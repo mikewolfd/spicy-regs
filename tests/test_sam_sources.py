@@ -12,7 +12,9 @@ import pytest
 
 from spicy_docs.sources.sam_public import REQUIRED, csv_records, download_url
 from spicy_docs.storage.raw_archive import CentralRawArchiveStore
-from spicy_regs import mcp_server
+from spicy_regs import data_dictionary, mcp_server
+from spicy_regs.contract_types import described_schema
+from spicy_regs.explorer_metadata import build_bundle
 from spicy_regs.pipelines import sam_sources as pipeline
 from spicy_regs.transforms import build_sam_sources as module
 
@@ -55,7 +57,7 @@ def test_notice_window_keeps_amendments_missing_deadlines_and_no_award_join(tmp_
         kind="opportunities",capture=capture(body,"opportunities","ContractOpportunitiesFullCSV.csv"),
         selection={"agency_code":"047","posted_from":"2026-11-01","posted_to":"2026-11-07"})
     rows=pq.read_table(paths[0]).to_pylist()
-    assert [row["title"] for row in rows]==["original","revision"]
+    assert [row["title_raw"] for row in rows]==["original","revision"]
     assert rows[0]["response_deadline_raw"]=="" and rows[1]["response_deadline_raw"]=="2026-11-20"
     assert summary["source_rows"]==4 and summary["selected_rows"]==2
 
@@ -103,6 +105,7 @@ def test_native_generation_replay_query_and_update(tmp_path,monkeypatch):
         with mcp_server._build_connection() as con:
             row=con.execute("SELECT native_id,name_raw,uei,additional_comments_raw,source_sha256 FROM sam_exclusion_observations WHERE native_id='S4NATIVE'").fetchone()
         assert row[:4]==("S4NATIVE","Unregistered party","",comment)
+        assert summary["text_encoding"] == "utf-8-sig"
         summaries.append(summary)
         outputs.append(output)
     assert summaries[0]["snapshot_id"]!=summaries[1]["snapshot_id"]
@@ -129,3 +132,32 @@ def test_ordinary_acquisition_retains_public_redirects_without_signed_query(tmp_
     assert result["byte_size"]==len(body) and len(calls)==2
     text="\n".join(path.read_text() for path in out.rglob("*.jsonl"))
     assert "private-signature" not in text
+
+
+def test_installed_schemas_and_source_descriptions_are_consumable():
+    schemas=data_dictionary.expected_schemas()
+    curated=data_dictionary.load_curated_descriptions()
+    for name,schema in module.SCHEMAS.items():
+        assert schemas[name]==described_schema(schema)
+        assert set(curated[name]["columns"])==set(schema.names)
+        assert name in mcp_server.TABLES
+    index={"format":"spicy-regs-publication","version":2,"families":{
+        "sam-exclusions":{"artifactDigest":"sha256:"+"0"*64,"tables":{name+".parquet":{"columns":[list(pair) for pair in described_schema(module.SCHEMAS[name])]}
+            for name in [module.TABLES["exclusions"],module.SNAPSHOTS["exclusions"]]}}}}
+    bundle=build_bundle(index)
+    assert bundle["tables"]["sam_exclusion_observations"]["sources"][0]["id"]=="sam-public"
+
+
+def test_byte_preserving_notice_decoding_records_its_uncertainty(tmp_path):
+    body=csv_body("opportunities",[{"NoticeId":"x","CGAC":"047","PostedDate":"2026-11-01",
+                                   "Title":"Ja\u0092Quan"}]).decode().encode("latin-1")
+    options=dict(kind="opportunities",capture=capture(body,"opportunities","ContractOpportunitiesFullCSV.csv"),
+        selection={"agency_code":"047","posted_from":"2026-11-01","posted_to":"2026-11-07"})
+    paths,summary=module.build_sam_source(csv_records(io.BytesIO(body),kind="opportunities",encoding="latin-1"),
+                                        tmp_path,**options,text_encoding="latin-1")
+    row=pq.read_table(paths[0]).to_pylist()[0]
+    assert row["title_raw"].encode("latin-1")==b"Ja\x92Quan"
+    assert row["text_encoding"]==summary["text_encoding"]=="latin-1"
+    assert row["text_interpretation_status"] == "byte-preserving-unqualified"
+    assert json.loads(row["unqualified_text_fields_json"]) == ["Title"]
+    assert summary["unqualified_text_rows"] == 1

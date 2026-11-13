@@ -16,8 +16,9 @@ import pyarrow as pa
 
 from spicy_regs.parquet_rows import write_rows
 
-COMMON = ["snapshot_id", "native_id", "source_url", "source_sha256", "observed_at", "snapshot_date",
-          "member_name", "member_sha256", "source_locator_json", "raw_fields_json", "record_content_sha256"]
+COMMON = ["snapshot_id", "native_id", "source_url", "source_sha256", "observed_at", "snapshot_date", "text_encoding",
+          "text_interpretation_status", "unqualified_text_fields_json", "member_name", "member_sha256",
+          "source_locator_json", "raw_fields_json", "record_content_sha256"]
 EXCLUSION_FIELDS = {
     "classification_raw": "Classification", "name_raw": "Name", "prefix_raw": "Prefix", "first_name_raw": "First",
     "middle_name_raw": "Middle", "last_name_raw": "Last", "suffix_raw": "Suffix", "uei": "Unique Entity ID",
@@ -28,7 +29,7 @@ EXCLUSION_FIELDS = {
     "cross_reference_raw": "Cross-Reference", "creation_date_raw": "Creation_Date",
 }
 NOTICE_FIELDS = {
-    "title": "Title", "solicitation_number": "Sol#", "department_raw": "Department/Ind.Agency",
+    "title_raw": "Title", "solicitation_number": "Sol#", "department_raw": "Department/Ind.Agency",
     "agency_code_raw": "CGAC", "sub_tier_raw": "Sub-Tier", "office_raw": "Office", "office_code_raw": "AAC Code",
     "posted_date_raw": "PostedDate", "notice_type_raw": "Type", "base_type_raw": "BaseType",
     "response_deadline_raw": "ResponseDeadLine", "set_aside_code_raw": "SetASideCode",
@@ -47,8 +48,9 @@ SCHEMAS = {
 SNAPSHOTS = {"exclusions": "sam_exclusion_snapshots", "opportunities": "sam_opportunity_snapshots"}
 SNAPSHOT_SCHEMA = pa.schema([
     *((name, pa.string()) for name in ["snapshot_id", "source_kind", "source_url", "source_sha256", "observed_at",
-                                      "snapshot_date", "selection_json", "coverage_limit"]),
+                                      "snapshot_date", "selection_json", "coverage_limit", "text_encoding"]),
     ("source_rows", pa.int64()), ("selected_rows", pa.int64()), ("distinct_native_ids", pa.int64()),
+    ("unqualified_text_rows", pa.int64()),
 ])
 SCHEMAS.update({name: SNAPSHOT_SCHEMA for name in SNAPSHOTS.values()})
 
@@ -93,7 +95,7 @@ def validate_capture(capture):
         raise ValueError("SAM capture needs a time zone")
 
 
-def build_sam_source(records, output_dir: Path, *, kind, capture, selection, snapshot_date=None):
+def build_sam_source(records, output_dir: Path, *, kind, capture, selection, snapshot_date=None, text_encoding="utf-8-sig"):
     """Exhaust and atomically write one pinned original, plus its population summary.
 
     The caller checks original size/digest and journals the exact input before
@@ -101,13 +103,16 @@ def build_sam_source(records, output_dir: Path, *, kind, capture, selection, sna
     """
     validate_selection(kind, selection)
     validate_capture(capture)
+    if text_encoding not in {"utf-8-sig", "utf-8", "latin-1", "cp1252"}:
+        raise ValueError("Unsupported explicit SAM text encoding")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    snapshot_id = "sha256:" + hashlib.sha256(_json({"kind": kind, "capture": capture, "selection": selection}).encode()).hexdigest()
-    source_count, selected_count, identities = 0, 0, set()
+    snapshot_id = "sha256:" + hashlib.sha256(_json({"kind": kind, "capture": capture, "selection": selection,
+                                                  "text_encoding": text_encoding}).encode()).hexdigest()
+    source_count, selected_count, unqualified_count, identities = 0, 0, 0, set()
 
     def rows():
-        nonlocal source_count, selected_count
+        nonlocal source_count, selected_count, unqualified_count
         for item in records:
             if item["ordinal"] != source_count:
                 raise ValueError("SAM original record ordinals are not contiguous")
@@ -118,10 +123,16 @@ def build_sam_source(records, output_dir: Path, *, kind, capture, selection, sna
             selected_count += 1
             identities.add(item["native_id"])
             raw = _json(fields)
+            uncertain = [name for name, value in fields.items()
+                         if text_encoding == "latin-1" and not value.isascii()]
+            unqualified_count += bool(uncertain)
             yield {
                 "snapshot_id": snapshot_id, "native_id": item["native_id"],
                 "source_url": capture["request_url"], "source_sha256": capture["response_sha256"],
                 "observed_at": capture["observed_at"], "snapshot_date": snapshot_date,
+                "text_encoding": text_encoding,
+                "text_interpretation_status": "byte-preserving-unqualified" if uncertain else "decoded-exact",
+                "unqualified_text_fields_json": _json(uncertain),
                 "member_name": item.get("member_name"), "member_sha256": item.get("member_sha256"),
                 "source_ordinal": item["ordinal"], "source_line_start": item["line_start"],
                 "source_line_end": item["line_end"],
@@ -136,7 +147,9 @@ def build_sam_source(records, output_dir: Path, *, kind, capture, selection, sna
         "snapshot_id": snapshot_id, "source_kind": kind, "source_url": capture["request_url"],
         "source_sha256": capture["response_sha256"], "observed_at": capture["observed_at"],
         "snapshot_date": snapshot_date, "selection_json": _json(selection), "source_rows": source_count,
+        "text_encoding": text_encoding,
         "selected_rows": selected_count, "distinct_native_ids": len(identities),
+        "unqualified_text_rows": unqualified_count,
         "coverage_limit": ("All rows of the selected public active-exclusions file; no inactive history or registration inference."
                            if kind == "exclusions" else
                            "Declared agency/posted-date rows in one public file; amendments retained, no all-version or attachment custody claim."),

@@ -56,7 +56,8 @@ def build(kind, filename, capture, selection, output_dir, *, archive_root=None, 
             else:
                 raise ValueError("Unsupported SAM source kind")
             paths, summary = build_sam_source(records, output_dir, kind=kind, capture=capture,
-                                             selection=selection, snapshot_date=snapshot_date)
+                                             selection=selection, snapshot_date=snapshot_date,
+                                             text_encoding="utf-8-sig" if kind == "exclusions" else encoding)
         evidence.event("sam-public-file-read", capture=capture, filename=filename, population=summary)
         if original["encoding"] != "raw":
             raise ValueError("SAM generation evidence requires an unwrapped original")

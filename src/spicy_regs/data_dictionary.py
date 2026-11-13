@@ -607,6 +607,10 @@ TABLES: tuple[str, ...] = (
     "fjc_service_terms",
     "fjc_courts",
     "fjc_snapshots",
+    "sam_exclusion_observations",
+    "sam_exclusion_snapshots",
+    "sam_opportunity_observations",
+    "sam_opportunity_snapshots",
     "executive_order_observations",
     "executive_disclosure_filings",
     "executive_disclosure_facts",
@@ -724,6 +728,10 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "fjc_service_terms",
         "fjc_courts",
         "fjc_snapshots",
+        "sam_exclusion_observations",
+        "sam_exclusion_snapshots",
+        "sam_opportunity_observations",
+        "sam_opportunity_snapshots",
         "executive_order_observations",
         "executive_disclosure_filings",
         "executive_disclosure_facts",
@@ -965,6 +973,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.build_historical_vetoes import SCHEMAS as HISTORICAL_VETO_SCHEMAS
     from spicy_regs.transforms.build_irs_form990 import SCHEMAS as IRS990_SCHEMAS
     from spicy_regs.transforms.build_fjc import SCHEMAS as FJC_SCHEMAS
+    from spicy_regs.transforms.build_sam_sources import SCHEMAS as SAM_SOURCE_SCHEMAS
     from spicy_regs.transforms.build_executive_orders import SCHEMA as EXECUTIVE_ORDER_SCHEMA
     from spicy_regs.transforms.build_executive_disclosures import SCHEMAS as EXECUTIVE_DISCLOSURE_SCHEMAS
     from spicy_regs.schemas.house_disbursements import SCHEMAS as HOUSE_DISBURSEMENT_SCHEMAS
@@ -1085,6 +1094,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         **IRS990_SCHEMAS,
         **SEC_SCHEMAS,
         **FJC_SCHEMAS,
+        **SAM_SOURCE_SCHEMAS,
         "executive_order_observations": EXECUTIVE_ORDER_SCHEMA,
         **EXECUTIVE_DISCLOSURE_SCHEMAS,
         **HOUSE_DISBURSEMENT_SCHEMAS,

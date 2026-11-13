@@ -13244,3 +13244,220 @@ tables:
       publisher_release_date: Unknown when the retained original does not state one; never copied from the capture clock.
       coverage: Snapshot-specific coverage limits and available provenance.
       source_scope_json: Complete replay selection binding every original by URL, digest, size and observation time.
+
+  sam_exclusion_observations:
+    label: SAM detailed exclusion observations
+    subject: reference
+    identity_columns:
+    - snapshot_id
+    - source_ordinal
+    summary: SAM detailed exclusion observations with exact original evidence and complete native cells.
+    coverage: Not a range. All observations of each explicitly selected public active-exclusions file. Inactive history
+      is outside this file; absence does not establish a termination or a registration flag change.
+    measured_on: '2026-11-13'
+    grain: One selected capture and native CSV record ordinal.
+    columns:
+      snapshot_id: Digest of source kind, original capture, selected scope and explicit text encoding; not a native
+        SAM identifier.
+      native_id: Literal SAM Number for an exclusion or NoticeId for a notice. Repeated source observations remain
+        separate.
+      source_url: Original public download request. Temporary signed redirect credentials are omitted.
+      source_sha256: SHA-256 of the retained original ZIP or CSV bytes.
+      observed_at: Capture time with explicit time zone; distinct from publisher dates.
+      snapshot_date: Date stated by a dated exclusions filename. NULL for the rolling notice filename, which states
+        no snapshot date.
+      text_encoding: Explicit decoding used for native CSV cells. latin-1 preserves bytes reversibly; non-ASCII interpretation
+        remains unqualified. No guessed text repair.
+      text_interpretation_status: decoded-exact or byte-preserving-unqualified. Unqualified text is diagnostic evidence,
+        not a qualified display name or description.
+      unqualified_text_fields_json: Native field names whose non-ASCII bytes lack a qualified text interpretation
+        under Latin-1 staging. ASCII cells remain exact.
+      member_name: Exact exclusions CSV ZIP member; NULL for a standalone notices CSV.
+      member_sha256: SHA-256 of decoded original member bytes; NULL for standalone CSV.
+      source_locator_json: Record ordinal and inclusive physical line range in the exact original CSV member or standalone
+        file.
+      raw_fields_json: Every native CSV column and cell, including unknown columns, quotes and multiline content.
+        Empty CSV cells are empty strings; omitted columns differ. Reversible under text_encoding.
+      record_content_sha256: SHA-256 of sorted literal field/cell JSON, excluding capture position; useful for source-observed
+        refresh comparisons.
+      classification_raw: Original Classification CSV cell. Empty stays empty; NULL means this column was not supplied.
+        No cross-source identity inference.
+      name_raw: Original Name CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      prefix_raw: Original Prefix CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      first_name_raw: Original First CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      middle_name_raw: Original Middle CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      last_name_raw: Original Last CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      suffix_raw: Original Suffix CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      uei: Original Unique Entity ID CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      cage_code: Original CAGE CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      npi: Original NPI CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source identity
+        inference.
+      exclusion_program_raw: Original Exclusion Program CSV cell. Empty stays empty; NULL means this column was not
+        supplied. No cross-source identity inference.
+      excluding_agency_raw: Original Excluding Agency CSV cell. Empty stays empty; NULL means this column was not
+        supplied. No cross-source identity inference.
+      ct_code_raw: Original CT Code CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      exclusion_type_raw: Original Exclusion Type CSV cell. Empty stays empty; NULL means this column was not supplied.
+        No cross-source identity inference.
+      additional_comments_raw: Original Additional Comments CSV cell. Empty stays empty; NULL means this column was
+        not supplied. No cross-source identity inference.
+      active_date_raw: Original Active Date CSV cell. Empty stays empty; NULL means this column was not supplied.
+        No cross-source identity inference.
+      termination_date_raw: Original Termination Date CSV cell. Empty stays empty; NULL means this column was not
+        supplied. No cross-source identity inference.
+      record_status_raw: Original Record Status CSV cell. Empty stays empty; NULL means this column was not supplied.
+        No cross-source identity inference.
+      cross_reference_raw: Original Cross-Reference CSV cell. Empty stays empty; NULL means this column was not supplied.
+        No cross-source identity inference.
+      creation_date_raw: Original Creation_Date CSV cell. Empty stays empty; NULL means this column was not supplied.
+        No cross-source identity inference.
+      source_ordinal: Zero-based native observation ordinal; repeated native IDs are not collapsed.
+      source_line_start: First physical line of the native CSV record, one-based including the header.
+      source_line_end: Final physical line of the native CSV record, preserving multiline fields.
+  sam_opportunity_observations:
+    label: SAM contract opportunity observations
+    subject: reference
+    identity_columns:
+    - snapshot_id
+    - source_ordinal
+    summary: SAM contract opportunity observations with exact original evidence and complete native cells.
+    coverage: Window. One declared agency and inclusive posted-date interval in an explicitly selected public notices
+      file. All matching rows and revisions remain; no all-version history or attachment custody is inferred. Source
+      deadlines retain their original precision and time zone spelling.
+    measured_on: '2026-11-13'
+    grain: One selected capture and native CSV record ordinal.
+    columns:
+      snapshot_id: Digest of source kind, original capture, selected scope and explicit text encoding; not a native
+        SAM identifier.
+      native_id: Literal SAM Number for an exclusion or NoticeId for a notice. Repeated source observations remain
+        separate.
+      source_url: Original public download request. Temporary signed redirect credentials are omitted.
+      source_sha256: SHA-256 of the retained original ZIP or CSV bytes.
+      observed_at: Capture time with explicit time zone; distinct from publisher dates.
+      snapshot_date: Date stated by a dated exclusions filename. NULL for the rolling notice filename, which states
+        no snapshot date.
+      text_encoding: Explicit decoding used for native CSV cells. latin-1 preserves bytes reversibly; non-ASCII interpretation
+        remains unqualified. No guessed text repair.
+      text_interpretation_status: decoded-exact or byte-preserving-unqualified. Unqualified text is diagnostic evidence,
+        not a qualified display name or description.
+      unqualified_text_fields_json: Native field names whose non-ASCII bytes lack a qualified text interpretation
+        under Latin-1 staging. ASCII cells remain exact.
+      member_name: Exact exclusions CSV ZIP member; NULL for a standalone notices CSV.
+      member_sha256: SHA-256 of decoded original member bytes; NULL for standalone CSV.
+      source_locator_json: Record ordinal and inclusive physical line range in the exact original CSV member or standalone
+        file.
+      raw_fields_json: Every native CSV column and cell, including unknown columns, quotes and multiline content.
+        Empty CSV cells are empty strings; omitted columns differ. Reversible under text_encoding.
+      record_content_sha256: SHA-256 of sorted literal field/cell JSON, excluding capture position; useful for source-observed
+        refresh comparisons.
+      title_raw: Original Title CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      solicitation_number: Original Sol# CSV cell. Empty stays empty; NULL means this column was not supplied. No
+        cross-source identity inference.
+      department_raw: Original Department/Ind.Agency CSV cell. Empty stays empty; NULL means this column was not supplied.
+        No cross-source identity inference.
+      agency_code_raw: Original CGAC CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      sub_tier_raw: Original Sub-Tier CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      office_raw: Original Office CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      office_code_raw: Original AAC Code CSV cell. Empty stays empty; NULL means this column was not supplied. No
+        cross-source identity inference.
+      posted_date_raw: Original PostedDate CSV cell. Empty stays empty; NULL means this column was not supplied. No
+        cross-source identity inference.
+      notice_type_raw: Original Type CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      base_type_raw: Original BaseType CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      response_deadline_raw: Original ResponseDeadLine CSV cell. Empty stays empty; NULL means this column was not
+        supplied. No cross-source identity inference.
+      set_aside_code_raw: Original SetASideCode CSV cell. Empty stays empty; NULL means this column was not supplied.
+        No cross-source identity inference.
+      set_aside_raw: Original SetASide CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      naics_code_raw: Original NaicsCode CSV cell. Empty stays empty; NULL means this column was not supplied. No
+        cross-source identity inference.
+      classification_code_raw: Original ClassificationCode CSV cell. Empty stays empty; NULL means this column was
+        not supplied. No cross-source identity inference.
+      active_raw: Original Active CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      archive_date_raw: Original ArchiveDate CSV cell. Empty stays empty; NULL means this column was not supplied.
+        No cross-source identity inference.
+      source_link: Original Link CSV cell. Empty stays empty; NULL means this column was not supplied. No cross-source
+        identity inference.
+      additional_info_link: Original AdditionalInfoLink CSV cell. Empty stays empty; NULL means this column was not
+        supplied. No cross-source identity inference.
+      description_raw: Original Description CSV cell. Empty stays empty; NULL means this column was not supplied.
+        No cross-source identity inference.
+      source_ordinal: Zero-based native observation ordinal; repeated native IDs are not collapsed.
+      source_line_start: First physical line of the native CSV record, one-based including the header.
+      source_line_end: Final physical line of the native CSV record, preserving multiline fields.
+  sam_exclusion_snapshots:
+    label: SAM exclusions source snapshots
+    subject: reference
+    identity_columns:
+    - snapshot_id
+    summary: Exact selected original, declared scope and observed population counts.
+    coverage: Not a range. All observations of each explicitly selected public active-exclusions file. Inactive history
+      is outside this file; absence does not establish a termination or a registration flag change.
+    measured_on: '2026-11-13'
+    grain: One original capture, scope and explicit text encoding.
+    columns:
+      snapshot_id: Digest of source kind, original capture, selected scope and explicit text encoding; not a native
+        SAM identifier.
+      source_kind: opportunities or exclusions; never entity registrations or spending awards.
+      source_url: Original public download request. Temporary signed redirect credentials are omitted.
+      source_sha256: SHA-256 of the retained original ZIP or CSV bytes.
+      observed_at: Capture time with explicit time zone; distinct from publisher dates.
+      snapshot_date: Date stated by a dated exclusions filename. NULL for the rolling notice filename, which states
+        no snapshot date.
+      selection_json: Exact declared population or agency/date window. Notices use the source calendar date without
+        inferred time zone conversion.
+      coverage_limit: Explicit source/population limitation for this selected file.
+      text_encoding: Explicit decoding used for native CSV cells. latin-1 preserves bytes reversibly; non-ASCII interpretation
+        remains unqualified. No guessed text repair.
+      source_rows: Physical data records read through complete CSV EOF; excludes the header.
+      selected_rows: Records retained within the declared scope, including repeated native IDs.
+      distinct_native_ids: Distinct native ID values in the selected rows; not a count of real-world parties.
+      unqualified_text_rows: Selected observations with at least one unqualified non-ASCII field. Identify affected
+        fields and records through the observation table.
+  sam_opportunity_snapshots:
+    label: SAM opportunities source snapshots
+    subject: reference
+    identity_columns:
+    - snapshot_id
+    summary: Exact selected original, declared scope and observed population counts.
+    coverage: Window. One declared agency and inclusive posted-date interval in an explicitly selected public notices
+      file. All matching rows and revisions remain; no all-version history or attachment custody is inferred. Source
+      deadlines retain their original precision and time zone spelling.
+    measured_on: '2026-11-13'
+    grain: One original capture, scope and explicit text encoding.
+    columns:
+      snapshot_id: Digest of source kind, original capture, selected scope and explicit text encoding; not a native
+        SAM identifier.
+      source_kind: opportunities or exclusions; never entity registrations or spending awards.
+      source_url: Original public download request. Temporary signed redirect credentials are omitted.
+      source_sha256: SHA-256 of the retained original ZIP or CSV bytes.
+      observed_at: Capture time with explicit time zone; distinct from publisher dates.
+      snapshot_date: Date stated by a dated exclusions filename. NULL for the rolling notice filename, which states
+        no snapshot date.
+      selection_json: Exact declared population or agency/date window. Notices use the source calendar date without
+        inferred time zone conversion.
+      coverage_limit: Explicit source/population limitation for this selected file.
+      text_encoding: Explicit decoding used for native CSV cells. latin-1 preserves bytes reversibly; non-ASCII interpretation
+        remains unqualified. No guessed text repair.
+      source_rows: Physical data records read through complete CSV EOF; excludes the header.
+      selected_rows: Records retained within the declared scope, including repeated native IDs.
+      distinct_native_ids: Distinct native ID values in the selected rows; not a count of real-world parties.
+      unqualified_text_rows: Selected observations with at least one unqualified non-ASCII field. Identify affected
+        fields and records through the observation table.

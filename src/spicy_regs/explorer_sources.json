@@ -316,6 +316,13 @@
       "description": "Official issuer submissions and standard-taxonomy whole-entity companyfacts; exact observations remain separate.",
       "name": "SEC EDGAR public data APIs",
       "kind": "government"
+    },
+    "sam-public": {
+      "id": "sam-public",
+      "name": "SAM.gov public notices and detailed exclusions",
+      "url": "https://sam.gov/data-services",
+      "kind": "government",
+      "note": "Exact public file observations. Detailed exclusions remain separate from registration flags; notices are separate from spending awards."
     }
   },
   "families": {
@@ -733,6 +740,16 @@
     "cms-medicare-provider": {
       "sources": [
         "cms"
+      ]
+    },
+    "sam-exclusions": {
+      "sources": [
+        "sam-public"
+      ]
+    },
+    "sam-opportunities": {
+      "sources": [
+        "sam-public"
       ]
     }
   },
