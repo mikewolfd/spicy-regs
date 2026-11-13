@@ -377,7 +377,7 @@ def read_cbo_archive_cards(items: Sequence[Any], congress: int, sweep: ArchiveSw
                            outcome="refused", message=str(refused))
             results.append(replace(seen, outcome="refused", reason=str(refused), page=page))
             continue
-        chosen_pdf = select_estimate_pdf(card.documents, item, bills, pdfs)
+        chosen_pdf = select_estimate_pdf(card.estimate_documents, item, bills, pdfs)
         pdf = None
         if chosen_pdf is not None and fetched_pdfs < max_pdfs:
             fetched_pdfs += 1
