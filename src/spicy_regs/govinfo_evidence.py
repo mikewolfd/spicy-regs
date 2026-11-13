@@ -96,7 +96,7 @@ def _sources(observation: GovInfoPreservation) -> dict:
     result = {}
     for name in ("summary", "mods", "premis", "closing_summary"):
         capture = getattr(observation, name + "_capture")
-        result[name] = {"state": "unrequested"} if capture is None else _source(capture)
+        result[name] = {"state": "not-selected"} if capture is None else _source(capture)
     return result
 
 
@@ -114,7 +114,7 @@ def preservation_facts(observation: GovInfoPreservation) -> dict:
         value = raw_summary.get(field)
         if summary is None:
             state = (
-                "unrequested" if observation.summary_capture is None else _source(observation.summary_capture)["state"]
+                "not-selected" if observation.summary_capture is None else _source(observation.summary_capture)["state"]
             )
         elif field not in raw_summary:
             state = "missing"
@@ -173,7 +173,7 @@ def preservation_facts(observation: GovInfoPreservation) -> dict:
 def budget_granules(package_id: str, pages: tuple[CapturedBodyResponse, ...], *, page_size: int) -> dict:
     """Reconcile exact retained publisher pages offline, including a valid-empty traversal."""
     if not pages:
-        return {"status": "unrequested", "pages": [], "granules": []}
+        return {"status": "not-selected", "pages": [], "granules": []}
     if len(pages) > 20:
         raise ValueError("Select at most 20 budget inventory pages")
     if any(page.byte_size > _METADATA_LIMIT for page in pages):
@@ -275,7 +275,7 @@ def budget_facts(
         result["native_files"].append(
             {
                 **asdict(offer),
-                "status": (_source(file)["state"] if same_file and file is not None else "advertised-unrequested"),
+                "status": (_source(file)["state"] if same_file and file is not None else "advertised-not-selected"),
             }
         )
     if file is not None:

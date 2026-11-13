@@ -25,7 +25,7 @@ def _page(url, **data):
 
 def test_complete_empty_differs_from_no_page_and_incomplete_continuation():
     empty = _page(URL, count=0, granules=[])
-    assert budget_granules(PACKAGE, (), page_size=100)["status"] == "unrequested"
+    assert budget_granules(PACKAGE, (), page_size=100)["status"] == "not-selected"
     assert budget_granules(PACKAGE, (empty,), page_size=100) == {
         "status": "complete",
         "pages": [
@@ -57,6 +57,13 @@ def test_complete_empty_differs_from_no_page_and_incomplete_continuation():
         budget_granules(
             PACKAGE, (_page(URL, count=1, granules=[{"granuleId": "a", "packageId": "OTHER"}]),), page_size=100
         )
+
+
+def test_omitted_captures_do_not_claim_no_acquisition_attempt():
+    observation = read_package_preservation(PACKAGE, summary=None, mods=None, premis=None)
+    facts = preservation_facts(observation)
+    assert all(source["state"] == "not-selected" for source in facts["sources"].values())
+    assert all(date["state"] == "not-selected" for date in facts["native_dates"])
 
 
 def _budget(*, file, last_modified="2026-04-02T18:37:00Z", fixity="match", repeat=False, changed=False):

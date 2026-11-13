@@ -25,7 +25,11 @@ to a stated constituent. Omit `--budget` to query preservation evidence and
 an optional selected file for a report or hearing.
 
 The command checks each selected journal and original file before reading
-source values. It returns issue dates and publisher update times from
+source values. `not-selected` means this selection supplies no capture;
+it makes no claim about earlier acquisition attempts. `advertised-not-selected`
+likewise names an offer with no selected file capture. Keep separately retained
+failed-attempt records beside the selection, even when no response body survived.
+It returns issue dates and publisher update times from
 SUMMARY, descriptive dates and relationships from MODS, preservation
 objects and events from PREMIS, and separate capture times and source
 locators. Optional
