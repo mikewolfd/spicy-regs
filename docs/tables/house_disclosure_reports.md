@@ -29,7 +29,7 @@ One explicitly selected P filing PDF reading, including refusals and the exact s
 | `backend` | `VARCHAR` | Native PDF backend used by the reader. |
 | `backend_version` | `VARCHAR` | Installed native PDF backend version recorded for replay. |
 | `model` | `VARCHAR` | Null: this path makes no model or OCR calls. |
-| `filer_name_raw` | `VARCHAR` | Name stated by the native PDF, when readable; never inferred from an image refusal. |
+| `filer_name_raw` | `VARCHAR` | Literal labeled native filer name, when readable. Qualified header and signature names must agree and match the selected index name after whitespace-only comparison; missing or contradictory identity refuses transactions. |
 | `state_district_raw` | `VARCHAR` | State/district stated by the native PDF, checked against the selected index for qualified native reports. |
 | `signed_date_raw` | `VARCHAR` | Date printed beside the native digital-signature statement; this is not signature authentication. |
 | `index_year` | `BIGINT` | Selected publisher index year, distinct from the date range of transaction activity. |

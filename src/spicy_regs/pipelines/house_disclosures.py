@@ -212,8 +212,17 @@ def candidate(selection, output_dir, evidence, *, store):
         evidence.retain_bytes(body, stage="house-ptr-pdf", raw_source=True,
                               original_location=source["url"], observed_at=source.get("observed_at"))
         reading = read_ptr_pdf(body, doc_id=doc)
-        if reading["status"] == "native_layout" and reading.get("state_district_raw") != indexed[doc]["state_district"]:
-            raise ValueError("House report district differs from its selected filing")
+        if reading["status"] == "native_layout":
+            # The qualified originals spell the native name as these literal
+            # index components in this order. Only whitespace is folded; no
+            # aliases, omitted honorifics, initials or fuzzy names are inferred.
+            declared_name = " ".join(" ".join(indexed[doc][field].split())
+                                     for field in ("prefix", "first", "last", "suffix")
+                                     if indexed[doc][field].strip())
+            if not declared_name or " ".join((reading.get("filer_name_raw") or "").split()) != declared_name:
+                raise ValueError("House native filer name differs from its selected index name")
+            if reading.get("state_district_raw") != indexed[doc]["state_district"]:
+                raise ValueError("House report district differs from its selected filing")
         report_id = _id(indexed[doc]["filing_id"], source["sha256"])
         report = {"report_id": report_id, "filing_id": indexed[doc]["filing_id"], "doc_id": doc,
                   "index_year": index["year"], "source_uri": source["url"], "source_sha256": source["sha256"],

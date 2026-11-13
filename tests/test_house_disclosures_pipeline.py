@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 import hashlib
+from io import BytesIO
 import json
 from pathlib import Path
 
@@ -35,6 +36,78 @@ def selected(tmp_path, monkeypatch):
 
 def rows(path, table):
     return pq.read_table(path / "generation" / (table + ".parquet")).to_pylist()
+
+
+def planted_name(replacement, *, change_signature=False):
+    """Change only identity text on a real original; keep the result derived."""
+    import pymupdf
+
+    old = "Hon. Bradley S. Schneider"
+    with pymupdf.open(stream=(FIXTURES / "20030591.pdf").read_bytes(), filetype="pdf") as document:
+        page = document[0]
+        spans = [span for block in page.get_text("dict")["blocks"]
+                 for line in block.get("lines", []) for span in line["spans"]
+                 if old in span["text"] and (span["text"] == old or change_signature)]
+        for span in spans:
+            page.add_redact_annot(span["bbox"])
+        page.apply_redactions()
+        if replacement is not None:
+            for span in spans:
+                page.insert_text(span["origin"], span["text"].replace(old, replacement),
+                                 fontname="tiro", fontsize=span["size"])
+        return document.tobytes()
+
+
+class DerivedInputs:
+    """A test-only reader/evidence sink, never the central original archive."""
+
+    def __init__(self, selected, body):
+        self.selected, self.body, self.retained = selected, body, []
+
+    def open(self, digest):
+        source = self.selected["index"]
+        return BytesIO((FIXTURES / "2025FD.zip").read_bytes() if digest == source["sha256"] else self.body)
+
+    def retain_bytes(self, body, **fields):
+        self.retained.append((body, fields))
+
+    def event(self, *args, **fields):
+        pass
+
+
+@pytest.mark.parametrize("replacement,reason", [
+    (None, "native_filer_name_missing_or_ambiguous"),
+    ("Hon. Other Person", "native_header_signature_name_mismatch"),
+])
+def test_real_original_missing_or_wrong_name_cannot_qualify_consumer_transactions(selected, tmp_path, replacement, reason):
+    changed = deepcopy(selected)
+    changed["reports"] = [changed["reports"][0]]
+    body = planted_name(replacement)
+    changed["reports"][0].update(sha256="sha256:" + hashlib.sha256(body).hexdigest(), bytes=len(body))
+    inputs = DerivedInputs(changed, body)
+    house.candidate(changed, tmp_path / "refused-name", inputs, store=inputs)
+    report = pq.read_table(tmp_path / "refused-name" / (house.REPORTS + ".parquet")).to_pylist()[0]
+    assert report["extraction_status"] == "refused" and reason in report["refusal_reason"]
+    assert report["filer_name_raw"] == replacement and report["transaction_count"] == 0
+    assert pq.read_table(tmp_path / "refused-name" / (house.TRANSACTIONS + ".parquet")).num_rows == 0
+    assert any(kept == body for kept, _fields in inputs.retained)
+
+
+@pytest.mark.parametrize("name", ["Hon. Other Person", "Hon. Bradley Scott Schneider", "Hon. Bradley S. SCHNEIDER"])
+def test_coherent_native_name_must_match_literal_selected_index_name(selected, tmp_path, name):
+    from spicy_docs.reading.house_ptr import read_ptr_pdf
+
+    changed = deepcopy(selected)
+    changed["reports"] = [changed["reports"][0]]
+    body = planted_name(name, change_signature=True)
+    changed["reports"][0].update(sha256="sha256:" + hashlib.sha256(body).hexdigest(), bytes=len(body))
+    reading = read_ptr_pdf(body, doc_id="20030591")
+    assert reading["status"] == "native_layout" and reading["filer_name_raw"] == name
+    inputs = DerivedInputs(changed, body)
+    with pytest.raises(ValueError, match="native filer name differs"):
+        house.candidate(changed, tmp_path / "index-name-mismatch", inputs, store=inputs)
+    assert not (tmp_path / "index-name-mismatch").exists()
+    assert any(kept == body for kept, _fields in inputs.retained)
 
 
 def test_build_and_bounded_replay_preserve_amendments_blanks_ranges_and_refusals(selected, tmp_path):

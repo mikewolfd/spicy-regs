@@ -38930,7 +38930,7 @@
       {
         "column_name": "filer_name_raw",
         "column_type": "VARCHAR",
-        "description": "Name stated by the native PDF, when readable; never inferred from an image refusal."
+        "description": "Literal labeled native filer name, when readable. Qualified header and signature names must agree and match the selected index name after whitespace-only comparison; missing or contradictory identity refuses transactions."
       },
       {
         "column_name": "state_district_raw",

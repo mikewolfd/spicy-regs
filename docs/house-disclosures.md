@@ -21,6 +21,14 @@ remain available. Scanned forms, image bundles, unfamiliar layouts and checkbox
 interpretation remain outside this reader's qualified scope. A refused report
 with no emitted rows is not an empty report.
 
+Native qualification requires a labeled filer name and a matching printed
+signature name. Both remain source observations; the signature does not fill a
+missing labeled name. The ordinary builder also compares the native name to the
+selected index's literal prefix, first name, last name and suffix, in that order,
+folding whitespace only. A name contradiction refuses rather than inferring an
+alias, expanding an initial or changing case. Source names and page text are
+preserved, including on explicit native identity refusals.
+
 ## Use and bounded replay
 
 Query the selected source catalog before acquisition. A selection JSON uses

@@ -13634,8 +13634,9 @@ tables:
       backend: Native PDF backend used by the reader.
       backend_version: Installed native PDF backend version recorded for replay.
       model: 'Null: this path makes no model or OCR calls.'
-      filer_name_raw: Name stated by the native PDF, when readable; never inferred from
-        an image refusal.
+      filer_name_raw: Literal labeled native filer name, when readable. Qualified header
+        and signature names must agree and match the selected index name after whitespace-only
+        comparison; missing or contradictory identity refuses transactions.
       state_district_raw: State/district stated by the native PDF, checked against the
         selected index for qualified native reports.
       signed_date_raw: Date printed beside the native digital-signature statement; this
