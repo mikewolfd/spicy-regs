@@ -11,11 +11,13 @@ from spicy_regs import comments_maintenance as guard
 
 PINS = {name: {"table-uuid": name + "-uuid", "current-snapshot-id": 7, "current-schema-id": 3}
         for name in guard.TABLES}
+MaintenanceValues = dict[str, str | int | None]
+TableConfig = dict[str, str | MaintenanceValues]
 
 
 class Tables:
     def __init__(self):
-        self.configs = {
+        self.configs: dict[str, TableConfig] = {
             "comments": {"compaction": {"state": "enabled", "target_size_mb": "512"}, "interval": "6h",
                          "snapshot_expiration": {"state": "disabled", "max_snapshot_age": "30d",
                                                  "min_snapshots_to_keep": 42}},
@@ -39,21 +41,26 @@ class Tables:
         if request.method == "GET" and self.fail_get == table:
             return httpx.Response(503)
         if request.method == "POST":
+            assert isinstance(body, dict)
             assert set(body) == set(self.configs[table]) & set(guard.FIELDS)
             assert all(set(value) <= set(guard.FIELDS[key]) for key, value in body.items())
             disabling = all(value == {"state": "disabled"} for value in body.values())
             if self.fail_restore and table == "comments" and not disabling:
                 return httpx.Response(503)
             for key, value in body.items():
-                self.configs[table][key].update(value)
+                settings = self.configs[table][key]
+                assert isinstance(settings, dict)
+                settings.update(value)
             if self.lose_disable_response and table == "etl_receipts" and disabling:
                 self.lose_disable_response = False
                 raise httpx.ReadError("Lost response after update", request=request)
             return httpx.Response(200, json={"success": True, "result": self.configs[table]})
         config = deepcopy(self.configs[table])
         for name in set(guard.FIELDS) & set(config):
-            config[name]["next_eligible_at"] = None if config[name]["state"] == "disabled" else "2026-11-14T00:00:00Z"
-            config[name]["next_eligible_reason"] = "running" if self.running else config[name]["state"]
+            settings = config[name]
+            assert isinstance(settings, dict)
+            settings["next_eligible_at"] = None if settings["state"] == "disabled" else "2026-11-14T00:00:00Z"
+            settings["next_eligible_reason"] = "running" if self.running else settings["state"]
         return httpx.Response(200, json={"success": True, "result": {"maintenance_config": config}})
 
 

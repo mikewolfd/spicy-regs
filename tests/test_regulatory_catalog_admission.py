@@ -1,5 +1,6 @@
 """Native catalog admission is enforced by the real subject/receipt writer."""
 from dataclasses import replace
+from typing import cast
 
 import duckdb
 import pytest
@@ -71,7 +72,7 @@ def test_comments_catalog_admits_mixed_receipts_only_at_their_exact_shape(tmp_pa
         assert connection.execute(f"SELECT comment_id, _promoted_v2 FROM {flagged} ORDER BY comment_id").fetchall() == [
             ("new", False), ("old", True),
         ]
-        held = connection.execute(f"SELECT attachments_json FROM {flagged} WHERE comment_id='old'").fetchone()[0]
+        [(held,)] = connection.execute(f"SELECT attachments_json FROM {flagged} WHERE comment_id='old'").fetchall()
         from spicy_regs.pipelines.comment_fields_write import only_adds_attachments
 
         reread = '[{"title": "old", "attachment_id": "a", "docOrder": 1}]'
@@ -133,8 +134,9 @@ def test_comments_catalog_admits_mixed_receipts_only_at_their_exact_shape(tmp_pa
 def test_comments_schema_migration_only_appends_nullable_fields_and_checks_snapshot(tmp_path):
     from types import SimpleNamespace
 
+    from pyiceberg.catalog import Catalog
     from pyiceberg.exceptions import CommitFailedException
-    from pyiceberg.io.pyarrow import _pyarrow_to_schema_without_ids, schema_to_pyarrow
+    from pyiceberg.io.pyarrow import PyArrowFileIO, _pyarrow_to_schema_without_ids, schema_to_pyarrow
     from pyiceberg.partitioning import UNPARTITIONED_PARTITION_SPEC
     from pyiceberg.table import Table
     from pyiceberg.table.metadata import new_table_metadata
@@ -152,8 +154,8 @@ def test_comments_schema_migration_only_appends_nullable_fields_and_checks_snaps
         _pyarrow_to_schema_without_ids(prior), UNPARTITIONED_PARTITION_SPEC,
         UNSORTED_SORT_ORDER, tmp_path.as_uri(),
     )
-    snapshot = Snapshot(snapshot_id=81, sequence_number=1, timestamp_ms=1, manifest_list="local")
-    ref = SnapshotRef(snapshot_id=81, snapshot_ref_type=SnapshotRefType.BRANCH)
+    snapshot = Snapshot.model_validate({"snapshot-id": 81, "sequence-number": 1, "timestamp-ms": 1, "manifest-list": "local"})
+    ref = SnapshotRef.model_validate({"snapshot-id": 81, "type": SnapshotRefType.BRANCH})
     metadata = metadata.model_copy(update={"current_snapshot_id": 81, "snapshots": [snapshot], "refs": {"main": ref}})
 
     class MetadataCatalog:
@@ -172,7 +174,7 @@ def test_comments_schema_migration_only_appends_nullable_fields_and_checks_snaps
             pass
 
         def load_table(self, name):
-            return Table(name, self.metadata, "local", None, self)
+            return Table(name, self.metadata, "local", PyArrowFileIO(), cast(Catalog, self))
 
     catalog = MetadataCatalog()
     table = catalog.load_table(("default_native", "comments"))

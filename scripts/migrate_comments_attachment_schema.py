@@ -77,7 +77,7 @@ def migrate(table, *, expected: tuple[str, int | None, int], apply: bool = False
                     update.add_column(("attachments", field.name), iceberg_type(field.type))
             # PyIceberg adds UUID and current-schema requirements. Pin the main branch
             # at the REST commit as well, so a concurrent data write refuses the update.
-            transaction._stage((), (AssertRefSnapshotId(ref="main", snapshot_id=expected[1]),))
+            transaction._stage((), (AssertRefSnapshotId.model_validate({"ref": "main", "snapshot-id": expected[1]}),))
         table.refresh()
         after = table_pin(table)
         observed = table.schema()

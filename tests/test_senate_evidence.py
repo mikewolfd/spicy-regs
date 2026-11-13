@@ -2,12 +2,13 @@
 
 import gzip
 import json
+from typing import cast
 
 import httpx
 import pytest
 from spicy_docs.sources.congress.committee_rosters import SENATE_CVC_URL
 from spicy_docs.sources.congress.votes import VoteSourceError
-from spicy_docs.sources.walled_fetch import ProxyFetchers
+from spicy_docs.sources.walled_fetch import ProxyFetchers, ZyteHttpFetcher
 from spicy_docs.storage.raw_archive import iter_acquisition_receipts
 
 from spicy_regs.source_evidence import CaptureEvidence
@@ -43,9 +44,9 @@ def test_same_event_fields_for_each_successful_reader_path(reader, rung, monkeyp
 
     evidence = Evidence()
     cls, budget = (LadderVoteAcquirer, BUDGET) if reader == "vote" else (LadderCommitteeRosterAcquirer, ROSTER_BUDGET)
-    with cls(budget=budget, transport=httpx.MockTransport(respond), evidence=evidence) as source:
-        source._proxies = ProxyFetchers(Fetcher(body) if rung == "zyte_http" else "disabled", "disabled")
-        acquired = source.acquire(SENATE_1) if reader == "vote" else source.acquire_senate(
+    with cls(budget=budget, transport=httpx.MockTransport(respond), evidence=cast(CaptureEvidence, evidence)) as source:
+        source._proxies = ProxyFetchers(cast(ZyteHttpFetcher, Fetcher(body)) if rung == "zyte_http" else "disabled", "disabled")
+        acquired = source.acquire(SENATE_1) if isinstance(source, LadderVoteAcquirer) else source.acquire_senate(
             archived_at=timestamp if rung == "internet_archive" else None
         )
     [event] = [fields for name, fields in evidence.events if name == "source-serving-rung"]

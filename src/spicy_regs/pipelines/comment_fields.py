@@ -451,7 +451,8 @@ def _arrow_totals(files: list[str], columns: list[str], withheld_ids=()) -> dict
         for batch in handle.iter_batches(columns=columns, batch_size=20_000):
             if len(withheld):
                 identities = batch.column("comment_id").cast(pa.string())
-                batch = batch.filter(pc.invert(pc.is_in(identities, value_set=withheld)))
+                excluded = pc.call_function("is_in", [identities], pc.SetLookupOptions(withheld))
+                batch = batch.filter(pc.call_function("invert", [excluded]))
                 totals["footer_rows"] += batch.num_rows
             totals["rows"] += batch.num_rows
             for c in columns:
@@ -524,7 +525,7 @@ def stage(workdir: Path, out: Path, *, profile: str = "all", allow_source_gaps: 
                 "unresolved_keys": sum(check["unresolved"] for check in checkpoints),
                 "sha256": file_sha256(withheld),
                 "withheld_comment_ids": con.execute(
-                    "SELECT count(DISTINCT comment_id) FROM read_parquet(?)", [str(withheld)]).fetchone()[0],
+                    "SELECT count(DISTINCT comment_id) FROM read_parquet(?)", [str(withheld)]).fetchall()[0][0],
             }
             withheld_ids = [row[0] for row in con.execute(
                 "SELECT DISTINCT comment_id FROM read_parquet(?)", [str(withheld)]).fetchall()]
