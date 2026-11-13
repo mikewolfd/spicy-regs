@@ -21,6 +21,7 @@ import re
 import subprocess
 import sys
 from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
@@ -81,11 +82,19 @@ def changed_joins(joins: Iterable[table_joins.Join], previous: dict) -> tuple[li
     return selected, removed
 
 
-def table_urls(base_url: str) -> Callable[[str], list[str]]:
+@dataclass(frozen=True)
+class TableURLs:
+    base: str
+    selected: dict[str, list[str]]
+
+    def __call__(self, table: str) -> list[str]:
+        return self.selected.get(table, [f"{self.base}/{table}.parquet"])
+
+
+def table_urls(base_url: str) -> TableURLs:
     """Resolve each table once: through the publication index, then the rulemaking pointer, else its legacy key."""
     base = base_url.rstrip("/")
-    urls = publication.published_urls(base)
-    return lambda table: urls.get(table, [f"{base}/{table}.parquet"])
+    return TableURLs(base, publication.published_urls(base))
 
 
 def connect() -> duckdb.DuckDBPyConnection:
@@ -111,7 +120,8 @@ def _unpublished(con: duckdb.DuckDBPyConnection, urls: list[str]) -> bool:
     return False
 
 
-def measure(con: duckdb.DuckDBPyConnection, join: table_joins.Join, url_of: Callable[[str], list[str]]) -> dict:
+def measure(con: duckdb.DuckDBPyConnection, join: table_joins.Join, url_of: Callable[[str], list[str]],
+            *, allow_unpublished: bool = False) -> dict:
     """Measure full selected inputs, preserving parent multiplicity and raw-row amplification.
 
     A declared-empty child that no generation publishes yet has no key to read: it
@@ -120,6 +130,14 @@ def measure(con: duckdb.DuckDBPyConnection, join: table_joins.Join, url_of: Call
     child = [_quote(column) for column in join.child_columns]
     parent = [_quote(column) for column in join.parent_columns]
     child_urls, parent_urls = url_of(join.measured_via or join.child), url_of(join.parent)
+    if (allow_unpublished and join.kind == "unmeasured" and join.baseline_keys == join.baseline_missing == 0
+            and isinstance(url_of, TableURLs) and (join.measured_via or join.child) not in url_of.selected
+            and _unpublished(con, child_urls)):
+        return {"join": join.name, "kind": join.kind, "status": "NOT_PUBLISHED", "keys": None, "missing": None,
+                "resolved_pct": None, "floor_pct": None, "baseline_keys": 0, "baseline_missing": 0,
+                "examples": [], "scope": "new_unmeasured_child_not_published", "child_urls": child_urls,
+                "parent_urls": parent_urls, "expected_cardinality": join.expected_cardinality,
+                "reason": "No selected generation or legacy child file; live join qualification remains pending."}
     if join.kind == "empty" and _unpublished(con, child_urls):
         result = verdict(join, 0, 0)
         result.update({"scope": "child_not_published", "child_urls": child_urls, "parent_urls": parent_urls,
@@ -182,8 +200,8 @@ def verdict(join: table_joins.Join, keys: int, missing: int, examples: Sequence[
 
 
 def check(con: duckdb.DuckDBPyConnection, joins: Iterable[table_joins.Join],
-          url_of: Callable[[str], list[str]]) -> list[dict]:
-    return [measure(con, join, url_of) for join in joins]
+          url_of: Callable[[str], list[str]], *, unpublished_new: frozenset[str] = frozenset()) -> list[dict]:
+    return [measure(con, join, url_of, allow_unpublished=join.name in unpublished_new) for join in joins]
 
 
 def record_baselines(joins: Sequence[table_joins.Join], results: Sequence[dict], receipt: Path,
@@ -197,7 +215,7 @@ def record_baselines(joins: Sequence[table_joins.Join], results: Sequence[dict],
     record = json.loads(path.read_text())
     entries = {entry["join"]: entry for entry in record["results"]}
     for join, result in zip(joins, results, strict=True):
-        if result["status"] in ("EMPTY", "EMPTIED", "MULTIPLICITY"):
+        if result["status"] in ("EMPTY", "EMPTIED", "MULTIPLICITY", "NOT_PUBLISHED"):
             raise ValueError(f"{join.name}: {result['status']} has no baseline to record")
         kind = join.kind if join.kind != "unmeasured" else ("scope" if result["missing"] else "complete")
         entries[join.name] = {
@@ -210,6 +228,8 @@ def record_baselines(joins: Sequence[table_joins.Join], results: Sequence[dict],
 
 
 def _line(result: dict) -> str:
+    if result["status"] == "NOT_PUBLISHED":
+        return f"NOT_PUBLISHED {result['join']}  {result['reason']}"
     pct = "n/a" if result["resolved_pct"] is None else f"{result['resolved_pct']:.4f}%"
     floor = "none" if result["floor_pct"] is None else f"{result['floor_pct']:.4f}%"
     detail = f"  e.g. {result['examples']}" if result["examples"] else ""
@@ -223,12 +243,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--index-url", help="Public base URL to check instead of the ledger's stated destination")
     parser.add_argument("--receipt", type=Path, help="Write every measurement to this JSON file")
     parser.add_argument("--changed-since", help="Check only declarations added or changed since this full Git commit SHA")
+    parser.add_argument("--allow-unpublished-new", action="store_true",
+                        help="With --changed-since, report newly declared, unmeasured absent children as NOT_PUBLISHED; "
+                             "does not qualify live joins or waive missing previously declared/selected tables")
     parser.add_argument("--aggregate", action="append", help="Run this named aggregate check instead of join checks; repeatable")
     parser.add_argument("--timeout-seconds", type=float, default=90, help="Aggregate query timeout, at most 90 seconds")
     parser.add_argument("--record", action="append", metavar="JOIN",
                         help="Measure this declared join (its full name) and record the result as its baseline in "
                              "join_measurements.json, citing --receipt; repeatable")
     args = parser.parse_args(argv)
+    if args.allow_unpublished_new and not args.changed_since:
+        parser.error("--allow-unpublished-new requires --changed-since")
     if args.changed_since and args.aggregate:
         parser.error("--changed-since selects joins and cannot be used with --aggregate")
     if args.record and (args.changed_since or args.aggregate or not args.receipt
@@ -236,6 +261,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--record needs a --receipt inside the repository it cites and cannot be combined with "
                      "--changed-since or --aggregate")
     joins, removed = list(table_joins.JOINS), []
+    unpublished_new = frozenset()
     if args.record:
         declared = {join.name: join for join in joins}
         if unknown := [name for name in args.record if name not in declared]:
@@ -243,7 +269,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         joins = [declared[name] for name in dict.fromkeys(args.record)]
     if args.changed_since:
         try:
-            joins, removed = changed_joins(joins, previous_record(args.changed_since))
+            previous = previous_record(args.changed_since)
+            joins, removed = changed_joins(joins, previous)
+            if args.allow_unpublished_new:
+                before_names = {f"{r['child']}.{'+'.join(r['child_columns'])} -> "
+                                f"{r['parent']}.{'+'.join(r['parent_columns'])}" for r in previous["joins"]}
+                before_children = {name for r in previous["joins"] for name in (r["child"], r.get("measured_via")) if name}
+                unpublished_new = frozenset(join.name for join in joins if join.name not in before_names
+                                            and (join.measured_via or join.child) not in before_children)
         except (ValueError, OSError) as exc:
             print(f"Cannot select changed joins: {exc}", file=sys.stderr)
             return 2
@@ -283,7 +316,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"Checking {len(joins)} declared joins against {base} ({source}); baseline {table_joins.BASELINE_DATE}")
     try:
         with connect() as con:
-            results = check(con, joins, table_urls(base))
+            results = check(con, joins, table_urls(base), unpublished_new=unpublished_new)
     except (httpx.HTTPError, duckdb.Error, publication.PublicationError) as exc:
         if args.receipt:
             args.receipt.write_text(json.dumps({"base": base, "changed_since": args.changed_since,
