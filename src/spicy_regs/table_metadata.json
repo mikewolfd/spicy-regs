@@ -32371,6 +32371,202 @@
       "publication_id"
     ]
   },
+  "cbo_estimate_cards": {
+    "table": "cbo_estimate_cards",
+    "label": "Archived CBO cost-estimate cards",
+    "summary": "One qualified card per CBO publication, with three positional fiscal windows, literal and typed millions, PAYGO and mandate answers, source context and original evidence. Join publication_id to cbo_cost_estimates for source-stated bill links; cards exist independently of whether those bill links resolve.",
+    "coverage": "Explicit retained Common Crawl publication captures selected through the bill-family archive manifest. The build accounts for every item of the selected feed and records unread indexes, unretained pages, observed absence and unresolved PDF candidates separately.",
+    "kind": null,
+    "measured_on": "2026-11-13",
+    "data_quality": "Authority is the archive with explicit capture time and publication time. Asterisks, blanks and nonnumeric amounts retain their literal and have null typed amounts. PDF-only bill/month matches remain unresolved. Current retained-source qualification does not establish complete archive coverage, PDF parity or public publication.",
+    "columns": [
+      {
+        "column_name": "publication_id",
+        "column_type": "VARCHAR",
+        "description": "CBO publication identity, independent of any bill link."
+      },
+      {
+        "column_name": "congress",
+        "column_type": "BIGINT",
+        "description": "Congress named by the selected feed."
+      },
+      {
+        "column_name": "publication_date",
+        "column_type": "VARCHAR",
+        "description": "Selected feed Date as a UTC instant; distinct from archive capture time."
+      },
+      {
+        "column_name": "publication_title",
+        "column_type": "VARCHAR",
+        "description": "Selected feed Title, including unresolved bill descriptions."
+      },
+      {
+        "column_name": "publication_context",
+        "column_type": "VARCHAR",
+        "description": "Selected feed Description, retained without inferring bill stage."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "Literal card heading."
+      },
+      {
+        "column_name": "subtitle",
+        "column_type": "VARCHAR",
+        "description": "Literal card subtitle, where printed."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "CBO states fiscal-year amounts in millions of dollars."
+      },
+      {
+        "column_name": "windows",
+        "column_type": "STRUCT(period VARCHAR, direct_spending_outlays_literal VARCHAR, direct_spending_outlays_millions BIGINT, revenues_literal VARCHAR, revenues_millions BIGINT, increase_or_decrease_in_the_deficit_literal VARCHAR, increase_or_decrease_in_the_deficit_millions BIGINT, spending_subject_to_appropriation_outlays_literal VARCHAR, spending_subject_to_appropriation_outlays_millions BIGINT)[]",
+        "description": "Exactly three positional fiscal windows with literal headings and amounts."
+      },
+      {
+        "column_name": "answers",
+        "column_type": "STRUCT(pay_go VARCHAR, increase_net_spending VARCHAR, increase_budget_deficits VARCHAR, mandate_effect_intergovernmental VARCHAR, mandate_effect_private_sector VARCHAR)",
+        "description": "PAYGO, long-term budget and mandate answers as printed; null means unstated."
+      },
+      {
+        "column_name": "flags",
+        "column_type": "STRUCT(pay_go BOOLEAN, increase_net_spending BOOLEAN, increase_budget_deficits BOOLEAN, mandate_effect_intergovernmental BOOLEAN, mandate_effect_private_sector BOOLEAN)",
+        "description": "Leading Yes/No answers as booleans; thresholds and other answers stay in answers, with null when no boolean is stated."
+      },
+      {
+        "column_name": "footnotes",
+        "column_type": "VARCHAR[]",
+        "description": "Literal notes defining asterisks, per-bill application and qualifications."
+      },
+      {
+        "column_name": "pdf_urls",
+        "column_type": "VARCHAR[]",
+        "description": "PDF URLs explicitly linked by the publication; not bill/month guesses."
+      },
+      {
+        "column_name": "card_source",
+        "column_type": "VARCHAR",
+        "description": "Source and reading route; PDF routes require separate qualification."
+      },
+      {
+        "column_name": "markup",
+        "column_type": "VARCHAR",
+        "description": "Source layout label, where applicable."
+      },
+      {
+        "column_name": "schema_version",
+        "column_type": "VARCHAR",
+        "description": "Shared card schema identity."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "Original WARC member SHA-256, not a decoded-copy identity."
+      },
+      {
+        "column_name": "source_locator",
+        "column_type": "VARCHAR",
+        "description": "WARC record ID plus payload locator; PDF page is separately identified."
+      },
+      {
+        "column_name": "receipt_object",
+        "column_type": "VARCHAR",
+        "description": "Archive-relative immutable acquisition receipt."
+      },
+      {
+        "column_name": "authority",
+        "column_type": "VARCHAR",
+        "description": "Archive authority rather than a current publisher answer."
+      },
+      {
+        "column_name": "archive_operator",
+        "column_type": "VARCHAR",
+        "description": "Public archive operator."
+      },
+      {
+        "column_name": "original_publisher_url",
+        "column_type": "VARCHAR",
+        "description": "Publisher URL named by the verified WARC record."
+      },
+      {
+        "column_name": "archive_timestamp",
+        "column_type": "VARCHAR",
+        "description": "Selected archive capture timestamp, YYYYMMDDhhmmss."
+      },
+      {
+        "column_name": "earliest_timestamp",
+        "column_type": "VARCHAR",
+        "description": "Earliest status-200 capture in the declared index population."
+      },
+      {
+        "column_name": "index_sha256",
+        "column_type": "VARCHAR",
+        "description": "Retained index answer digest."
+      },
+      {
+        "column_name": "index_digest",
+        "column_type": "VARCHAR",
+        "description": "Archive index payload digest, independently checked against retained payload."
+      },
+      {
+        "column_name": "crawl_id",
+        "column_type": "VARCHAR",
+        "description": "Common Crawl collection identity."
+      },
+      {
+        "column_name": "warc_filename",
+        "column_type": "VARCHAR",
+        "description": "Archive-native WARC path."
+      },
+      {
+        "column_name": "extraction_method",
+        "column_type": "VARCHAR",
+        "description": "Maintained reader and version used for this observation."
+      },
+      {
+        "column_name": "model_id",
+        "column_type": "VARCHAR",
+        "description": "Model identity on a structured model observation; otherwise null."
+      },
+      {
+        "column_name": "request_id",
+        "column_type": "VARCHAR",
+        "description": "Retained model request identity; otherwise null."
+      },
+      {
+        "column_name": "identity_rule",
+        "column_type": "VARCHAR",
+        "description": "Publication/PDF association rule and retained supporting evidence."
+      },
+      {
+        "column_name": "captures",
+        "column_type": "BIGINT",
+        "description": "Distinct status-200 capture coordinates in the declared index population."
+      },
+      {
+        "column_name": "warc_offset",
+        "column_type": "BIGINT",
+        "description": "Byte offset of the original WARC member."
+      },
+      {
+        "column_name": "warc_length",
+        "column_type": "BIGINT",
+        "description": "Byte length of the original WARC member."
+      },
+      {
+        "column_name": "page_number",
+        "column_type": "BIGINT",
+        "description": "One-based original PDF page; null for an HTML card."
+      }
+    ],
+    "subject": "congress",
+    "grain": "One qualified card per CBO publication, selecting the latest verified archive capture; bill links remain in cbo_cost_estimates.",
+    "identity_columns": [
+      "publication_id"
+    ]
+  },
   "gao_decisions": {
     "table": "gao_decisions",
     "label": "Government Accountability Office legal decisions",
@@ -39856,6 +40052,20 @@
         ],
         "processing_fields": [
           "raw_source_row"
+        ]
+      },
+      {
+        "dataset": "cbo_estimate_cards",
+        "receipt_only": false,
+        "policy_version": "congress-subjects/1",
+        "identity_columns": [
+          "publication_id"
+        ],
+        "processing_fields": [
+          "source_fields",
+          "source_metadata",
+          "source_schema",
+          "entry_kind"
         ]
       },
       {

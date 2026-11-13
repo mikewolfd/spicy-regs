@@ -72,7 +72,8 @@ class BillFamilyRollup(RollupPipeline):
     #: and ``cbo_feed_items``. Inert once a table is published, since publication checks a union; remove each after
     #: its first publish.
     added_tables: ClassVar[tuple[str, ...]] = (
-        "bill_cosponsors.parquet", "bill_committee_activities.parquet", "cbo_feed_items.parquet")
+        "bill_cosponsors.parquet", "bill_committee_activities.parquet", "cbo_feed_items.parquet",
+        "cbo_estimate_cards.parquet")
     partitioned: ClassVar[Mapping[str, tuple[str, ...]]] = {
         f"{name}.parquet": (partitioning.column,) for name, partitioning in PARTITIONED.items()
     }

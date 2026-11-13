@@ -14,6 +14,7 @@ from functools import lru_cache
 from typing import Any
 
 import pyarrow as pa
+from spicy_docs.schemas.cbo_estimate_cards import CBO_ESTIMATE_CARDS, validate_card
 
 TEXT, INTEGER, BOOLEAN = pa.string(), pa.int64(), pa.bool_()
 
@@ -69,6 +70,7 @@ NATIVE = {
 
 # Complete source field inventories. A new producer field must be classified explicitly.
 INPUT_COLUMNS = {
+    "cbo_estimate_cards": CBO_ESTIMATE_CARDS.columns,
     'amendments': tuple(
         'amendment_id congress amendment_type amendment_number purpose description proposed_date '
         'submitted_date chamber update_date latest_action_date latest_action_text sponsor_bioguide_id '
@@ -200,6 +202,7 @@ RECEIPT_ONLY = frozenset(("bill_family_archives", "bill_family_backfills", "bill
 # stage_source_text), the rule that gave its signed date (signed_date_rule), the system that entered a bill action
 # (source_system_name), and whether the roster file or the caller stated an assignment's Congress (congress_basis).
 PROCESSING = {
+    "cbo_estimate_cards": frozenset(),
     'amendments': frozenset('url'.split()),
     'bill_actions': frozenset('source_system_code stage_rule stage_matcher'.split()),
     'bill_committees': frozenset('referral_rule referral_signal'.split()),
@@ -306,6 +309,7 @@ FLATTEN = {
 }
 # Non-domain members of these source objects stay exclusively in the receipt.
 OBJECT_PROCESSING = {
+    "cbo_estimate_cards": frozenset(),
     ("nominations", "nomination_type_json"): frozenset(),
     ("treaties", "parts_json"): frozenset(("urls", "url")),
     ("member_party_affiliations", "source_json"): frozenset(("party", "start", "end")),
@@ -313,6 +317,7 @@ OBJECT_PROCESSING = {
         ("rule", "matcher", "kind_rule", "source", "model", "prompt_version", "content_hash", "regenerated")),
 }
 IDENTITIES = {
+    "cbo_estimate_cards": CBO_ESTIMATE_CARDS.identity,
     "bill_committee_activities": ("bill_id", "system_code", "activity_name", "activity_date", "occurrence"),
     "cbo_feed_items": ("publication_id",),
     "amendments": ("amendment_id",), "bill_actions": ("bill_id", "action_index"),
@@ -342,6 +347,10 @@ def target_name(dataset: str, name: str) -> str:
 
 @lru_cache(maxsize=None)
 def subject_schema(dataset: str) -> pa.Schema:
+    if dataset == "cbo_estimate_cards":
+        from spicy_regs.contract_types import arrow_schema
+
+        return arrow_schema(CBO_ESTIMATE_CARDS)
     if dataset in RECEIPT_ONLY:
         return pa.schema([])
     fields = {}
@@ -426,6 +435,11 @@ def map_record(dataset: str, row: Mapping[str, Any]) -> MappedRecord:
     receipt integration retains that whole original input as a refused attempt.
     Missing legacy columns remain null; they do not establish an empty list.
     """
+    if dataset == "cbo_estimate_cards":
+        if extra := set(row) - set(INPUT_COLUMNS[dataset]):
+            raise ValueError(f"{dataset}: unclassified source fields {sorted(extra)}")
+        validate_card(row)
+        return MappedRecord(dict(row), dict(row))
     if extra := set(row) - set(INPUT_COLUMNS[dataset]):
         raise ValueError(f"{dataset}: unclassified source fields {sorted(extra)}")
     raw = dict(row)

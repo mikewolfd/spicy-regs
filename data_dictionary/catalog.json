@@ -686,6 +686,20 @@
         ]
       },
       {
+        "dataset": "cbo_estimate_cards",
+        "receipt_only": false,
+        "policy_version": "congress-subjects/1",
+        "identity_columns": [
+          "publication_id"
+        ],
+        "processing_fields": [
+          "source_fields",
+          "source_metadata",
+          "source_schema",
+          "entry_kind"
+        ]
+      },
+      {
         "dataset": "cbo_feed_items",
         "receipt_only": false,
         "policy_version": "congress-subjects/1",
@@ -9718,6 +9732,53 @@
         "link",
         "description",
         "bill_number"
+      ]
+    },
+    {
+      "table": "cbo_estimate_cards",
+      "label": "Archived CBO cost-estimate cards",
+      "summary": "One qualified card per CBO publication, with three positional fiscal windows, literal and typed millions, PAYGO and mandate answers, source context and original evidence. Join publication_id to cbo_cost_estimates for source-stated bill links; cards exist independently of whether those bill links resolve.",
+      "coverage": "Explicit retained Common Crawl publication captures selected through the bill-family archive manifest. The build accounts for every item of the selected feed and records unread indexes, unretained pages, observed absence and unresolved PDF candidates separately.",
+      "kind": null,
+      "measured_on": "2026-11-13",
+      "data_quality": "Authority is the archive with explicit capture time and publication time. Asterisks, blanks and nonnumeric amounts retain their literal and have null typed amounts. PDF-only bill/month matches remain unresolved. Current retained-source qualification does not establish complete archive coverage, PDF parity or public publication.",
+      "columns": [
+        "publication_id",
+        "congress",
+        "publication_date",
+        "publication_title",
+        "publication_context",
+        "title",
+        "subtitle",
+        "unit",
+        "windows",
+        "answers",
+        "flags",
+        "footnotes",
+        "pdf_urls",
+        "card_source",
+        "markup",
+        "schema_version",
+        "source_sha256",
+        "source_locator",
+        "receipt_object",
+        "authority",
+        "archive_operator",
+        "original_publisher_url",
+        "archive_timestamp",
+        "earliest_timestamp",
+        "index_sha256",
+        "index_digest",
+        "crawl_id",
+        "warc_filename",
+        "extraction_method",
+        "model_id",
+        "request_id",
+        "identity_rule",
+        "captures",
+        "warc_offset",
+        "warc_length",
+        "page_number"
       ]
     },
     {

@@ -4121,6 +4121,26 @@ tables:
       run, so a link and its hearing state one committee key.
     columns_from: spicy_docs
 
+  cbo_estimate_cards:
+    measured_on: "2026-11-13"
+    label: "Archived CBO cost-estimate cards"
+    subject: congress
+    coverage: >-
+      Explicit retained Common Crawl publication captures selected through the bill-family
+      archive manifest. The build accounts for every item of the selected feed and records
+      unread indexes, unretained pages, observed absence and unresolved PDF candidates separately.
+    summary: >-
+      One qualified card per CBO publication, with three positional fiscal windows,
+      literal and typed millions, PAYGO and mandate answers, source context and original evidence.
+      Join publication_id to cbo_cost_estimates for source-stated bill links; cards exist
+      independently of whether those bill links resolve.
+    data_quality: >-
+      Authority is the archive with explicit capture time and publication time. Asterisks,
+      blanks and nonnumeric amounts retain their literal and have null typed amounts.
+      PDF-only bill/month matches remain unresolved. Current retained-source qualification
+      does not establish complete archive coverage, PDF parity or public publication.
+    columns_from: spicy_docs
+
   cbo_feed_items:
     measured_on: "2026-10-03"
     label: "CBO cost-estimate feed items"

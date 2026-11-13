@@ -399,6 +399,7 @@ FAMILY_TABLES: tuple[tuple[str, str], ...] = (
     ("cbo_cost_estimates", "cbo_cost_estimates"),
     # spicy-docs 0.54.0: every item of each CBO feed read, whether or not it names a bill.
     ("cbo_feed_items", "cbo_feed_items"),
+    ("cbo_estimate_cards", "cbo_estimate_cards"),
 )
 
 #: Contracts stored one file per partition (multi-file design §4.2): ``bill_sections`` by the Congress its
@@ -2008,6 +2009,8 @@ def build_bill_family(
     bills_acquirer: BulkBillsSource | None = None,
     list_source: ListBackfillSource | None = None,
     cbo_acquirer: Any = None,
+    cbo_archive_manifest: Path | None = None,
+    cbo_archive_root: Path | None = None,
     max_version_fetches: int = MAX_VERSION_FETCHES,
     download_prior: Callable[[str, Path], bool] = r2.download,
     download_members: Callable[[str, Path], Sequence[Path]] = download_prior_members,
@@ -2486,7 +2489,14 @@ def build_bill_family(
         },
         prior=prior_paths.get("cbo_cost_estimates"),
     )
-    folded = replace(folded, cbo_cost_estimates=tuple(estimates), cbo_feed_items=feed.items)
+    from spicy_regs.transforms.cbo_archive_selection import read_selected_cards
+
+    cards = read_selected_cards(
+        cbo_archive_manifest or (Path(raw) if (raw := os.environ.get("BILL_FAMILY_CBO_ARCHIVE_MANIFEST")) else None),
+        archive_root=cbo_archive_root, congresses=bulk_congresses, output_dir=output_dir, evidence=evidence,
+    )
+    folded = replace(folded, cbo_cost_estimates=tuple(estimates), cbo_feed_items=feed.items,
+                     cbo_estimate_cards=tuple(cards))
     # Each scope names parents whose prior child rows this run replaces --
     # emptying them where the run publishes none.
     replaced: dict[str, ReplacementScope] = {
@@ -2514,6 +2524,11 @@ def build_bill_family(
     }
 
     def publish(contract: str, rows: Any) -> Path:
+        if contract == "cbo_estimate_cards":
+            from spicy_regs.transforms.cbo_archive_selection import merge_card_rows
+
+            return merge_card_rows(output_dir, rows, download_prior=download_prior,
+                                   prior_present=(prior_paths.get(contract) is not None) if contract in prior_paths else None)
         if contract in PARTITIONED:
             table = TABLE_CONTRACTS[contract]
             return merge_partitioned_table(
