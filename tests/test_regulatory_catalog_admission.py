@@ -24,7 +24,7 @@ def test_comments_catalog_admits_mixed_receipts_only_at_their_exact_shape(tmp_pa
     from spicy_regs.policy_migrations import earlier_policy
     from spicy_regs.sources import regulatory_catalog as native
     from spicy_regs.transforms.parquet_rows import write_rows
-    from spicy_regs.transforms.regulations_receipts import policy
+    from spicy_regs.transforms.regulations_receipts import COMMENTS_PROMOTION_PROCESSOR, policy
     from spicy_regs.transforms.regulations_shape import shape_record
 
     current = policy("comments")
@@ -32,12 +32,13 @@ def test_comments_catalog_admits_mixed_receipts_only_at_their_exact_shape(tmp_pa
     assert native.policy("comments") == current
     raw_old = {"comment_id": "old", "attachments_json": '[{"attachment_id":"a","title":"old"}]'}
     raw_new = {"comment_id": "new", "attachments_json": '[{"attachment_id":"b","authors":["A"],"docOrder":0}]'}
-    def prepare(raw, declared):
+    def prepare(raw, declared, *, promoted=False):
         row = shape_record("comments", raw)
         subject = pa.Table.from_pylist([row], schema=declared.subject_schema).to_pylist()[0]
+        processing = {} if promoted else {"raw_source_record": raw, "input_metadata": {}}
         return split_record(
-            declared, subject | {"raw_source_record": raw, "input_metadata": {}},
-            ReceiptContext("selected", raw["comment_id"], "test", [
+            declared, subject | processing,
+            ReceiptContext("selected", raw["comment_id"], COMMENTS_PROMOTION_PROCESSOR if promoted else "test", [
                 {"source_id": "fixture", "source_uri": None, "sha256": None, "locator": raw["comment_id"],
                  "body_version": "selected"},
             ]),
@@ -61,6 +62,21 @@ def test_comments_catalog_admits_mixed_receipts_only_at_their_exact_shape(tmp_pa
         assert connection.execute(f"SELECT comment_id, attachments_json FROM {table} ORDER BY comment_id").fetchall() == [
             ("new", raw_new["attachments_json"]), ("old", raw_old["attachments_json"]),
         ]
+
+        promoted, promoted_receipt = prepare(raw_old, prior, promoted=True)
+        write_rows([promoted_receipt, new_receipt], receipts, RECEIPT_SCHEMA)
+        connection.execute(f"DELETE FROM {native.receipts_table()} WHERE outcome='accepted'")
+        connection.execute(f"INSERT INTO {native.receipts_table()} SELECT * FROM read_parquet(?)", [str(receipts)])
+        flagged = native.processing_table(connection, COMMENT, include_comment_promotion=True)
+        assert connection.execute(f"SELECT comment_id, _promoted_v2 FROM {flagged} ORDER BY comment_id").fetchall() == [
+            ("new", False), ("old", True),
+        ]
+        held = connection.execute(f"SELECT attachments_json FROM {flagged} WHERE comment_id='old'").fetchone()[0]
+        from spicy_regs.pipelines.comment_fields_write import only_adds_attachments
+
+        reread = '[{"title": "old", "attachment_id": "a", "docOrder": 1}]'
+        assert not only_adds_attachments(reread, held)
+        assert only_adds_attachments(reread, held, promoted_v2=True)
 
         for edit, match in (
             ({"authors": []}, "v2 receipt cannot attest"),

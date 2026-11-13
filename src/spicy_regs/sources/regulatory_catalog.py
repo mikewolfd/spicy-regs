@@ -483,7 +483,7 @@ def _restore_comments_catalog(con, subject, receipts, work, generation):
 
 
 def processing_table(con, record_type, *, where: str | None = None, in_transaction=False,
-                     selected_receipts: Path | None = None):
+                     selected_receipts: Path | None = None, include_comment_promotion=False):
     """Return exact retained mapper observations after checking native subject joins.
 
     The receipt owns the original processing input. Native business columns are
@@ -494,6 +494,8 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
     from . import iceberg
     from contextlib import nullcontext
     dataset = record_type.name
+    if include_comment_promotion and dataset != 'comments':
+        raise ValueError('Only comments have attachment promotion receipts')
     target = qualified(record_type)
     temporary_name = '_processing_' + dataset + '_' + uuid4().hex
     predicate = f' WHERE {where}' if where else ''
@@ -542,8 +544,22 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
             else:
                 restored = [work / 'processing.parquet']
                 _restore_catalog_selection(con, dataset, subject, receipts, restored[0], generation)
-            con.execute(f'CREATE TEMP TABLE "{temporary_name}" AS SELECT * FROM read_parquet(?)',
-                        [[str(path) for path in restored]])
+            paths = [str(path) for path in restored]
+            if include_comment_promotion:
+                from spicy_regs.transforms.regulations_receipts import COMMENTS_PROMOTION_PROCESSOR
+                con.execute(f"""
+                    CREATE TEMP TABLE "{temporary_name}" AS
+                    SELECT p.*, coalesce(r.promoted, false) AS _promoted_v2
+                    FROM read_parquet(?) p
+                    LEFT JOIN (
+                        SELECT json_extract_string(identity_json, '$[1][0][1][1][1]') AS comment_id,
+                               true AS promoted
+                        FROM read_parquet(?)
+                        WHERE policy_version='regulations-native-v2' AND processor=?
+                    ) r USING (comment_id)
+                """, [paths, str(receipts), COMMENTS_PROMOTION_PROCESSOR])
+            else:
+                con.execute(f'CREATE TEMP TABLE "{temporary_name}" AS SELECT * FROM read_parquet(?)', [paths])
     return '"' + temporary_name + '"'
 
 

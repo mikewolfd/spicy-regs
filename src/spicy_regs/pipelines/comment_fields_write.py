@@ -47,6 +47,7 @@ import secrets
 import shutil
 import time
 from contextlib import suppress
+from functools import cache
 from os import getenv
 from pathlib import Path
 
@@ -54,7 +55,8 @@ from spicy_regs.duckdb_settings import ExportResources
 from spicy_regs.schemas import COMMENT
 from spicy_regs.sources import iceberg
 from spicy_regs.transforms.regulations_shape import (
-    COMMENT_ATTACHMENT_ID, COMMENT_ATTACHMENT_METADATA, COMMENT_ATTACHMENT_RESTRICTIONS,
+    COMMENT_ATTACHMENTS, COMMENT_ATTACHMENT_ID, COMMENT_ATTACHMENT_METADATA, COMMENT_ATTACHMENT_RESTRICTIONS,
+    _native, _validate,
 )
 
 #: The catalog's key and version, which :func:`prepare` selects on their own and a fill never writes.
@@ -124,16 +126,43 @@ def downloadable_attachments(value: str | None) -> str | None:
     return json.dumps(kept) if kept else None
 
 
-def only_adds_attachments(read: str | None, held: str | None) -> bool:
+@cache
+def _v2_attachment_type():
+    from spicy_regs.policy_migrations import earlier_policy
+
+    return earlier_policy("comments", "regulations-native-v2").subject_schema.field("attachments").type
+
+
+def _matches_promoted_attachments(held: str, *earlier_spellings: str | None) -> bool:
+    """The v2 promotion encoded the exact native struct in compact JSON with all fields."""
+    v2 = _v2_attachment_type()
+    decoded = json.loads(held)
+    if not isinstance(decoded, list) or any(
+        not isinstance(entry, dict) or list(entry) != v2.value_type.names for entry in decoded
+    ):
+        return False
+    import pyarrow as pa
+
+    for spelling in earlier_spellings:
+        candidate = _native("comments", "attachments_json", spelling)
+        _validate(candidate, COMMENT_ATTACHMENTS, "attachments")
+        normalized = pa.array([candidate], type=v2).to_pylist()[0]
+        if json.dumps(normalized, ensure_ascii=False, separators=(",", ":")) == held:
+            return True
+    return False
+
+
+def only_adds_attachments(read: str | None, held: str | None, promoted_v2: bool = False) -> bool:
     """Compare the read against the exact JSON written by an earlier extract."""
     if held is None:
         return False
     try:
         listed = _listed(read)
-        return (
-            _without_keys(listed, _METADATA_KEYS) == held
-            or _without_keys(listed, _METADATA_KEYS | {COMMENT_ATTACHMENT_ID}) == held
-            or downloadable_attachments(read) == held
+        prior = _without_keys(listed, _METADATA_KEYS)
+        before_ids = _without_keys(listed, _METADATA_KEYS | {COMMENT_ATTACHMENT_ID})
+        downloadable = downloadable_attachments(read)
+        return held in (prior, before_ids, downloadable) or (
+            promoted_v2 and _matches_promoted_attachments(held, prior, before_ids, downloadable)
         )
     except (ValueError, TypeError, AttributeError):
         return False
@@ -366,7 +395,7 @@ def prepare(
         snapshot = iceberg._read_snapshot(con, COMMENT, namespace=namespace)
         source = iceberg._snapshot_query(COMMENT, snapshot, namespace=namespace)
         from spicy_regs.sources.regulatory_catalog import processing_table
-        processing = processing_table(con, COMMENT)
+        processing = processing_table(con, COMMENT, include_comment_promotion="attachments_json" in additive)
         if iceberg._read_snapshot(con, COMMENT) != snapshot:
             raise RuntimeError('Catalog changed while preparing field fill; retry')
         missing = [c for c in columns if c not in con.sql(f'SELECT * FROM {processing}').columns]
@@ -399,6 +428,8 @@ def prepare(
         # scan of the remote table, streamed to disk.
         nulls = ", ".join(f'"{c}" IS NULL AS "null_{c}"' for c in columns)
         held = "".join(f', "{c}" AS "held_{c}"' for c in additive)
+        if additive:
+            held += ", _promoted_v2"
         con.execute(f"""COPY (SELECT comment_id, modify_date, {nulls}{held}, _file FROM ({with_file}) WHERE {where})
                         TO {_sql(cat_file)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
         con.execute(f"DROP TABLE {processing}")
@@ -450,10 +481,10 @@ def prepare(
         # value travels from here: carried through the whole-table join below it doubled that join's time (a
         # stand-in of the 26.3M-row catalog, 2026-10-03: 6.0 s against 13.2 s).
         for c in additive:
-            con.create_function(f"_additive_{c}", ADDITIVE[c], ["VARCHAR", "VARCHAR"], "BOOLEAN",
+            con.create_function(f"_additive_{c}", ADDITIVE[c], ["VARCHAR", "VARCHAR", "BOOLEAN"], "BOOLEAN",
                                 null_handling="special")
         differing = [f"""SELECT c.comment_id, c.modify_date, '{c}' AS "column",
-                                _additive_{c}(v."{c}", c."held_{c}") AS additive,
+                                _additive_{c}(v."{c}", c."held_{c}", c._promoted_v2) AS additive,
                                 c."held_{c}" AS held
                          FROM {catalog} c JOIN {versions} v ON {on_version}
                          WHERE c."held_{c}" IS NOT NULL AND v."{c}" IS NOT NULL AND v."{c}" <> c."held_{c}\""""

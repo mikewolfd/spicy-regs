@@ -430,7 +430,9 @@ New or changed comments populate the added fields during the normal nightly
 run. Previously published comments need an s5 re-read of the originals. The
 attachment fill still requires the same publisher modification date and
 agreement across copies. It can replace an earlier list when the re-read adds
-only the newly retained keys, and reports conflicting values. Measure the
-fill with a bounded agency sample before running it across the corpus. An
+only the newly retained keys, and reports conflicting values. For a row with an
+accepted v2 promotion receipt, the fill also checks the byte-exact compact JSON
+that the promotion derived from the native struct. Measure the fill with a
+bounded agency sample before running it across the corpus. An
 unread older value and a publisher-omitted value both appear as NULL in public
 Parquet.

@@ -197,6 +197,20 @@ def test_a_read_can_add_metadata_to_an_id_bearing_attachment_without_changing_th
     assert not cfw.only_adds_attachments(json.dumps([added | {"title": "changed"}]), held)
 
 
+def test_v2_promotion_fill_compares_all_historical_attachment_values():
+    previous = {"title": "café", "formats": None, "attachment_id": None,
+                "restrict_reason": None, "restrict_reason_type": "Copyrighted"}
+    held = json.dumps([previous], ensure_ascii=False, separators=(",", ":"))
+    added = {"title": "café", "formats": None, "restrictReasonType": "Copyrighted",
+             "attachment_id": "a", "authors": ["A", "A"], "docOrder": 0}
+    assert not cfw.only_adds_attachments(json.dumps([added]), held)
+    assert cfw.only_adds_attachments(json.dumps([added]), held, True)
+    assert not cfw.only_adds_attachments(json.dumps([added | {"restrictReasonType": "Other"}]), held, True)
+    assert not cfw.only_adds_attachments(json.dumps([added | {"title": "different"}]), held, True)
+    held_with_id = json.dumps([previous | {"attachment_id": "prior"}], ensure_ascii=False, separators=(",", ":"))
+    assert not cfw.only_adds_attachments(json.dumps([added]), held_with_id, True)
+
+
 def test_a_read_that_only_adds_withheld_attachments_replaces_the_held_list(tmp_path, catalog):
     """The 2026-10 re-read: the held list is the read's with its withheld entries and file-less renditions removed."""
     seed(catalog, [row("A", attachments_json=HELD)])
