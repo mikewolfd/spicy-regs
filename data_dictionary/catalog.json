@@ -11830,6 +11830,37 @@
         "coverage",
         "source_scope_json"
       ]
+    },
+    {
+      "table": "white_house_action_versions",
+      "label": "White House action source versions",
+      "summary": "One exact retained White House action-page version with source text, native category and literal dates. Related official-document facts may overlap; equivalence remains unresolved.",
+      "coverage": "Window. Explicitly selected nominations and appointments category pages and article HTML within a declared publication-date window. Changed HTML remains a separate version. This does not establish historical completeness or current legal effect.",
+      "kind": "window",
+      "measured_on": "2026-11-13",
+      "data_quality": "Exact URL and HTML-digest matches reuse existing official routes. Similar titles and names never establish document identity. WordPress post IDs identify publisher posts, not nominations or people.",
+      "columns": [
+        "action_version_id",
+        "source_url",
+        "native_post_id",
+        "title",
+        "document_type",
+        "categories_json",
+        "listing_url",
+        "listing_sha256",
+        "listing_record_index",
+        "published_time",
+        "display_time",
+        "modified_time",
+        "modified_time_status",
+        "body_text",
+        "body_html",
+        "body_selector",
+        "source_sha256",
+        "observed_at",
+        "parser_version",
+        "official_match_status"
+      ]
     }
   ]
 }

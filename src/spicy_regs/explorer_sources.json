@@ -323,6 +323,13 @@
       "url": "https://sam.gov/data-services",
       "kind": "government",
       "note": "Exact public file observations. Detailed exclusions remain separate from registration flags; notices are separate from spending awards."
+    },
+    "white-house-actions": {
+      "id": "white-house-actions",
+      "name": "White House presidential actions",
+      "url": "https://www.whitehouse.gov/presidential-actions/nominations-appointments/",
+      "kind": "government",
+      "note": "Selected retained source versions; related official facts can overlap."
     }
   },
   "families": {
@@ -1300,6 +1307,15 @@
       "inputs": [],
       "transformation": "Reads selected original historical Table III members; retains each classification placement and original source position.",
       "evidence": "src/spicy_regs/sources/table3_history.py",
+      "modelGenerated": false
+    },
+    "white_house_action_versions": {
+      "sources": [
+        "white-house-actions"
+      ],
+      "inputs": [],
+      "transformation": "Reads retained White House article HTML and category pages; preserves source versions without asserting equivalence to official documents.",
+      "evidence": "src/spicy_regs/pipelines/white_house.py",
       "modelGenerated": false
     }
   }

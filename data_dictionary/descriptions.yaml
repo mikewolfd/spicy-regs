@@ -13461,3 +13461,10 @@ tables:
       distinct_native_ids: Distinct native ID values in the selected rows; not a count of real-world parties.
       unqualified_text_rows: Selected observations with at least one unqualified non-ASCII field. Identify affected
         fields and records through the observation table.
+  white_house_action_versions:
+    label: White House action source versions
+    summary: One exact retained White House action-page version with source text, native category and literal dates. Related official-document facts may overlap; equivalence remains unresolved.
+    subject: congress
+    measured_on: '2026-11-13'
+    coverage: Window. Explicitly selected nominations and appointments category pages and article HTML within a declared publication-date window. Changed HTML remains a separate version. This does not establish historical completeness or current legal effect.
+    data_quality: Exact URL and HTML-digest matches reuse existing official routes. Similar titles and names never establish document identity. WordPress post IDs identify publisher posts, not nominations or people.

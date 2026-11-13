@@ -1074,6 +1074,7 @@ def _build_connection_inputs(con, publication):
         "foreign_assistance_observations",
         "foreign_assistance_snapshots",
         "administration_policy_bill_links", "administration_policy_statements",
+        "white_house_action_versions",
         "ecfr_snapshot_sections", "ecfr_snapshots", "federal_register_issues",
         "table3_historical_records", "uscode_edition_structure", "uscode_editions", "uscode_edition_sections",
     }
