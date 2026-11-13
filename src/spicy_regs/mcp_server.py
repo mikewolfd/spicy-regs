@@ -1064,6 +1064,8 @@ def _build_connection_inputs(con, publication):
         "executive_disclosure_pages",
         "house_disbursements",
         "house_disbursements_summary",
+        "house_disclosure_filings", "house_disclosure_reports", "house_disclosure_pages",
+        "house_disclosure_transactions", "house_disclosure_amendment_links",
         "house_disbursement_pdf_rows",
         "house_disbursement_pdf_pages",
         "senate_disbursements",

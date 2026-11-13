@@ -1036,6 +1036,20 @@ JOINS += (
           expected_cardinality='one'),
 )
 
+JOINS += tuple(
+    _join(child, child_key, parent, parent_key, 0, 0, "unmeasured",
+          "Version-bound House source identities. Local pilot resolution is checked by its consumer probe; "
+          "the shared publication has no measured House disclosure baseline.", expected_cardinality="one")
+    for child, child_key, parent, parent_key in (
+        ("house_disclosure_reports", "filing_id", "house_disclosure_filings", "filing_id"),
+        ("house_disclosure_pages", "report_id", "house_disclosure_reports", "report_id"),
+        ("house_disclosure_transactions", "report_id", "house_disclosure_reports", "report_id"),
+        ("house_disclosure_transactions", "filing_id", "house_disclosure_filings", "filing_id"),
+        ("house_disclosure_amendment_links", "original_report_id", "house_disclosure_reports", "report_id"),
+        ("house_disclosure_amendment_links", "amended_report_id", "house_disclosure_reports", "report_id"),
+    )
+)
+
 # New full-key/attribute baselines include raw-row cardinality and immutable input
 # URLs. Keep historical declarations above as lineage; replace their measured
 # values only from the replayable complete-input receipt.

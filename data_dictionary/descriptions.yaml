@@ -13555,3 +13555,230 @@ tables:
       comment: "Printed comment with blank or double-dash markers represented as null."
       comment_raw: "Displayed comment cell before missing-value interpretation."
       raw_cells_json: "Every displayed transaction cell in source column order; raw source HTML is separately retained."
+
+  house_disclosure_filings:
+    summary: One retained House index line, preserving every filing category and repeated
+      DocID occurrence.
+    label: House filing lookup
+    subject: congress
+    coverage: Sampled. One declared retained index snapshot and explicitly selected
+      periodic transaction report originals. Other categories are discovery only; image-form
+      extraction and source-wide completeness remain unqualified.
+    measured_on: '2026-11-13'
+    data_quality: Native blanks, ranges, repeated index entries and original/amended
+      observations remain separate. Refused reading is not a valid empty report. Page
+      regions retain unqualified checkboxes; annual sections and scanned transactions
+      are outside this pilot.
+    identity_columns:
+    - filing_id
+    columns:
+      filing_id: Identity of one original index line in one retained index snapshot;
+        repeated DocIDs remain separate observations.
+      doc_id: Literal House filing DocID; distinct from a native transaction ID.
+      filing_type: Literal filing-category code. P selects periodic transaction reports
+        and does not represent all filings.
+      prefix: Literal index name prefix, including blank.
+      first: Literal index first name.
+      last: Literal index last name.
+      suffix: Literal index name suffix, including blank.
+      state_district: Literal index StateDst code; no person identifier is inferred.
+      year_raw: Original Year cell; index year is separate from filing and transaction
+        dates.
+      filing_date_raw: Original index FilingDate cell.
+      filing_date_status: parsed, blank or unparsed; original cell remains available.
+      report_url: Publisher file route constructed from category, index year and DocID.
+        It does not establish possession or availability.
+      report_url_basis: How the file locator was constructed and its availability limit.
+      index_uri: Official URL of the retained index ZIP.
+      index_sha256: SHA-256 of the exact original index ZIP.
+      observed_at: Recorded source capture instant; null when no supported capture time
+        is known.
+      raw_cells_json: Ordered original header/value pairs, including blank and unfamiliar
+        fields.
+      index_year: Selected publisher index year, distinct from the date range of transaction
+        activity.
+      source_line: One-based physical line in the original yearFD.txt ZIP member.
+      filing_date: Parsed index filing date; null with explicit status when blank or
+        unreadable.
+  house_disclosure_reports:
+    summary: One explicitly selected P filing PDF reading, including refusals and the
+      exact source/backend version.
+    label: House disclosure report readings
+    subject: congress
+    coverage: Sampled. One declared retained index snapshot and explicitly selected
+      periodic transaction report originals. Other categories are discovery only; image-form
+      extraction and source-wide completeness remain unqualified.
+    measured_on: '2026-11-13'
+    data_quality: Native blanks, ranges, repeated index entries and original/amended
+      observations remain separate. Refused reading is not a valid empty report. Page
+      regions retain unqualified checkboxes; annual sections and scanned transactions
+      are outside this pilot.
+    identity_columns:
+    - report_id
+    columns:
+      report_id: Identity binding a selected index observation to one exact original
+        PDF version.
+      filing_id: Identity of one original index line in one retained index snapshot;
+        repeated DocIDs remain separate observations.
+      doc_id: Literal House filing DocID; distinct from a native transaction ID.
+      source_uri: Official URL of the selected original PDF.
+      source_sha256: SHA-256 of the exact original PDF, separate from index and derived
+        output hashes.
+      observed_at: Recorded source capture instant; null when no supported capture time
+        is known.
+      extraction_status: native_layout for the declared native-cell reading, or refused
+        with a reason; refused is not an empty filing.
+      refusal_reason: Explicit unread, identity, layout or page-budget reason; null
+        on a qualified native reading.
+      parser_version: Version of the source-owned deterministic native-grid reader.
+      backend: Native PDF backend used by the reader.
+      backend_version: Installed native PDF backend version recorded for replay.
+      model: 'Null: this path makes no model or OCR calls.'
+      filer_name_raw: Name stated by the native PDF, when readable; never inferred from
+        an image refusal.
+      state_district_raw: State/district stated by the native PDF, checked against the
+        selected index for qualified native reports.
+      signed_date_raw: Date printed beside the native digital-signature statement; this
+        is not signature authentication.
+      index_year: Selected publisher index year, distinct from the date range of transaction
+        activity.
+      source_bytes: Original PDF byte size.
+      page_count: Selected original PDF page count, including unread pages.
+      transaction_count: Qualified native transaction observations emitted for this
+        selected report; zero with refusal does not establish no transactions.
+  house_disclosure_pages:
+    summary: One visited original PDF page, preserving native text and explicit image/layout
+      failures.
+    label: House disclosure source pages
+    subject: congress
+    coverage: Sampled. One declared retained index snapshot and explicitly selected
+      periodic transaction report originals. Other categories are discovery only; image-form
+      extraction and source-wide completeness remain unqualified.
+    measured_on: '2026-11-13'
+    data_quality: Native blanks, ranges, repeated index entries and original/amended
+      observations remain separate. Refused reading is not a valid empty report. Page
+      regions retain unqualified checkboxes; annual sections and scanned transactions
+      are outside this pilot.
+    identity_columns:
+    - page_id
+    columns:
+      page_id: Identity of a page within one exact selected report version.
+      report_id: Identity binding a selected index observation to one exact original
+        PDF version.
+      doc_id: Literal House filing DocID; distinct from a native transaction ID.
+      source_uri: Official URL of the selected original PDF.
+      source_sha256: SHA-256 of the exact original PDF, separate from index and derived
+        output hashes.
+      page_status: Native grid, native supplement or an explicit unread/unsupported
+        page status.
+      native_text: Exact backend-native page text, including source glyph limitations;
+        empty text on an image page is not source emptiness.
+      page_locator: Official PDF URL with the one-based source page fragment.
+      page_number: One-based page number in the original PDF.
+  house_disclosure_transactions:
+    summary: One qualified native PTR row with reported brackets, native blanks and
+      every source-page fragment.
+    label: House reported transaction observations
+    subject: congress
+    coverage: Sampled. One declared retained index snapshot and explicitly selected
+      periodic transaction report originals. Other categories are discovery only; image-form
+      extraction and source-wide completeness remain unqualified.
+    measured_on: '2026-11-13'
+    data_quality: Native blanks, ranges, repeated index entries and original/amended
+      observations remain separate. Refused reading is not a valid empty report. Page
+      regions retain unqualified checkboxes; annual sections and scanned transactions
+      are outside this pilot.
+    identity_columns:
+    - transaction_id
+    columns:
+      transaction_id: Identity of a row occurrence within one exact selected report
+        version; not a net trade identity.
+      report_id: Identity binding a selected index observation to one exact original
+        PDF version.
+      filing_id: Identity of one original index line in one retained index snapshot;
+        repeated DocIDs remain separate observations.
+      doc_id: Literal House filing DocID; distinct from a native transaction ID.
+      owner_raw: Printed ownership cell. Native blank remains an empty string and is
+        never defaulted to Self.
+      asset_raw: Complete multiline printed asset cell. Existing ticker-like text stays
+        literal; no security identity is invented.
+      action_raw: Printed purchase, sale, partial/full sale or exchange code; original
+        spelling and line breaks remain.
+      native_transaction_id: Printed transaction ID, including a native blank on a new
+        row. It is not the filing DocID.
+      transaction_date_raw: Printed transaction date, retained even when an amended
+        report later states a different date.
+      transaction_date_status: parsed, blank or unparsed for the transaction-date cell.
+      notification_date_raw: Printed notification date, separate from transaction, filing
+        and source capture dates.
+      notification_date_status: parsed, blank or unparsed for the notification-date
+        cell.
+      amount_raw: Complete multiline reported amount bracket; not an exact cash amount.
+      amount_status: reported_range, reported_exclusive_lower_bound, blank or unparsed.
+        An exclusive lower bound remains exclusive.
+      currency: USD only when an explicit dollar bracket was interpreted; null otherwise.
+      filing_status_raw: Printed New or Amended transaction status; reports and rows
+        are never automatically replaced or deduplicated.
+      details_raw: Complete printed row details, including continuations across pages;
+        native font glyphs remain visible.
+      capital_gains_read_status: 'checkbox_not_qualified: the original page region retains
+        the mark, but this reader does not interpret checkboxes.'
+      source_uri: Official URL of the selected original PDF.
+      source_sha256: SHA-256 of the exact original PDF, separate from index and derived
+        output hashes.
+      page_locator: Official PDF URL with the one-based source page fragment.
+      fragments_json: Every row page fragment with its source page, PDF-point bounds,
+        original native word indices, text and word bounds.
+      row_number: One-based transaction occurrence in reading order within this exact
+        PDF.
+      page_number: One-based page number in the original PDF.
+      page_end: Last original page containing this transaction row or its continued
+        details.
+      amount_lower_usd: Reported bracket lower bound in US dollars; consult amount_status
+        for exclusive bounds. Never an exact amount.
+      amount_upper_usd: Reported bracket upper bound in US dollars; null for open-ended,
+        blank or unreadable brackets.
+      transaction_date: Parsed printed transaction date; does not rewrite a prior report
+        when amended.
+      notification_date: Parsed printed notification date.
+  house_disclosure_amendment_links:
+    summary: One original-image-reviewed prior-filing-date reference in a retained amendment
+      letter, bound to both PDF versions.
+    label: House reviewed amendment references
+    subject: congress
+    coverage: Sampled. One declared retained index snapshot and explicitly selected
+      periodic transaction report originals. Other categories are discovery only; image-form
+      extraction and source-wide completeness remain unqualified.
+    measured_on: '2026-11-13'
+    data_quality: Native blanks, ranges, repeated index entries and original/amended
+      observations remain separate. Refused reading is not a valid empty report. Page
+      regions retain unqualified checkboxes; annual sections and scanned transactions
+      are outside this pilot.
+    identity_columns:
+    - link_id
+    columns:
+      link_id: Identity binding an explicit reviewed date-reference link to both original
+        versions and its review.
+      original_report_id: Selected earlier report identity referenced by the reviewed
+        letter.
+      amended_report_id: Selected later amendment-letter report identity; this does
+        not imply full replacement.
+      original_doc_id: DocID of the uniquely indexed same-filer P report on the letter-stated
+        earlier filing date.
+      amended_doc_id: DocID of the retained amendment-letter bundle.
+      original_source_sha256: SHA-256 of the exact earlier PDF version.
+      amended_source_sha256: SHA-256 of the exact later amendment-letter PDF version.
+      original_page_locator: Official earlier report URL and source page.
+      amended_page_locator: Official amendment-letter URL and the page containing its
+        stated prior date.
+      link_status: 'reviewed_date_reference: original-image review and a unique same-filer
+        index-date match, separate from native transaction extraction.'
+      source_statement: Original-image-reviewed statement naming the earlier filing
+        date.
+      basis: Evidence and method used to resolve the reviewed reference.
+      uncertainty: Limits on the relationship; additions, supersession, extraction and
+        net-amount claims remain separate.
+      review_sha256: SHA-256 of the retained original-image review used to qualify this
+        link.
+      original_page_number: One-based reviewed page in the earlier PDF.
+      amended_page_number: One-based reviewed page in the later PDF.
