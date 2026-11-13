@@ -362,12 +362,15 @@ def test_the_fill_workflow_is_manual_holds_the_writers_lock_and_always_restores_
     steps = workflow["jobs"]["fill"]["steps"]
     names = [step["name"] for step in steps]
     order = [next(i for i, n in enumerate(names) if n.startswith(prefix)) for prefix in (
-        "Download and verify", "Earlier runs' journals", "Disable R2 compaction", "Prepare", "Write", "Keep the journals",
-        "Keep the journal, receipts", "Re-enable R2 compaction")]
+        "Download and verify", "Earlier runs' journals", "Save and suspend maintenance", "Prepare", "Write",
+        "Restore exact prior maintenance", "Keep the journals", "Keep the journal, receipts")]
     assert order == sorted(order)
     for step in steps[order[-3]:]:
         assert step["if"].startswith("always()"), step["name"]
     assert "--sha256" in steps[order[0]]["run"] and "fetch" in steps[order[0]]["run"]
+    assert 'comments_maintenance suspend --state "$WORKDIR/maintenance-state.json"' in steps[order[2]]["run"]
+    assert 'comments_maintenance verify --state "$WORKDIR/maintenance-state.json"' in steps[order[4]]["run"]
+    assert 'comments_maintenance restore --state "$WORKDIR/maintenance-state.json"' in steps[order[5]]["run"]
     from spicy_regs.pipelines.comment_fields_write import PROFILES
 
     profile = workflow[True]["workflow_dispatch"]["inputs"]["profile"]

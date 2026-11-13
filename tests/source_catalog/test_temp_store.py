@@ -24,8 +24,8 @@ def test_temp_store_modes_preserve_catalog_and_select_sqlite_storage(tmp_path, m
         schema_modes.append(db.execute("PRAGMA temp_store").fetchone()[0])
         original_schema(db)
 
-    def observe_cache(self):
-        original_run(self)
+    def observe_cache(self, *, receipt_keys=None):
+        original_run(self, receipt_keys=receipt_keys)
         cache_modes.append(self.db.execute("PRAGMA temp_store").fetchone()[0])
         assert self.db.execute("SELECT count(*) FROM native_metadata_cache").fetchone()[0] == 1
 

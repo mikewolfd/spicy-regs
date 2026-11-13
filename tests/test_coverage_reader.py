@@ -184,7 +184,7 @@ def test_refuses_changed_inputs(tmp_path, change):
 
 
 def test_schema_cli_describes_both_native_policy_families():
-    for dataset, version in [("bill_versions", "legislative-documents/2"), ("bill_actions", "congress-subjects/1")]:
+    for dataset, version in [("bill_versions", "legislative-documents/2"), ("bill_actions", "congress-subjects/2")]:
         result = json.loads(
             subprocess.check_output([sys.executable, "-m", "spicy_regs.coverage_reader", "--schema", dataset])
         )
