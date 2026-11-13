@@ -24386,7 +24386,7 @@
       {
         "column_name": "parse_status",
         "column_type": "VARCHAR",
-        "description": "parsed for qualified electronic HTML; unsupported_paper for listed paper filings. Source failures prevent a completed build."
+        "description": "parsed for qualified electronic HTML; unsupported_paper for listed paper filings; unrequested_electronic for unacquired bodies in an explicit unpublishable local candidate. Source failures prevent a completed-year build."
       },
       {
         "column_name": "filer_heading",

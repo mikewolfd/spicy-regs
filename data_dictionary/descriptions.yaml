@@ -13513,7 +13513,7 @@ tables:
       amendment_number: "Number printed in an amendment title; null when absent."
       original_candidate_ids: "Derived original electronic report candidates with the same literal first/last names and report date within this selection. Does not establish replacement or cumulative semantics."
       amendment_link_status: "not_applicable, unique_candidate, ambiguous or unresolved. Candidate matching is derived and never collapses filings."
-      parse_status: "parsed for qualified electronic HTML; unsupported_paper for listed paper filings. Source failures prevent a completed build."
+      parse_status: "parsed for qualified electronic HTML; unsupported_paper for listed paper filings; unrequested_electronic for unacquired bodies in an explicit unpublishable local candidate. Source failures prevent a completed-year build."
       filer_heading: "Complete printed electronic-report filer heading; null for unparsed paper."
       filed_at_raw: "Printed Filed date and time, without an inferred timezone."
       transaction_count: "Printed electronic report transaction count, reconciled with every table row; null for paper."

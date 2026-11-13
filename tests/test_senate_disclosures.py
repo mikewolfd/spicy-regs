@@ -198,3 +198,43 @@ def test_duplicate_originals_keep_ambiguous_amendment_candidates(tmp_path):
             [str(tmp_path / "built/generation/senate_disclosure_reports.parquet")],
         ).fetchone()
     assert result == ([IDS[0], extra_id], "ambiguous")
+
+
+def test_explicit_partial_retains_declared_population_and_cannot_publish(tmp_path):
+    from rulespec_artifacts import LocalMemberSource
+    from spicy_regs.sources.publication import PublicationError, _stage_verified_generation
+
+    requests = []
+    r = reader(requests)
+    try:
+        capture = capture_year(tmp_path / "capture", year=2025, reader=r, archive_root=tmp_path / "raw")
+    finally:
+        r.close()
+    selected = json.loads(capture.read_text())
+    selected["reports"].pop(IDS[0])
+    selected["complete"] = False
+    selected["source_refusal"] = {"stage": "agreement", "status_code": 403, "body_retained": False}
+    capture.write_text(json.dumps(selected))
+    artifact = build(capture, tmp_path / "partial", archive_root=tmp_path / "raw", local_partial=True)
+    assert artifact.root["spec"]["publicationStatus"] == "local-partial"
+    with duckdb.connect() as con:
+        result = con.execute(
+            "SELECT report_id,parse_status,transaction_count FROM read_parquet(?) ORDER BY report_id",
+            [str(tmp_path / "partial/generation/senate_disclosure_reports.parquet")],
+        ).fetchall()
+    assert result == [
+        (IDS[0], "unrequested_electronic", None),
+        (IDS[1], "parsed", 1),
+        (IDS[2], "unsupported_paper", None),
+    ]
+    uploads = []
+    with pytest.raises(PublicationError, match="partial candidate"):
+        _stage_verified_generation(
+            artifact,
+            LocalMemberSource(tmp_path / "partial/generation"),
+            upload_member=lambda *a, **k: uploads.append(a),
+            client=None,
+            bucket="unused",
+            index={"families": {}},
+        )
+    assert not uploads

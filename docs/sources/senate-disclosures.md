@@ -63,3 +63,12 @@ or combined amendment total is created. The HTML caption describes transactions
 “added to this report”; same-name/date candidate links establish neither
 replacement nor cumulative amendment semantics. The native UUID, report hash and
 HTML row selector let a researcher inspect each observation independently.
+
+When source access is unresolved, `build --local-partial` can inspect a complete
+retained filing listing together with whichever exact report originals are held.
+Every listed report remains in the candidate. Missing electronic bodies are
+`unrequested_electronic` with null transaction counts; paper remains
+`unsupported_paper`. The source-refusal observation stays in the capture control
+and evidence journal. This candidate uses the maintained `local-partial` status,
+which the ordinary publisher refuses before any upload. The default build still
+requires every selected electronic report and never accepts a partial year.

@@ -211,8 +211,8 @@ def amount_range(value):
     return None, None, None, "unresolved"
 
 
-def build(captures, output, *, archive_root=None, read_index=None):
-    """Offline bounded replay into the existing generation/evidence writer."""
+def build(captures, output, *, archive_root=None, read_index=None, local_partial=False):
+    """Offline replay; explicit local partial candidates remain unpublishable."""
     import pyarrow as pa
     import pyarrow.parquet as pq
 
@@ -222,7 +222,8 @@ def build(captures, output, *, archive_root=None, read_index=None):
     if (
         manifest.get("format") != "senate-ptr-captures"
         or manifest.get("version") != 1
-        or manifest.get("complete") is not True
+        or type(manifest.get("complete")) is not bool
+        or (manifest["complete"] is not True and not local_partial)
     ):
         raise SenateDisclosureError("Only complete declared Senate capture selections can build tables")
     evidence = CaptureEvidence(output, FAMILY, archive_root=archive_root)
@@ -231,8 +232,17 @@ def build(captures, output, *, archive_root=None, read_index=None):
         evidence.retain_control(Path(captures), stage="senate-capture-selection")
         rows, counts = listings(manifest, evidence.store, evidence=evidence)
         electronic_ids = {r["report_id"] for r in rows if r["report_kind"] == "electronic"}
-        if set(manifest["reports"]) != electronic_ids:
+        held_ids = set(manifest["reports"])
+        missing_ids = electronic_ids - held_ids
+        if held_ids - electronic_ids or (missing_ids and not local_partial):
             raise SenateDisclosureError("Senate electronic report population differs from its complete listing")
+        if local_partial:
+            evidence.event(
+                "senate-local-source-gaps",
+                unresolved_report_ids=sorted(missing_ids),
+                source_refusal=manifest.get("source_refusal"),
+                qualification="Local partial candidate; unacquired bodies are not empty reports.",
+            )
         originals = {}
         for filing in rows:
             if filing["amendment_status"] == "none" and filing["report_kind"] == "electronic":
@@ -263,7 +273,13 @@ def build(captures, output, *, archive_root=None, read_index=None):
                 "report_date": date.fromisoformat(filing["report_date"]),
                 "submitted_date": date.fromisoformat(filing["submitted_date"]),
                 "raw_search_cells_json": json.dumps(filing["raw_search_cells"]),
-                "parse_status": "parsed" if item else "unsupported_paper",
+                "parse_status": (
+                    "parsed"
+                    if item
+                    else "unsupported_paper"
+                    if filing["report_kind"] == "paper"
+                    else "unrequested_electronic"
+                ),
                 "observed_at": item["observed_at"] if item else None,
                 "original_candidate_ids": [],
                 "amendment_link_status": "not_applicable",
@@ -310,7 +326,7 @@ def build(captures, output, *, archive_root=None, read_index=None):
                 for identity, d, kind in selected
             ],
             scope_id=f"senate-ptr-filing-year:{manifest['filing_year']}",
-            complete=True,
+            complete=not local_partial,
         )
         paths = []
         for table, values in zip(TABLES, (reports, transactions), strict=True):
@@ -322,6 +338,8 @@ def build(captures, output, *, archive_root=None, read_index=None):
             filing_year=manifest["filing_year"],
             listed_reports=len(reports),
             electronic_reports=len(electronic_ids),
+            parsed_electronic_reports=len(held_ids),
+            unrequested_electronic_reports=len(missing_ids),
             paper_reports=len(reports) - len(electronic_ids),
             transactions=len(transactions),
             source_counts=list(counts),
@@ -336,6 +354,7 @@ def build(captures, output, *, archive_root=None, read_index=None):
             read_snapshot=read_snapshot,
             inputs=evidence.inputs(),
             owned_output_root=output,
+            publication_status="local-partial" if local_partial else "complete-family",
         )
         write_json(
             output / "result.json",
@@ -343,6 +362,9 @@ def build(captures, output, *, archive_root=None, read_index=None):
                 "pin": artifact.pin.as_dict(),
                 "reports": len(reports),
                 "transactions": len(transactions),
+                "publication_status": "local-partial" if local_partial else "complete-family",
+                "parsed_electronic_reports": len(held_ids),
+                "unrequested_electronic_reports": len(missing_ids),
                 "source_evidence": str(evidence.artifact_dir),
             },
         )
@@ -364,6 +386,11 @@ def main():
     replay = sub.add_parser("build")
     replay.add_argument("--captures", type=Path, required=True)
     replay.add_argument("--read-index", type=Path)
+    replay.add_argument(
+        "--local-partial",
+        action="store_true",
+        help="Build an unpublishable local candidate retaining explicit missing electronic bodies",
+    )
     for command in (capture, replay):
         command.add_argument("--output", type=Path, required=True)
         command.add_argument("--archive-root", type=Path)
@@ -378,7 +405,13 @@ def main():
         )
         print(json.dumps({"captures": str(result)}))
     else:
-        result = build(args.captures, args.output, archive_root=args.archive_root, read_index=args.read_index)
+        result = build(
+            args.captures,
+            args.output,
+            archive_root=args.archive_root,
+            read_index=args.read_index,
+            local_partial=args.local_partial,
+        )
         print(json.dumps(result.pin.as_dict()))
 
 
