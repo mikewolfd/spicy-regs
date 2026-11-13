@@ -36,6 +36,7 @@ LOCAL_FAMILIES = frozenset({
     "census-geocoder",
     "court-opinions",
     "executive-orders",
+    "executive-disclosures",
     "fec-financial-profiles",
     "grants-opportunities",
     "fara",

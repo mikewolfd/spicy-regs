@@ -12846,3 +12846,129 @@ tables:
       source_release_logical_id: Logical identity of the admitted source release.
       source_selection_json: Exact declared Article III flat-file capture, including URL, SHA-256, size and acquisition
         time.
+
+  executive_disclosure_filings:
+    label: Executive disclosure filing lookup
+    subject: oversight
+    identity_columns:
+    - cohort_id
+    - filing_id
+    summary: Executive disclosure filing lookup for an explicitly selected public filing cohort.
+    coverage: Not a range. Local candidate only until separately published. Selected archived White House
+      Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part
+      6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive,
+      amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.
+    measured_on: '2026-11-13'
+    grain: One reviewed report/access outcome in a declared cohort.
+    columns:
+      cohort_id: Identity of the explicitly declared report cohort, with omissions stated in coverage_note.
+      coverage_note: Declared source population, supported sections and local/public limits.
+      filing_id: Reviewed report identity within the cohort; source versions remain separately pinned by source_sha256.
+      official_id: Cohort-scoped reviewed person identity; never a nominated office or cross-source profile
+        identifier.
+      official_name: Filer name read from the exact original; not inferred from the nominated office.
+      position_raw: Position as printed on the reviewed source cover.
+      agency_raw: Agency as printed; an empty string is a blank source cell, not an inferred employing agency.
+      report_type: Literal report type from the source cover, independent of form type.
+      report_period_raw: Native annual reporting period as printed; not the release/filename year.
+      form_type: OGE form identifier; this reader qualifies only annual 278e Part 6, never 278-T.
+      filing_date: Actual receipt/filing date if evidenced; NULL when only the signature date is known.
+      filer_signed_date: Reviewed ISO calendar date of the filer signature; source cover retains the original handwriting.
+      agency_certification_date: Reviewed ISO date of agency certification, independent of signature and filing dates.
+      oge_certification_date: Reviewed ISO date of OGE certification; attached amendment certifications remain separately recorded.
+      metadata_review_ref: Reviewed original cover locator and retained image/checksum evidence for manually
+        read metadata.
+      source_url: Official archived public PDF, retained independently of extracted facts.
+      source_sha256: Exact original PDF digest; reopen through CentralRawArchiveStore and verify before
+        replay.
+      acquired_at: Original-response observation timestamp; not the report filing or certification date.
+      access_status: not_requested, requested, available, unavailable, expired or access_refused; none implies
+        an empty filing.
+      access_basis: public_posting, form201_required, agency_request_required or human_attestation_required.
+        Only public postings supported by this build.
+      access_reason: Observed access condition/outcome and its limitations.
+      access_evidence_ref: Retained acquisition or authoritative access-condition evidence reference.
+      amendment_status: none_observed_in_retained_document, included_unreconciled or unknown; no claim of
+        global amendment completeness.
+      amendment_details_json: Ordered retained amendment observations, with section/page/date and unresolved
+        interpretation.
+      facts_status: qualified_part6, unsupported or not_available; unsupported records retain their filing/evidence
+        lookup.
+      facts_reason: Qualification limit or explicit refusal reason; not a statement that a filing contains
+        no interests.
+      metadata_json: Exact reviewed metadata selection with its digest-bound source and review reference.
+      report_year: Native annual-report year from the cover, distinct from filename/publication year.
+      byte_size: Byte size.
+      cover_page: One-based original PDF cover page, after any attached amendment letter.
+  executive_disclosure_facts:
+    label: Executive disclosure supported Part 6 facts
+    subject: oversight
+    identity_columns:
+    - fact_id
+    summary: Executive disclosure supported Part 6 facts for an explicitly selected public filing cohort.
+    coverage: Not a range. Local candidate only until separately published. Selected archived White House
+      Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part
+      6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive,
+      amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.
+    measured_on: '2026-11-13'
+    grain: One populated row in a qualified source version and section.
+    columns:
+      cohort_id: Identity of the explicitly declared report cohort, with omissions stated in coverage_note.
+      filing_id: Reviewed report identity within the cohort; source versions remain separately pinned by source_sha256.
+      fact_id: Filing identity plus exact original digest, section and native row label; never a person profile key.
+      section: 'Qualified OGE section title; current support is Part 6: Other Assets and Income.'
+      row_number_raw: Native source row label, preserving punctuation and subordinate labels such as 4.1.
+      description_raw: Literal source Description cell, including ownership prefixes and footnote references.
+      eif_raw: Literal excepted investment fund (EIF) designation, such as N/A or No; blank remains blank.
+      value_raw: Literal reported value; empty string means a blank source cell. No point estimate or aggregate
+        wealth.
+      income_type_raw: Literal reported income category; blank remains blank.
+      income_amount_raw: Literal income amount/range, with blank distinct from zero and from an absent filing.
+      ownership_label: Literal Self, Spouse or Joint prefix, when stated in Description; NULL when unstated.
+      value_status: range, blank or unrecognized; original text retained in value_raw.
+      income_status: range, blank or unrecognized; original text retained in income_amount_raw.
+      currency: USD only for recognized dollar ranges; NULL when neither cell supplies a qualified dollar
+        range.
+      source_url: Official archived public PDF, retained independently of extracted facts.
+      source_sha256: Exact original PDF digest; reopen through CentralRawArchiveStore and verify before
+        replay.
+      source_locator: One-based original PDF page fragment; append to source_url to inspect the original.
+      parser_revision: Source-specific interpretation rule revision; retained with backend version for replay.
+      backend_version: Installed PyMuPDF table-reader version used for this observation.
+      raw_cells_json: Ordered source table cells including blanks, NULL merged cells and original text.
+      cell_boxes_json: Original table cell coordinates for bounded visual reconciliation.
+      page: One-based page in the exact original PDF, including any prefixed amendment pages.
+      value_lower: Inclusive USD lower bound only when value_status is range; NULL otherwise.
+      value_upper: Inclusive USD upper bound only when value_status is range; NULL otherwise.
+      income_lower: Inclusive USD lower bound only when income_status is range; NULL otherwise.
+      income_upper: Inclusive USD upper bound only when income_status is range; NULL otherwise.
+  executive_disclosure_pages:
+    label: Executive disclosure interpreted pages
+    subject: oversight
+    identity_columns:
+    - filing_id
+    - source_sha256
+    - page
+    summary: Executive disclosure interpreted pages for an explicitly selected public filing cohort.
+    coverage: Not a range. Local candidate only until separately published. Selected archived White House
+      Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part
+      6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive,
+      amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.
+    measured_on: '2026-11-13'
+    grain: One interpreted PDF page for a qualified source version.
+    columns:
+      cohort_id: Identity of the explicitly declared report cohort, with omissions stated in coverage_note.
+      filing_id: Reviewed report identity within the cohort; source versions remain separately pinned by source_sha256.
+      source_url: Official archived public PDF, retained independently of extracted facts.
+      source_sha256: Exact original PDF digest; reopen through CentralRawArchiveStore and verify before
+        replay.
+      source_locator: One-based original PDF page fragment; append to source_url to inspect the original.
+      page_text: Full raw text of the interpreted page, including footnotes; exact original remains authoritative.
+      table_bbox_json: Table bbox json.
+      parser_revision: Source-specific interpretation rule revision; retained with backend version for replay.
+      backend_version: Installed PyMuPDF table-reader version used for this observation.
+      page: One-based page in the exact original PDF, including any prefixed amendment pages.
+      source_slot_count: All physical data slots observed in the interpreted source table, including blank
+        slots.
+      blank_slot_count: Completely blank data slots; excluded from facts and retained as a page-level reconciliation
+        count.

@@ -1868,6 +1868,28 @@
       "title": "FEC CSV previews",
       "publisher": "Federal Election Commission",
       "description": "Truncated CSV previews of a retired table (ss-j4vz B10). Captured by the 2026-09-11 FEC research capture; its capture metadata was imported as acquisition receipts (ss-wfop)."
+    },
+    {
+      "id": "family:executive-disclosures",
+      "title": "Selected public Executive disclosure filings",
+      "publisher": "Archived White House; U.S. Office of Government Ethics access guidance",
+      "description": "Explicit public archived Harris annual packages released in 2021 and 2024, native report years 2020 and 2023. Local filing lookup and 2024 Part 6 qualification only; amended 2021 package remains lookup-only. No complete executive coverage or public publication established. Refused locator probes and guidance responses remain separate from available filings.",
+      "source_names": [
+        "executive-disclosures"
+      ],
+      "families": [
+        "executive-disclosures"
+      ],
+      "tables": [
+        "executive_disclosure_filings",
+        "executive_disclosure_facts",
+        "executive_disclosure_pages"
+      ],
+      "source_urls": [
+        "https://bidenwhitehouse.archives.gov/wp-content/uploads/2024/05/Harris-Kamala-D.-2024-Annual-278.pdf",
+        "https://bidenwhitehouse.archives.gov/wp-content/uploads/2021/05/Harris-Kamala-D.-2021-Annual-278.pdf",
+        "https://www.oge.gov/web/OGE.nsf/publicresources_disclosure-faq"
+      ]
     }
   ],
   "routes": [

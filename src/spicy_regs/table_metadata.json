@@ -22968,6 +22968,397 @@
     "grain": "One dated Federal Register document in the admitted source release; EO number is a lookup value, not the sole source identity. History is the publisher's literal notes, not an inferred legal status.",
     "identity_columns": []
   },
+  "executive_disclosure_filings": {
+    "table": "executive_disclosure_filings",
+    "label": "Executive disclosure filing lookup",
+    "summary": "Executive disclosure filing lookup for an explicitly selected public filing cohort.",
+    "coverage": "Not a range. Local candidate only until separately published. Selected archived White House Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part 6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "cohort_id",
+        "column_type": "VARCHAR",
+        "description": "Identity of the explicitly declared report cohort, with omissions stated in coverage_note."
+      },
+      {
+        "column_name": "coverage_note",
+        "column_type": "VARCHAR",
+        "description": "Declared source population, supported sections and local/public limits."
+      },
+      {
+        "column_name": "filing_id",
+        "column_type": "VARCHAR",
+        "description": "Reviewed report identity within the cohort; source versions remain separately pinned by source_sha256."
+      },
+      {
+        "column_name": "official_id",
+        "column_type": "VARCHAR",
+        "description": "Cohort-scoped reviewed person identity; never a nominated office or cross-source profile identifier."
+      },
+      {
+        "column_name": "official_name",
+        "column_type": "VARCHAR",
+        "description": "Filer name read from the exact original; not inferred from the nominated office."
+      },
+      {
+        "column_name": "position_raw",
+        "column_type": "VARCHAR",
+        "description": "Position as printed on the reviewed source cover."
+      },
+      {
+        "column_name": "agency_raw",
+        "column_type": "VARCHAR",
+        "description": "Agency as printed; an empty string is a blank source cell, not an inferred employing agency."
+      },
+      {
+        "column_name": "report_type",
+        "column_type": "VARCHAR",
+        "description": "Literal report type from the source cover, independent of form type."
+      },
+      {
+        "column_name": "report_period_raw",
+        "column_type": "VARCHAR",
+        "description": "Native annual reporting period as printed; not the release/filename year."
+      },
+      {
+        "column_name": "form_type",
+        "column_type": "VARCHAR",
+        "description": "OGE form identifier; this reader qualifies only annual 278e Part 6, never 278-T."
+      },
+      {
+        "column_name": "filing_date",
+        "column_type": "VARCHAR",
+        "description": "Actual receipt/filing date if evidenced; NULL when only the signature date is known."
+      },
+      {
+        "column_name": "filer_signed_date",
+        "column_type": "VARCHAR",
+        "description": "Reviewed ISO calendar date of the filer signature; source cover retains the original handwriting."
+      },
+      {
+        "column_name": "agency_certification_date",
+        "column_type": "VARCHAR",
+        "description": "Reviewed ISO date of agency certification, independent of signature and filing dates."
+      },
+      {
+        "column_name": "oge_certification_date",
+        "column_type": "VARCHAR",
+        "description": "Reviewed ISO date of OGE certification; attached amendment certifications remain separately recorded."
+      },
+      {
+        "column_name": "metadata_review_ref",
+        "column_type": "VARCHAR",
+        "description": "Reviewed original cover locator and retained image/checksum evidence for manually read metadata."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Official archived public PDF, retained independently of extracted facts."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "Exact original PDF digest; reopen through CentralRawArchiveStore and verify before replay."
+      },
+      {
+        "column_name": "acquired_at",
+        "column_type": "VARCHAR",
+        "description": "Original-response observation timestamp; not the report filing or certification date."
+      },
+      {
+        "column_name": "access_status",
+        "column_type": "VARCHAR",
+        "description": "not_requested, requested, available, unavailable, expired or access_refused; none implies an empty filing."
+      },
+      {
+        "column_name": "access_basis",
+        "column_type": "VARCHAR",
+        "description": "public_posting, form201_required, agency_request_required or human_attestation_required. Only public postings supported by this build."
+      },
+      {
+        "column_name": "access_reason",
+        "column_type": "VARCHAR",
+        "description": "Observed access condition/outcome and its limitations."
+      },
+      {
+        "column_name": "access_evidence_ref",
+        "column_type": "VARCHAR",
+        "description": "Retained acquisition or authoritative access-condition evidence reference."
+      },
+      {
+        "column_name": "amendment_status",
+        "column_type": "VARCHAR",
+        "description": "none_observed_in_retained_document, included_unreconciled or unknown; no claim of global amendment completeness."
+      },
+      {
+        "column_name": "amendment_details_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered retained amendment observations, with section/page/date and unresolved interpretation."
+      },
+      {
+        "column_name": "facts_status",
+        "column_type": "VARCHAR",
+        "description": "qualified_part6, unsupported or not_available; unsupported records retain their filing/evidence lookup."
+      },
+      {
+        "column_name": "facts_reason",
+        "column_type": "VARCHAR",
+        "description": "Qualification limit or explicit refusal reason; not a statement that a filing contains no interests."
+      },
+      {
+        "column_name": "metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Exact reviewed metadata selection with its digest-bound source and review reference."
+      },
+      {
+        "column_name": "report_year",
+        "column_type": "BIGINT",
+        "description": "Native annual-report year from the cover, distinct from filename/publication year."
+      },
+      {
+        "column_name": "byte_size",
+        "column_type": "BIGINT",
+        "description": "Byte size."
+      },
+      {
+        "column_name": "cover_page",
+        "column_type": "BIGINT",
+        "description": "One-based original PDF cover page, after any attached amendment letter."
+      }
+    ],
+    "subject": "oversight",
+    "grain": "One reviewed report/access outcome in a declared cohort.",
+    "identity_columns": [
+      "cohort_id",
+      "filing_id"
+    ]
+  },
+  "executive_disclosure_facts": {
+    "table": "executive_disclosure_facts",
+    "label": "Executive disclosure supported Part 6 facts",
+    "summary": "Executive disclosure supported Part 6 facts for an explicitly selected public filing cohort.",
+    "coverage": "Not a range. Local candidate only until separately published. Selected archived White House Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part 6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "cohort_id",
+        "column_type": "VARCHAR",
+        "description": "Identity of the explicitly declared report cohort, with omissions stated in coverage_note."
+      },
+      {
+        "column_name": "filing_id",
+        "column_type": "VARCHAR",
+        "description": "Reviewed report identity within the cohort; source versions remain separately pinned by source_sha256."
+      },
+      {
+        "column_name": "fact_id",
+        "column_type": "VARCHAR",
+        "description": "Filing identity plus exact original digest, section and native row label; never a person profile key."
+      },
+      {
+        "column_name": "section",
+        "column_type": "VARCHAR",
+        "description": "Qualified OGE section title; current support is Part 6: Other Assets and Income."
+      },
+      {
+        "column_name": "row_number_raw",
+        "column_type": "VARCHAR",
+        "description": "Native source row label, preserving punctuation and subordinate labels such as 4.1."
+      },
+      {
+        "column_name": "description_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source Description cell, including ownership prefixes and footnote references."
+      },
+      {
+        "column_name": "eif_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal excepted investment fund (EIF) designation, such as N/A or No; blank remains blank."
+      },
+      {
+        "column_name": "value_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal reported value; empty string means a blank source cell. No point estimate or aggregate wealth."
+      },
+      {
+        "column_name": "income_type_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal reported income category; blank remains blank."
+      },
+      {
+        "column_name": "income_amount_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal income amount/range, with blank distinct from zero and from an absent filing."
+      },
+      {
+        "column_name": "ownership_label",
+        "column_type": "VARCHAR",
+        "description": "Literal Self, Spouse or Joint prefix, when stated in Description; NULL when unstated."
+      },
+      {
+        "column_name": "value_status",
+        "column_type": "VARCHAR",
+        "description": "range, blank or unrecognized; original text retained in value_raw."
+      },
+      {
+        "column_name": "income_status",
+        "column_type": "VARCHAR",
+        "description": "range, blank or unrecognized; original text retained in income_amount_raw."
+      },
+      {
+        "column_name": "currency",
+        "column_type": "VARCHAR",
+        "description": "USD only for recognized dollar ranges; NULL when neither cell supplies a qualified dollar range."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Official archived public PDF, retained independently of extracted facts."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "Exact original PDF digest; reopen through CentralRawArchiveStore and verify before replay."
+      },
+      {
+        "column_name": "source_locator",
+        "column_type": "VARCHAR",
+        "description": "One-based original PDF page fragment; append to source_url to inspect the original."
+      },
+      {
+        "column_name": "parser_revision",
+        "column_type": "VARCHAR",
+        "description": "Source-specific interpretation rule revision; retained with backend version for replay."
+      },
+      {
+        "column_name": "backend_version",
+        "column_type": "VARCHAR",
+        "description": "Installed PyMuPDF table-reader version used for this observation."
+      },
+      {
+        "column_name": "raw_cells_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered source table cells including blanks, NULL merged cells and original text."
+      },
+      {
+        "column_name": "cell_boxes_json",
+        "column_type": "VARCHAR",
+        "description": "Original table cell coordinates for bounded visual reconciliation."
+      },
+      {
+        "column_name": "page",
+        "column_type": "BIGINT",
+        "description": "One-based page in the exact original PDF, including any prefixed amendment pages."
+      },
+      {
+        "column_name": "value_lower",
+        "column_type": "BIGINT",
+        "description": "Inclusive USD lower bound only when value_status is range; NULL otherwise."
+      },
+      {
+        "column_name": "value_upper",
+        "column_type": "BIGINT",
+        "description": "Inclusive USD upper bound only when value_status is range; NULL otherwise."
+      },
+      {
+        "column_name": "income_lower",
+        "column_type": "BIGINT",
+        "description": "Inclusive USD lower bound only when income_status is range; NULL otherwise."
+      },
+      {
+        "column_name": "income_upper",
+        "column_type": "BIGINT",
+        "description": "Inclusive USD upper bound only when income_status is range; NULL otherwise."
+      }
+    ],
+    "subject": "oversight",
+    "grain": "One populated row in a qualified source version and section.",
+    "identity_columns": [
+      "fact_id"
+    ]
+  },
+  "executive_disclosure_pages": {
+    "table": "executive_disclosure_pages",
+    "label": "Executive disclosure interpreted pages",
+    "summary": "Executive disclosure interpreted pages for an explicitly selected public filing cohort.",
+    "coverage": "Not a range. Local candidate only until separately published. Selected archived White House Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part 6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "cohort_id",
+        "column_type": "VARCHAR",
+        "description": "Identity of the explicitly declared report cohort, with omissions stated in coverage_note."
+      },
+      {
+        "column_name": "filing_id",
+        "column_type": "VARCHAR",
+        "description": "Reviewed report identity within the cohort; source versions remain separately pinned by source_sha256."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Official archived public PDF, retained independently of extracted facts."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "Exact original PDF digest; reopen through CentralRawArchiveStore and verify before replay."
+      },
+      {
+        "column_name": "source_locator",
+        "column_type": "VARCHAR",
+        "description": "One-based original PDF page fragment; append to source_url to inspect the original."
+      },
+      {
+        "column_name": "page_text",
+        "column_type": "VARCHAR",
+        "description": "Full raw text of the interpreted page, including footnotes; exact original remains authoritative."
+      },
+      {
+        "column_name": "table_bbox_json",
+        "column_type": "VARCHAR",
+        "description": "Table bbox json."
+      },
+      {
+        "column_name": "parser_revision",
+        "column_type": "VARCHAR",
+        "description": "Source-specific interpretation rule revision; retained with backend version for replay."
+      },
+      {
+        "column_name": "backend_version",
+        "column_type": "VARCHAR",
+        "description": "Installed PyMuPDF table-reader version used for this observation."
+      },
+      {
+        "column_name": "page",
+        "column_type": "BIGINT",
+        "description": "One-based page in the exact original PDF, including any prefixed amendment pages."
+      },
+      {
+        "column_name": "source_slot_count",
+        "column_type": "BIGINT",
+        "description": "All physical data slots observed in the interpreted source table, including blank slots."
+      },
+      {
+        "column_name": "blank_slot_count",
+        "column_type": "BIGINT",
+        "description": "Completely blank data slots; excluded from facts and retained as a page-level reconciliation count."
+      }
+    ],
+    "subject": "oversight",
+    "grain": "One interpreted PDF page for a qualified source version.",
+    "identity_columns": [
+      "filing_id",
+      "source_sha256",
+      "page"
+    ]
+  },
   "house_disbursements": {
     "table": "house_disbursements",
     "label": "House Statement of Disbursements detail ledger",
