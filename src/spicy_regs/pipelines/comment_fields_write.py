@@ -372,6 +372,7 @@ def _refuse_committed_failures(workdir: Path) -> None:
 # --------------------------------------------------------------------------- #
 def prepare(
     workdir: Path, *, scope: dict[str, str] | None = None, reads: Path | None = None, profile: str = "all", con=None,
+    resources: ExportResources | None = None,
 ) -> dict:
     """Compute the fill at the catalog's current snapshot; return and write the counts-only receipt.
 
@@ -379,7 +380,8 @@ def prepare(
     ``workdir/parts``. ``profile`` names the fill columns considered (:data:`PROFILES`); the receipt keeps them for
     :func:`write`. Refuses a snapshot that lacks a fill column: the columns arrive with the deployed branch's first
     data commit (runbook), never from this tool. Refuses a read that lacks one, and while any batch committed and
-    failed its check. Touches no catalog row and needs no lock.
+    failed its check. Touches no catalog row and needs no lock. ``resources`` overrides the default query targets
+    for a bounded execution; these settings do not enforce a whole-process memory limit.
     """
     columns = fill_columns(profile)
     additive = [c for c in columns if c in ADDITIVE]
@@ -389,7 +391,7 @@ def prepare(
     out = fill_dir(workdir)
     out.mkdir(parents=True, exist_ok=True)
     try:
-        WRITE_RESOURCES.configure(con, out / "spill")
+        (resources or WRITE_RESOURCES).configure(con, out / "spill")
         storage_access(con)
         namespace = iceberg._selected_catalog_namespace(con, COMMENT)
         snapshot = iceberg._read_snapshot(con, COMMENT, namespace=namespace)
