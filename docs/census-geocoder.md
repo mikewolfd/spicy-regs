@@ -70,9 +70,24 @@ WHERE outcome <> 'matched';
 Replay uses exact local release inputs without downloading originals again.
 Refresh uses an explicit new SpicyDocs acquisition, release, input-pin array and
 fresh candidate directory; a repeated request is never silently called unchanged.
-The generation can use `sources.publication.publish_generation` with its source
-evidence directory. Local in-memory publication rehearsal proves that format;
-public publication and selection remain separate acceptance steps.
+The maintained `publish-local-generation` command accepts the `census-geocoder`
+family and applies the existing family, source-evidence, shared-raw, shrink and
+prior-generation checks. Rehearse against an explicit saved publication index in
+a private disk store, with the real retained generation and its evidence:
+
+```sh
+uv run --frozen publish-local-generation --family census-geocoder \
+  --generation "$GEOCODER_OUTPUT/generation" --evidence "$GEOCODER_EVIDENCE" \
+  --dry-run --live-index "$SAVED_PUBLICATION_INDEX" --output "$DRY_RUN_RECEIPT"
+```
+
+`GEOCODER_EVIDENCE` is the `sourceEvidence` path printed by the builder. Retain its
+adjacent `source-archive.json`; the default gates require originals in the shared
+raw archive and `SPICYGOV_RAW_ROOT` unset. The dry run writes no shared publication
+or selection. Its receipt proves local publication admission; public delivery and
+selection remain separate acceptance steps. See the
+[family publication procedure](local-family-refresh.md#the-publish-steps-for-every-family)
+for prior-generation and default shrink guards.
 
 The 2026-11-13 local genuine cohort resolves the Berkeley structure address and
 nearby coordinate to Alameda County (`06` + `001` = `06001`), with separate tract

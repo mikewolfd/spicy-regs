@@ -33,6 +33,7 @@ from spicy_regs.sources.publication import PublicationError
 #: an independent audit of its original (docs/uscode-editions.md).
 LOCAL_FAMILIES = frozenset({
     "administration-policy",
+    "census-geocoder",
     "court-opinions",
     "executive-orders",
     "fec-financial-profiles",
