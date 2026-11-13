@@ -134,7 +134,7 @@ def test_duplicate_revisions_and_conflicting_award_totals_refuse(tmp_path, other
     assert not list(tmp_path.glob("*.parquet"))
 
 
-def test_full_capture_replay_generation_empty_and_tamper_controls(tmp_path):
+def test_full_capture_replay_generation_empty_and_tamper_controls(tmp_path, monkeypatch):
     original = archive([ROW])
     item = {
         "agency_name": "Denali Commission",
@@ -168,11 +168,33 @@ def test_full_capture_replay_generation_empty_and_tamper_controls(tmp_path):
     )
     evidence.finish()
     assert len(calls) == 2
-    first, _ = build(selected, tmp_path / "first", archive_root=raw)
+    first, first_evidence = build(selected, tmp_path / "first", archive_root=raw)
     second, _ = build(selected, tmp_path / "second", archive_root=raw)
     assert len(calls) == 2  # Offline unchanged replay performs no network requests.
     verify_generation(tmp_path / "first" / "generation", expected_pin=first.pin)
     verify_generation(tmp_path / "second" / "generation", expected_pin=second.pin)
+    assert first.root["spec"]["publicationStatus"] == "complete-family"
+    events = [json.loads(line) for line in (first_evidence / "journal.jsonl").read_text().splitlines()]
+    (cohort,) = [event for event in events if event["event"] == "usaspending-cohort"]
+    (declared,) = [event["manifest"] for event in events if event["event"] == "selected-inputs"]
+    assert cohort["complete"] and cohort["scope"]["finite"]
+    assert cohort["scope"]["awarding_agency_code"] == "513"
+    assert cohort["scope"]["awarding_agency_database_id"] == 120
+    assert cohort["scope"]["fiscal_year"] == 2025 and cohort["scope"]["award_family"] == "assistance"
+    assert cohort["scope"]["geographic_filter"] is None
+    assert cohort["scope"]["archive_sha256"] == digest(original)
+    assert cohort["table_rows"] == dict.fromkeys(
+        ("usaspending_transactions", "usaspending_awards", "usaspending_archive_members"), 1
+    )
+    assert declared["scope"] == {"id": cohort["scope"]["id"], "finite": True}
+    assert declared["complete"] and len(declared["used"]) == 2
+    assert digest(original) in {source["sha256"] for source in declared["used"]}
+    assert (
+        pq.read_table(tmp_path / "first/generation/usaspending_awards.parquet").to_pylist()[0][
+            "publisher_overall_award_outlayed_amount"
+        ]
+        is None
+    )
     for name in ("usaspending_transactions", "usaspending_awards", "usaspending_archive_members"):
         assert pq.read_table(tmp_path / "first/generation" / f"{name}.parquet").equals(
             pq.read_table(tmp_path / "second/generation" / f"{name}.parquet")
@@ -185,6 +207,23 @@ def test_full_capture_replay_generation_empty_and_tamper_controls(tmp_path):
         )
     with pytest.raises(ValueError, match="full"):
         selected_archive({**selected, "snapshot_kind": "delta"}, evidence.store)
+    # A later converter bug cannot label a source cohort complete after dropping a native record.
+    from spicy_regs.pipelines import usaspending_awards as pipeline
+
+    original_builder = pipeline.build_tables
+
+    def drop_record(literal, output, *, selection):
+        paths = original_builder(literal, output, selection=selection)
+        pq.write_table(pq.read_table(paths[0]).slice(0, 0), paths[0])
+        return paths
+
+    with monkeypatch.context() as broken:
+        broken.setattr(pipeline, "build_tables", drop_record)
+        with pytest.raises(ValueError, match="retain every original"):
+            pipeline.build(selected, tmp_path / "dropped-record", archive_root=raw)
+    assert not (tmp_path / "dropped-record/generation/artifact.json").exists()
+    (failed_journal,) = (tmp_path / "dropped-record/source-evidence").glob("*/artifact/journal.jsonl")
+    assert all(json.loads(line)["event"] != "selected-inputs" for line in failed_journal.read_text().splitlines())
     empty = tmp_path / "empty"
     paths = tables([], empty)
     assert pq.read_table(paths[0]).num_rows == pq.read_table(paths[1]).num_rows == 0

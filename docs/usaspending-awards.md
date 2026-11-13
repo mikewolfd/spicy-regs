@@ -117,9 +117,14 @@ force totals to agree. No outlay comparison is inferred from an obligation match
 The lane's `HANDOFF.md` links original hashes, viewed raw CSV images, final source
 pins, ordinary MCP queries, focused tests and bounded resource measurements.
 The coordinator owns independent review, shared package adoption, catalog/public
-selection and deployment. The generation is deliberately `local-partial` for the
-larger source family even though the declared cohort is complete. Public delivery
-and other source populations remain unverified until that separate work completes.
+selection and deployment. `complete-family` means that the generation holds all
+declared tables for its exact selected full archive. The source evidence's
+`usaspending-cohort` event names the awarding agency, fiscal year, award family,
+absence of geographic filtering, original archive hash/version and output row
+counts. The maintained `selected-inputs` declaration binds every used original
+to that same named finite scope. These declarations do not claim all USAspending
+agencies, years or record grains, or a complete outlay total. Public availability
+still requires separate coordinator-owned integration and selection.
 
 ## Rehearse the maintained delivery entry point
 
@@ -143,11 +148,24 @@ It does not write shared publication state, refresh coverage or change comments
 holds. For genuine central-raw evidence, keep the shared-archive check enabled;
 `--scratch-raw` is for separately declared scratch builds.
 
-The first qualified Denali generation remains `local-partial`, as described
-above. The publisher refuses it with `A local partial candidate cannot be
-published`, even though the family is registered. The refusal writes no receipt
-or selected family. Registration does not waive source-evidence pins, family
-identity, shrink checks or the complete-family requirement. The coordinator must
-resolve the generation's delivery classification for its declared cohort before
-an accepted delivery rehearsal; this receiving registration does not relabel the
-generation, expand its source scope or establish public acceptance.
+The ordinary build admits an inventory-bound fiscal-year full archive, validates
+all of its native records and requires the transaction and member tables to
+retain every parsed record/member. Only then does it seal the complete finite
+selected-input set and build `complete-family`. Missing/refused inputs, deltas,
+out-of-scope rows or a converter that drops a native record cannot become a
+complete generation. Null lifetime outlays remain unknown values; they are not
+missing source records and never become known zeroes or FY outlay coverage.
+
+The earlier candidate's unconditional `local-partial` status confused bounded
+publisher coverage with incomplete family construction. Rebuilding from the
+same pinned originals creates a new artifact with the exact finite cohort in
+its evidence. It does not edit or relabel the earlier artifact or publisher
+bytes. The generic publisher continues to refuse every `local-partial`
+candidate, including the retained earlier candidate. Family identity, source
+evidence pins, table membership and shrink guards also remain unchanged.
+
+An accepted private CLI rehearsal establishes maintained delivery eligibility
+for that exact artifact and declared cohort. It does not establish public
+availability or permission to replace a different agency/year/family cohort.
+Before any future shared selection, the coordinator must compare the live
+family's declared scope and apply the maintained prior-generation safeguards.

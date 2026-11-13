@@ -8,6 +8,8 @@ from dataclasses import asdict
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import pyarrow.parquet as pq
+
 from spicy_regs.contract_types import described_schema
 from spicy_regs.generations import build_generation
 from spicy_regs.source_evidence import CaptureEvidence
@@ -141,12 +143,13 @@ def selected_archive(selection, store):
 
 
 def build(selection, output_dir: Path, *, archive_root: Path | None = None):
-    """Build the ordinary immutable generation, locally partial at the source-family level.
+    """Build all declared tables for one finite, inventory-bound full cohort.
 
-    One selected agency/year/family can be complete while the larger USAspending
-    source family remains unselected. An unchanged replay performs no HTTP and
-    a refreshed full snapshot goes to a new generation, replacing rather than
-    appending the same cohort.
+    Complete-family describes this build's declared tables and selected archive,
+    not all USAspending agencies/years or known values for every monetary field.
+    A refreshed full snapshot replaces the same cohort in a new generation;
+    an unchanged replay performs no HTTP. Incomplete input or a dropped source
+    record refuses before a complete selected-input declaration can be sealed.
     """
     output_dir = Path(output_dir)
     if (output_dir / "generation").exists():
@@ -172,6 +175,34 @@ def build(selection, output_dir: Path, *, archive_root: Path | None = None):
             },
         )
         evidence.event("usaspending-selection", selection=selection)
+        tables = build_tables(archive, output_dir, selection=selection)
+        counts = {path.stem: pq.read_metadata(path).num_rows for path in tables}
+        if counts["usaspending_transactions"] != len(archive.rows) or counts["usaspending_archive_members"] != len(
+            archive.members
+        ):
+            raise ValueError("Full cohort build must retain every original transaction and CSV member")
+        scope = {
+            "id": (
+                f"{FAMILY}:awarding-agency:{selection['agency_code']}:FY{selection['fiscal_year']}:"
+                f"{selection['award_family']}:full:{archive.sha256}"
+            ),
+            "finite": True,
+            "awarding_agency_database_id": selection["agency_id"],
+            "awarding_agency_code": selection["agency_code"],
+            "fiscal_year": selection["fiscal_year"],
+            "award_family": selection["award_family"],
+            "geographic_filter": None,
+            "archive_sha256": archive.sha256,
+            "archive_version": pin["updated_date"],
+        }
+        evidence.event(
+            "usaspending-cohort",
+            scope=scope,
+            complete=True,
+            completeness_basis="Every member and record in the selected full archive, with no row filtering or skipping",
+            table_rows=counts,
+            outlay_scope="Publisher lifetime amounts; blanks remain unknown, not a complete fiscal-year outlay total",
+        )
         evidence.declare_used_inputs(
             [
                 {"location": pin["url"], "sha256": pin["sha256"], "bytes": pin["bytes"], "asset_kind": "zip"},
@@ -182,9 +213,9 @@ def build(selection, output_dir: Path, *, archive_root: Path | None = None):
                     "asset_kind": "json",
                 },
             ],
-            scope_id=f"{selection['agency_code']}:{selection['fiscal_year']}:{selection['award_family']}",
+            scope_id=scope["id"],
+            complete=True,
         )
-        tables = build_tables(archive, output_dir, selection=selection)
         artifact = build_generation(
             output_dir / "generation",
             family=FAMILY,
@@ -192,7 +223,7 @@ def build(selection, output_dir: Path, *, archive_root: Path | None = None):
             expected_keys=tuple(f"{name}.parquet" for name in SCHEMAS),
             schemas={name: described_schema(schema) for name, schema in SCHEMAS.items()},
             inputs=evidence.inputs(),
-            publication_status="local-partial",
+            publication_status="complete-family",
             owned_output_root=output_dir,
         )
     except BaseException as error:
