@@ -38,7 +38,16 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
-- **Selected local integration provider** `spicy_docs-0.85.0+readers.20261113.2`
+- **Selected combined local integration provider** `spicy_docs-0.85.0+readers.20261113.3`
+  is built from `4b86983c1a71889c3b659096c84079edfa794e3c`, combining the independently reviewed
+  reader repairs and source lanes. The full SpicyDocs gate passed at that exact source.
+  Clean-worktree and independent Git-archive builds are byte-identical; all package sources
+  and wheel RECORD hashes match. See [the receipt](spicy_docs-0.85.0+readers.20261113.3.json).
+  This is local package adoption, not public release or acceptance of incomplete source populations.
+  The reserved public `0.86` attachment release is untouched. The superseded `.2` wheel remains
+  recoverable from the adoption commit's parent; its receipt and frozen reader integration branch remain.
+
+- **Prior local integration provider** `spicy_docs-0.85.0+readers.20261113.2`
   is built from `837143fd864e56db24b840dd3b1ba78f015ca96f`. Its reader implementation is the independently reviewed
   `e247fc9b` candidate plus the independently reviewed `3ccb64d4` CFR spelling fix;
   the final integration commit changes only version and lock metadata.
