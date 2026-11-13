@@ -57,6 +57,7 @@ LOCAL_FAMILIES = frozenset({
     "sec-edgar",
     "treasury-fiscal",
     "foreign-assistance",
+    "usaspending-awards",
     "uscode-editions",
     "white-house-actions",
 })

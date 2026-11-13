@@ -120,3 +120,34 @@ The coordinator owns independent review, shared package adoption, catalog/public
 selection and deployment. The generation is deliberately `local-partial` for the
 larger source family even though the declared cohort is complete. Public delivery
 and other source populations remain unverified until that separate work completes.
+
+## Rehearse the maintained delivery entry point
+
+`publish-local-generation` registers the exact `usaspending-awards` family.
+For a bounded private rehearsal, use the retained generation and the exact
+source-evidence artifact it pins, with a private prior index made through
+`spicy_regs.sources.publication.empty_index()`. Pass that fixture explicitly;
+using the public index is a separate operation with a different resource scope.
+
+```sh
+uv run --frozen --no-sync publish-local-generation \
+  --family usaspending-awards \
+  --generation /path/to/retained/candidate/generation \
+  --evidence /path/to/retained/candidate/source-evidence/RUN/artifact \
+  --live-index /private/rehearsal/empty-prior.json \
+  --dry-run --output /private/rehearsal/new-receipt
+```
+
+This executes the maintained publication guards against a private disk store.
+It does not write shared publication state, refresh coverage or change comments
+holds. For genuine central-raw evidence, keep the shared-archive check enabled;
+`--scratch-raw` is for separately declared scratch builds.
+
+The first qualified Denali generation remains `local-partial`, as described
+above. The publisher refuses it with `A local partial candidate cannot be
+published`, even though the family is registered. The refusal writes no receipt
+or selected family. Registration does not waive source-evidence pins, family
+identity, shrink checks or the complete-family requirement. The coordinator must
+resolve the generation's delivery classification for its declared cohort before
+an accepted delivery rehearsal; this receiving registration does not relabel the
+generation, expand its source scope or establish public acceptance.

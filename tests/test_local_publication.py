@@ -18,8 +18,8 @@ from tests.generation_fakes import Store
 FAMILY = "treasury-fiscal"
 
 
-def generation(tmp_path, name, tables, *, read=None, family=FAMILY):
-    """A complete-family generation of ``tables`` (table name to its ids) with evidence citing one raw original.
+def generation(tmp_path, name, tables, *, read=None, family=FAMILY, publication_status="complete-family"):
+    """A generation of ``tables`` (table name to its ids) with evidence citing one raw original.
 
     ``read`` is the published index bytes and prior root bytes a build recorded as what it read.
     """
@@ -37,7 +37,7 @@ def generation(tmp_path, name, tables, *, read=None, family=FAMILY):
         index = publication.parse_index(read[0])
         evidence.inherit_pinned_root(index, read[1])
     artifact = build_generation(directory, family=family, files=files, expected_keys=[path.name for path in files],
-                                inputs=evidence.inputs(), read_snapshot=index)
+                                inputs=evidence.inputs(), read_snapshot=index, publication_status=publication_status)
     evidence.finish()
     return directory, artifact.pin.artifact_digest.removeprefix("sha256:"), evidence.artifact_dir
 
@@ -68,6 +68,34 @@ def test_census_acs_cli_registration_keeps_family_and_evidence_guards(tmp_path):
     assert receipt["status"] == "dry_run_accepted" and receipt["family"] == family
     assert receipt["artifactDigest"] == "sha256:" + digest
     assert receipt["tables"]["census_acs_county_observations.parquet"]["rows"] == 3
+    assert receipt["other_family_changes"] == [] and live.read_bytes() == original_index
+    assert not list(tmp_path.glob(".dry-run-store-*"))
+
+
+def test_usaspending_cli_registration_retains_family_evidence_and_partial_guards(tmp_path):
+    family = "usaspending-awards"
+    directory, digest, evidence = generation(tmp_path, "awards", {"transactions": ["a"]}, family=family)
+    live = tmp_path / "private-prior.json"
+    original_index = json.dumps(publication.empty_index()).encode()
+    live.write_bytes(original_index)
+    dry = ("--dry-run", "--scratch-raw", "--live-index", str(live))
+    with pytest.raises(publication.PublicationError, match="not the expected treasury-fiscal"):
+        run(tmp_path, "wrong-family", directory, evidence, *dry)
+    with pytest.raises(publication.PublicationError, match="pass --evidence"):
+        run(tmp_path, "missing-evidence", directory, None, *dry, family=family)
+    _, _, other_evidence = generation(tmp_path, "other", {"transactions": ["other"]})
+    with pytest.raises(publication.PublicationError, match="source evidence is missing or differs"):
+        run(tmp_path, "wrong-evidence", directory, other_evidence, *dry, family=family)
+    partial, _, partial_evidence = generation(
+        tmp_path, "partial-awards", {"transactions": ["a"]}, family=family, publication_status="local-partial")
+    with pytest.raises(publication.PublicationError, match="local partial candidate cannot be published"):
+        run(tmp_path, "partial-refused", partial, partial_evidence, *dry, family=family)
+    assert not any((tmp_path / name).exists() for name in (
+        "wrong-family", "missing-evidence", "wrong-evidence", "partial-refused"))
+    output = run(tmp_path, "registered", directory, evidence, *dry, family=family)
+    receipt = json.loads((output / "dry-run.json").read_text())
+    assert receipt["status"] == "dry_run_accepted" and receipt["family"] == family
+    assert receipt["artifactDigest"] == "sha256:" + digest
     assert receipt["other_family_changes"] == [] and live.read_bytes() == original_index
     assert not list(tmp_path.glob(".dry-run-store-*"))
 
