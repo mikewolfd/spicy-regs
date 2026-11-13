@@ -7458,6 +7458,7 @@
         "source_sha256",
         "source_locator",
         "page_text",
+        "filer_identity_json",
         "table_bbox_json",
         "parser_revision",
         "backend_version",

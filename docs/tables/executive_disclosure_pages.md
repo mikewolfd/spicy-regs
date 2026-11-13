@@ -21,6 +21,7 @@ Executive disclosure interpreted pages for an explicitly selected public filing 
 | `source_sha256` | `VARCHAR` | Exact original PDF digest; reopen through CentralRawArchiveStore and verify before replay. |
 | `source_locator` | `VARCHAR` | One-based original PDF page fragment; append to source_url to inspect the original. |
 | `page_text` | `VARCHAR` | Full raw text of the interpreted page, including footnotes; exact original remains authoritative. |
+| `filer_identity_json` | `VARCHAR` | Literal Part 6 Filer's Name label/value and cover Last Name, First Name and MI fields, with original page/section cell locators. Comparison collapses whitespace only; cover fields use First Name, optional MI and Last Name order. Case, spelling and punctuation differences refuse without aliases. |
 | `table_bbox_json` | `VARCHAR` | Table bbox json. |
 | `parser_revision` | `VARCHAR` | Source-specific interpretation rule revision; retained with backend version for replay. |
 | `backend_version` | `VARCHAR` | Installed PyMuPDF table-reader version used for this observation. |

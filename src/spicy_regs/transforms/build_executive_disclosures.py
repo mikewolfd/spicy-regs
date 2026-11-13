@@ -30,7 +30,7 @@ SCHEMAS = {
         income_type_raw income_amount_raw ownership_label value_status income_status currency
         source_url source_sha256 source_locator parser_revision backend_version raw_cells_json cell_boxes_json""",
         page=pa.int64(), value_lower=pa.int64(), value_upper=pa.int64(), income_lower=pa.int64(), income_upper=pa.int64()),
-    TABLES[2]: _schema("""cohort_id filing_id source_url source_sha256 source_locator page_text table_bbox_json
+    TABLES[2]: _schema("""cohort_id filing_id source_url source_sha256 source_locator page_text filer_identity_json table_bbox_json
         parser_revision backend_version""", page=pa.int64(), source_slot_count=pa.int64(), blank_slot_count=pa.int64()),
 }
 FILING_FIELDS = set(SCHEMAS[TABLES[0]].names) - {"cohort_id", "coverage_note", "facts_status", "facts_reason", "metadata_json"}

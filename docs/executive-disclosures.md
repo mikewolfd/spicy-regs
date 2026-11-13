@@ -61,7 +61,12 @@ source/review evidence; tests for these states are controls, not claims that
 these outcomes were observed in this pilot. Template expiry never sets record
 expiration. Signed dates, agency/OGE certification dates and filing receipt date
 are separate; receipt dates stay NULL when unknown. The source's blank agency
-stays blank. An amendment state of `none_observed_in_retained_document` does not
+stays blank. The reader compares the declared name exactly with the native
+labeled Part 6 Filer's Name and the cover's labeled name fields, permitting only
+surrounding/repeated whitespace normalization. Spelling, case and punctuation
+differences refuse; ownership labels and partial names cannot identify the filer.
+`executive_disclosure_pages.filer_identity_json` retains the native labels and
+values, cover fields and original page/section cell locators. An amendment state of `none_observed_in_retained_document` does not
 assert global amendment completeness. Unsupported records retain their explicit
 reason and source lookup; they are not empty disclosures.
 

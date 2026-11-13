@@ -23321,6 +23321,11 @@
         "description": "Full raw text of the interpreted page, including footnotes; exact original remains authoritative."
       },
       {
+        "column_name": "filer_identity_json",
+        "column_type": "VARCHAR",
+        "description": "Literal Part 6 Filer's Name label/value and cover Last Name, First Name and MI fields, with original page/section cell locators. Comparison collapses whitespace only; cover fields use First Name, optional MI and Last Name order. Case, spelling and punctuation differences refuse without aliases."
+      },
+      {
         "column_name": "table_bbox_json",
         "column_type": "VARCHAR",
         "description": "Table bbox json."

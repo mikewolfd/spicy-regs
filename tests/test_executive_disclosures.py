@@ -85,7 +85,7 @@ def test_lookup_through_ordinary_service_keeps_parent_blank_and_amendment(tmp_pa
     def read(_body, **kwargs):
         return SimpleNamespace(parser_revision=source.PARSER_REVISION, backend_version="test-double",
             source_sha256=selected["filings"][0]["source_sha256"],
-            pages=({"page": 8, "page_text": "source page and footnote", "source_locator": "#page=8",
+            pages=({"page": 8, "page_text": "source page and footnote", "filer_identity_json": "{}", "source_locator": "#page=8",
                     "table_bbox_json": "[]", "source_slot_count": 2},),
             rows=tuple({"page": 8, "source_locator": "#page=8", "row_number_raw": label,
                         "description_raw": description, "eif_raw": "N/A", "value_raw": value,
