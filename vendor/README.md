@@ -38,7 +38,22 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
-- **Selected combined local integration provider** `spicy_docs-0.85.0+readers.20261113.4`
+- **Selected local integration provider** `spicy_docs-0.85.0+readers.20261113.5`
+  is built from `5961c4f05d765be9bb6956402ac731075e674eb4`. It adds reviewed historical
+  archive/Senate fallback readers, bill context and older bill child reads, GovInfo
+  preservation/native budget evidence, and comment attachment metadata. Source inputs,
+  intermediate records and actual outputs received bounded direct data reviews recorded
+  on ss-uoid, ss-eskm, ss-zzij, ss-88ii, ss-0x5o, ss-v9y6, ss-flsg and ss-348x.
+  Clean-tree and independent Git-archive builds are byte-identical; package sources,
+  installed files and RECORD hashes match. See [the receipt](spicy_docs-0.85.0+readers.20261113.5.json).
+  This is local adoption. Remaining source coverage, historical fills and hosted acceptance
+  stay with those tickets; public `0.86` remains reserved. Focused installed-wheel checks
+  qualify this receiving change; the full repository gates remain subject to the host's
+  resource reserve. Native uv 0.13.7 emits the existing backend-bound warning for
+  `uv_build<0.12`; this integration leaves that dependency bound unchanged.
+  The superseded `.4` wheel is recoverable from this commit's parent; its receipt remains.
+
+- **Prior combined local integration provider** `spicy_docs-0.85.0+readers.20261113.4`
   is built from `f83eead7274cc9102de036a15d7d310e809f9d11`. It adds the independently reviewed CBO
   primary-document link selection and native PDF layout corrections to the prior `.3` provider.
   Its full SpicyDocs gate passed at that exact source. Clean-worktree and independent

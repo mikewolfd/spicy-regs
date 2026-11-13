@@ -408,8 +408,8 @@
       },
       {
         "column_name": "attachments",
-        "column_type": "STRUCT(title VARCHAR, formats STRUCT(url VARCHAR, format VARCHAR, size BIGINT)[], attachment_id VARCHAR, restrict_reason VARCHAR, restrict_reason_type VARCHAR)[]",
-        "description": "Native ordered list of attachment entries, including restricted attachments and renditions without a URL. `restrict_reason_type` and `restrict_reason` retain the stated restriction. `attachment_id` is the attachment's own id, NULL on a row read before SpicyDocs 0.85.0 and where the record states none or a malformed one. NULL means the included set was absent or unavailable in that row; [] means it contained no attachment entries. A format list or rendition URL can be NULL. Older rows may retain the earlier filtered representation; NULL never proves attachment absence."
+        "column_type": "STRUCT(title VARCHAR, formats STRUCT(url VARCHAR, format VARCHAR, size BIGINT)[], attachment_id VARCHAR, restrict_reason VARCHAR, restrict_reason_type VARCHAR, agency_note VARCHAR, authors VARCHAR[], description VARCHAR, doc_abstract VARCHAR, doc_order BIGINT, modify_date VARCHAR, \"publication\" VARCHAR)[]",
+        "description": "Ordered attachments, including restricted entries and renditions without a URL. The attachment's own `attachment_id`, `restrict_reason`, `restrict_reason_type`, `agency_note`, `authors`, `description`, `doc_abstract`, `doc_order`, `modify_date`, and `publication` come from the publisher. Authors are ordered text values and document order is an integer. NULL means the list is absent or unavailable, and [] means the included set had no attachment entries. A NULL field can also mean the comment predates reading that field. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
         "column_name": "text_content",
@@ -1043,7 +1043,7 @@
   "congress_bills": {
     "table": "congress_bills",
     "label": "Congressional bills",
-    "summary": "One bill or resolution. Full BILLSTATUS records, older API details and retained archive-list rows provide different amounts of detail. Pre-108th detail records do not include walked action, committee, text, subject or related-bill lists; their missing values stay NULL. `cosponsor_count` is retained when stated. Without actions, stage and signed-date rules remain unset. Main identifiers support navigation; source method and processing evidence are inspected separately.",
+    "summary": "One bill or resolution. Full BILLSTATUS records, older API details and retained archive-list rows provide different amounts of detail. An explicitly selected 82nd–107th Congress bill may have a completed API action list and publisher summaries. The `child_routes` inventory separates the detail's advertised links and counts from child observations and their page pins. A detail's `cosponsor_count` is a declaration. Its acquired cosponsor population requires a separate read. Main identifiers support navigation. Source method and processing evidence are inspected separately.",
     "coverage": "True range on the archive index, mixed on enrichment. The index reaches the earliest Congresses, with latest actions from 1799-12-16. Scoped bill-family runs enrich the 108th Congress onward from GovInfo BILLSTATUS and the 82nd–107th from Congress.gov details. Older list-only rows can remain where enrichment has not run. Missing child records or CBO estimates do not prove source absence.",
     "kind": "true_range",
     "measured_on": "2026-09-29",
@@ -1228,12 +1228,50 @@
         "column_name": "related_bill_count",
         "column_type": "BIGINT",
         "description": "How many related bills the publisher states."
+      },
+      {
+        "column_name": "title_history",
+        "column_type": "STRUCT(title VARCHAR, title_type VARCHAR, chamber_code VARCHAR, chamber_name VARCHAR, bill_text_version_code VARCHAR, bill_text_version_name VARCHAR, update_date VARCHAR, title_type_code VARCHAR, parent_title_type VARCHAR)[]",
+        "description": "Ordered title records with literal title type, code, chamber, version and update fields. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+      },
+      {
+        "column_name": "calendar_numbers",
+        "column_type": "STRUCT(calendar VARCHAR, number VARCHAR)[]",
+        "description": "Bill-level calendar references in source order, without attribution to any action. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+      },
+      {
+        "column_name": "constitutional_authority_statement_text",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher statement, including any stated markup."
+      },
+      {
+        "column_name": "source_create_date",
+        "column_type": "VARCHAR",
+        "description": "Literal createDate of the source record, separate from introduction and publication."
+      },
+      {
+        "column_name": "origin_chamber_code",
+        "column_type": "VARCHAR",
+        "description": "The source's literal originChamberCode, when stated."
+      },
+      {
+        "column_name": "child_routes",
+        "column_type": "STRUCT(route VARCHAR, advertised_url VARCHAR, parent_declared_count BIGINT, parent_observed_at VARCHAR, outcome VARCHAR, reason VARCHAR, observed_count BIGINT, http_status BIGINT, page_pins STRUCT(url VARCHAR, sha256 VARCHAR, observed_at VARCHAR, records BIGINT, declared_count BIGINT)[])[]",
+        "description": "Congress.gov detail links, declared counts and separately observed child-route outcomes. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       }
     ],
     "subject": "congress",
     "grain": "One row per bill or resolution, as one BILLSTATUS document states it.",
     "identity_columns": [
       "bill_id"
+    ],
+    "later_policy_columns": [
+      "title_history",
+      "calendar_numbers",
+      "constitutional_authority_statement_text",
+      "source_create_date",
+      "origin_chamber_code",
+      "child_routes"
     ]
   },
   "bill_subjects": {
@@ -35558,8 +35596,8 @@
   "bill_actions": {
     "table": "bill_actions",
     "label": "Bill actions",
-    "summary": "One row per entry of the bill's own action list (`actions` in its BILLSTATUS document), in publisher order; actions recorded under the bill's amendments (`amendments/amendment/actions`) are not rows, so a roll call on an amendment can have no action here. Each row also carries the stage the action text implies, with the rule and matcher that fired, which makes `congress_bills.stage` auditable action by action.",
-    "coverage": "Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled.",
+    "summary": "One row per entry of the bill's own action list, in publisher order. Committee, calendar and roll call references appear under the action that states them. Amendment actions have a separate scope. API rows carry the exact page digest, observation time and zero-based page position. Each row also carries the stage the action text implies.",
+    "coverage": "Sampled. GovInfo BILLSTATUS from the 108th Congress onward, with explicitly selected Congress.gov action lists for bills in the 82nd–107th Congresses.",
     "kind": "sampled",
     "measured_on": "2026-09-28",
     "data_quality": "One event is often entered by more than one system (`source_system_name`). Library of Congress and House floor rows carry an `action_code`; Senate and House committee rows carry none. The same event can appear once per system in different words, and some events appear in one system only (S. 545's committee report has a Senate row and no Library of Congress row; 119th Congress, checked 2026-10-03). Counting rows counts entries, not events; filtering to one system, or to rows with an `action_code`, drops the events the other systems alone record.",
@@ -35618,13 +35656,51 @@
         "column_name": "stage",
         "column_type": "VARCHAR",
         "description": "The stage this one action's qualified code and text classify as, in the same vocabulary as congress_bills.stage (`introduced`, `committee`, `calendared`, `passed_chamber`, `other_chamber`, `conference`, `cleared`, `presented`, `law`, or the outcomes `failed` and `vetoed`; never `passed_both`, which is a bill's state, not one action's); `introduced` with stage_rule NULL when no rule classifies the action, as for the desk or a floor step in the bill's own chamber. An action reads `cleared` where its own words complete agreement on one text; a chamber's agreement to a conference report reads `conference` here, and the bill reads `cleared` from the second, or from its listed enrolled text, which no action reads. One action's classification, not the bill's state."
+      },
+      {
+        "column_name": "action_committees",
+        "column_type": "STRUCT(system_code VARCHAR, \"name\" VARCHAR, url VARCHAR)[]",
+        "description": "Ordered committee references stated on this action. NULL means the source omitted the group. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+      },
+      {
+        "column_name": "action_calendar_numbers",
+        "column_type": "STRUCT(calendar VARCHAR, number VARCHAR)[]",
+        "description": "Calendar references stated on this action, without inheriting bill-level calendars. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+      },
+      {
+        "column_name": "action_recorded_votes",
+        "column_type": "STRUCT(chamber VARCHAR, congress VARCHAR, date VARCHAR, full_action_name VARCHAR, roll_number VARCHAR, session_number VARCHAR, url VARCHAR)[]",
+        "description": "Ordered recorded-vote references the publisher attached to this action. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+      },
+      {
+        "column_name": "source_page_sha256",
+        "column_type": "VARCHAR",
+        "description": "Exact Congress.gov API child-page digest, when the action came from that route."
+      },
+      {
+        "column_name": "source_page_observed_at",
+        "column_type": "VARCHAR",
+        "description": "When the child page was captured, independent of the parent observation and action date."
+      },
+      {
+        "column_name": "source_page_row_index",
+        "column_type": "BIGINT",
+        "description": "Zero-based position of the action in its retained API page."
       }
     ],
     "subject": "congress",
-    "grain": "One row per entry of the bill's own action list (actions in its BILLSTATUS document), in publisher order; actions recorded under the bill's amendments (amendments/amendment/actions) are not rows, so a roll call on an amendment can have no action here.",
+    "grain": "One row per entry of the bill's own action list, in publisher order; actions recorded under the bill's amendments (amendments/amendment/actions) are not rows, so a roll call on an amendment can have no action here.",
     "identity_columns": [
       "bill_id",
       "action_index"
+    ],
+    "later_policy_columns": [
+      "action_committees",
+      "action_calendar_numbers",
+      "action_recorded_votes",
+      "source_page_sha256",
+      "source_page_observed_at",
+      "source_page_row_index"
     ],
     "documented_values": {
       "action_type": {
@@ -36071,8 +36147,8 @@
   "bill_publisher_summaries": {
     "table": "bill_publisher_summaries",
     "label": "CRS bill summaries (publisher)",
-    "summary": "One row per retained CRS summary revision, keyed by bill, summary version, action date and publisher update date. Later update dates preserve earlier rows; repeated copies of the same dated revision merge into one row. `summary_html` is kept exactly as the publisher escaped it. `update_date` preserves the native item clock; legacy `last_summary_update_date` dates the summary itself. `source_schema_version` qualifies those meanings. Neither clock nor its minimum establishes first publication. See docs/bill-summary-clocks.md for the schema-qualified query and replay limits.",
-    "coverage": "Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. A bill has rows only for the summaries the publisher has written.",
+    "summary": "One row per retained CRS summary revision, keyed by bill, summary version, action date and publisher update date. Later update dates preserve earlier rows; repeated copies of the same dated revision merge into one row. `summary_html` is kept exactly as the publisher escaped it. `update_date` preserves the native item clock; legacy `last_summary_update_date` dates the summary itself. `source_schema_version` qualifies those meanings. For `congress-api-v3`, `update_date` is the child response's own updateDate. Read its page digest, capture time and row index from the receipt. See docs/bill-summary-clocks.md for the schema-qualified query and replay limits.",
+    "coverage": "Sampled. GovInfo BILLSTATUS from the 108th Congress onward, with explicitly selected Congress.gov summary lists for bills in the 82nd–107th Congresses.",
     "kind": "sampled",
     "measured_on": "2026-09-28",
     "data_quality": null,
@@ -36120,7 +36196,7 @@
       {
         "column_name": "source_schema_version",
         "column_type": "VARCHAR",
-        "description": "The source BILLSTATUS version that gives the two native summary clocks their context."
+        "description": "The BILLSTATUS version or Congress.gov API format giving the native clock its context."
       }
     ],
     "subject": "congress",
@@ -36143,7 +36219,7 @@
     "coverage": "Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. source is govinfo for a printing whose body was acquired; other rows are printings the publisher lists without an acquired body.",
     "kind": "sampled",
     "measured_on": "2026-09-28",
-    "data_quality": "A numbered reprint is its own printing since spicy-docs 0.37.0: the publisher types it exactly like the printing it follows, so its `version_code` is its own package suffix (`eas2`, `rfs2`) rather than the stage's slug. Public/private laws are distinct publisher listings, not enrolled BILLS printings. Unsupported law bodies remain unacquired: their offered URLs, labels and dates are retained, with no acquired body or section claims.",
+    "data_quality": "A numbered reprint is its own printing since spicy-docs 0.37.0: the publisher types it exactly like the printing it follows, so its `version_code` is its own package suffix (`eas2`, `rfs2`) rather than the stage's slug. Public/private laws are distinct publisher listings, not enrolled BILLS printings. Unsupported law bodies remain unacquired: their offered URLs, labels and dates are retained, with no acquired body or section claims. The matching `etl_receipts` processing evidence retains original offered format URLs, body capture time and body digest when stated. See docs/bill-source-detail.md.",
     "columns": [
       {
         "column_name": "bill_id",
@@ -45607,7 +45683,7 @@
       {
         "dataset": "bill_actions",
         "receipt_only": false,
-        "policy_version": "congress-subjects/1",
+        "policy_version": "congress-subjects/2",
         "identity_columns": [
           "bill_id",
           "action_index"
@@ -46037,7 +46113,7 @@
       {
         "dataset": "congress_bills",
         "receipt_only": false,
-        "policy_version": "congress-subjects/1",
+        "policy_version": "congress-subjects/2",
         "identity_columns": [
           "bill_id"
         ],
