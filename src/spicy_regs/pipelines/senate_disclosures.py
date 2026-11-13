@@ -60,7 +60,7 @@ def listings(manifest, store, *, evidence=None):
     selection = SenateYear(manifest["filing_year"])
     rows, counts, start, seen = [], None, 0, set()
     for item in manifest["search_pages"]:
-        if item["url"] != SEARCH_URL or item["start"] != start or start and start >= counts[1]:
+        if item["url"] != SEARCH_URL or item["start"] != start or (counts is not None and start >= counts[1]):
             raise SenateDisclosureError("Retained Senate search page coordinates differ")
         body = original(store, item)
         total, filtered, page = parse_search(body, selection, start=start)
