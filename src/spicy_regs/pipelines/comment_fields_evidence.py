@@ -16,13 +16,13 @@ from botocore.exceptions import ClientError
 from botocore.response import StreamingBody
 from spicy_docs.sources.mirrulations import DEFAULT_MAX_OBJECT_BYTES, _raise_if_access_refused
 
-SOURCE_PIN_COLUMNS = ("etag", "size", "version_id", "raw_sha256")
+SOURCE_PIN_COLUMNS = ("etag", "size", "version_id", "raw_sha256", "raw_custody")
 REFETCH_SUFFIX = r"( *\([0-9]+\))+$"
 EVIDENCE_SCHEMA = {
     "key": pl.String, "expected_etag": pl.String, "expected_size": pl.Int64,
-    "expected_version_id": pl.String, "expected_sha256": pl.String, "etag": pl.String, "size": pl.Int64,
+    "expected_version_id": pl.String, "expected_sha256": pl.Binary, "etag": pl.String, "size": pl.Int64,
     "version_id": pl.String, "last_modified": pl.String, "observed_at": pl.String,
-    "sha256": pl.String, "status": pl.String, "reason": pl.String, "custody": pl.String,
+    "sha256": pl.Binary, "status": pl.String, "reason": pl.String, "custody": pl.String,
 }
 
 
@@ -48,15 +48,17 @@ class SourcePin(NamedTuple):
     size: int | None
     version_id: str | None
     raw_sha256: str | None
+    raw_custody: str | None
 
 
 class _PinnedObject:
-    def __init__(self, fetch, key, pin, observations, archive, observe_source):
+    def __init__(self, fetch, key, pin, observations, archive, evidence_store, observe_source):
         self.fetch = fetch
         self.key = key
         self.pin = pin
         self.observations = observations
         self.archive = archive
+        self.evidence_store = evidence_store
         self.observe_source = observe_source
 
     def get(self, **options):
@@ -73,13 +75,18 @@ class _PinnedObject:
             self.observations[self.key] = {"status": "oversized", "reason": "The pinned source exceeds the object byte cap"}
             raise ValueError("Pinned source exceeds the object byte cap")
         if pin.raw_sha256 is not None:
-            with self.archive.open(f"sha256:{pin.raw_sha256}") as stream:
+            if pin.raw_custody == "r2":
+                original = self.evidence_store.open(f"blobs/sha256/{pin.raw_sha256}")
+            else:
+                original = self.archive.open(f"sha256:{pin.raw_sha256}")
+            with original as stream:
                 content = stream.read(pin.size + 1)
             if len(content) != pin.size or hashlib.sha256(content).hexdigest() != pin.raw_sha256:
                 raise ValueError("Retained original differs from its pinned size or SHA-256")
             self.observations[self.key] = {
                 "etag": pin.etag, "size": pin.size, "version_id": pin.version_id,
-                "sha256": pin.raw_sha256, "custody": "central-raw-archive",
+                "sha256": bytes.fromhex(pin.raw_sha256),
+                "custody": "r2-source-evidence" if pin.raw_custody == "r2" else "central-raw-archive",
             }
             return {"ETag": pin.etag, "ContentLength": pin.size, "VersionId": pin.version_id,
                     "Body": StreamingBody(BytesIO(content), len(content))}
@@ -123,7 +130,7 @@ class _PinnedObject:
         finally:
             body.close()
         self.observations[self.key] = {
-            **observed, "sha256": hashlib.sha256(content).hexdigest(), "custody": "external",
+            **observed, "sha256": hashlib.sha256(content).digest(), "custody": "external",
         }
         return {**response, "Body": StreamingBody(BytesIO(content), len(content))}
 
@@ -131,18 +138,20 @@ class _PinnedObject:
 class PinnedChunk:
     """One bounded resource adapter. The reader still owns JSON parsing and outcomes."""
 
-    def __init__(self, resource, pins, archive, *, observe_source=False):
+    def __init__(self, resource, pins, archive, evidence_store, *, observe_source=False):
         self.resource = resource
         self.pins = pins
         self.observations = {}
         self.archive = archive
+        self.evidence_store = evidence_store
         self.observe_source = observe_source
 
     def Object(self, bucket, key):  # noqa: N802 - boto3 resource API
         def fetch(**options):
             return self.resource.Object(bucket, key).get(**options)
 
-        return _PinnedObject(fetch, key, self.pins[key], self.observations, self.archive, self.observe_source)
+        return _PinnedObject(fetch, key, self.pins[key], self.observations, self.archive, self.evidence_store,
+                             self.observe_source)
 
     def evidence(self, accepted, failures):
         observed_at = datetime.now(UTC).isoformat()
@@ -152,7 +161,8 @@ class PinnedChunk:
             status = outcome.get("status") or ("read" if key in accepted else failure.get("status", "unattempted"))
             yield {
                 "key": key, "expected_etag": pin.etag, "expected_size": pin.size, "expected_version_id": pin.version_id,
-                "expected_sha256": pin.raw_sha256, "observed_at": observed_at, **outcome, "status": status,
+                "expected_sha256": bytes.fromhex(pin.raw_sha256) if pin.raw_sha256 else None,
+                "observed_at": observed_at, **outcome, "status": status,
                 "reason": outcome.get("reason", failure.get("reason")),
             }
 
@@ -193,13 +203,13 @@ def checkpoint_path(part):
     return part.with_suffix(".checkpoint.json")
 
 
-def verified_part(part, plan_sha256, expected_keys):
+def verified_part(part, plan_sha256, expected_keys, profile):
     checkpoint = checkpoint_path(part)
     if not checkpoint.exists():
         return False
     selected = json.loads(checkpoint.read_text())
     evidence = part.parent / selected["evidence_file"]
-    if (selected["plan_sha256"] != plan_sha256 or selected["part_file"] != part.name
+    if (selected["plan_sha256"] != plan_sha256 or selected["part_file"] != part.name or selected["profile"] != profile
             or not part.exists() or not evidence.is_file()
             or evidence.parent.resolve() != (part.parent / "source-evidence").resolve()
             or file_sha256(part) != selected["part_sha256"]
@@ -227,12 +237,13 @@ def write_evidence(part, rows):
     return target
 
 
-def commit_checkpoint(part, plan_sha256, evidence, keys, unresolved):
+def commit_checkpoint(part, plan_sha256, evidence, keys, unresolved, profile):
     checkpoint = checkpoint_path(part)
     temporary = checkpoint.with_suffix(".tmp")
     record = {
         "plan_sha256": plan_sha256,
         "part_file": part.name,
+        "profile": profile,
         "part_sha256": file_sha256(part),
         "evidence_file": str(evidence.relative_to(part.parent)),
         "evidence_sha256": file_sha256(evidence),

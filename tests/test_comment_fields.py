@@ -79,7 +79,7 @@ def test_pinned_chunk_commits_verified_body_evidence_or_retains_failure(tmp_path
     [evidence] = (part.parent / "source-evidence").glob("*.parquet")
     [observed] = pl.read_parquet(evidence).to_dicts()
     assert observed["status"] == expected
-    assert observed["sha256"] == (sha256(body).hexdigest() if expected == "read" else None)
+    assert observed["sha256"] == (sha256(body).digest() if expected == "read" else None)
     if expected == "read":
         assert first["rows"] == 1
         assert cf.stage(tmp_path, tmp_path / "stage", profile="attachments")["rows"] == 1
@@ -117,7 +117,7 @@ def test_pinned_chunk_uses_verified_central_original_without_fetching(tmp_path):
     assert cf.read(tmp_path, workers=1, resource=resource, raw_root=raw)["rows"] == 1
     [evidence] = list((tmp_path / "parts").glob("*/source-evidence/*.parquet"))
     [observation] = pl.read_parquet(evidence).to_dicts()
-    assert (observation["custody"], observation["sha256"]) == ("central-raw-archive", digest)
+    assert (observation["custody"], observation["sha256"]) == ("central-raw-archive", bytes.fromhex(digest))
 
 
 def test_frozen_key_plan_can_capture_the_version_from_a_single_get(tmp_path):
@@ -137,8 +137,40 @@ def test_frozen_key_plan_can_capture_the_version_from_a_single_get(tmp_path):
     checkpoint = json.loads(checkpoint_path(part).read_text())
     [observed] = pl.read_parquet(part.parent / checkpoint["evidence_file"]).to_dicts()
     assert (observed["expected_etag"], observed["etag"], observed["version_id"], observed["sha256"]) == (
-        None, '"observed"', "v1", sha256(body).hexdigest(),
+        None, '"observed"', "v1", sha256(body).digest(),
     )
+
+
+def test_attachment_profile_reuses_r2_original_and_refuses_all_fields(tmp_path):
+    from contextlib import contextmanager
+
+    key, body = next(iter(_store().items()))
+    digest = sha256(body).hexdigest()
+    pins = tmp_path / "pins.parquet"
+    pl.DataFrame({
+        "key": [key], "etag": ['"retained-etag"'], "size": [len(body)], "version_id": [None],
+        "raw_sha256": [digest], "raw_custody": ["r2"],
+    }).write_parquet(pins)
+    plan = cf.plan(tmp_path, _manifest(tmp_path, [key]), source_pins=pins, profile="attachments")
+
+    @contextmanager
+    def open_original(object_key):
+        assert object_key == "blobs/sha256/" + digest
+        yield BytesIO(body)
+
+    resource = SimpleNamespace(Object=lambda *_: pytest.fail("R2-held source must not issue publisher GET"))
+    assert cf.read(tmp_path, workers=1, resource=resource, evidence_store=SimpleNamespace(open=open_original))["rows"] == 1
+    part = cf.part_path(tmp_path, plan.stem, key.split("/")[1], 0)
+    assert pl.read_parquet(part).columns == list(cf.read_columns("attachments"))
+    checkpoint = json.loads(checkpoint_path(part).read_text())
+    assert checkpoint["profile"] == "attachments"
+    [observation] = pl.read_parquet(part.parent / checkpoint["evidence_file"]).to_dicts()
+    assert (observation["custody"], observation["sha256"]) == ("r2-source-evidence", bytes.fromhex(digest))
+    with pytest.raises(ValueError, match="all-fields"):
+        cf.stage(tmp_path, tmp_path / "stage")
+    with pytest.raises(ValueError, match="seed comment attributes"):
+        cf.build_attributes(tmp_path)
+    assert cf.stage(tmp_path, tmp_path / "stage", profile="attachments")["rows"] == 1
 
 
 def test_staging_source_gaps_quarantines_every_copy_of_the_comment(tmp_path):
