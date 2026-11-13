@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from spicy_regs.subject_catalog import subject_tables
 from spicy_regs.disbursement_summary_tables import TABLES as DISBURSEMENT_SUMMARY_TABLES
+from spicy_regs.fec_research_tables import TABLES as FEC_RESEARCH_TABLES
 
 import base64
 import difflib
@@ -131,6 +132,7 @@ TABLES = (
     *DISBURSEMENT_SUMMARY_TABLES,
     "fec_financial_profiles",
     "lobbying_quarterly_profiles",
+    *FEC_RESEARCH_TABLES,
     "treasury_debt_observations",
     "treasury_statement_periods",
     "treasury_statement_classification_cells",
@@ -1085,6 +1087,7 @@ def _build_connection_inputs(con, publication):
         *DISBURSEMENT_SUMMARY_TABLES,
         "fec_financial_profiles",
         "lobbying_quarterly_profiles",
+        *FEC_RESEARCH_TABLES,
         "census_acs_county_observations",
         "census_geocoder_lookups",
         "census_geocoder_geographies",

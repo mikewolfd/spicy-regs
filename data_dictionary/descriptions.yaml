@@ -14159,3 +14159,323 @@ tables:
       amendment_count: Recognized amendments at or before cutoff; no chain is invented between multiple amendments.
       period_start: First calendar day of the declared quarter, not the acquisition or posting date.
       period_end: Last calendar day of the declared quarter; no annual amount is allocated to quarters.
+  fec_committee_relationship_profiles:
+    label: Disclosed committee affiliations and sponsors
+    subject: campaign_finance
+    identity_columns:
+    - profile_id
+    summary: Disclosed committee affiliations and sponsors with exact source coordinates and explicit interpretation
+      limits.
+    coverage: Sampled. Explicit retained committee pages; relationship dates, ownership and financial transfers are
+      not inferred.
+    measured_on: '2026-11-13'
+    grain: One selected committee occurrence.
+    columns:
+      profile_id: Identity of one selected profile; not an economic transaction ID.
+      committee_id: Literal native FEC committee ID; no name matching.
+      committee_name: Publisher committee label; earlier filing titles remain separately in native evidence.
+      designation: Native committee designation code; sponsorship does not imply authorization.
+      source_sha256: SHA-256 of the retained original publisher bytes.
+      source_url: Publisher URL recorded for the retained original; its current contents can differ.
+      captured_at: Known original capture time; null where historical acquisition time is unknown.
+      source_pointer: JSON pointer to this exact occurrence in the original response.
+      relationships_json: Every source relationship field and array entry, retaining missing, null, empty and unresolved
+        labels.
+      native_fields_json: Complete original committee result, including source field states and array multiplicity.
+      relationship_effective_date_status: No relationship effective date is inferred from retrieval or filing dates.
+      policy_version: Version of the named interpretation and selection rules.
+      coverage_note: Explicit population, timing, attribution and financial limits of this named output.
+  fec_contribution_profiles:
+    label: Qualified selected-report contributions
+    subject: campaign_finance
+    identity_columns:
+    - profile_id
+    summary: Qualified selected-report contributions with exact source coordinates and explicit interpretation limits.
+    coverage: Window. Complete selected recipient report with separate itemized, unitemized, signed-adjustment and
+      refund measures; not a complete cycle.
+    measured_on: '2026-11-13'
+    grain: One effective report and contribution family.
+    columns:
+      profile_id: Identity of one selected profile; not an economic transaction ID.
+      committee_id: Literal native FEC committee ID; no name matching.
+      committee_name: Publisher committee label; earlier filing titles remain separately in native evidence.
+      candidate_id: Native candidate ID. Different offices may have different IDs for the same person.
+      candidate_association_basis: Native committee/cycle link and candidate observation before the report; daily
+        authorization is not asserted.
+      filing_id: Native filing number selected by matching publisher report evidence.
+      source_sha256: SHA-256 of the retained original publisher bytes.
+      source_url: Publisher URL recorded for the retained original; its current contents can differ.
+      captured_at: Known original capture time; null where historical acquisition time is unknown.
+      period_start: Declared report or cycle coverage start, not necessarily the earliest transaction date.
+      period_end: Declared report or cycle coverage end, not necessarily the latest transaction date.
+      source_evidence_json: Exact retained request descriptors, original digests, sizes and capture dates.
+      policy_version: Version of the named interpretation and selection rules.
+      coverage_note: Explicit population, timing, attribution and financial limits of this named output.
+      contribution_family: PAC receipts source-typed PAC, or individual-contribution schedule lines.
+      gross_itemized_receipts: Included nonnegative itemized receipts, in exact USD decimal text.
+      negative_receipt_adjustments: Signed negative receipt adjustments, distinct from Schedule B refunds.
+      signed_itemized_receipts: Gross itemized receipts plus signed adjustments, reconciled to the official report.
+      itemized_refunds: Matching family Schedule B refunds; never inferred from a negative receipt sign.
+      net_itemized_flow: Signed itemized receipts minus matching itemized refunds, in exact USD decimal text.
+      unitemized_receipts: Separate reported unitemized amount; not attributed to named itemized donors.
+      net_reported_family: Signed itemized receipts plus separate unitemized receipts minus matching refunds.
+      amount_basis: Declared publisher or selected-report measure basis. Alternative representations are not added.
+      breakdown_json: Exact amounts grouped by native PAC ID or reported contributor state; includes record counts,
+        not unique donors.
+      source_cycle: Selected two-year FEC cycle or completed result edition.
+      included_records: Included receipt/refund observation count, not a count of people.
+      memo_records: Preserved source memo observations excluded from additive money.
+  fec_contribution_decisions:
+    label: Contribution inclusion and exclusion evidence
+    subject: campaign_finance
+    identity_columns:
+    - record_id
+    summary: Contribution inclusion and exclusion evidence with exact source coordinates and explicit interpretation
+      limits.
+    coverage: Window. Selected contribution-family observations, including excluded memos and prior-period transaction
+      dates.
+    measured_on: '2026-11-13'
+    grain: One existing financial-mapper observation.
+    columns:
+      profile_id: Identity of one selected profile; not an economic transaction ID.
+      committee_id: Literal native FEC committee ID; no name matching.
+      committee_name: Publisher committee label; earlier filing titles remain separately in native evidence.
+      candidate_id: Native candidate ID. Different offices may have different IDs for the same person.
+      candidate_association_basis: Native committee/cycle link and candidate observation before the report; daily
+        authorization is not asserted.
+      filing_id: Native filing number selected by matching publisher report evidence.
+      source_sha256: SHA-256 of the retained original publisher bytes.
+      source_url: Publisher URL recorded for the retained original; its current contents can differ.
+      captured_at: Known original capture time; null where historical acquisition time is unknown.
+      period_start: Declared report or cycle coverage start, not necessarily the earliest transaction date.
+      period_end: Declared report or cycle coverage end, not necessarily the latest transaction date.
+      source_evidence_json: Exact retained request descriptors, original digests, sizes and capture dates.
+      policy_version: Version of the named interpretation and selection rules.
+      coverage_note: Explicit population, timing, attribution and financial limits of this named output.
+      record_id: Deterministic identity of one native observation, bound to its source digest and coordinates.
+      contribution_family: PAC receipts source-typed PAC, or individual-contribution schedule lines.
+      disposition: Included or excluded under the selected-report calculation.
+      disposition_reason: Receipt, signed adjustment, refund or source memo representation decision.
+      amount: Exact source USD decimal text; the sign alone does not establish a refund.
+      donor_id: Disclosed native PAC ID where supported; individuals remain unresolved.
+      donor_label: Reported contributor label; similar names do not become resolved people.
+      employer: Reported employer of a contributor, not the donor or an employer donation.
+      occupation: Source-reported occupation label; not identity resolution.
+      native_entity_type: Literal entity type in the filing.
+      election_code: Literal transaction election designation; different elections remain separate in native observations.
+      memo_field_status: Missing trailing field, explicitly empty field, or reported memo indicator.
+      transaction_date_scope: Native transaction date within or outside declared report coverage; outside dates remain
+        included and visible.
+      native_values_json: Complete existing financial-mapper observation with raw amounts, dates, field omissions
+        and provenance.
+      source_locator_json: Exact native record ordinal and byte coordinates.
+      source_cycle: Selected two-year FEC cycle or completed result edition.
+  fec_outside_spending_profiles:
+    label: Candidate support and opposition spending
+    subject: campaign_finance
+    identity_columns:
+    - profile_id
+    summary: Candidate support and opposition spending with exact source coordinates and explicit interpretation limits.
+    coverage: Window. Observed publisher aggregate groups reconcile to separately captured official totals. Specific
+      elections and observed date extrema are not supplied.
+    measured_on: '2026-11-13'
+    grain: One candidate, cycle and support/oppose indicator.
+    columns:
+      profile_id: Identity of one selected profile; not an economic transaction ID.
+      candidate_id: Native candidate ID. Different offices may have different IDs for the same person.
+      candidate_name: Literal source candidate label, independent of identifier resolution.
+      support_oppose: Source S (support) or O (oppose); unresolved indicators refuse aggregation.
+      source_evidence_json: Exact retained request descriptors, original digests, sizes and capture dates.
+      source_generation: Digest binding the selected original query captures and interpretation policy.
+      period_start: Declared report or cycle coverage start, not necessarily the earliest transaction date.
+      period_end: Declared report or cycle coverage end, not necessarily the latest transaction date.
+      election_basis: All elections in the selected two-year cycle; election-specific queries refuse.
+      amount_basis: Declared publisher or selected-report measure basis. Alternative representations are not added.
+      policy_version: Version of the named interpretation and selection rules.
+      coverage_note: Explicit population, timing, attribution and financial limits of this named output.
+      total: Exact USD decimal text for the named publisher group or total.
+      reported_event_dates: The aggregate supplies cycle scope, not observed transaction date extrema.
+      source_cycle: Selected two-year FEC cycle or completed result edition.
+      reported_spender_count: Distinct supported source filer IDs; not transaction or unique-person count.
+      unknown_spender_rows: Rows without supported filer identity, separately visible.
+  fec_outside_spending_spenders:
+    label: Reported independent expenditure filers
+    subject: campaign_finance
+    identity_columns:
+    - record_id
+    summary: Reported independent expenditure filers with exact source coordinates and explicit interpretation limits.
+    coverage: Window. Selected publisher candidate/cycle groups; Form 5 identities and unresolved filers remain separate.
+    measured_on: '2026-11-13'
+    grain: One filer, candidate, cycle and support/oppose group.
+    columns:
+      profile_id: Identity of one selected profile; not an economic transaction ID.
+      candidate_id: Native candidate ID. Different offices may have different IDs for the same person.
+      candidate_name: Literal source candidate label, independent of identifier resolution.
+      support_oppose: Source S (support) or O (oppose); unresolved indicators refuse aggregation.
+      source_evidence_json: Exact retained request descriptors, original digests, sizes and capture dates.
+      source_generation: Digest binding the selected original query captures and interpretation policy.
+      period_start: Declared report or cycle coverage start, not necessarily the earliest transaction date.
+      period_end: Declared report or cycle coverage end, not necessarily the latest transaction date.
+      election_basis: All elections in the selected two-year cycle; election-specific queries refuse.
+      amount_basis: Declared publisher or selected-report measure basis. Alternative representations are not added.
+      policy_version: Version of the named interpretation and selection rules.
+      coverage_note: Explicit population, timing, attribution and financial limits of this named output.
+      record_id: Deterministic identity of one native observation, bound to its source digest and coordinates.
+      spender_id: Native filer ID; C9 IDs remain Form 5 filer identities rather than inferred committees.
+      spender_name: Literal reporting filer label, not an independently resolved organization.
+      spender_namespace: FEC committee, FEC Form 5 filer, or unresolved source identity.
+      total: Exact USD decimal text for the named publisher group or total.
+      source_cycle: Selected two-year FEC cycle or completed result edition.
+      reported_transaction_count: Publisher number of transactions behind one group; never a spender count.
+  fec_election_workbook_rows:
+    label: Official election workbook rows
+    subject: campaign_finance
+    identity_columns:
+    - record_id
+    summary: Official election workbook rows with exact source coordinates and explicit interpretation limits.
+    coverage: Not a range. Literal official workbook rows, including summaries and overlapping appendices. Only the
+      reviewed Senate layout is interpreted in the companion table.
+    measured_on: '2026-11-13'
+    grain: One physical row in one retained worksheet.
+    columns:
+      record_id: Deterministic identity of one native observation, bound to its source digest and coordinates.
+      source_sha256: SHA-256 of the retained original publisher bytes.
+      source_url: Publisher URL recorded for the retained original; its current contents can differ.
+      captured_at: Known original capture time; null where historical acquisition time is unknown.
+      source_sheet: Literal worksheet name.
+      reader_version: Version of the source reader over maintained literal workbook syntax.
+      cells_json: Every literal cell on this workbook row, including nulls, cached formula values and presentation
+        facts.
+      source_row: One-based native worksheet row, including source totals, notes and blanks.
+      source_cycle: Selected two-year FEC cycle or completed result edition.
+  fec_election_results:
+    label: Official Senate election results
+    subject: campaign_finance
+    identity_columns:
+    - record_id
+    summary: Official Senate election results with exact source coordinates and explicit interpretation limits.
+    coverage: Window. Reviewed official Senate edition, preserving primaries, runoffs, general elections, unexpired
+      terms, ballot lines, zero votes and ranked-choice rounds. Appendix observations remain literal in the companion
+      table.
+    measured_on: '2026-11-13'
+    grain: One native Senate row and vote column.
+    columns:
+      record_id: Deterministic identity of one native observation, bound to its source digest and coordinates.
+      source_sha256: SHA-256 of the retained original publisher bytes.
+      source_url: Publisher URL recorded for the retained original; its current contents can differ.
+      captured_at: Known original capture time; null where historical acquisition time is unknown.
+      source_sheet: Literal worksheet name.
+      reader_version: Version of the source reader over maintained literal workbook syntax.
+      source_column: Native vote column in the retained worksheet.
+      state: Source state abbreviation; blank totals inherit only within the same explicitly repeated full state name.
+      state_raw: Literal native state cell; original blanks remain blank.
+      district_raw: Literal seat label, preserving full versus unexpired terms.
+      seat_term: Full or unexpired Senate term, separate within each state.
+      stage: Primary, primary runoff, general or general runoff, from separate source columns.
+      round: Reported column, combined-party witness, or explicit ranked-choice round.
+      vote_basis: Ballot line, combined-party witness, ranked-choice round or reported total. These bases overlap.
+      row_kind: Candidate, party total or contest total; summary totals are not additional candidate votes.
+      candidate_id: Native candidate ID. Different offices may have different IDs for the same person.
+      candidate_id_status: Supported source ID shape or unresolved, including write-ins and totals.
+      candidate_name: Literal source candidate label, independent of identifier resolution.
+      party: Literal party ballot-line label; several party lines do not create several candidates.
+      votes_raw: Literal source vote cell, retaining zero, null, asterisk and Unopposed.
+      votes_status: Exact nonnegative integer, missing value, or nonnumeric source text.
+      percentage_raw: Literal source fractional percentage; not recomputed or used to infer votes.
+      footnotes: Literal source row footnotes, including ranked-choice and nomination-method qualifications.
+      primary_winner_raw: Literal primary winner indicator.
+      general_winner_raw: Literal general winner indicator; not inferred from a single round.
+      interpretation_version: Version of downstream Senate result interpretation.
+      overlap_note: Repeated combined-party totals, distinct rounds and appendix overlap limits.
+      source_row: One-based native worksheet row, including source totals, notes and blanks.
+      source_cycle: Selected two-year FEC cycle or completed result edition.
+      votes: Exact integer votes where supplied; zero survives and missing stays null.
+  sector_financial_comparisons:
+    label: Sector financial comparisons
+    subject: campaign_finance
+    identity_columns:
+    - record_id
+    summary: Separate qualified FEC and lobbying measures with source-local classifications, exact evidence and visible
+      uncertainty.
+    grain: One declared source measure and classification group, or one native classification/issue observation.
+    coverage: Derived. Bounded selected source profiles and a versioned broad-sector mapping. Unknown classifications,
+      unresolved quarters and overlapping issues remain visible; not a national or complete annual sector total.
+    measured_on: '2026-11-13'
+    columns:
+      record_id: Deterministic identity bound to source selections and mapping revision.
+      sector_code: Selected NAICS 2022 sector, unclassified, or uncertain. Definitions alone do not classify organizations.
+      sector_label: Official selected NAICS sector label, or explicit unclassified/uncertain category.
+      classification_scheme: The retained NAICS vintage, separate from LDA issue vocabulary.
+      mapping_version: Explicit revision of curator assignments and their evidence.
+      source_family: FEC or LDA; the financial measures are never added across sources.
+      measure: Receipts, disbursements, registrant income or in-house expenses, kept separate.
+      known_reported_amount: Exact decimal text summed only over qualified selected observations; null when none qualify.
+      amount_status: Known selected observations or no qualified measure; neither means a complete annual total.
+      amount_basis: Source-specific measure and estimate basis, preserved separately.
+      period_start: Start of the explicitly supported comparison window.
+      period_end: End of the explicitly supported comparison window.
+      source_generation: Exact prerequisite generation pin, verified before reading.
+      source_table_sha256: SHA-256 of exact prerequisite table bytes, verified before reading.
+      cutoff: Recorded source as-of scope; different capture dates do not imply a shared atomic snapshot.
+      population_json: Declared source population and exclusions; the FEC and lobbying populations differ.
+      evidence_json: Assignment evidence with native IDs, source digests, original locators and limitations.
+      coverage_note: Coverage, classification, identity and financial-overlap limits.
+      policy_version: Version of the comparison rules.
+      population_profiles: Declared source profile denominator, including unresolved observations.
+      group_profiles: Profiles assigned to this source-local industry group.
+      qualified_measure_profiles: Profiles contributing one accepted amount for this measure.
+      unresolved_measure_profiles: Group profiles without an accepted value, never replaced with zero.
+      classified_population_profiles: Source profile denominator with one supported broad classification.
+      unclassified_population_profiles: Source profile denominator lacking an industry assignment.
+      uncertain_population_profiles: Source profile denominator with competing or uncertain industry assignments.
+  sector_classification_evidence:
+    label: Sector classification evidence
+    subject: campaign_finance
+    identity_columns:
+    - record_id
+    summary: Separate qualified FEC and lobbying measures with source-local classifications, exact evidence and visible
+      uncertainty.
+    grain: One declared source measure and classification group, or one native classification/issue observation.
+    coverage: Derived. Bounded selected source profiles and a versioned broad-sector mapping. Unknown classifications,
+      unresolved quarters and overlapping issues remain visible; not a national or complete annual sector total.
+    measured_on: '2026-11-13'
+    columns:
+      record_id: Deterministic identity bound to source selections and mapping revision.
+      source_namespace: FEC committee or LDA client identity namespace; proposed cross-source links stay separate.
+      native_entity_id: Literal source-local ID; names do not establish cross-source identity.
+      sector_codes_json: Distinct proposed sector codes; multiple codes do not duplicate additive money.
+      classification_status: Supported context, uncertain industry, or unresolved identity association.
+      classification_scheme: The retained NAICS vintage, separate from LDA issue vocabulary.
+      mapping_version: Explicit revision of curator assignments and their evidence.
+      method: Curated business-evidence method. Name-only or issue-code industry inference refuses.
+      applicable_start: First reporting date for which this mapping was declared applicable.
+      applicable_end: Last reporting date for which this mapping was declared applicable.
+      observed_at: Date classification evidence was reviewed, not a relationship effective date.
+      evidence_json: Assignment evidence with native IDs, source digests, original locators and limitations.
+      uncertainty: Explicit limits of curator classification or identity association.
+      association_json: Separately retained unresolved identity proposal; never used to join money.
+  lobbying_issue_financial_observations:
+    label: Lobbying issue financial observations
+    subject: lobbying
+    identity_columns:
+    - record_id
+    summary: Separate qualified FEC and lobbying measures with source-local classifications, exact evidence and visible
+      uncertainty.
+    grain: One declared source measure and classification group, or one native classification/issue observation.
+    coverage: Derived. Bounded selected source profiles and a versioned broad-sector mapping. Unknown classifications,
+      unresolved quarters and overlapping issues remain visible; not a national or complete annual sector total.
+    measured_on: '2026-11-13'
+    columns:
+      record_id: Deterministic identity bound to source selections and mapping revision.
+      issue_code: Literal LDA issue code, separate from organizational industry.
+      profile_id: Selected source quarterly profile, repeated at most once per issue.
+      filing_uuid: Native selected LDA filing UUID; activities are reduced to distinct issues before any amount is
+        exposed.
+      income: Reported whole-filing registrant income estimate, not allocated to this issue.
+      expenses: Reported whole-filing in-house expense estimate, separate from income and not allocated to this issue.
+      source_url: Publisher filing URL for this observation.
+      period_start: Start of the explicitly supported comparison window.
+      period_end: End of the explicitly supported comparison window.
+      source_generation: Exact prerequisite generation pin, verified before reading.
+      amount_basis: Source-specific measure and estimate basis, preserved separately.
+      overlap_note: Issue-filtered views overlap; repeated activities never multiply money.

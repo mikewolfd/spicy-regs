@@ -46704,5 +46704,1157 @@
       }
     ],
     "guide": "A receipt is the paperwork behind one row. Each time our pipeline turns a\npublisher's record (an FCC filing, a GAO decision, one rating on a scorecard)\ninto a row of a table, it writes one receipt to go with it: what it read, which\nversion of our code read it, how that went, and anything it kept that did not\nbecome a column. The table holds what you query. The receipt holds how the row\ngot there. (\"ETL\" in the name is that pipeline: extract, transform, load.)\n\nReceipts are useful for three things:\n\n- **Finding something that is no longer a column.** A table in the newer layout\n  keeps the columns people query. A few things people do sometimes want, such\n  as the link to a filing's page on the publisher's site, are kept in the\n  receipt instead, until the table's group stops writing receipts and makes\n  them columns. Where that is so, the table's own notes say it in one sentence.\n- **Checking where a row came from.** A receipt names what was read to make\n  the row.\n- **Seeing what did not become a row.** When a pipeline records a record it\n  could not convert, it does so as a receipt with no row.\n\nNot every table has receipts yet. Tables are moving to the newer layout one\ngroup at a time, and a table has receipts only after it has been published that\nway. `describe_table('etl_receipts')` lists, under `publication`, each group\nthat has them and the tables in it (`datasets`). A table that is not named\nthere has no receipts this server can query. Most such tables have none:\neverything they hold is in the table itself. The eight rulemaking snapshot\ntables (`rule_targets`, `proceedings`, `regulatory_agenda_items`,\n`agenda_item_proceedings`, `comment_periods`, `rulemaking_lifecycles`,\n`lifecycle_events`, `agency_lifecycle_stats`) are the exception: their receipts\nsit in the snapshot's own internal file, which this server does not read, so a\nvalue kept only there cannot be read here. (The other\n`datasets` list in that reply, under `metadata`, names every table that is set\nup to have receipts, whether or not it has published any.)\n\nThe word has two other uses in this dictionary, and neither is this table.\n`fec_receipts` and other campaign-finance wording mean money a committee\nreceived. A note that cites a \"receipt\" followed by a folder name points at the\nmaintainers' own evidence files, which are not public.\n\n## How to find the receipt for a row\n\nIn a table that has receipts, every row has exactly one receipt whose\n`outcome` is `accepted`. You find it with a query, by the table's name and the\nrow's key.\n\n1. Ask for the table's key columns. `describe_table('crs_reports')` lists them\n   as `identity_columns`; for `crs_reports` those are `report_id` and `update_date`.\n2. Write the row's key the way a receipt stores it in `identity_json`: each key\n   column as a name and a value, in the order `identity_columns` gives.\n3. Select the receipt with that table name and that key.\n\nFor the CRS report `R48641` updated at `2026-07-17T22:38:55+00:00`:\n\n```sql\nSELECT *\nFROM etl_receipts\nWHERE dataset = 'crs_reports'\n  AND outcome = 'accepted'\n  AND identity_json = '[\"list\",[[\"list\",[[\"str\",\"report_id\"],[\"str\",\"R48641\"]]],[\"list\",[[\"str\",\"update_date\"],[\"datetime\",\"2026-07-17T22:38:55+00:00\"]]]]]'\n```\n\nA table with two key columns names both. `fec_committee_history` is keyed by\n`committee_id` and `cycle`, and its key for committee `C00097238` in 2012 is:\n\n```text\n[\"list\",[[\"list\",[[\"str\",\"committee_id\"],[\"str\",\"C00097238\"]]],[\"list\",[[\"str\",\"cycle\"],[\"int\",2012]]]]]\n```\n\nText is written `[\"str\",\"…\"]`, a whole number `[\"int\",2012]` with no quotes\naround the number, and a key column that is empty for the row `[\"null\",null]`.\nA timestamp is written `[\"datetime\",\"2026-07-17T22:38:55+00:00\"]`.\nSpelling and capital letters must match the table's value exactly.\n\nTo fetch the receipts of several rows, join on the same expression and build\nthe key from the table's own column:\n\n```sql\nSELECT t.report_id, t.update_date, t.title, r.witnesses\nFROM crs_reports t\nJOIN etl_receipts r\n  ON r.dataset = 'crs_reports'\n AND r.outcome = 'accepted'\n AND r.identity_json = '[\"list\",[[\"list\",[[\"str\",\"report_id\"],[\"str\",\"' || t.report_id\n     || '\"]]],[\"list\",[[\"str\",\"update_date\"],[\"datetime\",\"'\n     || replace(strftime(t.update_date AT TIME ZONE 'UTC', '%Y-%m-%dT%H:%M:%S.%f')\n                || '+00:00', '.000000+', '+') || '\"]]]]]'\nWHERE t.report_id IN ('R48641', 'IN12713')\n```\n\nThree things to know before relying on this:\n\n- The query reads through all of that table's receipts, so it is slower on the\n  largest tables.\n- A shorter form you may see, `contains(identity_json, '\"R48641\"')`, works for\n  a table with one key column. Do not use it on a table with several key\n  columns: matching one part of the key returns other rows' receipts.\n- A key value that contains a double quote or a backslash is stored with a\n  backslash in front of each, so the plain joining of text above will not match\n  it.\n\n## How to read a value out of a receipt\n\nThe three columns ending in `_json` hold text in a form of JSON where every\nvalue is written as a pair: its type, then the value. The text `R48641` is\nstored as `[\"str\",\"R48641\"]`, the number 5 as `[\"int\",5]`, a missing value as\n`[\"null\",null]`, a record as `[\"dict\",[[name, pair], …]]` and a list as\n`[\"list\",[pair, …]]`. This keeps the number 5 apart from the text \"5\", and a\nmissing value apart from an empty text. The cost is that the usual JSON\nfunctions cannot fetch a field by its name, so today the working way to read\none is a text pattern:\n\n```sql\nSELECT regexp_extract(processing_json, '\\[\"url\",\\[\"str\",\"([^\"]*)\"', 1) AS url\nFROM etl_receipts\nWHERE dataset = 'crs_reports'\n  AND outcome = 'accepted'\n  AND identity_json = '[\"list\",[[\"list\",[[\"str\",\"report_id\"],[\"str\",\"R48641\"]]],[\"list\",[[\"str\",\"update_date\"],[\"datetime\",\"2026-07-17T22:38:55+00:00\"]]]]]'\n```\n\nPut the field's name where `url` is. The pattern has limits:\n\n- It reads text values only. For a field that is absent, missing or not text it\n  returns an empty text, not NULL.\n- It returns the first field of that name anywhere in the receipt.\n- It stops at the first double quote, so a value that contains one (a title, or\n  a list kept as text) comes back cut short. For such a value use the longer\n  form, which reads it whole:\n\n```sql\nSELECT ('\"' || regexp_extract(processing_json, '\\[\"title\",\\[\"str\",\"((?:[^\"\\\\]|\\\\.)*)\"', 1) || '\"')::JSON ->> '$' AS title\nFROM etl_receipts\nWHERE dataset = 'crs_reports'\n  AND outcome = 'accepted'\n  AND identity_json = '[\"list\",[[\"list\",[[\"str\",\"report_id\"],[\"str\",\"R48641\"]]],[\"list\",[[\"str\",\"update_date\"],[\"datetime\",\"2026-07-17T22:38:55+00:00\"]]]]]'\n```\n\nTo see which fields a table's receipts hold, look at one:\n`SELECT processing_json FROM etl_receipts WHERE dataset = 'crs_reports' AND outcome = 'accepted' LIMIT 1`.\n\n## What a receipt contains\n\nOne row per receipt. The first columns say which row the receipt belongs to;\nthe rest say what was read and what happened. On the server, `etl_receipts` is\none table holding the receipts of every table that has them. In the published\nfiles, each group of tables has its own `etl_receipts.parquet` beside its\ntables, and the publication index names it.\n\nEach column is described under `columns` in this reply.\n\n## What a receipt does not tell you\n\n- **Whether the publisher's record is right, current or approved.** `outcome`\n  describes our processing only. `accepted` means the pipeline turned the record\n  into a row; it says nothing about what an agency decided. Where a publisher\n  states a status of its own, that is a column of the table.\n- **What the row said before.** The server holds one build of each table, the\n  one published now, with that build's receipts. A receipt for a row carried\n  over from an earlier build notes the earlier receipts in `diagnostic_json`;\n  the earlier builds themselves cannot be queried here. Tables that retain source\n  revisions, such as `crs_reports`, expose those revisions as separate rows in the\n  current build.\n- **Where to open the publisher's page.** `witnesses` names what the pipeline\n  read, and that is not always a page you can visit. For some tables it is one\n  of the pipeline's own working files, named by a path on the machine that ran\n  the build. A link to the publisher, where we hold one, is a column of the\n  table or a field in `processing_json`.\n- **That nothing was missed.** A table whose receipts are all `accepted` shows\n  that no failure was recorded, not that every record the publisher holds was\n  read. What a table covers is stated in its own coverage note.\n- **Anything about a table that has no receipts yet.** That table has not moved\n  to the newer layout. Nothing is missing from it."
+  },
+  "fec_committee_relationship_profiles": {
+    "table": "fec_committee_relationship_profiles",
+    "label": "Disclosed committee affiliations and sponsors",
+    "category": "query_data",
+    "summary": "Disclosed committee affiliations and sponsors with exact source coordinates and explicit interpretation limits.",
+    "coverage": "Sampled. Explicit retained committee pages; relationship dates, ownership and financial transfers are not inferred.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "profile_id",
+        "column_type": "VARCHAR",
+        "description": "Identity of one selected profile; not an economic transaction ID."
+      },
+      {
+        "column_name": "committee_id",
+        "column_type": "VARCHAR",
+        "description": "Literal native FEC committee ID; no name matching."
+      },
+      {
+        "column_name": "committee_name",
+        "column_type": "VARCHAR",
+        "description": "Publisher committee label; earlier filing titles remain separately in native evidence."
+      },
+      {
+        "column_name": "designation",
+        "column_type": "VARCHAR",
+        "description": "Native committee designation code; sponsorship does not imply authorization."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained original publisher bytes."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Publisher URL recorded for the retained original; its current contents can differ."
+      },
+      {
+        "column_name": "captured_at",
+        "column_type": "VARCHAR",
+        "description": "Known original capture time; null where historical acquisition time is unknown."
+      },
+      {
+        "column_name": "source_pointer",
+        "column_type": "VARCHAR",
+        "description": "JSON pointer to this exact occurrence in the original response."
+      },
+      {
+        "column_name": "relationships_json",
+        "column_type": "VARCHAR",
+        "description": "Every source relationship field and array entry, retaining missing, null, empty and unresolved labels."
+      },
+      {
+        "column_name": "native_fields_json",
+        "column_type": "VARCHAR",
+        "description": "Complete original committee result, including source field states and array multiplicity."
+      },
+      {
+        "column_name": "relationship_effective_date_status",
+        "column_type": "VARCHAR",
+        "description": "No relationship effective date is inferred from retrieval or filing dates."
+      },
+      {
+        "column_name": "policy_version",
+        "column_type": "VARCHAR",
+        "description": "Version of the named interpretation and selection rules."
+      },
+      {
+        "column_name": "coverage_note",
+        "column_type": "VARCHAR",
+        "description": "Explicit population, timing, attribution and financial limits of this named output."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One selected committee occurrence.",
+    "identity_columns": [
+      "profile_id"
+    ]
+  },
+  "fec_contribution_profiles": {
+    "table": "fec_contribution_profiles",
+    "label": "Qualified selected-report contributions",
+    "category": "query_data",
+    "summary": "Qualified selected-report contributions with exact source coordinates and explicit interpretation limits.",
+    "coverage": "Window. Complete selected recipient report with separate itemized, unitemized, signed-adjustment and refund measures; not a complete cycle.",
+    "kind": "window",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "profile_id",
+        "column_type": "VARCHAR",
+        "description": "Identity of one selected profile; not an economic transaction ID."
+      },
+      {
+        "column_name": "committee_id",
+        "column_type": "VARCHAR",
+        "description": "Literal native FEC committee ID; no name matching."
+      },
+      {
+        "column_name": "committee_name",
+        "column_type": "VARCHAR",
+        "description": "Publisher committee label; earlier filing titles remain separately in native evidence."
+      },
+      {
+        "column_name": "candidate_id",
+        "column_type": "VARCHAR",
+        "description": "Native candidate ID. Different offices may have different IDs for the same person."
+      },
+      {
+        "column_name": "candidate_association_basis",
+        "column_type": "VARCHAR",
+        "description": "Native committee/cycle link and candidate observation before the report; daily authorization is not asserted."
+      },
+      {
+        "column_name": "filing_id",
+        "column_type": "VARCHAR",
+        "description": "Native filing number selected by matching publisher report evidence."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained original publisher bytes."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Publisher URL recorded for the retained original; its current contents can differ."
+      },
+      {
+        "column_name": "captured_at",
+        "column_type": "VARCHAR",
+        "description": "Known original capture time; null where historical acquisition time is unknown."
+      },
+      {
+        "column_name": "period_start",
+        "column_type": "VARCHAR",
+        "description": "Declared report or cycle coverage start, not necessarily the earliest transaction date."
+      },
+      {
+        "column_name": "period_end",
+        "column_type": "VARCHAR",
+        "description": "Declared report or cycle coverage end, not necessarily the latest transaction date."
+      },
+      {
+        "column_name": "source_evidence_json",
+        "column_type": "VARCHAR",
+        "description": "Exact retained request descriptors, original digests, sizes and capture dates."
+      },
+      {
+        "column_name": "policy_version",
+        "column_type": "VARCHAR",
+        "description": "Version of the named interpretation and selection rules."
+      },
+      {
+        "column_name": "coverage_note",
+        "column_type": "VARCHAR",
+        "description": "Explicit population, timing, attribution and financial limits of this named output."
+      },
+      {
+        "column_name": "contribution_family",
+        "column_type": "VARCHAR",
+        "description": "PAC receipts source-typed PAC, or individual-contribution schedule lines."
+      },
+      {
+        "column_name": "gross_itemized_receipts",
+        "column_type": "VARCHAR",
+        "description": "Included nonnegative itemized receipts, in exact USD decimal text."
+      },
+      {
+        "column_name": "negative_receipt_adjustments",
+        "column_type": "VARCHAR",
+        "description": "Signed negative receipt adjustments, distinct from Schedule B refunds."
+      },
+      {
+        "column_name": "signed_itemized_receipts",
+        "column_type": "VARCHAR",
+        "description": "Gross itemized receipts plus signed adjustments, reconciled to the official report."
+      },
+      {
+        "column_name": "itemized_refunds",
+        "column_type": "VARCHAR",
+        "description": "Matching family Schedule B refunds; never inferred from a negative receipt sign."
+      },
+      {
+        "column_name": "net_itemized_flow",
+        "column_type": "VARCHAR",
+        "description": "Signed itemized receipts minus matching itemized refunds, in exact USD decimal text."
+      },
+      {
+        "column_name": "unitemized_receipts",
+        "column_type": "VARCHAR",
+        "description": "Separate reported unitemized amount; not attributed to named itemized donors."
+      },
+      {
+        "column_name": "net_reported_family",
+        "column_type": "VARCHAR",
+        "description": "Signed itemized receipts plus separate unitemized receipts minus matching refunds."
+      },
+      {
+        "column_name": "amount_basis",
+        "column_type": "VARCHAR",
+        "description": "Declared publisher or selected-report measure basis. Alternative representations are not added."
+      },
+      {
+        "column_name": "breakdown_json",
+        "column_type": "VARCHAR",
+        "description": "Exact amounts grouped by native PAC ID or reported contributor state; includes record counts, not unique donors."
+      },
+      {
+        "column_name": "source_cycle",
+        "column_type": "INTEGER",
+        "description": "Selected two-year FEC cycle or completed result edition."
+      },
+      {
+        "column_name": "included_records",
+        "column_type": "INTEGER",
+        "description": "Included receipt/refund observation count, not a count of people."
+      },
+      {
+        "column_name": "memo_records",
+        "column_type": "INTEGER",
+        "description": "Preserved source memo observations excluded from additive money."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One effective report and contribution family.",
+    "identity_columns": [
+      "profile_id"
+    ]
+  },
+  "fec_contribution_decisions": {
+    "table": "fec_contribution_decisions",
+    "label": "Contribution inclusion and exclusion evidence",
+    "category": "query_data",
+    "summary": "Contribution inclusion and exclusion evidence with exact source coordinates and explicit interpretation limits.",
+    "coverage": "Window. Selected contribution-family observations, including excluded memos and prior-period transaction dates.",
+    "kind": "window",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "profile_id",
+        "column_type": "VARCHAR",
+        "description": "Identity of one selected profile; not an economic transaction ID."
+      },
+      {
+        "column_name": "committee_id",
+        "column_type": "VARCHAR",
+        "description": "Literal native FEC committee ID; no name matching."
+      },
+      {
+        "column_name": "committee_name",
+        "column_type": "VARCHAR",
+        "description": "Publisher committee label; earlier filing titles remain separately in native evidence."
+      },
+      {
+        "column_name": "candidate_id",
+        "column_type": "VARCHAR",
+        "description": "Native candidate ID. Different offices may have different IDs for the same person."
+      },
+      {
+        "column_name": "candidate_association_basis",
+        "column_type": "VARCHAR",
+        "description": "Native committee/cycle link and candidate observation before the report; daily authorization is not asserted."
+      },
+      {
+        "column_name": "filing_id",
+        "column_type": "VARCHAR",
+        "description": "Native filing number selected by matching publisher report evidence."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained original publisher bytes."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Publisher URL recorded for the retained original; its current contents can differ."
+      },
+      {
+        "column_name": "captured_at",
+        "column_type": "VARCHAR",
+        "description": "Known original capture time; null where historical acquisition time is unknown."
+      },
+      {
+        "column_name": "period_start",
+        "column_type": "VARCHAR",
+        "description": "Declared report or cycle coverage start, not necessarily the earliest transaction date."
+      },
+      {
+        "column_name": "period_end",
+        "column_type": "VARCHAR",
+        "description": "Declared report or cycle coverage end, not necessarily the latest transaction date."
+      },
+      {
+        "column_name": "source_evidence_json",
+        "column_type": "VARCHAR",
+        "description": "Exact retained request descriptors, original digests, sizes and capture dates."
+      },
+      {
+        "column_name": "policy_version",
+        "column_type": "VARCHAR",
+        "description": "Version of the named interpretation and selection rules."
+      },
+      {
+        "column_name": "coverage_note",
+        "column_type": "VARCHAR",
+        "description": "Explicit population, timing, attribution and financial limits of this named output."
+      },
+      {
+        "column_name": "record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic identity of one native observation, bound to its source digest and coordinates."
+      },
+      {
+        "column_name": "contribution_family",
+        "column_type": "VARCHAR",
+        "description": "PAC receipts source-typed PAC, or individual-contribution schedule lines."
+      },
+      {
+        "column_name": "disposition",
+        "column_type": "VARCHAR",
+        "description": "Included or excluded under the selected-report calculation."
+      },
+      {
+        "column_name": "disposition_reason",
+        "column_type": "VARCHAR",
+        "description": "Receipt, signed adjustment, refund or source memo representation decision."
+      },
+      {
+        "column_name": "amount",
+        "column_type": "VARCHAR",
+        "description": "Exact source USD decimal text; the sign alone does not establish a refund."
+      },
+      {
+        "column_name": "donor_id",
+        "column_type": "VARCHAR",
+        "description": "Disclosed native PAC ID where supported; individuals remain unresolved."
+      },
+      {
+        "column_name": "donor_label",
+        "column_type": "VARCHAR",
+        "description": "Reported contributor label; similar names do not become resolved people."
+      },
+      {
+        "column_name": "employer",
+        "column_type": "VARCHAR",
+        "description": "Reported employer of a contributor, not the donor or an employer donation."
+      },
+      {
+        "column_name": "occupation",
+        "column_type": "VARCHAR",
+        "description": "Source-reported occupation label; not identity resolution."
+      },
+      {
+        "column_name": "native_entity_type",
+        "column_type": "VARCHAR",
+        "description": "Literal entity type in the filing."
+      },
+      {
+        "column_name": "election_code",
+        "column_type": "VARCHAR",
+        "description": "Literal transaction election designation; different elections remain separate in native observations."
+      },
+      {
+        "column_name": "memo_field_status",
+        "column_type": "VARCHAR",
+        "description": "Missing trailing field, explicitly empty field, or reported memo indicator."
+      },
+      {
+        "column_name": "transaction_date_scope",
+        "column_type": "VARCHAR",
+        "description": "Native transaction date within or outside declared report coverage; outside dates remain included and visible."
+      },
+      {
+        "column_name": "native_values_json",
+        "column_type": "VARCHAR",
+        "description": "Complete existing financial-mapper observation with raw amounts, dates, field omissions and provenance."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Exact native record ordinal and byte coordinates."
+      },
+      {
+        "column_name": "source_cycle",
+        "column_type": "INTEGER",
+        "description": "Selected two-year FEC cycle or completed result edition."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One existing financial-mapper observation.",
+    "identity_columns": [
+      "record_id"
+    ]
+  },
+  "fec_outside_spending_profiles": {
+    "table": "fec_outside_spending_profiles",
+    "label": "Candidate support and opposition spending",
+    "category": "query_data",
+    "summary": "Candidate support and opposition spending with exact source coordinates and explicit interpretation limits.",
+    "coverage": "Window. Observed publisher aggregate groups reconcile to separately captured official totals. Specific elections and observed date extrema are not supplied.",
+    "kind": "window",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "profile_id",
+        "column_type": "VARCHAR",
+        "description": "Identity of one selected profile; not an economic transaction ID."
+      },
+      {
+        "column_name": "candidate_id",
+        "column_type": "VARCHAR",
+        "description": "Native candidate ID. Different offices may have different IDs for the same person."
+      },
+      {
+        "column_name": "candidate_name",
+        "column_type": "VARCHAR",
+        "description": "Literal source candidate label, independent of identifier resolution."
+      },
+      {
+        "column_name": "support_oppose",
+        "column_type": "VARCHAR",
+        "description": "Source S (support) or O (oppose); unresolved indicators refuse aggregation."
+      },
+      {
+        "column_name": "source_evidence_json",
+        "column_type": "VARCHAR",
+        "description": "Exact retained request descriptors, original digests, sizes and capture dates."
+      },
+      {
+        "column_name": "source_generation",
+        "column_type": "VARCHAR",
+        "description": "Digest binding the selected original query captures and interpretation policy."
+      },
+      {
+        "column_name": "period_start",
+        "column_type": "VARCHAR",
+        "description": "Declared report or cycle coverage start, not necessarily the earliest transaction date."
+      },
+      {
+        "column_name": "period_end",
+        "column_type": "VARCHAR",
+        "description": "Declared report or cycle coverage end, not necessarily the latest transaction date."
+      },
+      {
+        "column_name": "election_basis",
+        "column_type": "VARCHAR",
+        "description": "All elections in the selected two-year cycle; election-specific queries refuse."
+      },
+      {
+        "column_name": "amount_basis",
+        "column_type": "VARCHAR",
+        "description": "Declared publisher or selected-report measure basis. Alternative representations are not added."
+      },
+      {
+        "column_name": "policy_version",
+        "column_type": "VARCHAR",
+        "description": "Version of the named interpretation and selection rules."
+      },
+      {
+        "column_name": "coverage_note",
+        "column_type": "VARCHAR",
+        "description": "Explicit population, timing, attribution and financial limits of this named output."
+      },
+      {
+        "column_name": "total",
+        "column_type": "VARCHAR",
+        "description": "Exact USD decimal text for the named publisher group or total."
+      },
+      {
+        "column_name": "reported_event_dates",
+        "column_type": "VARCHAR",
+        "description": "The aggregate supplies cycle scope, not observed transaction date extrema."
+      },
+      {
+        "column_name": "source_cycle",
+        "column_type": "INTEGER",
+        "description": "Selected two-year FEC cycle or completed result edition."
+      },
+      {
+        "column_name": "reported_spender_count",
+        "column_type": "INTEGER",
+        "description": "Distinct supported source filer IDs; not transaction or unique-person count."
+      },
+      {
+        "column_name": "unknown_spender_rows",
+        "column_type": "INTEGER",
+        "description": "Rows without supported filer identity, separately visible."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One candidate, cycle and support/oppose indicator.",
+    "identity_columns": [
+      "profile_id"
+    ]
+  },
+  "fec_outside_spending_spenders": {
+    "table": "fec_outside_spending_spenders",
+    "label": "Reported independent expenditure filers",
+    "category": "query_data",
+    "summary": "Reported independent expenditure filers with exact source coordinates and explicit interpretation limits.",
+    "coverage": "Window. Selected publisher candidate/cycle groups; Form 5 identities and unresolved filers remain separate.",
+    "kind": "window",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "profile_id",
+        "column_type": "VARCHAR",
+        "description": "Identity of one selected profile; not an economic transaction ID."
+      },
+      {
+        "column_name": "candidate_id",
+        "column_type": "VARCHAR",
+        "description": "Native candidate ID. Different offices may have different IDs for the same person."
+      },
+      {
+        "column_name": "candidate_name",
+        "column_type": "VARCHAR",
+        "description": "Literal source candidate label, independent of identifier resolution."
+      },
+      {
+        "column_name": "support_oppose",
+        "column_type": "VARCHAR",
+        "description": "Source S (support) or O (oppose); unresolved indicators refuse aggregation."
+      },
+      {
+        "column_name": "source_evidence_json",
+        "column_type": "VARCHAR",
+        "description": "Exact retained request descriptors, original digests, sizes and capture dates."
+      },
+      {
+        "column_name": "source_generation",
+        "column_type": "VARCHAR",
+        "description": "Digest binding the selected original query captures and interpretation policy."
+      },
+      {
+        "column_name": "period_start",
+        "column_type": "VARCHAR",
+        "description": "Declared report or cycle coverage start, not necessarily the earliest transaction date."
+      },
+      {
+        "column_name": "period_end",
+        "column_type": "VARCHAR",
+        "description": "Declared report or cycle coverage end, not necessarily the latest transaction date."
+      },
+      {
+        "column_name": "election_basis",
+        "column_type": "VARCHAR",
+        "description": "All elections in the selected two-year cycle; election-specific queries refuse."
+      },
+      {
+        "column_name": "amount_basis",
+        "column_type": "VARCHAR",
+        "description": "Declared publisher or selected-report measure basis. Alternative representations are not added."
+      },
+      {
+        "column_name": "policy_version",
+        "column_type": "VARCHAR",
+        "description": "Version of the named interpretation and selection rules."
+      },
+      {
+        "column_name": "coverage_note",
+        "column_type": "VARCHAR",
+        "description": "Explicit population, timing, attribution and financial limits of this named output."
+      },
+      {
+        "column_name": "record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic identity of one native observation, bound to its source digest and coordinates."
+      },
+      {
+        "column_name": "spender_id",
+        "column_type": "VARCHAR",
+        "description": "Native filer ID; C9 IDs remain Form 5 filer identities rather than inferred committees."
+      },
+      {
+        "column_name": "spender_name",
+        "column_type": "VARCHAR",
+        "description": "Literal reporting filer label, not an independently resolved organization."
+      },
+      {
+        "column_name": "spender_namespace",
+        "column_type": "VARCHAR",
+        "description": "FEC committee, FEC Form 5 filer, or unresolved source identity."
+      },
+      {
+        "column_name": "total",
+        "column_type": "VARCHAR",
+        "description": "Exact USD decimal text for the named publisher group or total."
+      },
+      {
+        "column_name": "source_cycle",
+        "column_type": "INTEGER",
+        "description": "Selected two-year FEC cycle or completed result edition."
+      },
+      {
+        "column_name": "reported_transaction_count",
+        "column_type": "BIGINT",
+        "description": "Publisher number of transactions behind one group; never a spender count."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One filer, candidate, cycle and support/oppose group.",
+    "identity_columns": [
+      "record_id"
+    ]
+  },
+  "fec_election_workbook_rows": {
+    "table": "fec_election_workbook_rows",
+    "label": "Official election workbook rows",
+    "category": "query_data",
+    "summary": "Official election workbook rows with exact source coordinates and explicit interpretation limits.",
+    "coverage": "Not a range. Literal official workbook rows, including summaries and overlapping appendices. Only the reviewed Senate layout is interpreted in the companion table.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic identity of one native observation, bound to its source digest and coordinates."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained original publisher bytes."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Publisher URL recorded for the retained original; its current contents can differ."
+      },
+      {
+        "column_name": "captured_at",
+        "column_type": "VARCHAR",
+        "description": "Known original capture time; null where historical acquisition time is unknown."
+      },
+      {
+        "column_name": "source_sheet",
+        "column_type": "VARCHAR",
+        "description": "Literal worksheet name."
+      },
+      {
+        "column_name": "reader_version",
+        "column_type": "VARCHAR",
+        "description": "Version of the source reader over maintained literal workbook syntax."
+      },
+      {
+        "column_name": "cells_json",
+        "column_type": "VARCHAR",
+        "description": "Every literal cell on this workbook row, including nulls, cached formula values and presentation facts."
+      },
+      {
+        "column_name": "source_row",
+        "column_type": "INTEGER",
+        "description": "One-based native worksheet row, including source totals, notes and blanks."
+      },
+      {
+        "column_name": "source_cycle",
+        "column_type": "INTEGER",
+        "description": "Selected two-year FEC cycle or completed result edition."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One physical row in one retained worksheet.",
+    "identity_columns": [
+      "record_id"
+    ]
+  },
+  "fec_election_results": {
+    "table": "fec_election_results",
+    "label": "Official Senate election results",
+    "category": "query_data",
+    "summary": "Official Senate election results with exact source coordinates and explicit interpretation limits.",
+    "coverage": "Window. Reviewed official Senate edition, preserving primaries, runoffs, general elections, unexpired terms, ballot lines, zero votes and ranked-choice rounds. Appendix observations remain literal in the companion table.",
+    "kind": "window",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic identity of one native observation, bound to its source digest and coordinates."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained original publisher bytes."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Publisher URL recorded for the retained original; its current contents can differ."
+      },
+      {
+        "column_name": "captured_at",
+        "column_type": "VARCHAR",
+        "description": "Known original capture time; null where historical acquisition time is unknown."
+      },
+      {
+        "column_name": "source_sheet",
+        "column_type": "VARCHAR",
+        "description": "Literal worksheet name."
+      },
+      {
+        "column_name": "reader_version",
+        "column_type": "VARCHAR",
+        "description": "Version of the source reader over maintained literal workbook syntax."
+      },
+      {
+        "column_name": "source_column",
+        "column_type": "VARCHAR",
+        "description": "Native vote column in the retained worksheet."
+      },
+      {
+        "column_name": "state",
+        "column_type": "VARCHAR",
+        "description": "Source state abbreviation; blank totals inherit only within the same explicitly repeated full state name."
+      },
+      {
+        "column_name": "state_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal native state cell; original blanks remain blank."
+      },
+      {
+        "column_name": "district_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal seat label, preserving full versus unexpired terms."
+      },
+      {
+        "column_name": "seat_term",
+        "column_type": "VARCHAR",
+        "description": "Full or unexpired Senate term, separate within each state."
+      },
+      {
+        "column_name": "stage",
+        "column_type": "VARCHAR",
+        "description": "Primary, primary runoff, general or general runoff, from separate source columns."
+      },
+      {
+        "column_name": "round",
+        "column_type": "VARCHAR",
+        "description": "Reported column, combined-party witness, or explicit ranked-choice round."
+      },
+      {
+        "column_name": "vote_basis",
+        "column_type": "VARCHAR",
+        "description": "Ballot line, combined-party witness, ranked-choice round or reported total. These bases overlap."
+      },
+      {
+        "column_name": "row_kind",
+        "column_type": "VARCHAR",
+        "description": "Candidate, party total or contest total; summary totals are not additional candidate votes."
+      },
+      {
+        "column_name": "candidate_id",
+        "column_type": "VARCHAR",
+        "description": "Native candidate ID. Different offices may have different IDs for the same person."
+      },
+      {
+        "column_name": "candidate_id_status",
+        "column_type": "VARCHAR",
+        "description": "Supported source ID shape or unresolved, including write-ins and totals."
+      },
+      {
+        "column_name": "candidate_name",
+        "column_type": "VARCHAR",
+        "description": "Literal source candidate label, independent of identifier resolution."
+      },
+      {
+        "column_name": "party",
+        "column_type": "VARCHAR",
+        "description": "Literal party ballot-line label; several party lines do not create several candidates."
+      },
+      {
+        "column_name": "votes_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source vote cell, retaining zero, null, asterisk and Unopposed."
+      },
+      {
+        "column_name": "votes_status",
+        "column_type": "VARCHAR",
+        "description": "Exact nonnegative integer, missing value, or nonnumeric source text."
+      },
+      {
+        "column_name": "percentage_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source fractional percentage; not recomputed or used to infer votes."
+      },
+      {
+        "column_name": "footnotes",
+        "column_type": "VARCHAR",
+        "description": "Literal source row footnotes, including ranked-choice and nomination-method qualifications."
+      },
+      {
+        "column_name": "primary_winner_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal primary winner indicator."
+      },
+      {
+        "column_name": "general_winner_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal general winner indicator; not inferred from a single round."
+      },
+      {
+        "column_name": "interpretation_version",
+        "column_type": "VARCHAR",
+        "description": "Version of downstream Senate result interpretation."
+      },
+      {
+        "column_name": "overlap_note",
+        "column_type": "VARCHAR",
+        "description": "Repeated combined-party totals, distinct rounds and appendix overlap limits."
+      },
+      {
+        "column_name": "source_row",
+        "column_type": "INTEGER",
+        "description": "One-based native worksheet row, including source totals, notes and blanks."
+      },
+      {
+        "column_name": "source_cycle",
+        "column_type": "INTEGER",
+        "description": "Selected two-year FEC cycle or completed result edition."
+      },
+      {
+        "column_name": "votes",
+        "column_type": "BIGINT",
+        "description": "Exact integer votes where supplied; zero survives and missing stays null."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One native Senate row and vote column.",
+    "identity_columns": [
+      "record_id"
+    ]
+  },
+  "sector_financial_comparisons": {
+    "table": "sector_financial_comparisons",
+    "label": "Sector financial comparisons",
+    "summary": "Separate qualified FEC and lobbying measures with source-local classifications, exact evidence and visible uncertainty.",
+    "coverage": "Derived. Bounded selected source profiles and a versioned broad-sector mapping. Unknown classifications, unresolved quarters and overlapping issues remain visible; not a national or complete annual sector total.",
+    "kind": "derived",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic identity bound to source selections and mapping revision."
+      },
+      {
+        "column_name": "sector_code",
+        "column_type": "VARCHAR",
+        "description": "Selected NAICS 2022 sector, unclassified, or uncertain. Definitions alone do not classify organizations."
+      },
+      {
+        "column_name": "sector_label",
+        "column_type": "VARCHAR",
+        "description": "Official selected NAICS sector label, or explicit unclassified/uncertain category."
+      },
+      {
+        "column_name": "classification_scheme",
+        "column_type": "VARCHAR",
+        "description": "The retained NAICS vintage, separate from LDA issue vocabulary."
+      },
+      {
+        "column_name": "mapping_version",
+        "column_type": "VARCHAR",
+        "description": "Explicit revision of curator assignments and their evidence."
+      },
+      {
+        "column_name": "source_family",
+        "column_type": "VARCHAR",
+        "description": "FEC or LDA; the financial measures are never added across sources."
+      },
+      {
+        "column_name": "measure",
+        "column_type": "VARCHAR",
+        "description": "Receipts, disbursements, registrant income or in-house expenses, kept separate."
+      },
+      {
+        "column_name": "known_reported_amount",
+        "column_type": "VARCHAR",
+        "description": "Exact decimal text summed only over qualified selected observations; null when none qualify."
+      },
+      {
+        "column_name": "amount_status",
+        "column_type": "VARCHAR",
+        "description": "Known selected observations or no qualified measure; neither means a complete annual total."
+      },
+      {
+        "column_name": "amount_basis",
+        "column_type": "VARCHAR",
+        "description": "Source-specific measure and estimate basis, preserved separately."
+      },
+      {
+        "column_name": "period_start",
+        "column_type": "VARCHAR",
+        "description": "Start of the explicitly supported comparison window."
+      },
+      {
+        "column_name": "period_end",
+        "column_type": "VARCHAR",
+        "description": "End of the explicitly supported comparison window."
+      },
+      {
+        "column_name": "source_generation",
+        "column_type": "VARCHAR",
+        "description": "Exact prerequisite generation pin, verified before reading."
+      },
+      {
+        "column_name": "source_table_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of exact prerequisite table bytes, verified before reading."
+      },
+      {
+        "column_name": "cutoff",
+        "column_type": "VARCHAR",
+        "description": "Recorded source as-of scope; different capture dates do not imply a shared atomic snapshot."
+      },
+      {
+        "column_name": "population_json",
+        "column_type": "VARCHAR",
+        "description": "Declared source population and exclusions; the FEC and lobbying populations differ."
+      },
+      {
+        "column_name": "evidence_json",
+        "column_type": "VARCHAR",
+        "description": "Assignment evidence with native IDs, source digests, original locators and limitations."
+      },
+      {
+        "column_name": "coverage_note",
+        "column_type": "VARCHAR",
+        "description": "Coverage, classification, identity and financial-overlap limits."
+      },
+      {
+        "column_name": "policy_version",
+        "column_type": "VARCHAR",
+        "description": "Version of the comparison rules."
+      },
+      {
+        "column_name": "population_profiles",
+        "column_type": "INTEGER",
+        "description": "Declared source profile denominator, including unresolved observations."
+      },
+      {
+        "column_name": "group_profiles",
+        "column_type": "INTEGER",
+        "description": "Profiles assigned to this source-local industry group."
+      },
+      {
+        "column_name": "qualified_measure_profiles",
+        "column_type": "INTEGER",
+        "description": "Profiles contributing one accepted amount for this measure."
+      },
+      {
+        "column_name": "unresolved_measure_profiles",
+        "column_type": "INTEGER",
+        "description": "Group profiles without an accepted value, never replaced with zero."
+      },
+      {
+        "column_name": "classified_population_profiles",
+        "column_type": "INTEGER",
+        "description": "Source profile denominator with one supported broad classification."
+      },
+      {
+        "column_name": "unclassified_population_profiles",
+        "column_type": "INTEGER",
+        "description": "Source profile denominator lacking an industry assignment."
+      },
+      {
+        "column_name": "uncertain_population_profiles",
+        "column_type": "INTEGER",
+        "description": "Source profile denominator with competing or uncertain industry assignments."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One declared source measure and classification group, or one native classification/issue observation.",
+    "identity_columns": [
+      "record_id"
+    ]
+  },
+  "sector_classification_evidence": {
+    "table": "sector_classification_evidence",
+    "label": "Sector classification evidence",
+    "summary": "Separate qualified FEC and lobbying measures with source-local classifications, exact evidence and visible uncertainty.",
+    "coverage": "Derived. Bounded selected source profiles and a versioned broad-sector mapping. Unknown classifications, unresolved quarters and overlapping issues remain visible; not a national or complete annual sector total.",
+    "kind": "derived",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic identity bound to source selections and mapping revision."
+      },
+      {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "FEC committee or LDA client identity namespace; proposed cross-source links stay separate."
+      },
+      {
+        "column_name": "native_entity_id",
+        "column_type": "VARCHAR",
+        "description": "Literal source-local ID; names do not establish cross-source identity."
+      },
+      {
+        "column_name": "sector_codes_json",
+        "column_type": "VARCHAR",
+        "description": "Distinct proposed sector codes; multiple codes do not duplicate additive money."
+      },
+      {
+        "column_name": "classification_status",
+        "column_type": "VARCHAR",
+        "description": "Supported context, uncertain industry, or unresolved identity association."
+      },
+      {
+        "column_name": "classification_scheme",
+        "column_type": "VARCHAR",
+        "description": "The retained NAICS vintage, separate from LDA issue vocabulary."
+      },
+      {
+        "column_name": "mapping_version",
+        "column_type": "VARCHAR",
+        "description": "Explicit revision of curator assignments and their evidence."
+      },
+      {
+        "column_name": "method",
+        "column_type": "VARCHAR",
+        "description": "Curated business-evidence method. Name-only or issue-code industry inference refuses."
+      },
+      {
+        "column_name": "applicable_start",
+        "column_type": "VARCHAR",
+        "description": "First reporting date for which this mapping was declared applicable."
+      },
+      {
+        "column_name": "applicable_end",
+        "column_type": "VARCHAR",
+        "description": "Last reporting date for which this mapping was declared applicable."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Date classification evidence was reviewed, not a relationship effective date."
+      },
+      {
+        "column_name": "evidence_json",
+        "column_type": "VARCHAR",
+        "description": "Assignment evidence with native IDs, source digests, original locators and limitations."
+      },
+      {
+        "column_name": "uncertainty",
+        "column_type": "VARCHAR",
+        "description": "Explicit limits of curator classification or identity association."
+      },
+      {
+        "column_name": "association_json",
+        "column_type": "VARCHAR",
+        "description": "Separately retained unresolved identity proposal; never used to join money."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One declared source measure and classification group, or one native classification/issue observation.",
+    "identity_columns": [
+      "record_id"
+    ]
+  },
+  "lobbying_issue_financial_observations": {
+    "table": "lobbying_issue_financial_observations",
+    "label": "Lobbying issue financial observations",
+    "summary": "Separate qualified FEC and lobbying measures with source-local classifications, exact evidence and visible uncertainty.",
+    "coverage": "Derived. Bounded selected source profiles and a versioned broad-sector mapping. Unknown classifications, unresolved quarters and overlapping issues remain visible; not a national or complete annual sector total.",
+    "kind": "derived",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic identity bound to source selections and mapping revision."
+      },
+      {
+        "column_name": "issue_code",
+        "column_type": "VARCHAR",
+        "description": "Literal LDA issue code, separate from organizational industry."
+      },
+      {
+        "column_name": "profile_id",
+        "column_type": "VARCHAR",
+        "description": "Selected source quarterly profile, repeated at most once per issue."
+      },
+      {
+        "column_name": "filing_uuid",
+        "column_type": "VARCHAR",
+        "description": "Native selected LDA filing UUID; activities are reduced to distinct issues before any amount is exposed."
+      },
+      {
+        "column_name": "income",
+        "column_type": "VARCHAR",
+        "description": "Reported whole-filing registrant income estimate, not allocated to this issue."
+      },
+      {
+        "column_name": "expenses",
+        "column_type": "VARCHAR",
+        "description": "Reported whole-filing in-house expense estimate, separate from income and not allocated to this issue."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Publisher filing URL for this observation."
+      },
+      {
+        "column_name": "period_start",
+        "column_type": "VARCHAR",
+        "description": "Start of the explicitly supported comparison window."
+      },
+      {
+        "column_name": "period_end",
+        "column_type": "VARCHAR",
+        "description": "End of the explicitly supported comparison window."
+      },
+      {
+        "column_name": "source_generation",
+        "column_type": "VARCHAR",
+        "description": "Exact prerequisite generation pin, verified before reading."
+      },
+      {
+        "column_name": "amount_basis",
+        "column_type": "VARCHAR",
+        "description": "Source-specific measure and estimate basis, preserved separately."
+      },
+      {
+        "column_name": "overlap_note",
+        "column_type": "VARCHAR",
+        "description": "Issue-filtered views overlap; repeated activities never multiply money."
+      }
+    ],
+    "subject": "lobbying",
+    "grain": "One declared source measure and classification group, or one native classification/issue observation.",
+    "identity_columns": [
+      "record_id"
+    ]
   }
 }

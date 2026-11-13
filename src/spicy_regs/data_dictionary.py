@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from spicy_regs.subject_catalog import subject_tables, policies as subject_policies
 from spicy_regs.disbursement_summary_tables import TABLES as DISBURSEMENT_SUMMARY_TABLES
+from spicy_regs.fec_research_tables import TABLES as FEC_RESEARCH_TABLES
 
 import argparse
 import hashlib
@@ -632,6 +633,7 @@ TABLES: tuple[str, ...] = (
     *DISBURSEMENT_SUMMARY_TABLES,
     "fec_financial_profiles",
     "lobbying_quarterly_profiles",
+    *FEC_RESEARCH_TABLES,
     "treasury_debt_observations",
     "treasury_statement_periods",
     "treasury_statement_classification_cells",
@@ -761,6 +763,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         *DISBURSEMENT_SUMMARY_TABLES,
         "fec_financial_profiles",
         "lobbying_quarterly_profiles",
+        *FEC_RESEARCH_TABLES,
         "treasury_debt_observations",
         "treasury_statement_periods",
         "treasury_statement_classification_cells",
@@ -1003,6 +1006,9 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.schemas.disbursement_summaries import SCHEMAS as DISBURSEMENT_SUMMARY_SCHEMAS
     from spicy_regs.transforms.build_fec_financial_profiles import SCHEMA as FEC_PROFILE_SCHEMA
     from spicy_regs.transforms.build_lobbying_quarterly_profiles import SCHEMA as LDA_QUARTERLY_SCHEMA
+    from spicy_regs.pipelines.fec_research_profiles import SCHEMAS as FEC_RESEARCH_SCHEMAS
+    from spicy_regs.transforms.fec_election_results import SCHEMAS as FEC_ELECTION_SCHEMAS
+    from spicy_regs.transforms.sector_comparisons import SCHEMAS as SECTOR_SCHEMAS
     from spicy_regs.transforms.build_census_acs import SCHEMA as CENSUS_ACS_SCHEMA
     from spicy_regs.transforms.build_census_geocoder import SCHEMAS as CENSUS_GEOCODER_SCHEMAS
     from spicy_regs.transforms.build_foreign_assistance import SCHEMAS as FOREIGN_ASSISTANCE_SCHEMAS
@@ -1129,6 +1135,9 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         **DISBURSEMENT_SUMMARY_SCHEMAS,
         "fec_financial_profiles": FEC_PROFILE_SCHEMA,
         "lobbying_quarterly_profiles": LDA_QUARTERLY_SCHEMA,
+        **FEC_RESEARCH_SCHEMAS,
+        **FEC_ELECTION_SCHEMAS,
+        **SECTOR_SCHEMAS,
         "census_acs_county_observations": CENSUS_ACS_SCHEMA,
         **CENSUS_GEOCODER_SCHEMAS,
         **FOREIGN_ASSISTANCE_SCHEMAS,

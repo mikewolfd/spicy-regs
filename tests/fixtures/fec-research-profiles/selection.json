@@ -1,0 +1,124 @@
+{
+  "committees": [
+    {
+      "response_sha256": "sha256:15858050945e21e818a4576160de75e3915ffe8d47d82e2dbd9b200b26fc3577",
+      "byte_size": 112527,
+      "request_url": "https://api.open.fec.gov/v1/committees/?cycle=2024&cycle=2026&sort=committee_id&per_page=100&page=30",
+      "observed_at": "2026-09-12T16:57:29.402394+00:00",
+      "expected_results": 100
+    },
+    {
+      "response_sha256": "sha256:3dd2acd42e48cbcbf3df0147f67fda7d26e705f29cb208907226d1ea00a6a52b",
+      "byte_size": 104410,
+      "request_url": "https://api.open.fec.gov/v1/committees/?cycle=2024&cycle=2026&sort=committee_id&per_page=100&page=244",
+      "observed_at": "2026-09-12T17:02:11.271570+00:00",
+      "expected_results": 100
+    }
+  ],
+  "outside": [
+    {
+      "name": "by-spender",
+      "path": "/v1/schedules/schedule_e/by_candidate/",
+      "params": {
+        "candidate_id": "S6OH00163",
+        "cycle": 2024,
+        "per_page": 100,
+        "sort": "-total"
+      },
+      "pages": [
+        {
+          "request_url": "https://api.open.fec.gov/v1/schedules/schedule_e/by_candidate/?candidate_id=S6OH00163&cycle=2024&per_page=100&sort=-total",
+          "observed_at": "2026-11-13T11:49:49.046655+00:00",
+          "sha256": "sha256:23a0ce487c7694e3cfc05e2498c1273a2998bd9f25a49b02ef8679434f780be8",
+          "bytes": 15450,
+          "blob_path": "sha256/23a0ce487c7694e3cfc05e2498c1273a2998bd9f25a49b02ef8679434f780be8"
+        }
+      ]
+    },
+    {
+      "name": "totals",
+      "path": "/v1/schedules/schedule_e/totals/by_candidate/",
+      "params": {
+        "candidate_id": "S6OH00163",
+        "cycle": 2024,
+        "per_page": 100
+      },
+      "pages": [
+        {
+          "request_url": "https://api.open.fec.gov/v1/schedules/schedule_e/totals/by_candidate/?candidate_id=S6OH00163&cycle=2024&per_page=100",
+          "observed_at": "2026-11-13T11:49:49.549250+00:00",
+          "sha256": "sha256:c74b2fd3e6f1bb3e859430d3143e16a53b12e631dc05ae2be4bc8a2e37cac97d",
+          "bytes": 302,
+          "blob_path": "sha256/c74b2fd3e6f1bb3e859430d3143e16a53b12e631dc05ae2be4bc8a2e37cac97d"
+        }
+      ]
+    }
+  ],
+  "outside_candidate": "S6OH00163",
+  "outside_cycle": 2024,
+  "contribution": {
+    "original": {
+      "response_sha256": "sha256:c9ec40b8ede0c948aebff3c0b007c2c29271d476e209d335538619651b0e8750",
+      "byte_size": 149810,
+      "request_url": "https://docquery.fec.gov/dcdev/posted/1943202.fec",
+      "observed_at": null,
+      "filing_id": "1943202"
+    },
+    "queries": [
+      {
+        "name": "reports",
+        "path": "/v1/committee/C00921817/reports/",
+        "params": {
+          "year": 2025,
+          "report_type": "YE",
+          "per_page": 100
+        },
+        "pages": [
+          {
+            "request_url": "https://api.open.fec.gov/v1/committee/C00921817/reports/?year=2025&report_type=YE&per_page=100",
+            "observed_at": "2026-11-13T11:51:04.661597+00:00",
+            "sha256": "sha256:82fd43f5a5457e15761b97c374039bc79535ada1fad934789d1407dcad3e10b2",
+            "bytes": 4327,
+            "blob_path": "sha256/82fd43f5a5457e15761b97c374039bc79535ada1fad934789d1407dcad3e10b2"
+          }
+        ]
+      },
+      {
+        "name": "committee-history",
+        "path": "/v1/committee/C00921817/history/2026/",
+        "params": {
+          "per_page": 100
+        },
+        "pages": [
+          {
+            "request_url": "https://api.open.fec.gov/v1/committee/C00921817/history/2026/?per_page=100",
+            "observed_at": "2026-11-13T11:52:55.989819+00:00",
+            "sha256": "sha256:1f1b7f217263ecadb620c0cfd3d5ed029d208ae100b0c5ceb44789d81f7bb925",
+            "bytes": 1629,
+            "blob_path": "sha256/1f1b7f217263ecadb620c0cfd3d5ed029d208ae100b0c5ceb44789d81f7bb925"
+          }
+        ]
+      },
+      {
+        "name": "candidate-search",
+        "path": "/v1/candidates/search/",
+        "params": {
+          "q": "MORGAN MURPHY",
+          "cycle": 2026,
+          "per_page": 100
+        },
+        "pages": [
+          {
+            "request_url": "https://api.open.fec.gov/v1/candidates/search/?q=MORGAN+MURPHY&cycle=2026&per_page=100",
+            "observed_at": "2026-11-13T11:52:56.385578+00:00",
+            "sha256": "sha256:5cd9d3e89b032e21182e1fc4bf7d658d6b68032bd4244e08dccefcf879829118",
+            "bytes": 2371,
+            "blob_path": "sha256/5cd9d3e89b032e21182e1fc4bf7d658d6b68032bd4244e08dccefcf879829118"
+          }
+        ]
+      }
+    ],
+    "cycle": 2026,
+    "candidate_id": "S6AL00484"
+  }
+}

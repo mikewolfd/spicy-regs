@@ -768,6 +768,28 @@
       ],
       "transformation": "Selects unambiguous quarterly LD-2 restatements within native registrant and client identifiers. Preserves unresolved competitors and separates reported income from in-house expenses. Selected retained coverage remains incomplete.",
       "evidence": "src/spicy_regs/transforms/build_lobbying_quarterly_profiles.py"
+    },
+    "fec-research-profiles": {
+      "sources": [
+        "fec"
+      ],
+      "transformation": "Bounded disclosed relationships and contribution/spending measures, with native identity uncertainty and exact official reconciliation.",
+      "evidence": "src/spicy_regs/pipelines/fec_research_profiles.py"
+    },
+    "fec-election-results": {
+      "sources": [
+        "fec"
+      ],
+      "transformation": "Literal official workbook rows and reviewed Senate votes; ballot lines, rounds and source totals remain distinct.",
+      "evidence": "src/spicy_regs/pipelines/fec_election_results.py"
+    },
+    "sector-comparisons": {
+      "sources": [
+        "fec",
+        "lobbying"
+      ],
+      "transformation": "Keeps selected FEC period flows, LDA quarterly income and expenses separate. Industry assignments require business evidence; unresolved identities never join money. Issue views retain unallocated whole-filing amounts.",
+      "evidence": "src/spicy_regs/pipelines/sector_comparisons.py"
     }
   },
   "tables": {
