@@ -143,6 +143,9 @@
  "cbo_cost_estimates": {
   "installed": "sha256:cf413e38bf03a6b9eab61638850e3e0aa1632b2e49edc8e66674a407bef0997f"
  },
+ "cbo_estimate_cards": {
+  "installed": "sha256:f95ef80b5490fc8a61d236dc5a3e70382334e6ed4546f11fd2945c944c415634"
+ },
  "cbo_feed_items": {
   "installed": "sha256:0cf1d0576dfdb98d049aeb31887180395da14204206bbf4272d37dbb9e6a11a6"
  },

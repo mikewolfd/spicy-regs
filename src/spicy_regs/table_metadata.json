@@ -36451,8 +36451,8 @@
     "table": "cbo_estimate_cards",
     "label": "Archived CBO cost-estimate cards",
     "summary": "One qualified card per CBO publication, with three positional fiscal windows, literal and typed millions, PAYGO and mandate answers, source context and original evidence. Join publication_id to cbo_cost_estimates for source-stated bill links; cards exist independently of whether those bill links resolve.",
-    "coverage": "Explicit retained Common Crawl publication captures selected through the bill-family archive manifest. The build accounts for every item of the selected feed and records unread indexes, unretained pages, observed absence and unresolved PDF candidates separately.",
-    "kind": null,
+    "coverage": "Window. Explicit retained Common Crawl publication captures selected through the bill-family archive manifest. The build accounts for every item of the selected feed and records unread indexes, unretained pages, observed absence and unresolved PDF candidates separately.",
+    "kind": "window",
     "measured_on": "2026-11-13",
     "data_quality": "Authority is the archive with explicit capture time and publication time. Asterisks, blanks and nonnumeric amounts retain their literal and have null typed amounts. PDF-only bill/month matches remain unresolved. Current retained-source qualification does not establish complete archive coverage, PDF parity or public publication.",
     "columns": [
@@ -36494,7 +36494,22 @@
       {
         "column_name": "unit",
         "column_type": "VARCHAR",
-        "description": "CBO states fiscal-year amounts in millions of dollars."
+        "description": "Normalized fiscal-year amounts in millions of dollars; source_unit keeps the printed unit."
+      },
+      {
+        "column_name": "source_unit",
+        "column_type": "VARCHAR",
+        "description": "Unit CBO printed, retained beside normalized millions."
+      },
+      {
+        "column_name": "reported_measures",
+        "column_type": "STRUCT(source_field VARCHAR, \"label\" VARCHAR, source_unit VARCHAR, literals VARCHAR[], millions BIGINT[])[]",
+        "description": "Every printed financial row in source order, including named committee components and the publisher-stated total; no total is inferred."
+      },
+      {
+        "column_name": "notes",
+        "column_type": "VARCHAR[]",
+        "description": "Literal footer context, limitations and uncertainty, including effects CBO did not review."
       },
       {
         "column_name": "windows",

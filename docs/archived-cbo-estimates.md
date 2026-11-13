@@ -44,3 +44,12 @@ The retained 119th controls support this local query. Full source qualification,
 PDF-only identity, all paired reader/model comparisons, shared gates and public
 acceptance remain open under ss-7ovu and ss-938z. The workspace evidence and exact
 pins are in `output/source-completion-20261113/lanes/cbo-estimates/`.
+
+The full selected page run retained every latest indexed page and yielded 772
+cards plus 174 genuine no-card pages. Source-supported layout fixes preserve
+printed billions in `source_unit` while deriving exact whole millions, retain
+all printed financial rows in `reported_measures`, and keep footer limitations
+in `notes`. A component breakdown uses CBO's stated total for common outlays;
+it never substitutes an inferred total. Unknown or unreviewed appropriation
+values stay null with their literal context. The source research report and
+lane manifest retain the measured population and remaining PDF/index gaps.

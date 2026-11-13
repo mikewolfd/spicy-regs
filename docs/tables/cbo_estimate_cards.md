@@ -6,7 +6,7 @@
 
 One qualified card per CBO publication, with three positional fiscal windows, literal and typed millions, PAYGO and mandate answers, source context and original evidence. Join publication_id to cbo_cost_estimates for source-stated bill links; cards exist independently of whether those bill links resolve.
 
-**Coverage.** Explicit retained Common Crawl publication captures selected through the bill-family archive manifest. The build accounts for every item of the selected feed and records unread indexes, unretained pages, observed absence and unresolved PDF candidates separately. *(measured 2026-11-13)*
+**Coverage.** Window. Explicit retained Common Crawl publication captures selected through the bill-family archive manifest. The build accounts for every item of the selected feed and records unread indexes, unretained pages, observed absence and unresolved PDF candidates separately. *(measured 2026-11-13)*
 
 **Data quality.** Authority is the archive with explicit capture time and publication time. Asterisks, blanks and nonnumeric amounts retain their literal and have null typed amounts. PDF-only bill/month matches remain unresolved. Current retained-source qualification does not establish complete archive coverage, PDF parity or public publication.
 
@@ -24,7 +24,10 @@ One qualified card per CBO publication, with three positional fiscal windows, li
 | `publication_context` | `VARCHAR` | Selected feed Description, retained without inferring bill stage. |
 | `title` | `VARCHAR` | Literal card heading. |
 | `subtitle` | `VARCHAR` | Literal card subtitle, where printed. |
-| `unit` | `VARCHAR` | CBO states fiscal-year amounts in millions of dollars. |
+| `unit` | `VARCHAR` | Normalized fiscal-year amounts in millions of dollars; source_unit keeps the printed unit. |
+| `source_unit` | `VARCHAR` | Unit CBO printed, retained beside normalized millions. |
+| `reported_measures` | `STRUCT(source_field VARCHAR, "label" VARCHAR, source_unit VARCHAR, literals VARCHAR[], millions BIGINT[])[]` | Every printed financial row in source order, including named committee components and the publisher-stated total; no total is inferred. |
+| `notes` | `VARCHAR[]` | Literal footer context, limitations and uncertainty, including effects CBO did not review. |
 | `windows` | `STRUCT(period VARCHAR, direct_spending_outlays_literal VARCHAR, direct_spending_outlays_millions BIGINT, revenues_literal VARCHAR, revenues_millions BIGINT, increase_or_decrease_in_the_deficit_literal VARCHAR, increase_or_decrease_in_the_deficit_millions BIGINT, spending_subject_to_appropriation_outlays_literal VARCHAR, spending_subject_to_appropriation_outlays_millions BIGINT)[]` | Exactly three positional fiscal windows with literal headings and amounts. |
 | `answers` | `STRUCT(pay_go VARCHAR, increase_net_spending VARCHAR, increase_budget_deficits VARCHAR, mandate_effect_intergovernmental VARCHAR, mandate_effect_private_sector VARCHAR)` | PAYGO, long-term budget and mandate answers as printed; null means unstated. |
 | `flags` | `STRUCT(pay_go BOOLEAN, increase_net_spending BOOLEAN, increase_budget_deficits BOOLEAN, mandate_effect_intergovernmental BOOLEAN, mandate_effect_private_sector BOOLEAN)` | Leading Yes/No answers as booleans; thresholds and other answers stay in answers, with null when no boolean is stated. |

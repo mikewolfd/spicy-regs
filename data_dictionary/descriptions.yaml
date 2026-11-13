@@ -4126,7 +4126,7 @@ tables:
     label: "Archived CBO cost-estimate cards"
     subject: congress
     coverage: >-
-      Explicit retained Common Crawl publication captures selected through the bill-family
+      Window. Explicit retained Common Crawl publication captures selected through the bill-family
       archive manifest. The build accounts for every item of the selected feed and records
       unread indexes, unretained pages, observed absence and unresolved PDF candidates separately.
     summary: >-

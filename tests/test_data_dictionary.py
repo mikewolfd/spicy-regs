@@ -700,13 +700,21 @@ def test_an_inline_column_list_beside_the_marker_is_refused(tmp_path):
 
 def test_hosted_schemas_follow_the_contract_types_in_contract_order():
     """VARCHAR unless the contract types a column (decision 67), spelled as DuckDB describes the file."""
+    import duckdb
+
     from spicy_docs.schemas import TABLE_CONTRACTS
 
-    from spicy_regs.contract_types import DESCRIBED
-
-    for table, columns in dd.contract_schemas().items():
-        contract = TABLE_CONTRACTS[table]
-        assert columns == [(c, DESCRIBED[contract.column_type(c)]) for c in contract.columns], table
+    # Compare the Arrow-derived declarations against DuckDB's own SQL types.
+    # The previous scalar lookup could not represent CBO's nested fiscal windows.
+    with duckdb.connect() as con:
+        for table, columns in dd.contract_schemas().items():
+            contract = TABLE_CONTRACTS[table]
+            expressions = []
+            for column in contract.columns:
+                quoted = column.replace('"', '""')
+                expressions.append(f'CAST(NULL AS {contract.column_type(column)}) AS "{quoted}"')
+            described = con.execute("DESCRIBE SELECT " + ", ".join(expressions)).fetchall()
+            assert columns == [(row[0], row[1]) for row in described], table
     typed = dict(dd.contract_schemas()["document_attributes"])
     assert (typed["page_count"], typed["receive_date"], typed["topics"]) == (
         "INTEGER", "TIMESTAMP WITH TIME ZONE", "VARCHAR[]")
