@@ -1,0 +1,95 @@
+name: Read comment attachment source groups
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_ref:
+        description: 'Reviewed exact 40-character runtime commit; must match the groups receipt reader'
+        type: string
+        required: true
+      groups_key:
+        description: 'Verified data-bucket staging key ending /groups.json'
+        type: string
+        required: true
+      groups_sha256:
+        description: 'Exact SHA-256 of groups.json'
+        type: string
+        required: true
+      groups:
+        description: 'JSON array of reviewed runner groups, for example ["runner-000"]'
+        type: string
+        required: true
+      resume_run_id:
+        description: 'Optional earlier run whose exact group checkpoints should resume'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 105
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        group: ${{ fromJSON(inputs.groups) }}
+    concurrency:
+      group: comment-attachment-read-${{ inputs.groups_sha256 }}-${{ matrix.group }}
+      cancel-in-progress: false
+      queue: max
+    env:
+      WORKDIR: ${{ runner.temp }}/comment-attachment-group
+      OMP_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+      POLARS_MAX_THREADS: '2'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Validate exact runtime
+        env:
+          RUNTIME_REF: ${{ inputs.runtime_ref }}
+        run: '[[ "$RUNTIME_REF" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.runtime_ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+      - name: Install the locked runtime
+        run: uv sync --frozen --extra operational-runner
+      - name: Restore this group's prior checkpoints
+        if: inputs.resume_run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: comment-attachments-${{ inputs.groups_sha256 }}-${{ matrix.group }}
+          path: ${{ env.WORKDIR }}
+          run-id: ${{ inputs.resume_run_id }}
+          github-token: ${{ github.token }}
+      - name: Read, verify and stage one group
+        env:
+          RUNTIME_REF: ${{ inputs.runtime_ref }}
+          GROUPS_KEY: ${{ inputs.groups_key }}
+          GROUPS_SHA256: ${{ inputs.groups_sha256 }}
+          SOURCE_GROUP: ${{ matrix.group }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          uv run --frozen python scripts/read_comment_attachment_group.py \
+            --runtime-ref "$RUNTIME_REF" --groups-key "$GROUPS_KEY" --groups-sha256 "$GROUPS_SHA256" \
+            --group "$SOURCE_GROUP" --workdir "$WORKDIR" --workers 64
+      - name: Retain compact checkpoints and resource evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comment-attachments-${{ inputs.groups_sha256 }}-${{ matrix.group }}
+          path: ${{ env.WORKDIR }}/
+          if-no-files-found: warn
+          include-hidden-files: true
+          compression-level: 0
+          retention-days: 30
