@@ -13783,3 +13783,72 @@ tables:
         link.
       original_page_number: One-based reviewed page in the earlier PDF.
       amended_page_number: One-based reviewed page in the later PDF.
+
+  cms_open_payments_summaries:
+    label: CMS Open Payments summaries
+    subject: spending
+    identity_columns:
+    - observation_id
+    summary: Compare source-reported recipient, reporting-entity and state amounts for one explicit program year and
+      release, with separate payment categories and research associations.
+    coverage: Windowed by design; one declared program year and publication across native reporting-entity, practitioner,
+      hospital, state and supplied national summaries. This schema statement does not measure current public coverage.
+      Complete local source verification, coordinator integration and public publication are separate evidence. Detailed
+      payment records, deletion history and NPPES enrichment are outside this summary product.
+    measured_on: '2026-11-13'
+    grain: One native summary occurrence for a selected program year, publication and aggregation level. Do not combine
+      overlapping levels or add investigator associations to payments received. Profile-type categories and payment-recipient-type
+      categories are separate source classifications.
+    columns:
+      observation_id: Digest-bound publisher occurrence; distinct native associations remain separate.
+      program_year: Explicit program year; separate from publication and capture dates.
+      release: Publisher summary publication token from the selected catalog distribution URL.
+      aggregation_level: entities, recipients, hospitals, states or national. Select one level before comparing or
+        adding amounts.
+      native_id: Literal entity/profile/CCN identifier, or JSON tuple of publisher country/state/category/recipient
+        type. Not an NPI identity merge.
+      name: Publisher entity/hospital/state label, or display name from literal recipient first and last name. Full
+        name components remain in raw_row_json.
+      recipient_type: Literal profile classification for recipients, including combined Physician/Non-Physician Practitioner
+        profiles; literal payment-recipient type for state/national rows. Combined profiles are not split or wholly
+        reassigned to either payment-recipient type.
+      npi: Literal source NPI; empty stays empty. No NPPES enrichment or matching is required.
+      state: Literal source state code, including empty country-level state codes. See state_basis before comparison.
+      country_code: Literal country code where the source summary supplies one; not inferred from addresses.
+      country_name: Literal country name when supplied by the source summary; not inferred when unavailable.
+      state_basis: Reporting entity address, recipient profile address, teaching hospital address or publisher recipient-state
+        summary.
+      payment_category: Literal General/Research/Investment/Interest for category rows; separate_columns for wide
+        native summaries.
+      general_amount_usd: Source-reported general payments received or made, exact US dollars. Select one summary
+        level.
+      research_amount_usd: Source-reported research payments received or made, exact US dollars; excludes associated
+        research amounts.
+      investment_amount_usd: Source-reported investment amount, exact US dollars; separate from value of ownership
+        interest.
+      interest_amount_usd: Source-reported value of ownership/investment interest, exact US dollars; not added to
+        payment totals.
+      associated_research_amount_usd: Source-reported associated research US dollars. Multiple investigators may share
+        associations; never add to payments received.
+      category_amount_usd: Exact US-dollar total for this state/national row and its single payment_category/recipient_type.
+      general_payment_count: Source general-payment record count at this native summary level.
+      research_payment_count: Source research-payment record count; separate from investigator associations.
+      investment_payment_count: Source investment record count when supplied; unavailable is not zero.
+      interest_payment_count: Source interest record count when supplied; unavailable is not zero.
+      associated_research_payment_count: Associated research record count; an association count, not additional payments
+        received.
+      category_payment_count: Source payment record count for this category and recipient type at the state/national
+        level.
+      recipient_count: Source recipient count for this state/national category/type; not a payment count and not additive
+        across categories.
+      value_statuses_json: Per-measure reported, source_null or source_empty. JSON null stays null; CSV empty stays
+        literal empty without inferred database-null meaning.
+      source_record_id: Digest-bound occurrence identity. Native record_number is a publication-local datastore occurrence,
+        not a longitudinal payment ID.
+      dataset_id: Native DKAN summary dataset identifier, distinct from distribution resource ID and publication token.
+      source_download_url: Official catalog-stated CSV distribution locator for this exact summary publication.
+      source_catalog_sha256: SHA-256 of the retained original catalog used to select this publication.
+      source_locator_json: Original request URL, SHA-256, capture time, native record_number and ordinal, plus JSON
+        pointer or CSV byte range/source_format.
+      raw_row_json: All literal source fields, including unknown columns, raw amount spelling, aliases, multiple-ID
+        flags, means, medians and original values. No correction is inferred.

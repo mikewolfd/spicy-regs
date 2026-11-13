@@ -73,3 +73,11 @@ CSV ranges are bounded individually and checkpointed in native occurrence order.
 An interrupted range leaves earlier complete originals reusable. Source transfer
 termination is retained as incomplete evidence and never as an empty or complete
 population. The same source checks validate each range and the final cohort.
+
+Recipient profiles can carry the combined native type
+`Covered Recipient Physician/Covered Recipient Non-Physician Practitioner`.
+Keep that source classification intact. It cannot be assigned wholly to either
+payment-recipient type in the state/national summaries. Reconcile all profile
+types together against the matching national payment categories; compare
+individual profile types only at their native profile grain. Shared NPIs and
+multiple-profile-ID flags remain source observations, not permission to merge.

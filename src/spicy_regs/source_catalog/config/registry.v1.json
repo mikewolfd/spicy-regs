@@ -1586,6 +1586,21 @@
       "tables": []
     },
     {
+      "id": "family:cms-open-payments",
+      "title": "CMS Open Payments summaries",
+      "publisher": "Centers for Medicare & Medicaid Services",
+      "description": "Retained Open Payments DKAN catalog, literal summary pages and bounded CSV ranges for explicitly selected program years/publications. Source capture, complete local replay and public publication are separate evidence; summary levels and research associations overlap and must remain separate.",
+      "source_names": [
+        "cms-open-payments"
+      ],
+      "families": [
+        "cms-open-payments"
+      ],
+      "tables": [
+        "cms_open_payments_summaries"
+      ]
+    },
+    {
       "id": "family:grants-opportunities",
       "title": "Grants.gov opportunities",
       "publisher": "Grants.gov",

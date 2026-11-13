@@ -45142,5 +45142,186 @@
     "identity_columns": [
       "snapshot_id"
     ]
+  },
+  "cms_open_payments_summaries": {
+    "table": "cms_open_payments_summaries",
+    "label": "CMS Open Payments summaries",
+    "summary": "Compare source-reported recipient, reporting-entity and state amounts for one explicit program year and release, with separate payment categories and research associations.",
+    "coverage": "Windowed by design; one declared program year and publication across native reporting-entity, practitioner, hospital, state and supplied national summaries. This schema statement does not measure current public coverage. Complete local source verification, coordinator integration and public publication are separate evidence. Detailed payment records, deletion history and NPPES enrichment are outside this summary product.",
+    "kind": "window",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Digest-bound publisher occurrence; distinct native associations remain separate."
+      },
+      {
+        "column_name": "program_year",
+        "column_type": "INTEGER",
+        "description": "Explicit program year; separate from publication and capture dates."
+      },
+      {
+        "column_name": "release",
+        "column_type": "VARCHAR",
+        "description": "Publisher summary publication token from the selected catalog distribution URL."
+      },
+      {
+        "column_name": "aggregation_level",
+        "column_type": "VARCHAR",
+        "description": "entities, recipients, hospitals, states or national. Select one level before comparing or adding amounts."
+      },
+      {
+        "column_name": "native_id",
+        "column_type": "VARCHAR",
+        "description": "Literal entity/profile/CCN identifier, or JSON tuple of publisher country/state/category/recipient type. Not an NPI identity merge."
+      },
+      {
+        "column_name": "name",
+        "column_type": "VARCHAR",
+        "description": "Publisher entity/hospital/state label, or display name from literal recipient first and last name. Full name components remain in raw_row_json."
+      },
+      {
+        "column_name": "recipient_type",
+        "column_type": "VARCHAR",
+        "description": "Literal profile classification for recipients, including combined Physician/Non-Physician Practitioner profiles; literal payment-recipient type for state/national rows. Combined profiles are not split or wholly reassigned to either payment-recipient type."
+      },
+      {
+        "column_name": "npi",
+        "column_type": "VARCHAR",
+        "description": "Literal source NPI; empty stays empty. No NPPES enrichment or matching is required."
+      },
+      {
+        "column_name": "state",
+        "column_type": "VARCHAR",
+        "description": "Literal source state code, including empty country-level state codes. See state_basis before comparison."
+      },
+      {
+        "column_name": "country_code",
+        "column_type": "VARCHAR",
+        "description": "Literal country code where the source summary supplies one; not inferred from addresses."
+      },
+      {
+        "column_name": "country_name",
+        "column_type": "VARCHAR",
+        "description": "Literal country name when supplied by the source summary; not inferred when unavailable."
+      },
+      {
+        "column_name": "state_basis",
+        "column_type": "VARCHAR",
+        "description": "Reporting entity address, recipient profile address, teaching hospital address or publisher recipient-state summary."
+      },
+      {
+        "column_name": "payment_category",
+        "column_type": "VARCHAR",
+        "description": "Literal General/Research/Investment/Interest for category rows; separate_columns for wide native summaries."
+      },
+      {
+        "column_name": "general_amount_usd",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Source-reported general payments received or made, exact US dollars. Select one summary level."
+      },
+      {
+        "column_name": "research_amount_usd",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Source-reported research payments received or made, exact US dollars; excludes associated research amounts."
+      },
+      {
+        "column_name": "investment_amount_usd",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Source-reported investment amount, exact US dollars; separate from value of ownership interest."
+      },
+      {
+        "column_name": "interest_amount_usd",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Source-reported value of ownership/investment interest, exact US dollars; not added to payment totals."
+      },
+      {
+        "column_name": "associated_research_amount_usd",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Source-reported associated research US dollars. Multiple investigators may share associations; never add to payments received."
+      },
+      {
+        "column_name": "category_amount_usd",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Exact US-dollar total for this state/national row and its single payment_category/recipient_type."
+      },
+      {
+        "column_name": "general_payment_count",
+        "column_type": "BIGINT",
+        "description": "Source general-payment record count at this native summary level."
+      },
+      {
+        "column_name": "research_payment_count",
+        "column_type": "BIGINT",
+        "description": "Source research-payment record count; separate from investigator associations."
+      },
+      {
+        "column_name": "investment_payment_count",
+        "column_type": "BIGINT",
+        "description": "Source investment record count when supplied; unavailable is not zero."
+      },
+      {
+        "column_name": "interest_payment_count",
+        "column_type": "BIGINT",
+        "description": "Source interest record count when supplied; unavailable is not zero."
+      },
+      {
+        "column_name": "associated_research_payment_count",
+        "column_type": "BIGINT",
+        "description": "Associated research record count; an association count, not additional payments received."
+      },
+      {
+        "column_name": "category_payment_count",
+        "column_type": "BIGINT",
+        "description": "Source payment record count for this category and recipient type at the state/national level."
+      },
+      {
+        "column_name": "recipient_count",
+        "column_type": "BIGINT",
+        "description": "Source recipient count for this state/national category/type; not a payment count and not additive across categories."
+      },
+      {
+        "column_name": "value_statuses_json",
+        "column_type": "VARCHAR",
+        "description": "Per-measure reported, source_null or source_empty. JSON null stays null; CSV empty stays literal empty without inferred database-null meaning."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Digest-bound occurrence identity. Native record_number is a publication-local datastore occurrence, not a longitudinal payment ID."
+      },
+      {
+        "column_name": "dataset_id",
+        "column_type": "VARCHAR",
+        "description": "Native DKAN summary dataset identifier, distinct from distribution resource ID and publication token."
+      },
+      {
+        "column_name": "source_download_url",
+        "column_type": "VARCHAR",
+        "description": "Official catalog-stated CSV distribution locator for this exact summary publication."
+      },
+      {
+        "column_name": "source_catalog_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained original catalog used to select this publication."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Original request URL, SHA-256, capture time, native record_number and ordinal, plus JSON pointer or CSV byte range/source_format."
+      },
+      {
+        "column_name": "raw_row_json",
+        "column_type": "VARCHAR",
+        "description": "All literal source fields, including unknown columns, raw amount spelling, aliases, multiple-ID flags, means, medians and original values. No correction is inferred."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One native summary occurrence for a selected program year, publication and aggregation level. Do not combine overlapping levels or add investigator associations to payments received. Profile-type categories and payment-recipient-type categories are separate source classifications.",
+    "identity_columns": [
+      "observation_id"
+    ]
   }
 }

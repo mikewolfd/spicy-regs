@@ -12139,6 +12139,50 @@
         "parser_version",
         "official_match_status"
       ]
+    },
+    {
+      "table": "cms_open_payments_summaries",
+      "label": "CMS Open Payments summaries",
+      "summary": "Compare source-reported recipient, reporting-entity and state amounts for one explicit program year and release, with separate payment categories and research associations.",
+      "coverage": "Windowed by design; one declared program year and publication across native reporting-entity, practitioner, hospital, state and supplied national summaries. This schema statement does not measure current public coverage. Complete local source verification, coordinator integration and public publication are separate evidence. Detailed payment records, deletion history and NPPES enrichment are outside this summary product.",
+      "kind": "window",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "observation_id",
+        "program_year",
+        "release",
+        "aggregation_level",
+        "native_id",
+        "name",
+        "recipient_type",
+        "npi",
+        "state",
+        "country_code",
+        "country_name",
+        "state_basis",
+        "payment_category",
+        "general_amount_usd",
+        "research_amount_usd",
+        "investment_amount_usd",
+        "interest_amount_usd",
+        "associated_research_amount_usd",
+        "category_amount_usd",
+        "general_payment_count",
+        "research_payment_count",
+        "investment_payment_count",
+        "interest_payment_count",
+        "associated_research_payment_count",
+        "category_payment_count",
+        "recipient_count",
+        "value_statuses_json",
+        "source_record_id",
+        "dataset_id",
+        "source_download_url",
+        "source_catalog_sha256",
+        "source_locator_json",
+        "raw_row_json"
+      ]
     }
   ]
 }
