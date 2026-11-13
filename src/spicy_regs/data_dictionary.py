@@ -631,6 +631,7 @@ TABLES: tuple[str, ...] = (
     "senate_disbursement_pages",
     *DISBURSEMENT_SUMMARY_TABLES,
     "fec_financial_profiles",
+    "lobbying_quarterly_profiles",
     "treasury_debt_observations",
     "treasury_statement_periods",
     "treasury_statement_classification_cells",
@@ -759,6 +760,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "senate_disbursement_pages",
         *DISBURSEMENT_SUMMARY_TABLES,
         "fec_financial_profiles",
+        "lobbying_quarterly_profiles",
         "treasury_debt_observations",
         "treasury_statement_periods",
         "treasury_statement_classification_cells",
@@ -1000,6 +1002,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.schemas.house_disbursement_pages import SCHEMAS as HOUSE_PDF_SCHEMAS
     from spicy_regs.schemas.disbursement_summaries import SCHEMAS as DISBURSEMENT_SUMMARY_SCHEMAS
     from spicy_regs.transforms.build_fec_financial_profiles import SCHEMA as FEC_PROFILE_SCHEMA
+    from spicy_regs.transforms.build_lobbying_quarterly_profiles import SCHEMA as LDA_QUARTERLY_SCHEMA
     from spicy_regs.transforms.build_census_acs import SCHEMA as CENSUS_ACS_SCHEMA
     from spicy_regs.transforms.build_census_geocoder import SCHEMAS as CENSUS_GEOCODER_SCHEMAS
     from spicy_regs.transforms.build_foreign_assistance import SCHEMAS as FOREIGN_ASSISTANCE_SCHEMAS
@@ -1125,6 +1128,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         **HOUSE_PDF_SCHEMAS,
         **DISBURSEMENT_SUMMARY_SCHEMAS,
         "fec_financial_profiles": FEC_PROFILE_SCHEMA,
+        "lobbying_quarterly_profiles": LDA_QUARTERLY_SCHEMA,
         "census_acs_county_observations": CENSUS_ACS_SCHEMA,
         **CENSUS_GEOCODER_SCHEMAS,
         **FOREIGN_ASSISTANCE_SCHEMAS,

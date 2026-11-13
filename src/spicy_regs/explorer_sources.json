@@ -758,6 +758,16 @@
       "sources": [
         "sam-public"
       ]
+    },
+    "lobbying-quarterly-profiles": {
+      "sources": [
+        "lobbying"
+      ],
+      "inputs": [
+        "lobbying_filings"
+      ],
+      "transformation": "Selects unambiguous quarterly LD-2 restatements within native registrant and client identifiers. Preserves unresolved competitors and separates reported income from in-house expenses. Selected retained coverage remains incomplete.",
+      "evidence": "src/spicy_regs/transforms/build_lobbying_quarterly_profiles.py"
     }
   },
   "tables": {
@@ -1317,6 +1327,9 @@
       "transformation": "Reads retained White House article HTML and category pages; preserves source versions without asserting equivalence to official documents.",
       "evidence": "src/spicy_regs/pipelines/white_house.py",
       "modelGenerated": false
+    },
+    "lobbying_quarterly_profiles": {
+      "family": "lobbying-quarterly-profiles"
     }
   }
 }

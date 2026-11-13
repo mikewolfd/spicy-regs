@@ -2398,7 +2398,7 @@
       {
         "column_name": "filing_type",
         "column_type": "VARCHAR",
-        "description": "The LDA filing-type code as the API states it: `RR` registration; `Q1`–`Q4` quarterly reports and `MM` the pre-2008 mid-year report; `1A`–`4A` and `MA` amendments; `1T`–`4T` and `MT` terminations; `1@`–`4@` and `M@` termination amendments; a trailing `Y` marks a no-activity report (`Q1Y`, `1@Y`). The LDA constants endpoint (`/api/v1/constants/filing/filingtypes/`) is the authority. An amendment is a separate filing that restates its quarter's report. To total amounts, drop registrations (`RR`, `RA`), which carry a `filing_period` too, then keep the latest filing per registrant, `client_id` and period: with registrations kept, a later one displaced a quarterly report in 103 groups of 2025 (measured 2026-10-03). For issues or activities, choose filing types first: a termination chain (`1T`, then a no-activity `1@Y`) shares the period, and the latest filing can be the no-activity one."
+        "description": "The LDA filing-type code as the API states it: `RR` registration; `Q1`–`Q4` quarterly reports and `MM` the pre-2008 mid-year report; `1A`–`4A` and `MA` amendments; `1T`–`4T` and `MT` terminations; `1@`–`4@` and `M@` termination amendments; a trailing `Y` marks a no-activity report (`Q1Y`, `1@Y`). The LDA constants endpoint (`/api/v1/constants/filing/filingtypes/`) is the authority. An amendment is a separate filing that restates its quarter's report. Quarterly interpretation belongs to `lobbying_quarterly_profiles`, which excludes registrations (`RR`, `RA`), uses exact native registrant/client identifiers and preserves unresolved competitors. Posting time alone does not establish an amendment chain. Terminations and no-activity suffixes do not imply zero amounts."
       },
       {
         "column_name": "filing_year",
@@ -2438,12 +2438,12 @@
       {
         "column_name": "income",
         "column_type": "DECIMAL(38,6)",
-        "description": "Lobbying income reported by a lobbying firm for the period, in USD. Null for self-filers (who report `expenses`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; drop registrations (`RR`, `RA`) and keep the latest filing per registrant, `client_id` and quarter (see `filing_type`)."
+        "description": "Lobbying income reported by a lobbying firm for the period, in USD. Null for self-filers (who report `expenses`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; use the explicit selection and unresolved statuses in `lobbying_quarterly_profiles` rather than choosing solely by latest posting."
       },
       {
         "column_name": "expenses",
         "column_type": "DECIMAL(38,6)",
-        "description": "Lobbying expenses reported by a self-filing organization for the period, in USD. Null for firms (who report `income`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; drop registrations (`RR`, `RA`) and keep the latest filing per registrant, `client_id` and quarter (see `filing_type`). A self-filing organization's expenses already include what it pays outside lobbying firms, whose `income` for that client is reported separately; do not add the two."
+        "description": "Lobbying expenses reported by a self-filing organization for the period, in USD. Null for firms (who report `income`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; use the explicit selection and unresolved statuses in `lobbying_quarterly_profiles` rather than choosing solely by latest posting. A self-filing organization's expenses already include what it pays outside lobbying firms, whose `income` for that client is reported separately; do not add the two."
       },
       {
         "column_name": "lobbying_activities",
@@ -28218,6 +28218,207 @@
     ],
     "subject": "campaign_finance",
     "grain": "One native entity, kind, cycle and explicit snapshot scope. Equivalent witnesses select once; conflicting facts remain visible without choosing a winner.",
+    "identity_columns": [
+      "profile_id"
+    ]
+  },
+  "lobbying_quarterly_profiles": {
+    "table": "lobbying_quarterly_profiles",
+    "label": "Quarterly lobbying income and expense profiles",
+    "summary": "Separate reported quarterly income and in-house expenses with source-linked original/amendment decisions and visible unresolved competitors.",
+    "coverage": "Derived. Explicit retained filing year, native registrant/client scope, quarters, cutoff and source generation. Every row remains labeled incomplete; a complete observed query is not publisher-wide coverage or future amendment closure.",
+    "kind": "derived",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "profile_id",
+        "column_type": "VARCHAR",
+        "description": "Stable identity of the selection rule, exact native registrant/client pair, filing year and quarter. Missing identities remain separate by filing UUID."
+      },
+      {
+        "column_name": "scope_id",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the explicit quarterly selection, including cutoff and source table pins."
+      },
+      {
+        "column_name": "registrant_id",
+        "column_type": "VARCHAR",
+        "description": "Native LDA registrant identifier; matching names do not merge registrants."
+      },
+      {
+        "column_name": "client_id",
+        "column_type": "VARCHAR",
+        "description": "Native client.id within this registrant; not an organization identifier shared across firms."
+      },
+      {
+        "column_name": "registrant_name",
+        "column_type": "VARCHAR",
+        "description": "Registrant name on the selected filing, or an agreed name among unresolved witnesses."
+      },
+      {
+        "column_name": "client_name",
+        "column_type": "VARCHAR",
+        "description": "Client name on the selected filing, or an agreed name among unresolved witnesses."
+      },
+      {
+        "column_name": "filing_period",
+        "column_type": "VARCHAR",
+        "description": "Native quarterly period; pre-2008 semiannual records are outside this output."
+      },
+      {
+        "column_name": "selection_status",
+        "column_type": "VARCHAR",
+        "description": "Selected for an unambiguous original or original/amendment pair; unresolved otherwise. Amount qualification is separate."
+      },
+      {
+        "column_name": "selection_reason",
+        "column_type": "VARCHAR",
+        "description": "Replayable reason for selection or refusal. Multiple amendments without predecessor links remain unresolved regardless of posting time."
+      },
+      {
+        "column_name": "selected_filing_uuid",
+        "column_type": "VARCHAR",
+        "description": "One selected original or amendment; null when no effective filing is established."
+      },
+      {
+        "column_name": "selected_filing_type",
+        "column_type": "VARCHAR",
+        "description": "Native selected type, including termination and no-activity suffixes. No-activity never implies zero money."
+      },
+      {
+        "column_name": "selected_source_url",
+        "column_type": "VARCHAR",
+        "description": "Publisher document URL from the selected native filing; not a newly fetched document."
+      },
+      {
+        "column_name": "income",
+        "column_type": "VARCHAR",
+        "description": "Reported registrant income estimate in USD as decimal text, preserving precision. Null never means zero. Never add to client expenses."
+      },
+      {
+        "column_name": "income_status",
+        "column_type": "VARCHAR",
+        "description": "Reported_estimate, source_null, source_empty, below_threshold_or_zero_unresolved, invalid_amount, unsupported_amount, unsupported_number, both_measures_reported_unresolved or unresolved_selection."
+      },
+      {
+        "column_name": "expenses",
+        "column_type": "VARCHAR",
+        "description": "Reported in-house expense estimate in USD as decimal text; may include external firm fees. Different accounting methods are not harmonized."
+      },
+      {
+        "column_name": "expenses_status",
+        "column_type": "VARCHAR",
+        "description": "Amount qualification as for income, or reporting_method_unresolved when an expense estimate has no recognized method."
+      },
+      {
+        "column_name": "expenses_method",
+        "column_type": "VARCHAR",
+        "description": "Literal selected expense-method spelling. A/a uses LDA definitions; B/b and C/c use different Internal Revenue Code definitions."
+      },
+      {
+        "column_name": "termination_date",
+        "column_type": "VARCHAR",
+        "description": "Literal selected termination date; a termination report still reports the quarter and is not discarded."
+      },
+      {
+        "column_name": "original_income",
+        "column_type": "VARCHAR",
+        "description": "Eligible reported income estimate on the unique original before restatement; original literal remains in witnesses_json."
+      },
+      {
+        "column_name": "original_expenses",
+        "column_type": "VARCHAR",
+        "description": "Eligible reported expense estimate on the unique original before restatement; not added to the amendment."
+      },
+      {
+        "column_name": "income_amendment_change",
+        "column_type": "VARCHAR",
+        "description": "Exact decimal difference between two eligible reported estimates when a unique amendment replaces a unique original; not an estimate of exact underlying spending."
+      },
+      {
+        "column_name": "expenses_amendment_change",
+        "column_type": "VARCHAR",
+        "description": "Difference between comparable original and amended expense estimates with the same recognized method; otherwise null."
+      },
+      {
+        "column_name": "witnesses_json",
+        "column_type": "VARCHAR",
+        "description": "All in-scope native filings, including separate amendments, original values, methods, source document links and postings; amounts serialize as decimal text."
+      },
+      {
+        "column_name": "excluded_filing_uuids_json",
+        "column_type": "VARCHAR",
+        "description": "Observed filings posted after the declared cutoff, retained as evidence but excluded from the as-of decision."
+      },
+      {
+        "column_name": "cutoff",
+        "column_type": "VARCHAR",
+        "description": "Explicit aware as-of timestamp applied to publisher posting dates. Later-discovered or unrequested filings may be missing."
+      },
+      {
+        "column_name": "source_table_generation",
+        "column_type": "VARCHAR",
+        "description": "Exact pinned source generation selected by the caller; not a current-publication claim."
+      },
+      {
+        "column_name": "source_table_sha256",
+        "column_type": "VARCHAR",
+        "description": "Verified SHA-256 of the actual native lobbying_filings.parquet read for this build."
+      },
+      {
+        "column_name": "coverage_status",
+        "column_type": "VARCHAR",
+        "description": "Always incomplete_retained_population: a declared retained snapshot does not prove publisher-wide completeness, absence or future amendment closure."
+      },
+      {
+        "column_name": "amount_basis",
+        "column_type": "VARCHAR",
+        "description": "Always reported_estimate_usd. Source amounts are good-faith estimates, usually rounded to nearest 10000 USD when at least 5000 USD; no exact-spending claim."
+      },
+      {
+        "column_name": "overlap_policy",
+        "column_type": "VARCHAR",
+        "description": "Keep income and in-house expenses separate because expenses may include fees reported separately as firm income. No combined national total."
+      },
+      {
+        "column_name": "selection_policy",
+        "column_type": "VARCHAR",
+        "description": "Versioned interpretation rule, lda-quarterly-selection/1."
+      },
+      {
+        "column_name": "selection_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the exact replayable selection control."
+      },
+      {
+        "column_name": "filing_year",
+        "column_type": "INTEGER",
+        "description": "Declared reporting calendar year, starting with quarterly reporting in 2008."
+      },
+      {
+        "column_name": "filing_count",
+        "column_type": "INTEGER",
+        "description": "Distinct retained native filings for this pair and quarter, including observed filings after cutoff."
+      },
+      {
+        "column_name": "amendment_count",
+        "column_type": "INTEGER",
+        "description": "Recognized amendments at or before cutoff; no chain is invented between multiple amendments."
+      },
+      {
+        "column_name": "period_start",
+        "column_type": "DATE",
+        "description": "First calendar day of the declared quarter, not the acquisition or posting date."
+      },
+      {
+        "column_name": "period_end",
+        "column_type": "DATE",
+        "description": "Last calendar day of the declared quarter; no annual amount is allocated to quarters."
+      }
+    ],
+    "subject": "lobbying",
+    "grain": "One native registrant/client pair, reporting year and quarter. Activity and lobbyist rows never multiply or allocate money.",
     "identity_columns": [
       "profile_id"
     ]
