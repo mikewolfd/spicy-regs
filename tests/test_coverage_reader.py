@@ -210,7 +210,7 @@ def test_congress_native_source_fields_restore_using_its_maintained_reader(tmp_p
     }
     result = bridge.restore(request)
     assert pq.read_table(result["urls"][0]).to_pylist() == [raw]
-    assert result["policyVersion"] == "congress-subjects/1"
+    assert result["policyVersion"] == "congress-subjects/2"
 
 
 def rewrite_receipts(request, edit):
