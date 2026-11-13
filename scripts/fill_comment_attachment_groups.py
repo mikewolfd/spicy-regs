@@ -131,9 +131,11 @@ def choose(args, client, bucket):
     if args.operation == "fill":
         fetch(client, bucket, args.config["pilot"], args.workdir / "pilot.json", 2**20)
         pilot = load(args.workdir / "pilot.json")
+        pilot_group = next((g for g in plan["groups"] if g["group_id"] == pilot["group"]), None)
         require(pilot["pilot"] is True and pilot["status"] == "complete" and pilot["written"]["rows_changed"] > 0
                 and pilot["plan_sha256"] == args.config["plan"]["sha256"] and pilot["runtime_ref"] == args.runtime_ref,
                 "A successful writing pilot for this exact plan/runtime is required")
+        require(pilot_group is not None and pilot["stage_sha256"] == pilot_group["reads"]["sha256"], "Pilot group stage differs")
         choices = args.config.get("groups", [i for i in ids if i != pilot["group"]])
         require(choices and len(set(choices)) == len(choices) and all(i in ids and i != pilot["group"] for i in choices),
                 "Remaining groups must be unique known groups excluding the pilot")
@@ -172,6 +174,18 @@ def pending_guard(workdir):
                     "Pending write needs its exact earlier recovery artifact; do not prepare another group")
             require(Path(line["preimage"]).is_file() and digest(Path(line["preimage"])) == line["preimage_sha256"],
                     "Pending write lacks its verified preimage")
+
+
+def pilot_history(workdir, pilot):
+    prepare_id = pilot["prepared"]["prepare_id"]
+    require(re.fullmatch(r"[0-9]+-[0-9a-f]{12}-[0-9a-f]{8}", prepare_id), "Pilot prepare identity differs")
+    lines = writer._lines(writer._journal(workdir, {"prepare_id": prepare_id}))
+    require(lines and all(line.get("prepare_id") == prepare_id for line in lines), "Pilot journal is missing or differs")
+    terminal = {line["batch"]: line for line in lines}
+    require(not any(line["state"] == "undone" for line in lines)
+            and all(line["state"] == "verified" for line in terminal.values())
+            and sum(line.get("changed", 0) for line in terminal.values()) == pilot["written"]["rows_changed"],
+            "Pilot is undone, unresolved, or differs from its retained success")
 
 
 def recovery_files(root):
@@ -226,6 +240,13 @@ def run_group(args, client, bucket):
     work = args.workdir / "writer"
     if args.operation != "undo":
         pending_guard(work)
+        if args.operation == "fill":
+            pilot_history(work, load(args.workdir / "pilot.json"))
+        prepared_path = writer.fill_dir(work) / "prepare.json"
+        if args.operation == "resume" and prepared_path.exists():
+            history = writer._lines(writer._journal(work, load(prepared_path)))
+            require(not any(line["state"] == "undone" for line in history),
+                    "This prepare was undone; use a fresh explicit pilot/prepare instead of resume")
     else:
         maintenance.run("verify", args.workdir / "maintenance-state.json")
         result = writer.undo(work, args.config["undo_batch"], expected_snapshot=args.config["expected_snapshot"])
@@ -268,6 +289,7 @@ def run_group(args, client, bucket):
     written = {**written, "new_rows_changed": written["rows_changed"], "rows_changed": total}
     owner.durable(args.workdir / "result.json", {**identity(args), "operation": args.operation, "status": "complete",
                    "pilot": load(writer.fill_dir(work) / "attempt.json")["operation"] == "pilot",
+                   "stage_sha256": group["reads"]["sha256"],
                    "prepared": {k: prepared[k] for k in ("rows_to_fill", "snapshot", "prepare_id")}, "written": written})
 
 
@@ -287,6 +309,8 @@ def finalize(args):
     if not authorized.exists() or load(authorized) != ownership(args):
         # In particular, a rejected downloaded artifact must never be pushed back into shared journal history.
         return
+    # A failed repeat must not leave an earlier descriptor claiming to pin the newly retained artifact.
+    (args.workdir / "published-result.json").unlink(missing_ok=True)
     try:
         maintenance.run("restore", args.workdir / "maintenance-state.json")
     finally:
@@ -294,9 +318,26 @@ def finalize(args):
             if (args.workdir / "plan.json").exists():
                 require(digest(args.workdir / "plan.json") == args.config["plan"]["sha256"], "Recovery plan differs")
                 client, _ = verified_target_client()
-                writer.sync_journals(args.workdir / "writer", load(args.workdir / "plan.json")["journals"], push=True, client=client)
+                prefix = load(args.workdir / "plan.json")["journals"]
+                # Even a verified artifact may lag or conflict with remote history. Check the complete merge
+                # again before any push, including when the child's earlier pull was the operation that failed.
+                pull_journals(args.workdir, prefix, client)
+                writer.sync_journals(args.workdir / "writer", prefix, push=True, client=client)
         finally:
             recovery(args)
+    completed = args.workdir / "worker-complete.json"
+    result = args.workdir / "result.json"
+    if completed.exists() and result.exists() and load(completed) == {**ownership(args), "result_sha256": digest(result)}:
+        writer._refuse_committed_failures(args.workdir / "writer")
+        require(not any(writer._lines(p)[-1]["state"] == "pending" for p in (args.workdir / "writer/fill").glob("*.jsonl")
+                        if writer._lines(p)), "Pending history cannot publish completion")
+        client, bucket = verified_target_client()
+        final = args.workdir / "completed-result.json"
+        owner.durable(final, {**load(result), "recovery": pin(args.workdir / "recovery.json"),
+                              "recovery_run_id": os.getenv("GITHUB_RUN_ID"),
+                              "recovery_artifact": f"comment-attachment-fill-{args.group}"})
+        owner.durable(args.workdir / "published-result.json", publish(client, bucket, final,
+                      "staging/comment-physical-fill-result-" + digest(final)))
 
 
 def guarded(args):
@@ -309,25 +350,19 @@ def guarded(args):
         return
     if args.operation in {"resume", "undo"}:
         recovery(args, verify=True)
+    (args.workdir / "worker-complete.json").unlink(missing_ok=True)
     owner.durable(args.workdir / "authorized.json", ownership(args))
-    success = False
     try:
         if state.exists():
             maintenance.run("restore", state)
             state.rename(args.workdir / "prior-maintenance-state.json")
         maintenance.run("suspend", state)
         runner.supervise(args, command=command, limits=LIMITS)
-        success = True
+        result = args.workdir / "result.json"
+        require(all(load(result)[name] == value for name, value in identity(args).items()), "Worker result identity differs")
+        owner.durable(args.workdir / "worker-complete.json", {**ownership(args), "result_sha256": digest(result)})
     finally:
         finalize(args)
-    if success:
-        client, bucket = verified_target_client()
-        result = args.workdir / "result.json"
-        owner.durable(result, {**load(result), "recovery": pin(args.workdir / "recovery.json"),
-                              "recovery_run_id": os.getenv("GITHUB_RUN_ID"),
-                              "recovery_artifact": f"comment-attachment-fill-{args.group}"})
-        owner.durable(args.workdir / "published-result.json", publish(client, bucket, result,
-                      "staging/comment-physical-fill-result-" + digest(result)))
 
 
 def main():

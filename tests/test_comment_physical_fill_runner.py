@@ -84,6 +84,11 @@ def test_real_group_write_resume_and_undo_preserve_conflicting_copies(tmp_path, 
     args.config.update(undo_batch=line["batch"], expected_snapshot=line["snapshot_after"]["snapshot_id"])
     run.run_group(args, store, "test")
     assert table(catalog)["B"]["attachments_json"] is None
+    run.recovery(args)
+    args.config["recovery_sha256"] = run.digest(args.workdir / "recovery.json")
+    args.operation = "resume"
+    with pytest.raises(ValueError, match="prepare was undone"):
+        run.run_group(args, store, "test")
 
 
 def test_retained_original_through_physical_group_to_native(tmp_path, catalog, monkeypatch):
@@ -197,7 +202,8 @@ def test_remaining_fill_requires_exact_writing_pilot(tmp_path, catalog):
     store, plan = setup_plan(tmp_path, catalog)
     args = arguments(tmp_path, plan, operation="fill")
     pilot = {"pilot": True, "status": "complete", "written": {"rows_changed": 0}, "plan_sha256": plan["sha256"],
-             "runtime_ref": args.runtime_ref, "group": 0}
+             "runtime_ref": args.runtime_ref, "group": 0,
+             "stage_sha256": json.loads(store.objects[plan["key"]])["groups"][0]["reads"]["sha256"]}
     path = tmp_path / "pilot.json"
     def pinned():
         path.write_text(json.dumps(pilot))
@@ -216,6 +222,37 @@ def test_remaining_fill_requires_exact_writing_pilot(tmp_path, catalog):
         run.choose(args, store, "test")
 
 
+def test_remaining_fill_uses_current_exact_pilot_journal_and_refuses_undo(tmp_path, catalog, monkeypatch):
+    store, plan = setup_plan(tmp_path, catalog)
+    monkeypatch.setattr(run.maintenance, "run", lambda *a: {})
+    args = arguments(tmp_path, plan)
+    run.run_group(args, store, "test")
+    pilot = run.publish(store, "test", args.workdir / "result.json", "staging/pilot")
+    remaining = arguments(tmp_path, plan, operation="fill", group=2)
+    remaining.config["pilot"] = pilot
+    with pytest.raises(ValueError, match="Pilot journal is missing"):
+        run.run_group(remaining, store, "test")
+    writer.sync_journals(args.workdir / "writer", "staging/aggregate/journals", push=True, client=store)
+    run.run_group(remaining, store, "test")
+    assert table(catalog)["C"]["attachments_json"] == LISTED
+    run.recovery(args)
+    args.config["recovery_sha256"] = run.digest(args.workdir / "recovery.json")
+    prepared = run.load(args.workdir / "writer/fill/prepare.json")
+    line = writer._lines(writer._journal(args.workdir / "writer", prepared))[-1]
+    from spicy_regs.schemas import COMMENT
+    with catalog() as con:
+        current = run.iceberg._read_snapshot(con, COMMENT).snapshot_id
+    args.operation = "undo"
+    args.config.update(undo_batch=line["batch"], expected_snapshot=current)
+    run.run_group(args, store, "test")
+    writer.sync_journals(args.workdir / "writer", "staging/aggregate/journals", push=True, client=store)
+    other = arguments(tmp_path, plan, operation="fill", group=1)
+    other.config["pilot"] = pilot
+    with pytest.raises(ValueError, match="Pilot is undone"):
+        run.run_group(other, store, "test")
+    assert not (other.workdir / "writer/fill/prepare.json").exists()
+
+
 def test_resume_verifies_old_settings_before_capturing_new_guard(tmp_path, catalog, monkeypatch):
     store, plan = setup_plan(tmp_path, catalog)
     args = arguments(tmp_path, plan)
@@ -231,7 +268,7 @@ def test_resume_verifies_old_settings_before_capturing_new_guard(tmp_path, catal
     def maintenance(operation, path):
         calls.append(operation)
         value = {"generation": "new"} if operation == "suspend" else run.load(path)
-        run.owner.durable(path, {**value, "operation": operation})
+        run.owner.durable(path, {**value, "operation": operation, "observation": len(calls)})
     monkeypatch.setattr(run.maintenance, "run", maintenance)
     monkeypatch.setattr(run.runner, "supervise", lambda *a, **kw: run.run_group(args, store, "test"))
     run.guarded(args)
@@ -240,6 +277,49 @@ def test_resume_verifies_old_settings_before_capturing_new_guard(tmp_path, catal
     assert run.load(args.workdir / "maintenance-state.json")["generation"] == "new"
     assert run.load(args.workdir / "result.json")["written"]["new_rows_changed"] == 0
     assert (args.workdir / "published-result.json").exists()
+    first = run.digest(args.workdir / "recovery.json")
+    run.finalize(args)  # Workflow always cleanup sees a fresh maintenance observation.
+    current = run.digest(args.workdir / "recovery.json")
+    assert current != first
+    published = run.load(args.workdir / "published-result.json")
+    assert json.loads(store.objects[published["key"]])["recovery"]["sha256"] == current
+    def failed_restore(operation, path):
+        raise RuntimeError("restore needs retry")
+    monkeypatch.setattr(run.maintenance, "run", failed_restore)
+    with pytest.raises(RuntimeError, match="restore needs retry"):
+        run.finalize(args)
+    assert not (args.workdir / "published-result.json").exists()
+    monkeypatch.setattr(run.maintenance, "run", maintenance)
+    run.finalize(args)
+    published = run.load(args.workdir / "published-result.json")
+    assert json.loads(store.objects[published["key"]])["recovery"]["sha256"] == run.digest(args.workdir / "recovery.json")
+
+
+def test_guarded_divergent_history_never_pushes_rejected_journals(tmp_path, catalog, monkeypatch):
+    store, plan = setup_plan(tmp_path, catalog)
+    args = arguments(tmp_path, plan)
+    monkeypatch.setattr(run.maintenance, "run", lambda *a: {})
+    run.run_group(args, store, "test")
+    run.recovery(args)
+    args.config["recovery_sha256"] = run.digest(args.workdir / "recovery.json")
+    args.operation = "resume"
+    journal = next((args.workdir / "writer/fill").glob("write-journal-*.jsonl"))
+    remote_key = "staging/aggregate/journals/" + journal.name
+    store.objects[remote_key] = b'{"state":"pending","prepare_id":"different-history"}\n'
+    prior = store.objects.copy()
+    calls = []
+    monkeypatch.setenv(run.iceberg.CATALOG_LOCK_ENV, "comments-catalog-write")
+    monkeypatch.setattr(run, "verified_target_client", lambda: (store, "test"))
+    monkeypatch.setattr(run.maintenance, "run", lambda operation, path: calls.append(operation))
+    monkeypatch.setattr(run.runner, "supervise", lambda *a, **kw: run.run_group(args, store, "test"))
+    with pytest.raises(ValueError, match="histories diverged"):
+        run.guarded(args)
+    assert calls == ["suspend", "restore"]
+    assert store.objects == prior
+    assert not (args.workdir / "published-result.json").exists()
+    with pytest.raises(ValueError, match="histories diverged"):
+        run.finalize(args)
+    assert store.objects == prior
 
 
 def test_real_watchdog_stop_still_restores_maintenance(tmp_path, monkeypatch):
