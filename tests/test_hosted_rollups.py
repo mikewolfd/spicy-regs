@@ -582,6 +582,7 @@ def test_member_and_cosponsor_family_growth_is_explicit():
         "bill_cosponsors.parquet",
         "bill_committee_activities.parquet",
         "cbo_feed_items.parquet",
+        "cbo_estimate_cards.parquet",
         "bill_family_document_file_outcomes.parquet",
     )
     for rollup in (MembersRollup, BillFamilyRollup):
