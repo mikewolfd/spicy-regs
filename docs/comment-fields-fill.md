@@ -90,16 +90,27 @@ named sha256. Delete the staging prefix (the file, its `.sha256` and
 `journals/`, after copying the journals into the receipts) once the fill is
 done.
 
-**Prepare** reads the catalog narrowly at its current snapshot: the key,
-`modify_date`, whether each fill column is NULL (the value only of
-`attachments_json`, which a read may replace) and each row's data file, and
-counts the table's rows. It checks the fill columns at
-that snapshot and refuses if one is missing. It also refuses while any journal
-holds a batch that committed and failed its check (below). Each step streams
-its input into a Parquet file under `fill/work/`, outside the artifact,
-removed once the receipt is written: the catalog scan, the read copies of the
-comments in scope (without their object keys), and one value per version and
-column (NULL where its copies disagree). It writes three files:
+**Prepare** first reads only the key, `modify_date` and data-file name at the
+pinned native snapshot, applying the docket or agency scope before any full
+subject or receipt is restored. It checks duplicate keys in that scope and
+matches the staged copies by key and version. Only keys whose same-version
+copies agree on a non-null value for a requested fill column enter the existing
+strict receipt reader. That reader still validates the complete selected
+subject, receipt digest, policy and one-to-one relationship before a value can
+be filled. Unread, other-version and conflicting-copy counts retain the entire
+scope; this operation does not validate unrelated rows' receipts.
+
+The restored candidate rows supply null flags and the existing attachment value
+needed for an additive replacement. Narrow whole-table counts, receipt-header
+scans and data-file metadata reads can remain; a small docket does not imply
+that every remote file is pruned. Size a production run by its candidate rows
+and their full subject/receipt bytes, plus those remaining scans. A full staged
+population still needs measured admission.
+
+Prepare checks the fill columns and refuses if one is missing or if a journal
+holds a batch that committed and failed its check (below). Intermediate key,
+read-copy, agreed-version and candidate files stay under `fill/work/`, outside
+the artifact, and are removed once the receipt is written. It writes:
 
 - `fill/fill.parquet`, holding only the values to fill, unsorted (a batch
   reads it filtered on `_file`);

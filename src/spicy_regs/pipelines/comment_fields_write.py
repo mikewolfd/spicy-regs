@@ -394,15 +394,6 @@ def prepare(
         namespace = iceberg._selected_catalog_namespace(con, COMMENT)
         snapshot = iceberg._read_snapshot(con, COMMENT, namespace=namespace)
         source = iceberg._snapshot_query(COMMENT, snapshot, namespace=namespace)
-        from spicy_regs.sources.regulatory_catalog import processing_table
-        processing = processing_table(con, COMMENT, include_comment_promotion="attachments_json" in additive)
-        if iceberg._read_snapshot(con, COMMENT) != snapshot:
-            raise RuntimeError('Catalog changed while preparing field fill; retry')
-        missing = [c for c in columns if c not in con.sql(f'SELECT * FROM {processing}').columns]
-        if missing:
-            raise RuntimeError(f"the comments catalog lacks {missing} at snapshot {snapshot.snapshot_id}: deploy the "
-                               "branch and let one ETL data commit migrate the table before preparing "
-                               "(docs/comment-fields-fill.md)")
         read_from = reads or workdir / "parts" / "*" / "*.parquet"
         parts = f"read_parquet({_sql(read_from)}, hive_partitioning=false)"
         lacking = [c for c in read_columns(profile) if c not in con.sql(f"SELECT * FROM {parts}").columns]
@@ -411,29 +402,25 @@ def prepare(
                                "(docs/comment-fields-fill.md)")
         table_rows = con.execute(f"SELECT count(*) FROM ({source})").fetchone()[0]
         where = " AND ".join(f'"{column}" = {_sql(value)}' for column, value in (scope or {}).items()) or "TRUE"
-        physical = source.replace("SELECT *", f"SELECT comment_id, {FILE_COLUMN} AS _file", 1)
-        with_file = f'SELECT p.*, f._file FROM {processing} p JOIN ({physical}) f USING (comment_id)'
         # Every intermediate is a Parquet file the next step streams, never an in-memory table: three whole-table
         # temp tables (the catalog's 15 fill values, the read copies with their object keys, and every version with
         # its key list) ran the runner out of 6 GB at the fill's COPY (run 37105894011, 2026-10-03). They sit in
         # ``fill/work``, outside the artifact's ``fill/*.parquet``, and go once the receipt is written.
         work = out / "work"
         work.mkdir(exist_ok=True)
+        index_file = work / "catalog-index.parquet"
+        index = f"read_parquet({_sql(index_file)})"
         cat_file, read_file, versions_file, differs_file = (
             work / f"{name}.parquet" for name in ("catalog", "reads", "versions", "differs"))
         catalog, read_rows, versions, differs = (
             f"read_parquet({_sql(path)})" for path in (cat_file, read_file, versions_file, differs_file))
-        # Of a catalog cell the fill reads only whether it is NULL, and the value only where a read may replace it, so
-        # the catalog side is the key, the data file, one flag per fill column and the replaceable values: the one
-        # scan of the remote table, streamed to disk.
-        nulls = ", ".join(f'"{c}" IS NULL AS "null_{c}"' for c in columns)
-        held = "".join(f', "{c}" AS "held_{c}"' for c in additive)
-        if additive:
-            held += ", _promoted_v2"
-        con.execute(f"""COPY (SELECT comment_id, modify_date, {nulls}{held}, _file FROM ({with_file}) WHERE {where})
-                        TO {_sql(cat_file)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
-        con.execute(f"DROP TABLE {processing}")
-        duplicated = con.execute(f"SELECT count(*) FROM (SELECT comment_id FROM {catalog} GROUP BY 1 HAVING count(*) > 1)"
+        # Resolve scope and versions before restoring any wide subject or receipt. The pinned native columns are
+        # selection hints only; the existing strict receipt reader still verifies every possible fill row below.
+        # Keep all scoped keys here so unread/other-version counts and duplicate detection do not shrink to fills.
+        physical = source.replace("SELECT *", f"SELECT comment_id, modify_date, {FILE_COLUMN} AS _file", 1)
+        con.execute(f"""COPY (SELECT comment_id, modify_date, _file FROM ({physical} WHERE {where}))
+                        TO {_sql(index_file)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
+        duplicated = con.execute(f"SELECT count(*) FROM (SELECT comment_id FROM {index} GROUP BY 1 HAVING count(*) > 1)"
                                  ).fetchone()[0]
         if duplicated:
             raise RuntimeError(f"{duplicated} comment ids appear more than once in the catalog; run the dedupe first")
@@ -441,7 +428,7 @@ def prepare(
         # The copies of the comments in scope, less their object keys: only a version read more than once can
         # conflict, so only those keys are read again, below.
         con.execute(f"""COPY (SELECT s.comment_id, s.modify_date, {values} FROM {parts} s
-                              SEMI JOIN {catalog} c USING (comment_id))
+                              SEMI JOIN {index} c USING (comment_id))
                         TO {_sql(read_file)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
         # Per column: how many spellings the copies of one version state (NULL counted as one), and the value. All
         # but 842 of the re-read's 26.6M versions were read once and state one spelling each, so only versions read
@@ -476,6 +463,29 @@ def prepare(
                               AND k.modify_date IS NOT DISTINCT FROM x.modify_date ORDER BY 1, 3)
                         TO {_sql(out / 'conflicts.parquet')} (FORMAT PARQUET)""")
         on_version = "v.comment_id = c.comment_id AND v.modify_date IS NOT DISTINCT FROM c.modify_date"
+        has_value = " OR ".join(f'v."{c}" IS NOT NULL' for c in columns)
+        candidates = (f'SELECT c.comment_id FROM {index} c JOIN {versions} v ON {on_version} '
+                      f'WHERE {has_value}')
+        from spicy_regs.sources.regulatory_catalog import processing_table
+        processing = processing_table(con, COMMENT, where=f'comment_id IN ({candidates})',
+                                      include_comment_promotion="attachments_json" in additive)
+        try:
+            if iceberg._read_snapshot(con, COMMENT) != snapshot:
+                raise RuntimeError('Catalog changed while preparing field fill; retry')
+            missing = [c for c in columns if c not in con.sql(f'SELECT * FROM {processing}').columns]
+            if missing:
+                raise RuntimeError(f"the comments catalog lacks {missing} at snapshot {snapshot.snapshot_id}: deploy the "
+                                   "branch and let one ETL data commit migrate the table before preparing "
+                                   "(docs/comment-fields-fill.md)")
+            nulls = ", ".join(f'p."{c}" IS NULL AS "null_{c}"' for c in columns)
+            held = "".join(f', p."{c}" AS "held_{c}"' for c in additive)
+            if additive:
+                held += ", p._promoted_v2"
+            con.execute(f"""COPY (SELECT p.comment_id, p.modify_date, {nulls}{held}, i._file
+                                  FROM {processing} p JOIN {index} i USING (comment_id))
+                            TO {_sql(cat_file)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
+        finally:
+            con.execute(f"DROP TABLE {processing}")
         # Where a replaceable cell holds a value the version's agreed read differs from: whether the read only adds
         # to it, and the value it would replace. Few rows, so the rule runs in Python on these alone, and the held
         # value travels from here: carried through the whole-table join below it doubled that join's time (a
@@ -518,7 +528,7 @@ def prepare(
                    count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM {read_rows} r WHERE r.comment_id = c.comment_id)),
                    count(*) FILTER (WHERE EXISTS (SELECT 1 FROM {read_rows} r WHERE r.comment_id = c.comment_id)
                                     AND NOT EXISTS (SELECT 1 FROM {versions} v WHERE {on_version}))
-            FROM {catalog} c""").fetchall()[0]
+            FROM {index} c""").fetchall()[0]
         fill_rows = f"read_parquet({_sql(out / 'fill.parquet')})"
         # A fill cell is non-NULL exactly where its rule held, so the fill file counts its own cells: a NULL filled
         # where it carries no replaced value, a replacement where it does.
