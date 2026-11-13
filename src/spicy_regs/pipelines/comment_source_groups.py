@@ -75,17 +75,20 @@ def split(manifest, source_pins, out, *, local_groups=8, runner_groups=128, max_
                 CREATE TEMP TABLE local_ids AS
                 SELECT DISTINCT {_comment_identity('key')} AS comment_id FROM held WHERE raw_custody='local'
             """)
+            # The partition writer only needs keys and the group number. Join
+            # source metadata after splitting so no per-key metadata is copied
+            # through the full-size sort/buffer.
             con.execute(f"""
                 COPY (
-                    SELECT k.key, {', '.join(f'h.{column}' for column in SOURCE_PIN_COLUMNS)},
+                    SELECT k.key,
                            CASE WHEN l.comment_id IS NOT NULL THEN
                                printf('local-%03d', bucket % {int(local_groups)})
                            ELSE printf('runner-%03d', bucket % {int(runner_groups)}) END AS source_group
                     FROM (SELECT *, ('0x' || left(sha256(comment_id), 15))::UBIGINT AS bucket
                           FROM selected_keys) k
                     LEFT JOIN local_ids l USING (comment_id)
-                    LEFT JOIN held h USING (key)
-                ) TO {_sql(partitions)} (FORMAT PARQUET, PARTITION_BY source_group, COMPRESSION ZSTD)
+                ) TO {_sql(partitions)} (
+                    FORMAT PARQUET, PARTITION_BY source_group, COMPRESSION ZSTD, ROW_GROUP_SIZE 2048)
             """)
             expected = con.execute("SELECT count(*) FROM selected_keys").fetchone()[0]
             if not expected:
@@ -95,9 +98,9 @@ def split(manifest, source_pins, out, *, local_groups=8, runner_groups=128, max_
                 table = f"read_parquet({_sql(partition / '*.parquet')}, hive_partitioning=false)"
                 count, distinct, local, hosted = con.execute(f"""
                     SELECT count(*), count(DISTINCT key),
-                           count(*) FILTER (WHERE raw_custody='local'),
-                           count(*) FILTER (WHERE raw_custody='r2')
-                    FROM {table}
+                           count(*) FILTER (WHERE h.raw_custody='local'),
+                           count(*) FILTER (WHERE h.raw_custody='r2')
+                    FROM {table} k LEFT JOIN held h USING (key)
                 """).fetchone()
                 if count != distinct or count > max_keys or (group.startswith("runner-") and local):
                     raise ValueError(f"Source group {group} violates key uniqueness, custody or size ({count} keys)")
@@ -109,8 +112,8 @@ def split(manifest, source_pins, out, *, local_groups=8, runner_groups=128, max_
                 if local or hosted:
                     pins = dest / "source-pins.parquet"
                     con.execute(f"""
-                        COPY (SELECT key, {', '.join(SOURCE_PIN_COLUMNS)} FROM {table}
-                              WHERE raw_custody IS NOT NULL ORDER BY key)
+                        COPY (SELECT key, {', '.join(f'h.{column}' for column in SOURCE_PIN_COLUMNS)}
+                              FROM held h SEMI JOIN {table} k USING (key) ORDER BY key)
                         TO {_sql(pins)} (FORMAT PARQUET, COMPRESSION ZSTD)
                     """)
                 group_receipts.append({
