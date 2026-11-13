@@ -78,6 +78,36 @@ def test_comments_catalog_admits_mixed_receipts_only_at_their_exact_shape(tmp_pa
         assert not only_adds_attachments(reread, held)
         assert only_adds_attachments(reread, held, promoted_v2=True)
 
+        restored = native.processing_table(connection, COMMENT, where="comment_id='old'")
+        connection.execute(f'CREATE TEMP TABLE maintenance AS SELECT * FROM {restored}')
+        connection.execute("UPDATE maintenance SET text_extraction_status='ok'")
+        native.replace_native(connection, COMMENT, 'maintenance', expected_prior=restored)
+        flagged = native.processing_table(connection, COMMENT, include_comment_promotion=True)
+        assert connection.execute(f"SELECT attachments_json, _promoted_v2 FROM {flagged} "
+                                  "WHERE comment_id='old'").fetchone() == (held, True)
+        assert not only_adds_attachments(reread.replace('"a"', '"unrelated"'), held, promoted_v2=True)
+
+        from spicy_regs.etl_receipts import _digest
+        from spicy_regs.transforms.regulations_receipts import has_comments_promotion_ancestor
+
+        receipt = connection.execute(f"SELECT * FROM {native.receipts_table()} WHERE identity_json LIKE '%old%' "
+                                     "AND outcome='accepted'").to_arrow_table().to_pylist()[0]
+        assert has_comments_promotion_ancestor(receipt)
+        no_reference = {
+            **receipt, "witnesses": [w for w in receipt["witnesses"] if w["source_id"] != "prior-etl-processing"],
+        }
+        no_reference["receipt_id"] = _digest({k: v for k, v in no_reference.items() if k != "receipt_id"})
+        assert not has_comments_promotion_ancestor(no_reference)
+        wrong_witness = {
+            **receipt, "witnesses": [w if w["source_id"] != "prior-etl-processing"
+                                     else {**w, "body_version": "sha256:" + "0" * 64} for w in receipt["witnesses"]],
+        }
+        wrong_witness["receipt_id"] = _digest({k: v for k, v in wrong_witness.items() if k != "receipt_id"})
+        assert not has_comments_promotion_ancestor(wrong_witness)
+
+        # Restore the original receipt and v2 subject for the independent v2 corruption probes below.
+        connection.execute(f"DELETE FROM {native.receipts_table()} WHERE outcome='accepted'")
+        connection.execute(f"INSERT INTO {native.receipts_table()} SELECT * FROM read_parquet(?)", [str(receipts)])
         for edit, match in (
             ({"authors": []}, "v2 receipt cannot attest"),
             ({"doc_order": 0}, "v2 receipt cannot attest"),
