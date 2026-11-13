@@ -84,7 +84,7 @@ def test_zyte_serves_the_file_and_the_rung_is_recorded():
     assert got.roster.senators and got.capture.body == XML and (zyte.calls, firecrawl.calls) == (1, 0)
     assert evidence.captures == [("senate-cvc:zyte_http", got.capture,
                                   {"transport": "zyte_http", "provider_request_id": "req-1"})]
-    assert evidence.events == [("senate-roster-rung", {"rung": "zyte_http", "provider_request_id": "req-1",
+    assert evidence.events[:1] == [("senate-roster-rung", {"rung": "zyte_http", "provider_request_id": "req-1",
                                                        "sha256": got.capture.sha256, "bytes": len(XML)})]  # fmt: skip
 
 

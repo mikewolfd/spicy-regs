@@ -90,16 +90,79 @@ named sha256. Delete the staging prefix (the file, its `.sha256` and
 `journals/`, after copying the journals into the receipts) once the fill is
 done.
 
-**Prepare** reads the catalog narrowly at its current snapshot: the key,
-`modify_date`, whether each fill column is NULL (the value only of
-`attachments_json`, which a read may replace) and each row's data file, and
-counts the table's rows. It checks the fill columns at
-that snapshot and refuses if one is missing. It also refuses while any journal
-holds a batch that committed and failed its check (below). Each step streams
-its input into a Parquet file under `fill/work/`, outside the artifact,
-removed once the receipt is written: the catalog scan, the read copies of the
-comments in scope (without their object keys), and one value per version and
-column (NULL where its copies disagree). It writes three files:
+**Prepare** first reads only the key, `modify_date` and data-file name at the
+pinned native snapshot, applying the docket or agency scope before any full
+subject or receipt is restored. It checks duplicate keys in that scope and
+matches the staged copies by key and version. Only keys whose same-version
+copies agree on a non-null value for a requested fill column enter the existing
+strict receipt reader. That reader still validates the complete selected
+subject, receipt digest, policy and one-to-one relationship before a value can
+be filled. Unread, other-version and conflicting-copy counts retain the entire
+scope; this operation does not validate unrelated rows' receipts.
+
+The restored candidate rows supply null flags and the existing attachment value
+needed for an additive replacement. Narrow whole-table counts, receipt-header
+scans and data-file metadata reads can remain; a small docket does not imply
+that every remote file is pruned. Size a production run by its candidate rows
+and their full subject/receipt bytes, plus those remaining scans. A full staged
+population still needs measured admission.
+
+### Bounded attachment groups
+
+A full attachment stage can name millions of candidate rows. Use
+`python -m spicy_regs.pipelines.comment_fields_groups` to produce smaller
+ordinary stages before calling `prepare`:
+
+```sh
+uv run python -m spicy_regs.pipelines.comment_fields_groups plan \
+  --workdir GROUPS --stage FULL_STAGE \
+  --max-rows "$GROUP_ROWS" --max-read-bytes "$GROUP_BYTES"
+uv run python -m spicy_regs.pipelines.comment_fields_groups stage \
+  --workdir GROUPS --group 0 --out GROUP_STAGE
+uv run fill-comment-fields prepare --workdir GROUP_WRITE \
+  --reads GROUP_STAGE/reads.parquet --profile attachments
+```
+
+Choose the identity and source-value byte limits from a bounded measurement
+on the actual execution host. They limit the selected input, not decoded
+subject/receipt memory. Planning uses a narrow native ID/version/file scan,
+a 256 MB DuckDB memory target and a configurable spill limit. It does not
+restore full subjects or receipts. The complete source stage must already
+account for its pinned source gaps and preserve all copies of each identity.
+
+`groups.json` pins the source-stage receipt, the original catalog snapshot
+and group membership. Each group stays within one original native data
+file; an oversized file is split into contiguous identity runs. Every source
+copy and version of one identity stays in the same group. Copies that disagree,
+including null versus nonnull, reach the existing agreement check together.
+The byte grouping reserves half the budget for a boundary; a single identity
+larger than that refuses planning and needs a measured larger bound.
+`excluded.parquet` records identities absent from the catalog, with only other
+versions, or with no stated same-version attachment value. None of those
+outcomes means that the entire source population has no attachments.
+
+Stage and apply groups in order, using a separate `GROUP_WRITE` directory
+and the existing `upload-staged` and hosted fill workflow for each group.
+Every `prepare` reads the current catalog snapshot and current file locations;
+the grouping snapshot guides locality and never authorizes a stale write.
+The normal shared writer exclusion and maintenance controls still apply.
+Keep each group's staging receipt, prepare result, write journal, pre-images
+and post-images. Resume an interrupted group with its existing `write`
+command and journal before advancing. A committed verification failure stops
+the sequence and uses the existing `undo` path; do not bypass it by starting
+another group. A verified completed group need not be prepared again.
+
+The helper adds no execution scheduler or alternate writer. Reconcile every
+planned group, explicit exclusion and source gap before the final mirror.
+The current helper rechecks the complete staged-file digest for each group
+and reads narrow catalog metadata during each prepare. Those costs remain;
+grouping avoids simultaneous wide restoration of the full candidate population
+and avoids spreading each group across every original native file.
+
+Prepare checks the fill columns and refuses if one is missing or if a journal
+holds a batch that committed and failed its check (below). Intermediate key,
+read-copy, agreed-version and candidate files stay under `fill/work/`, outside
+the artifact, and are removed once the receipt is written. It writes:
 
 - `fill/fill.parquet`, holding only the values to fill, unsorted (a batch
   reads it filtered on `_file`);
@@ -289,12 +352,17 @@ run:
 1. fetches the staged read and checks its sha256;
 2. pulls every earlier run's journal from the staging prefix's `journals/`,
    so a committed failure from any run stops this one;
-3. disables R2's compaction for the table and confirms it at table level
-   (the catalog-level setting alone does not show a table override);
+3. saves the exact maintenance configuration and UUID of both selected native
+   tables (`default_native.comments` and `default_native.etl_receipts` under the
+   default namespace), then disables and verifies their compaction and any
+   configured snapshot expiration; the base namespace and catalog defaults are
+   not those tables;
 4. runs `prepare`, then `write` (or `undo`);
-5. always pushes the journals back, uploads the journal, receipts and
-   pre-images as the run's artifact `comment-fields-fill`, and re-enables
-   compaction.
+5. always restores each table's saved writable settings, including an originally
+   disabled operation and its original target size/retention policy, then pushes
+   journals and uploads the recovery state, receipts and pre-images. Restoration
+   continues for the other table if one fails; the job fails until recovery is
+   verified, and `maintenance-state.json` records which table needs retry.
 
 The staged read for this fill (2026-09-29, receipt
 `comments-full-reread-2026-09-28/staging/staging.json`): key
@@ -346,8 +414,9 @@ Cautions:
   dispatch cancels the pending one. Check `gh run list` first and dispatch
   one step at a time, clear of the 06:25Z sweep (about 3 hours; it checks out
   `main` at start) and the 18:25Z retry.
-- An ETL commit between batches stops the fill: prepare again. The workflow
-  re-enables compaction at the end; confirm it did.
+- An ETL or in-flight maintenance commit between batches stops the fill: prepare
+  again. The workflow restores the original maintenance settings at the end;
+  confirm `maintenance-state.json` reports `restored: true`.
 
 ## Preconditions
 
@@ -369,20 +438,32 @@ concurrency group, so it excludes the other writers by hand:
    `fill-comment-fields.yml`). Confirm none has a run queued or in progress
    (`gh run list --workflow <file> --status in_progress`, then `--status
    queued`).
-2. Disable compaction for the table
-   (`npx wrangler r2 bucket catalog compaction disable spicy-regs default comments`)
-   and confirm it at table level, read-only:
-   `curl -H "Authorization: Bearer $(npx wrangler auth token)" https://api.cloudflare.com/client/v4/accounts/<account>/r2-catalog/spicy-regs/namespaces/default/tables/comments/maintenance-configs`
-   must show `result.maintenance_config.compaction.state` `disabled`
-   (2026-09-29: `enabled`, hourly, 128 MB; at catalog level snapshot expiry
-   is disabled, leave it so).
-3. `export SPICY_REGS_CATALOG_LOCK=local-fill-<UTC time>`. `write` and `undo`
-   refuse without it.
-4. Prepare, pilot and fill as on the runner. Every batch also refuses if the
-   snapshot moved, which catches a writer the steps above missed.
-5. Re-enable compaction
-   (`npx wrangler r2 bucket catalog compaction enable spicy-regs default comments --target-size 128`),
-   then the workflows.
+2. Set `SPICY_REGS_CATALOG_LOCK=local-fill-<UTC time>` only after those writers
+   are excluded. `write`, `undo`, schema apply and the maintenance helper refuse
+   without the lock marker.
+3. Choose a new recovery path and run
+   `uv run python -m spicy_regs.comments_maintenance suspend --state W/maintenance-state.json`.
+   The helper resolves the initialized native namespace and both exact table
+   UUIDs. It saves both prior responses before changing either table. It rolls
+   back both if suspension partly fails; keep the state file for retries.
+4. Before write or undo, run
+   `uv run python -m spicy_regs.comments_maintenance verify --state W/maintenance-state.json`.
+   Prepare, pilot and fill as on the runner. Existing version, schema, UUID and
+   snapshot guards remain mandatory; disabling maintenance cannot cancel a
+   commit already in flight.
+5. In cleanup, including after failure, run
+   `uv run python -m spicy_regs.comments_maintenance restore --state W/maintenance-state.json`.
+   Keep the original file and retry this command if restoration fails. It will
+   not apply old settings to a replaced table UUID. Verify `restored: true`, then
+   restore the workflows' prior enabled/disabled states.
+
+The helper uses Cloudflare's [table maintenance API](https://developers.cloudflare.com/api/resources/r2_data_catalog/subresources/namespaces/subresources/tables/subresources/maintenance_configs/methods/update/).
+It saves full observations and restores exactly the writable fields. Scheduler
+timestamps/reasons are read-only; the scheduling interval is left unchanged and
+checked, rather than invented or posted back. An omitted optional snapshot
+expiration setting stays absent. Missing compaction or a configured operation
+without an explicit state refuses before any change. This guard only covers the Comments subject and its
+shared native receipt table; it does not change catalog-wide settings.
 
 ## Seeding `comment_attributes`
 
@@ -421,7 +502,8 @@ reads both old and new rows and that a normal comments merge and receipt-free
 mirror export succeed. For the selected catalog, hold the existing
 `comments-catalog-write` lock and preview the change with
 `uv run --frozen --extra comments-reader python scripts/migrate_comments_attachment_schema.py`.
-Apply with `--apply --table-uuid UUID --snapshot-id ID --schema-id ID` using the
+Suspend both tables with the helper above before applying. Apply with
+`--apply --table-uuid UUID --snapshot-id ID --schema-id ID --maintenance-state W/maintenance-state.json` using the
 values from the preview. The command checks the initialization receipt and
 requires the exact v2 schema and pinned snapshot at commit. It changes schema
 metadata and keeps the existing data snapshot.

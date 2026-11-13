@@ -171,9 +171,9 @@ def comments_promotion_input(row: Mapping, processor: str | None) -> dict | None
     promotion row a normal receipt would retire the rule.
     Maintenance rewrites (comment fields, comment text, prior repairs, PDF/text backfills) build their source from
     ``processing_table``. For a promotion row that source is this derived row, and ``replace_native`` stores it as
-    the new ``regulatory-catalog-native-v1`` receipt's ``raw_source_record`` without saying it was derived. Only the
-    receipt history (``prior_receipts`` names this processor) shows it; ``_stage`` cannot mark it, because a
-    nightly merge over the same prior receipt stages genuinely fresh source rows.
+    the new ``regulatory-catalog-native-v1`` receipt's ``raw_source_record``. An attachment fill can recognize
+    this history through :func:`has_comments_promotion_ancestor` and still requires an exact match to the compact
+    v2 attachment struct. A nightly merge can inherit the same receipt history with genuinely fresh source rows.
     Readers without the receipt's processor (``read_internal``, ``materialize_internal``, ``_processor_inputs``
     over a published pair) still refuse these rows.
     ``row`` is the subject plus that receipt's processing fields. Any other processor, or a receipt with any
@@ -184,6 +184,31 @@ def comments_promotion_input(row: Mapping, processor: str | None) -> dict | None
     attachments = row["attachments"]
     encoded = None if attachments is None else json.dumps(attachments, ensure_ascii=False, separators=(",", ":"))
     return {name: encoded if name == "attachments_json" else row[name] for name, _ in SOURCE_COLUMNS["comments"]}
+
+
+def has_comments_promotion_ancestor(receipt: Mapping) -> bool:
+    """Confirm an accepted promotion reference still resolves from the selected catalog receipt."""
+    from spicy_regs.etl_receipts import decode_exact_json, exact_json, resolve_receipt_witness
+
+    if receipt["processor"] != "regulatory-catalog-native-v1" or receipt["outcome"] != "accepted":
+        return False
+    diagnostics = decode_exact_json(receipt["diagnostic_json"])
+    promotion_ids = {
+        entry["receipt_id"]: entry["processing_sha256"]
+        for entry in diagnostics.get("prior_receipts", [])
+        if entry["outcome"] == "accepted" and entry["processor"] == COMMENTS_PROMOTION_PROCESSOR
+    }
+    for witness in receipt["witnesses"]:
+        if (witness["source_id"] == "prior-etl-processing"
+                and witness["body_version"] in promotion_ids
+                and witness["sha256"] == promotion_ids[witness["body_version"]]
+                and witness["source_uri"] == "receipt-processing:" + witness["sha256"]):
+            try:
+                if resolve_receipt_witness(receipt, witness) == exact_json({}).encode():
+                    return True
+            except ValueError:
+                continue
+    return False
 
 
 def _retained_processor_input(dataset, row, *, processor=None, legacy_comments=False):

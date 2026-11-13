@@ -546,18 +546,37 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
                 _restore_catalog_selection(con, dataset, subject, receipts, restored[0], generation)
             paths = [str(path) for path in restored]
             if include_comment_promotion:
-                from spicy_regs.transforms.regulations_receipts import COMMENTS_PROMOTION_PROCESSOR
+                from spicy_regs.transforms.regulations_receipts import (
+                    COMMENTS_PROMOTION_PROCESSOR,
+                    has_comments_promotion_ancestor,
+                )
+                # Read the actual selected receipt before the replay rebind adds diagnostic history.
+                # First filter by processor and candidate marker in DuckDB; verify lineage only for
+                # ordinary receipts with a possible promotion predecessor.
+                ancestor_ids = work / 'promotion-ancestors.parquet'
+                candidates = con.execute("""
+                    SELECT json_extract_string(identity_json, '$[1][0][1][1][1]') AS comment_id,
+                           r AS receipt
+                    FROM read_parquet(?) r
+                    WHERE processor='regulatory-catalog-native-v1' AND contains(diagnostic_json, ?)
+                """, [str(raw_receipts), COMMENTS_PROMOTION_PROCESSOR]).to_arrow_reader(500)
+                write_rows(
+                    ({'comment_id': row['comment_id']} for batch in candidates for row in batch.to_pylist()
+                     if has_comments_promotion_ancestor(row['receipt'])),
+                    ancestor_ids, pa.schema([('comment_id', pa.string())]),
+                )
                 con.execute(f"""
                     CREATE TEMP TABLE "{temporary_name}" AS
-                    SELECT p.*, coalesce(r.promoted, false) AS _promoted_v2
+                    SELECT p.*, r.comment_id IS NOT NULL AS _promoted_v2
                     FROM read_parquet(?) p
                     LEFT JOIN (
-                        SELECT json_extract_string(identity_json, '$[1][0][1][1][1]') AS comment_id,
-                               true AS promoted
+                        SELECT json_extract_string(identity_json, '$[1][0][1][1][1]') AS comment_id
                         FROM read_parquet(?)
                         WHERE policy_version='regulations-native-v2' AND processor=?
+                        UNION ALL
+                        SELECT comment_id FROM read_parquet(?)
                     ) r USING (comment_id)
-                """, [paths, str(receipts), COMMENTS_PROMOTION_PROCESSOR])
+                """, [paths, str(raw_receipts), COMMENTS_PROMOTION_PROCESSOR, str(ancestor_ids)])
             else:
                 con.execute(f'CREATE TEMP TABLE "{temporary_name}" AS SELECT * FROM read_parquet(?)', [paths])
     return '"' + temporary_name + '"'

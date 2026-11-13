@@ -1,5 +1,6 @@
 """Native catalog admission is enforced by the real subject/receipt writer."""
 from dataclasses import replace
+from typing import cast
 
 import duckdb
 import pytest
@@ -71,13 +72,43 @@ def test_comments_catalog_admits_mixed_receipts_only_at_their_exact_shape(tmp_pa
         assert connection.execute(f"SELECT comment_id, _promoted_v2 FROM {flagged} ORDER BY comment_id").fetchall() == [
             ("new", False), ("old", True),
         ]
-        held = connection.execute(f"SELECT attachments_json FROM {flagged} WHERE comment_id='old'").fetchone()[0]
+        [(held,)] = connection.execute(f"SELECT attachments_json FROM {flagged} WHERE comment_id='old'").fetchall()
         from spicy_regs.pipelines.comment_fields_write import only_adds_attachments
 
         reread = '[{"title": "old", "attachment_id": "a", "docOrder": 1}]'
         assert not only_adds_attachments(reread, held)
         assert only_adds_attachments(reread, held, promoted_v2=True)
 
+        restored = native.processing_table(connection, COMMENT, where="comment_id='old'")
+        connection.execute(f'CREATE TEMP TABLE maintenance AS SELECT * FROM {restored}')
+        connection.execute("UPDATE maintenance SET text_extraction_status='ok'")
+        native.replace_native(connection, COMMENT, 'maintenance', expected_prior=restored)
+        flagged = native.processing_table(connection, COMMENT, include_comment_promotion=True)
+        assert connection.execute(f"SELECT attachments_json, _promoted_v2 FROM {flagged} "
+                                  "WHERE comment_id='old'").fetchone() == (held, True)
+        assert not only_adds_attachments(reread.replace('"a"', '"unrelated"'), held, promoted_v2=True)
+
+        from spicy_regs.etl_receipts import _digest
+        from spicy_regs.transforms.regulations_receipts import has_comments_promotion_ancestor
+
+        receipt = connection.execute(f"SELECT * FROM {native.receipts_table()} WHERE identity_json LIKE '%old%' "
+                                     "AND outcome='accepted'").to_arrow_table().to_pylist()[0]
+        assert has_comments_promotion_ancestor(receipt)
+        no_reference = {
+            **receipt, "witnesses": [w for w in receipt["witnesses"] if w["source_id"] != "prior-etl-processing"],
+        }
+        no_reference["receipt_id"] = _digest({k: v for k, v in no_reference.items() if k != "receipt_id"})
+        assert not has_comments_promotion_ancestor(no_reference)
+        wrong_witness = {
+            **receipt, "witnesses": [w if w["source_id"] != "prior-etl-processing"
+                                     else {**w, "body_version": "sha256:" + "0" * 64} for w in receipt["witnesses"]],
+        }
+        wrong_witness["receipt_id"] = _digest({k: v for k, v in wrong_witness.items() if k != "receipt_id"})
+        assert not has_comments_promotion_ancestor(wrong_witness)
+
+        # Restore the original receipt and v2 subject for the independent v2 corruption probes below.
+        connection.execute(f"DELETE FROM {native.receipts_table()} WHERE outcome='accepted'")
+        connection.execute(f"INSERT INTO {native.receipts_table()} SELECT * FROM read_parquet(?)", [str(receipts)])
         for edit, match in (
             ({"authors": []}, "v2 receipt cannot attest"),
             ({"doc_order": 0}, "v2 receipt cannot attest"),
@@ -103,8 +134,9 @@ def test_comments_catalog_admits_mixed_receipts_only_at_their_exact_shape(tmp_pa
 def test_comments_schema_migration_only_appends_nullable_fields_and_checks_snapshot(tmp_path):
     from types import SimpleNamespace
 
+    from pyiceberg.catalog import Catalog
     from pyiceberg.exceptions import CommitFailedException
-    from pyiceberg.io.pyarrow import _pyarrow_to_schema_without_ids, schema_to_pyarrow
+    from pyiceberg.io.pyarrow import PyArrowFileIO, _pyarrow_to_schema_without_ids, schema_to_pyarrow
     from pyiceberg.partitioning import UNPARTITIONED_PARTITION_SPEC
     from pyiceberg.table import Table
     from pyiceberg.table.metadata import new_table_metadata
@@ -122,8 +154,8 @@ def test_comments_schema_migration_only_appends_nullable_fields_and_checks_snaps
         _pyarrow_to_schema_without_ids(prior), UNPARTITIONED_PARTITION_SPEC,
         UNSORTED_SORT_ORDER, tmp_path.as_uri(),
     )
-    snapshot = Snapshot(snapshot_id=81, sequence_number=1, timestamp_ms=1, manifest_list="local")
-    ref = SnapshotRef(snapshot_id=81, snapshot_ref_type=SnapshotRefType.BRANCH)
+    snapshot = Snapshot.model_validate({"snapshot-id": 81, "sequence-number": 1, "timestamp-ms": 1, "manifest-list": "local"})
+    ref = SnapshotRef.model_validate({"snapshot-id": 81, "type": SnapshotRefType.BRANCH})
     metadata = metadata.model_copy(update={"current_snapshot_id": 81, "snapshots": [snapshot], "refs": {"main": ref}})
 
     class MetadataCatalog:
@@ -142,7 +174,7 @@ def test_comments_schema_migration_only_appends_nullable_fields_and_checks_snaps
             pass
 
         def load_table(self, name):
-            return Table(name, self.metadata, "local", None, self)
+            return Table(name, self.metadata, "local", PyArrowFileIO(), cast(Catalog, self))
 
     catalog = MetadataCatalog()
     table = catalog.load_table(("default_native", "comments"))

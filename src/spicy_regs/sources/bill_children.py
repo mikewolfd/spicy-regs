@@ -72,7 +72,7 @@ class OlderBillChildSource:
             link = detail.get(route)
             advertised = link.get("url") if isinstance(link, Mapping) else None
             declared = link.get("count") if isinstance(link, Mapping) else None
-            row = {
+            row: dict[str, object] = {
                 "route": route,
                 "advertised_url": advertised if isinstance(advertised, str) else None,
                 "parent_declared_count": declared if type(declared) is int and declared >= 0 else None,

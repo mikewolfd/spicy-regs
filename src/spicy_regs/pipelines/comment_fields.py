@@ -25,6 +25,7 @@ Two phases, so the long read holds no lock and the catalog write holds it briefl
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import resource as rusage
 import shutil
@@ -41,6 +42,11 @@ import pyarrow as pa
 from cyclopts import App
 from loguru import logger
 
+from spicy_regs.duckdb_settings import ExportResources
+from spicy_regs.pipelines.comment_fields_evidence import (
+    REFETCH_SUFFIX, SOURCE_PIN_COLUMNS, PinnedChunk, SourcePin, comment_key_identity, commit_checkpoint, file_sha256,
+    verified_part, write_evidence, write_source_pins,
+)
 from spicy_regs.pipelines.comment_fields_write import (
     BATCH_BYTES,
     HOST_COLUMNS,
@@ -57,6 +63,7 @@ from spicy_regs.transforms.regulations_shape import COMMENT_ATTACHMENT_ID, COMME
 
 #: Keys per chunk: the resume unit, about 17 s of reads at the measured rate.
 CHUNK_KEYS = 20_000
+PLAN_RESOURCES = ExportResources(memory="512MB", threads=1)
 #: Plans are versioned so older parts cannot satisfy a new re-read. s3 kept withheld attachments,
 #: s4 added their IDs, and s5 adds the publisher's remaining metadata.
 RECORD_SHAPE = "s5"
@@ -97,6 +104,11 @@ def part_row(keyed) -> dict:
     }
 
 
+def _attachment_part_row(keyed):
+    row = COMMENT.extract(keyed.payload)
+    return {"key": keyed.key, **{column: row[column] for column in read_columns("attachments")[1:]}}
+
+
 def require_record_shape(extract=None) -> None:
     """Refuse an extract that would write attachment data under an older shape."""
     listed = json.loads((extract or COMMENT.extract)(_WITHHELD)["attachments_json"] or "null")
@@ -118,52 +130,105 @@ def _sql(value: str | Path) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
-def plan(workdir: Path, manifest: Path, *, chunk_keys: int = CHUNK_KEYS) -> Path:
+def plan(
+    workdir: Path, manifest: Path, *, chunk_keys: int = CHUNK_KEYS, source_pins: Path | None = None,
+    observe_source: bool = False, max_spill: str = "3GB", profile: str = "all",
+) -> Path:
     """Add the manifest's comment keys that no earlier plan holds, as new fixed chunks; return the plan file.
 
     A plan is immutable and named by the manifest's digest, so a rerun on the same manifest is a no-op and a newer
     manifest adds only the keys ingested since. Chunks are contiguous in key order within an agency directory.
     """
-    digest = hashlib.sha256(manifest.read_bytes()).hexdigest()
+    digest = file_sha256(manifest)
+    pins_digest = file_sha256(source_pins) if source_pins is not None else None
+    read_columns(profile)
+    if profile != "all" and not (pins_digest or observe_source):
+        raise ValueError("An attachment-only read needs pinned source evidence")
     plans = workdir / "plan"
-    target = plans / f"{digest[:16]}-{RECORD_SHAPE}.parquet"
+    selection = digest[:16]
+    if pins_digest or observe_source:
+        mode = "observe" if observe_source else "listed"
+        selection = f"pinned-{selection}-{mode}-{profile}-{pins_digest[:16] if pins_digest else 'none'}"
+    target = plans / f"{selection}-{RECORD_SHAPE}.parquet"
     if target.exists():
+        if pins_digest or observe_source:
+            _pinned_plan(target)
         return target
     plans.mkdir(parents=True, exist_ok=True)
     earlier = sorted(plans.glob(f"*-{RECORD_SHAPE}.parquet"))
+    if earlier and (source_pins is not None or observe_source or any(path.name.startswith("pinned-") for path in earlier)):
+        raise ValueError("Use a fresh workdir for each pinned manifest and source inventory")
     temporary = target.with_suffix(".tmp")
+    spill = plans / f"{selection}-spill"
     with duckdb.connect() as con:
-        con.execute("SET preserve_insertion_order=false")
+        PLAN_RESOURCES.configure(con, spill)
+        con.execute("SET max_temp_directory_size = ?", [max_spill])
         known = f"SELECT key FROM read_parquet([{', '.join(map(_sql, earlier))}])" if earlier else "SELECT NULL::VARCHAR AS key WHERE false"
+        pins_select = pins_join = ""
+        if observe_source:
+            pins_select = ", " + ", ".join(
+                f"NULL::{dtype} AS {name}" for name, dtype in zip(
+                    SOURCE_PIN_COLUMNS, ("VARCHAR", "BIGINT", "VARCHAR", "VARCHAR", "VARCHAR"), strict=True))
+        if source_pins is not None:
+            pins = f"read_parquet({_sql(source_pins)})"
+            pin_columns = con.sql(f"SELECT * FROM {pins} LIMIT 0").columns
+            raw_sha = "raw_sha256" if "raw_sha256" in pin_columns else "NULL::VARCHAR AS raw_sha256"
+            custody = "raw_custody" if "raw_custody" in pin_columns else "NULL::VARCHAR AS raw_custody"
+            pins = f"(SELECT key, etag, size, version_id::VARCHAR AS version_id, {raw_sha}, {custody} FROM {pins})"
+            invalid = con.execute(f"""
+                SELECT key FROM {pins} GROUP BY key
+                HAVING key IS NULL OR count(*) > 1 OR bool_or(
+                    etag IS NULL OR trim(etag) = '' OR size IS NULL OR size < 0 OR coalesce(version_id = '', false)
+                    OR (raw_sha256 IS NOT NULL AND NOT regexp_full_match(raw_sha256, '[0-9a-f]{{64}}'))
+                    OR (raw_custody IS NOT NULL AND (raw_sha256 IS NULL OR raw_custody NOT IN ('local','r2'))))
+                LIMIT 1
+            """).fetchone()
+            if invalid is not None:
+                raise ValueError(f"Invalid or repeated Mirrulations source pin for {invalid[0]}")
+            pins_select = ", " + ", ".join(f"p.{column}" for column in SOURCE_PIN_COLUMNS)
+            pins_join = f"LEFT JOIN {pins} p USING (key)"
         con.execute(f"""
             COPY (
-                SELECT key, split_part(key, '/', 2) AS agency,
-                       (row_number() OVER (PARTITION BY split_part(key, '/', 2) ORDER BY key) - 1) // {int(chunk_keys)} AS chunk
-                FROM read_parquet({_sql(manifest)})
-                WHERE key LIKE '%/comments/%' AND key LIKE '%.json' AND key NOT IN ({known})
+                SELECT key, agency,
+                       (row_number() OVER (PARTITION BY agency ORDER BY key) - 1) // {int(chunk_keys)} AS chunk
+                       {pins_select}
+                FROM (
+                    SELECT key, split_part(key, '/', 2) AS agency FROM read_parquet({_sql(manifest)})
+                    WHERE key LIKE '%/comments/%' AND key LIKE '%.json' AND key NOT IN ({known})
+                ) m {pins_join}
                 ORDER BY agency, chunk, key
             ) TO {_sql(temporary)} (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE {int(chunk_keys)})
         """)
         keys, chunks = con.execute(
             f"SELECT count(*), count(DISTINCT (agency, chunk)) FROM read_parquet({_sql(temporary)})").fetchall()[0]
-    temporary.replace(target)
-    (plans / f"{digest[:16]}-{RECORD_SHAPE}.json").write_text(json.dumps(
+    if file_sha256(manifest) != digest or (source_pins is not None and file_sha256(source_pins) != pins_digest):
+        temporary.unlink()
+        raise ValueError("Comment plan input changed during planning")
+    plan_sha256 = file_sha256(temporary) if pins_digest or observe_source else None
+    target.with_suffix(".json").write_text(json.dumps(
         {"manifest": str(manifest), "manifest_sha256": digest, "record_shape": RECORD_SHAPE, "keys": keys,
-         "chunks": chunks, "chunk_keys": chunk_keys,
+         "chunks": chunks, "chunk_keys": chunk_keys, "plan_sha256": plan_sha256, "source_pins_sha256": pins_digest,
+         "observe_source": observe_source,
+         "profile": profile,
+         "reader_sha256": _reader_sha256() if plan_sha256 else None,
          "earlier_plans": [p.name for p in earlier]}, indent=2) + "\n")
+    temporary.replace(target)
+    shutil.rmtree(spill)
     logger.info("plan {}: {:,} new comment keys in {:,} chunks", target.name, keys, chunks)
     return target
 
 
 def _chunks(
     workdir: Path, agencies: set[str] | None, shard: tuple[int, int] | None = None,
-) -> Iterator[tuple[str, str, int, list[str]]]:
+) -> Iterator[tuple[str, str, int, list[str], dict[str, SourcePin] | None, str | None, bool, str]]:
     """Every planned chunk as ``(plan id, agency, chunk, keys)``, in plan, agency and chunk order.
 
     ``shard`` ``(i, n)`` keeps the chunks whose CRC-32 of ``agency/chunk`` is ``i`` modulo ``n``: chunks, not
     agencies, so the largest agencies spread across every process.
     """
     for plan_file in sorted((workdir / "plan").glob(f"*-{RECORD_SHAPE}.parquet")):
+        plan_sha256, observe_source, profile = (
+            _pinned_plan(plan_file) if plan_file.name.startswith("pinned-") else (None, False, "all"))
         with duckdb.connect() as con:
             index = con.execute(f"SELECT DISTINCT agency, chunk FROM {_sql(plan_file)} ORDER BY 1, 2").fetchall()
             for agency, chunk in index:
@@ -171,10 +236,34 @@ def _chunks(
                     continue
                 if shard is not None and zlib.crc32(f"{agency}/{chunk}".encode()) % shard[1] != shard[0]:
                     continue
-                keys = [row[0] for row in con.execute(
-                    f"SELECT key FROM {_sql(plan_file)} WHERE agency = ? AND chunk = ? ORDER BY key", [agency, chunk]
-                ).fetchall()]
-                yield plan_file.stem, agency, chunk, keys
+                columns = ", ".join(("key", *SOURCE_PIN_COLUMNS)) if plan_sha256 else "key"
+                selected = con.execute(
+                    f"SELECT {columns} FROM {_sql(plan_file)} WHERE agency = ? AND chunk = ? ORDER BY key", [agency, chunk]
+                ).fetchall()
+                keys = [row[0] for row in selected]
+                pins = {key: SourcePin(*pin) for key, *pin in selected} if plan_sha256 else None
+                yield plan_file.stem, agency, chunk, keys, pins, plan_sha256, observe_source, profile
+
+
+def _pinned_plan(plan_file):
+    metadata = json.loads(plan_file.with_suffix(".json").read_text())
+    digest = file_sha256(plan_file)
+    if digest != metadata["plan_sha256"] or metadata["reader_sha256"] != _reader_sha256():
+        raise ValueError(f"Pinned comments plan differs from its recorded SHA-256: {plan_file}")
+    expected_mode = "observe" if metadata["observe_source"] else "listed"
+    if f"-{expected_mode}-{metadata['profile']}-" not in plan_file.name:
+        raise ValueError(f"Pinned comments plan mode or profile differs: {plan_file}")
+    return digest, metadata["observe_source"], metadata["profile"]
+
+
+def _reader_sha256():
+    from spicy_docs.sources import mirrulations
+    from spicy_docs.schemas import regulations
+    from spicy_regs.pipelines import comment_fields_evidence
+
+    modules = (Path(__file__), Path(inspect.getfile(mirrulations)), Path(inspect.getfile(regulations)),
+               Path(inspect.getfile(comment_fields_evidence)))
+    return hashlib.sha256("".join(file_sha256(module) for module in modules).encode()).hexdigest()
 
 
 def part_path(workdir: Path, plan_id: str, agency: str, chunk: int) -> Path:
@@ -194,7 +283,7 @@ def _peak_rss_mb() -> float:
 def read(
     workdir: Path, *, workers: int = 64, agencies: list[str] | None = None, max_chunks: int | None = None,
     max_rss_mb: float = 2048, min_free_gb: float = 4, shard: tuple[int, int] | None = None, resource=None,
-    progress_name: str = "progress.json",
+    progress_name: str = "progress.json", raw_root: Path | None = None, evidence_store=None,
 ) -> dict:
     """Read every planned chunk that has no part yet; return this run's counts.
 
@@ -203,19 +292,22 @@ def read(
     chunk that takes its peak RSS past ``max_rss_mb``; a rerun resumes where it stopped.
     """
     from spicy_docs.sources import mirrulations
+    from spicy_docs.storage.raw_archive import CentralRawArchiveStore
 
     from spicy_regs.pipelines.regulations_state import source_record_type
 
     resource = resource or mirrulations.s3_resource(max_pool_connections=workers)
+    archive = CentralRawArchiveStore(raw_root, create=False) if raw_root is not None else None
     source = source_record_type(COMMENT)
     journal = workdir / "journal.jsonl"
     progress = workdir / progress_name
     totals: dict = {"chunks": 0, "keys": 0, "rows": 0, "unresolved": 0, "deferred_chunks": 0, "stopped": None}
     started = time.monotonic()
     wanted = set(agencies) if agencies is not None else None
-    for plan_id, agency, chunk, keys in _chunks(workdir, wanted, shard):
+    for plan_id, agency, chunk, keys, pins, plan_sha256, observe_source, profile in _chunks(workdir, wanted, shard):
         target = part_path(workdir, plan_id, agency, chunk)
-        if target.exists():
+        completed = verified_part(target, plan_sha256, keys, profile) if pins is not None else target.exists()
+        if completed:
             continue
         if max_chunks is not None and totals["chunks"] + totals["deferred_chunks"] >= max_chunks:
             break
@@ -225,20 +317,51 @@ def read(
             logger.warning("stopping before {} chunk {}: {}", agency, chunk, totals["stopped"])
             break
         begun = time.monotonic()
+        if pins is not None and archive is None and any(
+                pin.raw_sha256 is not None and pin.raw_custody != "r2" for pin in pins.values()):
+            raise ValueError("Supply --raw-root for retained source pins")
+        if pins is not None and evidence_store is None and any(pin.raw_custody == "r2" for pin in pins.values()):
+            from spicy_regs.sources.publication import EVIDENCE_PREFIX, _S3Members
+            from spicy_regs.sources.r2 import verified_target_client
+
+            client, bucket = verified_target_client()
+            evidence_store = _S3Members(client, bucket, EVIDENCE_PREFIX)
+        pinned = PinnedChunk(resource, pins, archive, evidence_store, observe_source=observe_source) if pins is not None else None
+        project = _attachment_part_row if profile == "attachments" else part_row
+        part_schema = {column: PART_SCHEMA[column] for column in read_columns(profile)} if profile == "attachments" else PART_SCHEMA
         reader = mirrulations.MirrulationsReader(
-            resource, mirrulations.BUCKET, mirrulations.PREFIX, agency, source,
+            pinned or resource, mirrulations.BUCKET, mirrulations.PREFIX, agency, source,
             key_lister=lambda keys=keys: keys, download_workers=workers,
         )
         rows, refused = [], []
-        for keyed in reader.iter_keyed_records():
-            try:
-                rows.append(part_row(keyed))
-            except ValueError as error:  # the extract refuses a malformed value rather than coercing it
-                refused.append({"key": keyed.key, "status": "refused", "reason": str(error)[:300]})
+        try:
+            for keyed in reader.iter_keyed_records():
+                try:
+                    row = project(keyed)
+                    if pinned is not None and row["comment_id"] != comment_key_identity(keyed.key):
+                        refused.append({"key": keyed.key, "status": "identity-mismatch",
+                                        "reason": f"Source states a different comment_id: {row['comment_id']}"})
+                    else:
+                        rows.append(row)
+                except ValueError as error:  # the extract refuses a malformed value rather than coercing it
+                    refused.append({"key": keyed.key, "status": "refused", "reason": str(error)[:300]})
+        except mirrulations.MirrulationsAccessRefusedError:
+            if pinned is not None:
+                write_evidence(target, pinned.evidence({row["key"] for row in rows}, {}))
+            raise
         transport = [o for o in reader.unresolved if o.status == mirrulations.STATUS_TRANSPORT]
         record = {"plan": plan_id, "agency": agency, "chunk": chunk, "keys": len(keys), "rows": len(rows),
                   "seconds": round(time.monotonic() - begun, 2),
                   "unresolved": [{"key": o.key, "status": o.status} for o in reader.unresolved] + refused}
+        evidence = None
+        if pinned is not None:
+            accepted = {row["key"] for row in rows}
+            failures = {outcome["key"]: outcome for outcome in record["unresolved"]}
+            observations = list(pinned.evidence(accepted, failures))
+            record["unresolved"] = [{"key": row["key"], "status": row["status"], "reason": row["reason"]}
+                                    for row in observations if row["status"] != "read"]
+            transport = [row for row in observations if row["status"] == mirrulations.STATUS_TRANSPORT]
+            evidence = write_evidence(target, observations)
         if transport:
             # Unwritten, so the next run reads the whole chunk again; nothing it holds is lost or doubled.
             totals["deferred_chunks"] += 1
@@ -246,14 +369,16 @@ def read(
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = target.with_name(target.name + ".tmp")
-        pl.DataFrame(rows, schema=PART_SCHEMA, orient="row").write_parquet(temporary, compression="zstd")
+        pl.DataFrame(rows, schema=part_schema, orient="row").write_parquet(temporary, compression="zstd")
         temporary.replace(target)
+        if evidence is not None:
+            commit_checkpoint(target, plan_sha256, evidence, len(keys), len(record["unresolved"]), profile)
         with journal.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record) + "\n")
         totals["chunks"] += 1
         totals["keys"] += len(keys)
         totals["rows"] += len(rows)
-        totals["unresolved"] += len(reader.unresolved) + len(refused)
+        totals["unresolved"] += len(record["unresolved"])
         elapsed = time.monotonic() - started
         progress.write_text(json.dumps({**totals, "seconds": round(elapsed, 1),
                                         "keys_per_second": round(totals["keys"] / elapsed, 1) if elapsed else None,
@@ -277,6 +402,15 @@ def status(workdir: Path) -> dict:
         planned = con.execute(f"""
             SELECT agency, chunk, split_part(filename, '/', -1) AS plan_file, count(*) AS n
             FROM read_parquet([{', '.join(map(_sql, plans))}], filename=true) GROUP BY ALL""").fetchall()
+    pinned_plans = {path.name: _pinned_plan(path)[0] for path in plans if path.name.startswith("pinned-")}
+    if pinned_plans:
+        checkpoints = [verified_part(part_path(workdir, plan_id, agency, chunk), digest, keys, profile)
+                       for plan_id, agency, chunk, keys, _, digest, _, profile in _chunks(workdir, None)]
+        closed = [checkpoint for checkpoint in checkpoints if checkpoint]
+        unresolved = sum(checkpoint["unresolved"] for checkpoint in closed)
+        return {"planned_keys": sum(row[3] for row in planned), "planned_chunks": len(planned),
+                "read_chunks": len(closed), "read_keys": sum(checkpoint["keys"] for checkpoint in closed) - unresolved,
+                "unresolved_keys": unresolved}
     done = {(path.parent.name.removeprefix("agency="), path.stem) for path in (workdir / "parts").glob("agency=*/*.parquet")}
     read_keys = sum(n for agency, chunk, plan_file, n in planned
                     if (agency, f"{plan_file.removesuffix('.parquet')}-{chunk:05d}") in done)
@@ -301,18 +435,25 @@ def _column_totals(con, source: str, columns: list[str]) -> dict:
     return dict(zip([d[0] for d in cursor.description], cursor.fetchone()))
 
 
-def _arrow_totals(files: list[str], columns: list[str]) -> dict:
+def _arrow_totals(files: list[str], columns: list[str], withheld_ids=()) -> dict:
     """Arrow's side, another reader and other kernels: rows, footer rows, and each column's non-null count and
     UTF-8 byte total (a number's sum)."""
     import pyarrow as pa
     import pyarrow.compute as pc
     import pyarrow.parquet as pq
 
+    withheld = pa.array(sorted(withheld_ids), type=pa.string())
     totals = {"rows": 0, "footer_rows": 0, **{f"nn:{c}": 0 for c in columns}, **{f"total:{c}": 0 for c in columns}}
     for file in files:
         handle = pq.ParquetFile(file)
-        totals["footer_rows"] += handle.metadata.num_rows
-        for batch in handle.iter_batches(columns=columns, batch_size=1 << 20):
+        if not len(withheld):
+            totals["footer_rows"] += handle.metadata.num_rows
+        for batch in handle.iter_batches(columns=columns, batch_size=20_000):
+            if len(withheld):
+                identities = batch.column("comment_id").cast(pa.string())
+                excluded = pc.call_function("is_in", [identities], pc.SetLookupOptions(withheld))
+                batch = batch.filter(pc.call_function("invert", [excluded]))
+                totals["footer_rows"] += batch.num_rows
             totals["rows"] += batch.num_rows
             for c in columns:
                 values = batch.column(c)
@@ -323,7 +464,7 @@ def _arrow_totals(files: list[str], columns: list[str]) -> dict:
     return totals
 
 
-def stage(workdir: Path, out: Path, *, profile: str = "all") -> dict:
+def stage(workdir: Path, out: Path, *, profile: str = "all", allow_source_gaps: bool = False) -> dict:
     """Write the staged fill input ``out/reads.parquet`` for ``profile`` from this record shape's parts, check it
     against them, and write ``reads.parquet.sha256`` and ``staging.json``; return the receipt.
 
@@ -339,6 +480,27 @@ def stage(workdir: Path, out: Path, *, profile: str = "all") -> dict:
 
     columns = list(read_columns(profile))
     parts = sorted(glob(str(shape_parts(workdir))))
+    pinned_plans = sorted((workdir / "plan").glob(f"pinned-*-{RECORD_SHAPE}.parquet"))
+    coverage = {}
+    withheld_ids = []
+    if pinned_plans:
+        (plan_file,) = pinned_plans
+        plan_sha256, observe_source, read_profile = _pinned_plan(plan_file)
+        if read_profile == "attachments" and profile != read_profile:
+            raise ValueError("Attachment-only parts cannot stage an all-fields fill")
+        pinned_parts = []
+        checkpoints = []
+        for _, agency, chunk, keys, _, _, _, _ in _chunks(workdir, None):
+            path = part_path(workdir, plan_file.stem, agency, chunk)
+            checkpoint = verified_part(path, plan_sha256, keys, read_profile)
+            if not checkpoint or (checkpoint["unresolved"] and not allow_source_gaps):
+                raise ValueError(f"Pinned stage needs a resolved checkpoint for {agency} chunk {chunk}")
+            pinned_parts.append(str(path))
+            checkpoints.append(checkpoint)
+        parts = sorted(pinned_parts)
+        coverage = {"plan_sha256": plan_sha256, "source_checkpoints": checkpoints, "observe_source": observe_source}
+        missing = [str(Path(path).parent / check["evidence_file"])
+                   for path, check in zip(pinned_parts, checkpoints, strict=True) if check["unresolved"]]
     if not parts:
         raise RuntimeError(f"no {RECORD_SHAPE} parts under {workdir / 'parts'}")
     target = out / "reads.parquet"
@@ -349,12 +511,30 @@ def stage(workdir: Path, out: Path, *, profile: str = "all") -> dict:
     begun = time.monotonic()
     with duckdb.connect() as con:
         WRITE_RESOURCES.configure(con, out / "spill")
+        if pinned_plans and missing:
+            unavailable = f"read_parquet([{', '.join(map(_sql, missing))}], hive_partitioning=false)"
+            identity = f"regexp_replace(regexp_extract(key, '([^/]+)\\.json$', 1), {_sql(REFETCH_SUFFIX)}, '')"
+            unsafe = con.execute(f"SELECT 1 FROM {unavailable} WHERE status='identity-mismatch' LIMIT 1").fetchone()
+            if unsafe:
+                raise ValueError("Cannot quarantine an unresolved source with a conflicting comment identity")
+            withheld = out / "source-gaps.parquet"
+            con.execute(f"""COPY (SELECT key, status, {identity} AS comment_id FROM {unavailable}
+                                  WHERE status <> 'read') TO {_sql(withheld)} (FORMAT PARQUET)""")
+            source = (f"(SELECT r.* FROM {source} r ANTI JOIN read_parquet({_sql(withheld)}) g USING (comment_id))")
+            coverage["source_gaps"] = {
+                "unresolved_keys": sum(check["unresolved"] for check in checkpoints),
+                "sha256": file_sha256(withheld),
+                "withheld_comment_ids": con.execute(
+                    "SELECT count(DISTINCT comment_id) FROM read_parquet(?)", [str(withheld)]).fetchall()[0][0],
+            }
+            withheld_ids = [row[0] for row in con.execute(
+                "SELECT DISTINCT comment_id FROM read_parquet(?)", [str(withheld)]).fetchall()]
         selected = ", ".join(f'"{c}"' for c in columns)
         con.execute(f"COPY (SELECT {selected} FROM {source} ORDER BY comment_id, key) TO {_sql(target)} "
                     "(FORMAT PARQUET, COMPRESSION ZSTD)")
         from_parts, from_file = (_column_totals(con, rel, columns) for rel in (source, f"read_parquet({_sql(target)})"))
     shutil.rmtree(out / "spill", ignore_errors=True)
-    arrow_parts, arrow_file = _arrow_totals(parts, columns), _arrow_totals([str(target)], columns)
+    arrow_parts, arrow_file = _arrow_totals(parts, columns, withheld_ids), _arrow_totals([str(target)], columns)
     names = pq.read_schema(target).names
     checks = {
         "the file holds exactly the profile's read columns, in order": names == columns,
@@ -362,7 +542,7 @@ def stage(workdir: Path, out: Path, *, profile: str = "all") -> dict:
         "one row per object key": from_file["distinct_keys"] == from_file["rows"],
         "no blank comment_id": from_file["blank_comment_ids"] == 0,
         "DuckDB: rows, ids, non-null counts and hash sums equal the parts'": from_file == from_parts,
-        "Arrow: rows, footer rows, non-null counts and byte totals equal the parts'": arrow_file == arrow_parts,
+        "Arrow: rows, footer rows, non-null counts and byte totals equal the selected parts'": arrow_file == arrow_parts,
     }
     failed = [name for name, passed in checks.items() if not passed]
     if failed:
@@ -376,6 +556,7 @@ def stage(workdir: Path, out: Path, *, profile: str = "all") -> dict:
                    "it from the data bucket once the fill is done",
         "profile": profile, "columns": columns, "record_shape": RECORD_SHAPE, "parts_dir": str(workdir / "parts"),
         "part_files": len(parts),
+        **coverage,
         **{k: from_file[k] for k in ("rows", "distinct_keys", "distinct_comment_ids")},
         "non_null_by_column": {c: from_file[f"nn:{c}"] for c in columns},
         "file": {"name": target.name, "bytes": identity["bytes"], "sha256": sha256, "etag": identity["etag"]},
@@ -443,6 +624,8 @@ def build_attributes(workdir: Path, out: Path | None = None, *, fetch=None) -> d
     from spicy_regs.transforms.regulations_attributes import _with_order_columns, contract, merge_attribute_parts
     from spicy_regs.transforms.reviewed_comments import ExcludeReviewedComments
 
+    if any(_pinned_plan(path)[2] == "attachments" for path in (workdir / "plan").glob(f"pinned-*-{RECORD_SHAPE}.parquet")):
+        raise ValueError("Attachment-only parts cannot seed comment attributes")
     table = "comment_attributes"
     out = out or workdir / f"{table}.parquet"
     staging = workdir / "attributes-staging" / table
@@ -484,38 +667,58 @@ def build_attributes(workdir: Path, out: Path | None = None, *, fetch=None) -> d
 app = App(name="fill-comment-fields", help=__doc__)
 
 
+@app.command(name="list-source-pins")
+def list_source_pins_command(*, out: Path, agency: str) -> None:
+    """List source versions under one Mirrulations agency without fetching comment bodies."""
+    from spicy_docs.sources import mirrulations
+
+    if not agency or "/" in agency:
+        raise ValueError("Supply one Mirrulations agency code")
+    prefix = f"{mirrulations.PREFIX}/{agency}/"
+    print(json.dumps(write_source_pins(mirrulations.s3_resource(), mirrulations.BUCKET, prefix, out), indent=2))
+
+
 @app.command(name="plan")
-def plan_command(*, workdir: Path, manifest: Path, chunk_keys: int = CHUNK_KEYS) -> None:
+def plan_command(
+    *, workdir: Path, manifest: Path, chunk_keys: int = CHUNK_KEYS, source_pins: Path | None = None,
+    observe_source: bool = False, max_spill: str = "3GB", profile: str = "all",
+) -> None:
     """Add a manifest's unplanned comment keys as new chunks."""
     require_record_shape()
-    plan(workdir, manifest, chunk_keys=chunk_keys)
+    plan(workdir, manifest, chunk_keys=chunk_keys, source_pins=source_pins,
+         observe_source=observe_source, max_spill=max_spill, profile=profile)
 
 
 @app.command(name="read")
 def read_command(
     *, workdir: Path, workers: int = 64, shard: int | None = None, shards: int | None = None,
-    max_rss_mb: float = 2048, min_free_gb: float = 4,
+    max_rss_mb: float = 2048, min_free_gb: float = 4, max_chunks: int | None = None, raw_root: Path | None = None,
 ) -> None:
     """Read the unread chunks, or one ``--shard`` of ``--shards`` (chunks dealt by CRC-32)."""
+    from dotenv import load_dotenv
+
+    load_dotenv()
     if (shard is None) != (shards is None):
         raise ValueError("--shard and --shards go together")
     pair = (shard, shards) if shard is not None and shards is not None else None
     if pair is not None and not 0 <= pair[0] < pair[1]:
         raise ValueError(f"shard {pair[0]} is outside 0..{pair[1] - 1}")
+    if max_chunks is not None and max_chunks < 1:
+        raise ValueError("--max-chunks must be positive")
     require_record_shape()
     name = f"progress-{shard}.json" if shard is not None else "progress.json"
     totals = read(workdir, workers=workers, max_rss_mb=max_rss_mb, min_free_gb=min_free_gb, shard=pair,
-                  progress_name=name)
+                  progress_name=name, max_chunks=max_chunks, raw_root=raw_root)
     print(json.dumps(totals))
     if totals["deferred_chunks"] or totals["stopped"]:
         raise SystemExit(3)
 
 
 @app.command(name="stage")
-def stage_command(*, workdir: Path, out: Path, profile: str = "all") -> None:
+def stage_command(*, workdir: Path, out: Path, profile: str = "all", allow_source_gaps: bool = False) -> None:
     """Write and check the staged fill input for ``--profile`` (``attachments`` for the 2026-10 re-read) under
     ``--out``, from this record shape's parts (no upload)."""
-    print(json.dumps(stage(workdir, out, profile=profile), indent=2))
+    print(json.dumps(stage(workdir, out, profile=profile, allow_source_gaps=allow_source_gaps), indent=2))
 
 
 @app.command(name="upload-staged")
@@ -540,6 +743,8 @@ def prepare_command(
     from dotenv import load_dotenv
 
     load_dotenv()
+    if reads is None and any((workdir / "plan").glob(f"pinned-*-{RECORD_SHAPE}.parquet")):
+        raise ValueError("Stage verified pinned parts and pass the staged file with --reads")
     scope = {k: v for k, v in (("docket_id", docket), ("agency_code", agency)) if v}
     print(json.dumps(prepare(workdir, scope=scope or None, reads=reads or shape_parts(workdir), profile=profile),
                      indent=2))

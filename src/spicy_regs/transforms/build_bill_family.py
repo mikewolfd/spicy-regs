@@ -2101,6 +2101,7 @@ def build_bill_family(
 
         if not api_key or evidence is None:
             raise ValueError("Bill child selection requires Congress.gov credentials and source evidence")
+        assert child_checkpoint_dir is not None  # The exact-selection validation above requires it here.
         child_source = OlderBillChildSource(child_checkpoint_dir, api_key=api_key, evidence=evidence)
     if selected_children and list_source is None and not api_key:
         raise ValueError("Bill child selection requires a bill detail reader")
@@ -2562,11 +2563,11 @@ def build_bill_family(
     # Each scope names parents whose prior child rows this run replaces --
     # emptying them where the run publishes none.
     complete_actions = {
-        row["bill_id"]
+        identifier
         for row in folded.bills
-        if row.get("child_routes_json") and any(
+        if (identifier := row["bill_id"]) is not None and (routes_json := row.get("child_routes_json")) and any(
             route["route"] == "actions" and route["outcome"] in {"populated", "requested-empty"}
-            for route in json.loads(row["child_routes_json"])
+            for route in json.loads(routes_json)
         )
     }
     replaced: dict[str, ReplacementScope] = {

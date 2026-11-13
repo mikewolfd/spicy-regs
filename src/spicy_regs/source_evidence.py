@@ -371,8 +371,9 @@ class CaptureEvidence:
         try:
             key = None
             raw = canonical_json_bytes(record)
-            # ``senate-archive-capture`` dates the Internet Archive copy a Senate roll call rests on (ss-bruk).
-            if event in {"capture", "refusal", "capture-incomplete", "build-outcome", "senate-archive-capture"} or (
+            # Preserve both the shared serving-rung identity and legacy archive dates beside the captures.
+            if event in {"capture", "refusal", "capture-incomplete", "build-outcome",
+                         "senate-archive-capture", "source-serving-rung"} or (
                 event == "retained-file" and fields.get("blob_store") == "central-raw"
             ):
                 # Commit source provenance before the disposable run journal.

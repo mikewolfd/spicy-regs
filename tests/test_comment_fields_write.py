@@ -555,6 +555,63 @@ def test_a_scoped_pilot_writes_one_batch(tmp_path, catalog):
     assert (table(catalog)["A"]["subtype"], table(catalog)["B"]["subtype"]) == ("S", None)
 
 
+@pytest.mark.parametrize("scope", [None, {"docket_id": "D-1"}])
+def test_prepare_restores_only_stated_matching_versions_without_losing_scope_counts(tmp_path, catalog, monkeypatch, scope):
+    from spicy_regs.sources import regulatory_catalog as native
+
+    seed(catalog, [row(cid, docket_id="D-1") for cid in ("A", "unread", "old", "null", "conflict")]
+         + [row("outside", docket_id="D-2")])
+    reads(tmp_path, [
+        {"key": "a", "comment_id": "A", "subtype": "S"},
+        {"key": "old", "comment_id": "old", "modify_date": "another version", "subtype": "S"},
+        {"key": "null", "comment_id": "null"},
+        {"key": "conflict1", "comment_id": "conflict", "subtype": "S"},
+        {"key": "conflict2", "comment_id": "conflict", "subtype": "T"},
+        {"key": "outside", "comment_id": "outside", "subtype": "S"},
+    ])
+    # An unrelated broken receipt must not be opened merely to count an unread native key.
+    with catalog() as con:
+        con.execute(f"UPDATE {native.receipts_table()} SET subject_version='unsealed damage' "
+                    "WHERE json_extract_string(identity_json, '$[1][0][1][1][1]')='unread'")
+    original = native.processing_table
+    selected = []
+
+    def restore(con, record_type, **options):
+        assert options.get("where"), "prepare restored the entire catalog before selecting its candidates"
+        selected.extend(row[0] for row in con.execute(
+            f'SELECT comment_id FROM {native.qualified(record_type)} WHERE {options["where"]} ORDER BY 1'
+        ).fetchall())
+        return original(con, record_type, **options)
+
+    monkeypatch.setattr(native, "processing_table", restore)
+    prepared = cfw.prepare(tmp_path, scope=scope)
+    assert selected == (["A"] if scope else ["A", "outside"])
+    assert prepared["catalog_rows"] == (5 if scope else 6)
+    assert (prepared["table_rows"], prepared["unread"], prepared["other_version_only"]) == (6, 1, 1)
+    assert prepared["conflicted_versions_by_column"]["subtype"] == 1
+    assert prepared["rows_to_fill"] == len(selected)
+
+
+@pytest.mark.parametrize("damage", ["digest", "missing", "duplicate"])
+def test_candidate_selection_still_requires_exact_one_to_one_receipts(tmp_path, catalog, damage):
+    from spicy_regs.sources import regulatory_catalog as native
+
+    seed(catalog, [row("A"), row("unread")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S"}])
+    with catalog() as con:
+        table = native.receipts_table()
+        selected = "json_extract_string(identity_json, '$[1][0][1][1][1]')='A'"
+        if damage == "digest":
+            con.execute(f"UPDATE {table} SET subject_version='unsealed damage' WHERE {selected}")
+        elif damage == "missing":
+            con.execute(f"DELETE FROM {table} WHERE {selected}")
+        else:
+            con.execute(f"INSERT INTO {table} SELECT * FROM {table} WHERE {selected}")
+    with pytest.raises(ValueError):
+        cfw.prepare(tmp_path)
+    assert not (tmp_path / "fill" / "prepare.json").exists()
+
+
 def test_batches_pack_whole_files_by_bytes():
     files = {"f1": {"rows": 3, "bytes": 300}, "f2": {"rows": 1, "bytes": 100}, "f3": {"rows": 5, "bytes": 900}}
     assert cfw.batches(files, 400, by_file=True) == [["f1", "f2"], ["f3"]]

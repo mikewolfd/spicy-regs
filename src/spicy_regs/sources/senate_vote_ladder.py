@@ -34,6 +34,8 @@ archive keeps beside the captures: route ``internet_archive``, the senate.gov UR
 its age at the fetch in whole seconds (the journal admits no floats), and the fetch time. ``LadderVoteAcquirer.archived``
 holds the same for the run, which ``build_roll_call_votes`` raises as a CI warning (:func:`senate_warnings`): an
 Archive copy of any age passes, so its age must be seen where the run is read.
+Every successful Senate read also emits the shared ``source-serving-rung`` event,
+including direct answers; legacy capture stages and archive events remain intact.
 """
 
 from __future__ import annotations
@@ -63,6 +65,7 @@ from spicy_docs.sources.web_archive import ARCHIVE_INTERVAL_SECONDS, WaybackCdxS
 from spicy_docs.transport.http import RetryableHTTPStatusError
 from spicy_docs.transport.source_acquirer import named_challenge
 
+from spicy_regs.sources.senate_evidence import record_serving_rung
 from spicy_regs.sources.senate_roster_ladder import is_senate_xml
 
 if TYPE_CHECKING:
@@ -154,6 +157,10 @@ class LadderVoteAcquirer(VoteAcquirer):
         self.rungs[rung] += 1
         if self.evidence is not None and answer.transport is not Transport.DIRECT:
             self.evidence.capture(capture, stage="vote-source", transport=rung, provider_request_id=answer.request_id)
+        record_serving_rung(
+            self.evidence, capture, operation=operation, original_url=url,
+            transport=rung, provider_request_id=answer.request_id,
+        )
         return result, capture
 
     def _skip_proxies(self, transports: Iterable[Transport]) -> None:
@@ -193,6 +200,9 @@ class LadderVoteAcquirer(VoteAcquirer):
                 fetched_at=capture.observed_at, sha256=capture.sha256, cdx_digest=archived.digest,
                 content_encoding=capture.content_encoding, index_sha256=index_sha256,
             )  # fmt: skip
+        record_serving_rung(
+            self.evidence, capture, operation=operation, original_url=url, transport=ARCHIVE,
+        )
         return result, capture
 
 

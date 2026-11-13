@@ -78,7 +78,8 @@ def test_malformed_attachment_leaves_only_its_key_unresolved(tmp_path, monkeypat
     docket = "EPA-2026-0001"
     bad = _comment_payload(f"{docket}-0001", docket, "2026-01-01")
     good = _comment_payload(f"{docket}-0002", docket, "2026-01-01")
-    bad["included"] = [{"id": "bad-attachment", "type": "attachments", "attributes": {"authors": "one"}}]
+    bad_attributes: dict[str, object] = {"authors": "one"}
+    bad["included"] = [{"id": "bad-attachment", "type": "attachments", "attributes": bad_attributes}]
     good["included"] = [{"id": "good-attachment", "type": "attachments", "attributes": {"authors": ["one"]}}]
     bad_key = _comment_key(bad["data"]["id"], docket)
     good_key = _comment_key(good["data"]["id"], docket)
@@ -103,7 +104,7 @@ def test_malformed_attachment_leaves_only_its_key_unresolved(tmp_path, monkeypat
     assert "attachment.authors" in failed["reason"]
     assert [row["comment_id"] for row in staged] == [good["data"]["id"]]
 
-    bad["included"][0]["attributes"]["authors"] = ["one"]
+    bad_attributes["authors"] = ["one"]
     store[bad_key] = dumps(bad).encode()
     pipeline.run()
     assert set(pl.read_parquet(tmp_path / "manifest.parquet")["key"].to_list()) == {bad_key, good_key}
