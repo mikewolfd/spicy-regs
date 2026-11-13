@@ -593,6 +593,7 @@ TABLES: tuple[str, ...] = (
     "fara_filings",
     "fara_snapshots",
     "sec_issuer_sources", "sec_filings", "sec_reported_facts", "sec_fact_scopes",
+    "gsa_iolp_properties", "gsa_iolp_leases", "gsa_iolp_snapshots",
     "ofac_entity_observations",
     "ofac_snapshots",
     "historical_veto_administrations",
@@ -702,6 +703,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "fara_foreign_principals",
         "fara_filings",
         "fara_snapshots",
+        "gsa_iolp_properties", "gsa_iolp_leases", "gsa_iolp_snapshots",
         "ofac_entity_observations",
         "sec_issuer_sources",
         "sec_filings",
@@ -951,6 +953,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.build_grants_status import SCHEMAS as GRANTS_STATUS_SCHEMAS
     from spicy_regs.transforms.build_fara import SCHEMAS as FARA_SCHEMAS
     from spicy_regs.transforms.build_sec_edgar import SCHEMAS as SEC_SCHEMAS
+    from spicy_regs.transforms.build_gsa_iolp import SCHEMAS as GSA_IOLP_SCHEMAS
     from spicy_regs.transforms.build_ofac import SCHEMAS as OFAC_SCHEMAS
     from spicy_regs.transforms.build_historical_vetoes import SCHEMAS as HISTORICAL_VETO_SCHEMAS
     from spicy_regs.transforms.build_irs_form990 import SCHEMAS as IRS990_SCHEMAS
@@ -1067,6 +1070,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         "grants_opportunity_observations": GRANTS_SCHEMA,
         **GRANTS_STATUS_SCHEMAS,
         **FARA_SCHEMAS,
+        **GSA_IOLP_SCHEMAS,
         **OFAC_SCHEMAS,
         **HISTORICAL_VETO_SCHEMAS,
         **IRS990_SCHEMAS,

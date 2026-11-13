@@ -43046,5 +43046,485 @@
     "identity_columns": [
       "snapshot_id"
     ]
+  },
+  "gsa_iolp_properties": {
+    "table": "gsa_iolp_properties",
+    "label": "GSA IOLP property observations",
+    "summary": "Each GSA IOLP property in one declared buildings distribution, with native location identity, address, source units and original row evidence.",
+    "coverage": "Not a range. Complete caller-selected dated GSA IOLP workbook pair. A replacement selects a new complete snapshot; earlier immutable generations and originals remain retained. A missing row does not establish disposal, lease termination or source deletion. Coverage is GSA inventory, not government-wide FRPP.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Identity of the exact selected catalog and workbook pair, including capture pins."
+      },
+      {
+        "column_name": "snapshot_date",
+        "column_type": "DATE",
+        "description": "Date label in both selected distribution filenames; not an inferred effective inventory date."
+      },
+      {
+        "column_name": "location_code",
+        "column_type": "VARCHAR",
+        "description": "Literal native GSA Location Code; use with snapshot_id for property joins."
+      },
+      {
+        "column_name": "asset_name",
+        "column_type": "VARCHAR",
+        "description": "Literal Real Property Asset Name."
+      },
+      {
+        "column_name": "installation_name",
+        "column_type": "VARCHAR",
+        "description": "Literal Installation Name; N/A remains text and is not rewritten as null."
+      },
+      {
+        "column_name": "gsa_region",
+        "column_type": "VARCHAR",
+        "description": "Literal GSA-assigned region code, not a geographic boundary or numeric quantity."
+      },
+      {
+        "column_name": "street_address",
+        "column_type": "VARCHAR",
+        "description": "Source building street address; not standardized, geocoded or independently verified."
+      },
+      {
+        "column_name": "city",
+        "column_type": "VARCHAR",
+        "description": "Literal source building city; a missing value remains null."
+      },
+      {
+        "column_name": "state",
+        "column_type": "VARCHAR",
+        "description": "Literal source building state or territory code; no geographic correction is inferred."
+      },
+      {
+        "column_name": "zip_code",
+        "column_type": "VARCHAR",
+        "description": "Literal source ZIP code including leading zeros, hyphens and ZIP+4 where supplied."
+      },
+      {
+        "column_name": "latitude_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source latitude in decimal degrees; retain digits and inspect location_status before mapping."
+      },
+      {
+        "column_name": "longitude_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source longitude in decimal degrees; retain digits and inspect location_status before mapping."
+      },
+      {
+        "column_name": "rentable_square_feet_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal Building Rentable Square Feet; building-level area can repeat across leases. Do not sum lease rows as independent building areas."
+      },
+      {
+        "column_name": "available_square_feet_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal Available Square Feet; null remains unknown, separate from zero. The measure describes building space."
+      },
+      {
+        "column_name": "congressional_district",
+        "column_type": "VARCHAR",
+        "description": "Literal source congressional district code, including leading zeros. District vintage is unstated."
+      },
+      {
+        "column_name": "ownership_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal Owned or Leased value for properties, or Federal Leased Code for leases."
+      },
+      {
+        "column_name": "ownership",
+        "column_type": "VARCHAR",
+        "description": "Owned or leased meaning mapped from the admitted source code; unknown codes refuse the build."
+      },
+      {
+        "column_name": "asset_type",
+        "column_type": "VARCHAR",
+        "description": "Literal Real Property Asset Type, such as BUILDING; land and structure rows are not relabelled as buildings."
+      },
+      {
+        "column_name": "representative",
+        "column_type": "VARCHAR",
+        "description": "Literal source representative label; not a verified current member or district join."
+      },
+      {
+        "column_name": "area_unit",
+        "column_type": "VARCHAR",
+        "description": "Square feet, as the source headers define; no area conversion or rounding is applied."
+      },
+      {
+        "column_name": "coordinate_unit",
+        "column_type": "VARCHAR",
+        "description": "Decimal degrees for source latitude/longitude; coordinate reference datum is unstated."
+      },
+      {
+        "column_name": "address_scope",
+        "column_type": "VARCHAR",
+        "description": "States that the address belongs to the source building and has no geocoding/standardization claim."
+      },
+      {
+        "column_name": "location_status",
+        "column_type": "VARCHAR",
+        "description": "Present but unvalidated, explicit missing fields, invalid coordinates, or a pinned unresolved source conflict. No full geographic audit is implied."
+      },
+      {
+        "column_name": "location_issue",
+        "column_type": "VARCHAR",
+        "description": "Exact-byte reviewed unresolved location issue, or null when no bounded review finding is recorded. Null does not establish correctness."
+      },
+      {
+        "column_name": "value_states_json",
+        "column_type": "VARCHAR",
+        "description": "JSON map distinguishing absent cell, explicit null, empty text and value. Lease-date parsing also records unparsed values."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Source-kind-scoped native key, distinct from snapshot identity."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the exact retained original workbook."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Durable catalog-stated original downloadURL; temporary signed redirects are excluded."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Capture time of this exact workbook response; separate from its distribution date label and lease dates."
+      },
+      {
+        "column_name": "source_sheet",
+        "column_type": "VARCHAR",
+        "description": "Literal worksheet name containing the source record."
+      },
+      {
+        "column_name": "source_row_number",
+        "column_type": "BIGINT",
+        "description": "One-based original worksheet row number; header is row 1."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Original workbook URL, SHA-256, sheet and one-based row locator."
+      },
+      {
+        "column_name": "raw_fields_json",
+        "column_type": "VARCHAR",
+        "description": "Every literal source field including unknown columns, empty text and null; no value correction is hidden."
+      },
+      {
+        "column_name": "raw_cells_json",
+        "column_type": "VARCHAR",
+        "description": "Present original cells with coordinates, literal values, encoding kinds, number formats and source date facts. Omitted cells stay distinguishable."
+      },
+      {
+        "column_name": "construction_year_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal Construction Date from the property distribution, normally a year. Not expanded to a day or inferred age."
+      },
+      {
+        "column_name": "building_status",
+        "column_type": "VARCHAR",
+        "description": "Literal source Building Status; no current occupancy or disposal conclusion is inferred."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One snapshot and native Location Code.",
+    "identity_columns": [
+      "snapshot_id",
+      "location_code"
+    ]
+  },
+  "gsa_iolp_leases": {
+    "table": "gsa_iolp_leases",
+    "label": "GSA IOLP lease observations",
+    "summary": "Each GSA IOLP lease in one declared leases distribution, with native lease identity, dates, building address and original row evidence.",
+    "coverage": "Not a range. Complete caller-selected dated GSA IOLP workbook pair. A replacement selects a new complete snapshot; earlier immutable generations and originals remain retained. A missing row does not establish disposal, lease termination or source deletion. Coverage is GSA inventory, not government-wide FRPP.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Identity of the exact selected catalog and workbook pair, including capture pins."
+      },
+      {
+        "column_name": "snapshot_date",
+        "column_type": "DATE",
+        "description": "Date label in both selected distribution filenames; not an inferred effective inventory date."
+      },
+      {
+        "column_name": "location_code",
+        "column_type": "VARCHAR",
+        "description": "Literal native GSA Location Code; use with snapshot_id for property joins."
+      },
+      {
+        "column_name": "asset_name",
+        "column_type": "VARCHAR",
+        "description": "Literal Real Property Asset Name."
+      },
+      {
+        "column_name": "installation_name",
+        "column_type": "VARCHAR",
+        "description": "Literal Installation Name; N/A remains text and is not rewritten as null."
+      },
+      {
+        "column_name": "gsa_region",
+        "column_type": "VARCHAR",
+        "description": "Literal GSA-assigned region code, not a geographic boundary or numeric quantity."
+      },
+      {
+        "column_name": "street_address",
+        "column_type": "VARCHAR",
+        "description": "Source building street address; not standardized, geocoded or independently verified."
+      },
+      {
+        "column_name": "city",
+        "column_type": "VARCHAR",
+        "description": "Literal source building city; a missing value remains null."
+      },
+      {
+        "column_name": "state",
+        "column_type": "VARCHAR",
+        "description": "Literal source building state or territory code; no geographic correction is inferred."
+      },
+      {
+        "column_name": "zip_code",
+        "column_type": "VARCHAR",
+        "description": "Literal source ZIP code including leading zeros, hyphens and ZIP+4 where supplied."
+      },
+      {
+        "column_name": "latitude_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source latitude in decimal degrees; retain digits and inspect location_status before mapping."
+      },
+      {
+        "column_name": "longitude_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source longitude in decimal degrees; retain digits and inspect location_status before mapping."
+      },
+      {
+        "column_name": "rentable_square_feet_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal Building Rentable Square Feet; building-level area can repeat across leases. Do not sum lease rows as independent building areas."
+      },
+      {
+        "column_name": "available_square_feet_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal Available Square Feet; null remains unknown, separate from zero. The measure describes building space."
+      },
+      {
+        "column_name": "congressional_district",
+        "column_type": "VARCHAR",
+        "description": "Literal source congressional district code, including leading zeros. District vintage is unstated."
+      },
+      {
+        "column_name": "ownership_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal Owned or Leased value for properties, or Federal Leased Code for leases."
+      },
+      {
+        "column_name": "ownership",
+        "column_type": "VARCHAR",
+        "description": "Owned or leased meaning mapped from the admitted source code; unknown codes refuse the build."
+      },
+      {
+        "column_name": "asset_type",
+        "column_type": "VARCHAR",
+        "description": "Literal Real Property Asset Type, such as BUILDING; land and structure rows are not relabelled as buildings."
+      },
+      {
+        "column_name": "representative",
+        "column_type": "VARCHAR",
+        "description": "Literal source representative label; not a verified current member or district join."
+      },
+      {
+        "column_name": "area_unit",
+        "column_type": "VARCHAR",
+        "description": "Square feet, as the source headers define; no area conversion or rounding is applied."
+      },
+      {
+        "column_name": "coordinate_unit",
+        "column_type": "VARCHAR",
+        "description": "Decimal degrees for source latitude/longitude; coordinate reference datum is unstated."
+      },
+      {
+        "column_name": "address_scope",
+        "column_type": "VARCHAR",
+        "description": "States that the address belongs to the source building and has no geocoding/standardization claim."
+      },
+      {
+        "column_name": "location_status",
+        "column_type": "VARCHAR",
+        "description": "Present but unvalidated, explicit missing fields, invalid coordinates, or a pinned unresolved source conflict. No full geographic audit is implied."
+      },
+      {
+        "column_name": "location_issue",
+        "column_type": "VARCHAR",
+        "description": "Exact-byte reviewed unresolved location issue, or null when no bounded review finding is recorded. Null does not establish correctness."
+      },
+      {
+        "column_name": "value_states_json",
+        "column_type": "VARCHAR",
+        "description": "JSON map distinguishing absent cell, explicit null, empty text and value. Lease-date parsing also records unparsed values."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Source-kind-scoped native key, distinct from snapshot identity."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the exact retained original workbook."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Durable catalog-stated original downloadURL; temporary signed redirects are excluded."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Capture time of this exact workbook response; separate from its distribution date label and lease dates."
+      },
+      {
+        "column_name": "source_sheet",
+        "column_type": "VARCHAR",
+        "description": "Literal worksheet name containing the source record."
+      },
+      {
+        "column_name": "source_row_number",
+        "column_type": "BIGINT",
+        "description": "One-based original worksheet row number; header is row 1."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Original workbook URL, SHA-256, sheet and one-based row locator."
+      },
+      {
+        "column_name": "raw_fields_json",
+        "column_type": "VARCHAR",
+        "description": "Every literal source field including unknown columns, empty text and null; no value correction is hidden."
+      },
+      {
+        "column_name": "raw_cells_json",
+        "column_type": "VARCHAR",
+        "description": "Present original cells with coordinates, literal values, encoding kinds, number formats and source date facts. Omitted cells stay distinguishable."
+      },
+      {
+        "column_name": "lease_number",
+        "column_type": "VARCHAR",
+        "description": "Literal native GSA Lease Number, including leading letters and zeros; unique within the selected lease snapshot."
+      },
+      {
+        "column_name": "lease_effective_date",
+        "column_type": "DATE",
+        "description": "Parsed calendar date from source lease effective text; null for missing, empty or unparsed values, whose state and literal text remain."
+      },
+      {
+        "column_name": "lease_expiration_date",
+        "column_type": "DATE",
+        "description": "Parsed calendar date from source lease expiration text; does not by itself prove termination or active lease status."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One snapshot and native Lease Number.",
+    "identity_columns": [
+      "snapshot_id",
+      "lease_number"
+    ]
+  },
+  "gsa_iolp_snapshots": {
+    "table": "gsa_iolp_snapshots",
+    "label": "GSA IOLP declared snapshots",
+    "summary": "The exact selected GSA IOLP buildings/leases pair, its timing limits, source pins and population reconciliation.",
+    "coverage": "Not a range. Complete caller-selected dated GSA IOLP workbook pair. A replacement selects a new complete snapshot; earlier immutable generations and originals remain retained. A missing row does not establish disposal, lease termination or source deletion. Coverage is GSA inventory, not government-wide FRPP.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Identity of the exact selected catalog and workbook pair, including capture pins."
+      },
+      {
+        "column_name": "snapshot_date",
+        "column_type": "DATE",
+        "description": "Date label in both selected distribution filenames; not an inferred effective inventory date."
+      },
+      {
+        "column_name": "dataset_id",
+        "column_type": "VARCHAR",
+        "description": "GSA-4495, the source catalog's IOLP identifier. This is not the government-wide FRPP dataset."
+      },
+      {
+        "column_name": "catalog_modified_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal metadata modified timestamp, separate from snapshot date and workbook capture time."
+      },
+      {
+        "column_name": "data_as_of",
+        "column_type": "VARCHAR",
+        "description": "Null because the selected files/catalog do not establish an effective inventory instant."
+      },
+      {
+        "column_name": "coverage",
+        "column_type": "VARCHAR",
+        "description": "GSA inventory and timing limitations for the exact selected distribution pair."
+      },
+      {
+        "column_name": "properties",
+        "column_type": "BIGINT",
+        "description": "Reconciled native property row count in the complete selected buildings workbook."
+      },
+      {
+        "column_name": "leases",
+        "column_type": "BIGINT",
+        "description": "Reconciled native lease row count in the complete selected leases workbook."
+      },
+      {
+        "column_name": "owned_properties",
+        "column_type": "BIGINT",
+        "description": "Selected property rows with the source OWNED label; not a government-wide total."
+      },
+      {
+        "column_name": "leased_properties",
+        "column_type": "BIGINT",
+        "description": "Selected property rows with the source LEASED label; distinct from lease count."
+      },
+      {
+        "column_name": "unmatched_lease_locations",
+        "column_type": "BIGINT",
+        "description": "Lease rows whose native Location Code has no property in the selected pair; these leases remain queryable."
+      },
+      {
+        "column_name": "source_selection_json",
+        "column_type": "VARCHAR",
+        "description": "Complete selected metadata/distributions and capture descriptors binding the exact pair."
+      },
+      {
+        "column_name": "raw_catalog_json",
+        "column_type": "VARCHAR",
+        "description": "Complete parsed source catalog record including unknown fields; exact original bytes remain in source evidence."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One exact catalog and buildings/leases distribution selection.",
+    "identity_columns": [
+      "snapshot_id"
+    ]
   }
 }

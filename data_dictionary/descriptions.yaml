@@ -12975,3 +12975,159 @@ tables:
         slots.
       blank_slot_count: Completely blank data slots; excluded from facts and retained as a page-level reconciliation
         count.
+
+  gsa_iolp_properties:
+    label: GSA IOLP property observations
+    subject: spending
+    summary: Each GSA IOLP property in one declared buildings distribution, with native location identity, address,
+      source units and original row evidence.
+    coverage: Not a range. Complete caller-selected dated GSA IOLP workbook pair. A replacement selects a new complete
+      snapshot; earlier immutable generations and originals remain retained. A missing row does not establish disposal,
+      lease termination or source deletion. Coverage is GSA inventory, not government-wide FRPP.
+    measured_on: '2026-11-13'
+    grain: One snapshot and native Location Code.
+    identity_columns:
+    - snapshot_id
+    - location_code
+    columns:
+      snapshot_id: Identity of the exact selected catalog and workbook pair, including capture pins.
+      snapshot_date: Date label in both selected distribution filenames; not an inferred effective inventory date.
+      location_code: Literal native GSA Location Code; use with snapshot_id for property joins.
+      asset_name: Literal Real Property Asset Name.
+      installation_name: Literal Installation Name; N/A remains text and is not rewritten as null.
+      gsa_region: Literal GSA-assigned region code, not a geographic boundary or numeric quantity.
+      street_address: Source building street address; not standardized, geocoded or independently verified.
+      city: Literal source building city; a missing value remains null.
+      state: Literal source building state or territory code; no geographic correction is inferred.
+      zip_code: Literal source ZIP code including leading zeros, hyphens and ZIP+4 where supplied.
+      latitude_raw: Literal source latitude in decimal degrees; retain digits and inspect location_status before mapping.
+      longitude_raw: Literal source longitude in decimal degrees; retain digits and inspect location_status before
+        mapping.
+      rentable_square_feet_raw: Literal Building Rentable Square Feet; building-level area can repeat across leases.
+        Do not sum lease rows as independent building areas.
+      available_square_feet_raw: Literal Available Square Feet; null remains unknown, separate from zero. The measure
+        describes building space.
+      congressional_district: Literal source congressional district code, including leading zeros. District vintage
+        is unstated.
+      ownership_raw: Literal Owned or Leased value for properties, or Federal Leased Code for leases.
+      ownership: Owned or leased meaning mapped from the admitted source code; unknown codes refuse the build.
+      asset_type: Literal Real Property Asset Type, such as BUILDING; land and structure rows are not relabelled as
+        buildings.
+      representative: Literal source representative label; not a verified current member or district join.
+      area_unit: Square feet, as the source headers define; no area conversion or rounding is applied.
+      coordinate_unit: Decimal degrees for source latitude/longitude; coordinate reference datum is unstated.
+      address_scope: States that the address belongs to the source building and has no geocoding/standardization claim.
+      location_status: Present but unvalidated, explicit missing fields, invalid coordinates, or a pinned unresolved
+        source conflict. No full geographic audit is implied.
+      location_issue: Exact-byte reviewed unresolved location issue, or null when no bounded review finding is recorded.
+        Null does not establish correctness.
+      value_states_json: JSON map distinguishing absent cell, explicit null, empty text and value. Lease-date parsing
+        also records unparsed values.
+      source_record_id: Source-kind-scoped native key, distinct from snapshot identity.
+      source_sha256: SHA-256 of the exact retained original workbook.
+      source_url: Durable catalog-stated original downloadURL; temporary signed redirects are excluded.
+      observed_at: Capture time of this exact workbook response; separate from its distribution date label and lease
+        dates.
+      source_sheet: Literal worksheet name containing the source record.
+      source_row_number: One-based original worksheet row number; header is row 1.
+      source_locator_json: Original workbook URL, SHA-256, sheet and one-based row locator.
+      raw_fields_json: Every literal source field including unknown columns, empty text and null; no value correction
+        is hidden.
+      raw_cells_json: Present original cells with coordinates, literal values, encoding kinds, number formats and
+        source date facts. Omitted cells stay distinguishable.
+      construction_year_raw: Literal Construction Date from the property distribution, normally a year. Not expanded
+        to a day or inferred age.
+      building_status: Literal source Building Status; no current occupancy or disposal conclusion is inferred.
+  gsa_iolp_leases:
+    label: GSA IOLP lease observations
+    subject: spending
+    summary: Each GSA IOLP lease in one declared leases distribution, with native lease identity, dates, building
+      address and original row evidence.
+    coverage: Not a range. Complete caller-selected dated GSA IOLP workbook pair. A replacement selects a new complete
+      snapshot; earlier immutable generations and originals remain retained. A missing row does not establish disposal,
+      lease termination or source deletion. Coverage is GSA inventory, not government-wide FRPP.
+    measured_on: '2026-11-13'
+    grain: One snapshot and native Lease Number.
+    identity_columns:
+    - snapshot_id
+    - lease_number
+    columns:
+      snapshot_id: Identity of the exact selected catalog and workbook pair, including capture pins.
+      snapshot_date: Date label in both selected distribution filenames; not an inferred effective inventory date.
+      location_code: Literal native GSA Location Code; use with snapshot_id for property joins.
+      asset_name: Literal Real Property Asset Name.
+      installation_name: Literal Installation Name; N/A remains text and is not rewritten as null.
+      gsa_region: Literal GSA-assigned region code, not a geographic boundary or numeric quantity.
+      street_address: Source building street address; not standardized, geocoded or independently verified.
+      city: Literal source building city; a missing value remains null.
+      state: Literal source building state or territory code; no geographic correction is inferred.
+      zip_code: Literal source ZIP code including leading zeros, hyphens and ZIP+4 where supplied.
+      latitude_raw: Literal source latitude in decimal degrees; retain digits and inspect location_status before mapping.
+      longitude_raw: Literal source longitude in decimal degrees; retain digits and inspect location_status before
+        mapping.
+      rentable_square_feet_raw: Literal Building Rentable Square Feet; building-level area can repeat across leases.
+        Do not sum lease rows as independent building areas.
+      available_square_feet_raw: Literal Available Square Feet; null remains unknown, separate from zero. The measure
+        describes building space.
+      congressional_district: Literal source congressional district code, including leading zeros. District vintage
+        is unstated.
+      ownership_raw: Literal Owned or Leased value for properties, or Federal Leased Code for leases.
+      ownership: Owned or leased meaning mapped from the admitted source code; unknown codes refuse the build.
+      asset_type: Literal Real Property Asset Type, such as BUILDING; land and structure rows are not relabelled as
+        buildings.
+      representative: Literal source representative label; not a verified current member or district join.
+      area_unit: Square feet, as the source headers define; no area conversion or rounding is applied.
+      coordinate_unit: Decimal degrees for source latitude/longitude; coordinate reference datum is unstated.
+      address_scope: States that the address belongs to the source building and has no geocoding/standardization claim.
+      location_status: Present but unvalidated, explicit missing fields, invalid coordinates, or a pinned unresolved
+        source conflict. No full geographic audit is implied.
+      location_issue: Exact-byte reviewed unresolved location issue, or null when no bounded review finding is recorded.
+        Null does not establish correctness.
+      value_states_json: JSON map distinguishing absent cell, explicit null, empty text and value. Lease-date parsing
+        also records unparsed values.
+      source_record_id: Source-kind-scoped native key, distinct from snapshot identity.
+      source_sha256: SHA-256 of the exact retained original workbook.
+      source_url: Durable catalog-stated original downloadURL; temporary signed redirects are excluded.
+      observed_at: Capture time of this exact workbook response; separate from its distribution date label and lease
+        dates.
+      source_sheet: Literal worksheet name containing the source record.
+      source_row_number: One-based original worksheet row number; header is row 1.
+      source_locator_json: Original workbook URL, SHA-256, sheet and one-based row locator.
+      raw_fields_json: Every literal source field including unknown columns, empty text and null; no value correction
+        is hidden.
+      raw_cells_json: Present original cells with coordinates, literal values, encoding kinds, number formats and
+        source date facts. Omitted cells stay distinguishable.
+      lease_number: Literal native GSA Lease Number, including leading letters and zeros; unique within the selected
+        lease snapshot.
+      lease_effective_date: Parsed calendar date from source lease effective text; null for missing, empty or unparsed
+        values, whose state and literal text remain.
+      lease_expiration_date: Parsed calendar date from source lease expiration text; does not by itself prove termination
+        or active lease status.
+  gsa_iolp_snapshots:
+    label: GSA IOLP declared snapshots
+    subject: spending
+    summary: The exact selected GSA IOLP buildings/leases pair, its timing limits, source pins and population reconciliation.
+    coverage: Not a range. Complete caller-selected dated GSA IOLP workbook pair. A replacement selects a new complete
+      snapshot; earlier immutable generations and originals remain retained. A missing row does not establish disposal,
+      lease termination or source deletion. Coverage is GSA inventory, not government-wide FRPP.
+    measured_on: '2026-11-13'
+    grain: One exact catalog and buildings/leases distribution selection.
+    identity_columns:
+    - snapshot_id
+    columns:
+      snapshot_id: Identity of the exact selected catalog and workbook pair, including capture pins.
+      snapshot_date: Date label in both selected distribution filenames; not an inferred effective inventory date.
+      dataset_id: GSA-4495, the source catalog's IOLP identifier. This is not the government-wide FRPP dataset.
+      catalog_modified_raw: Literal metadata modified timestamp, separate from snapshot date and workbook capture
+        time.
+      data_as_of: Null because the selected files/catalog do not establish an effective inventory instant.
+      coverage: GSA inventory and timing limitations for the exact selected distribution pair.
+      properties: Reconciled native property row count in the complete selected buildings workbook.
+      leases: Reconciled native lease row count in the complete selected leases workbook.
+      owned_properties: Selected property rows with the source OWNED label; not a government-wide total.
+      leased_properties: Selected property rows with the source LEASED label; distinct from lease count.
+      unmatched_lease_locations: Lease rows whose native Location Code has no property in the selected pair; these
+        leases remain queryable.
+      source_selection_json: Complete selected metadata/distributions and capture descriptors binding the exact pair.
+      raw_catalog_json: Complete parsed source catalog record including unknown fields; exact original bytes remain
+        in source evidence.

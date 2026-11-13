@@ -32,6 +32,7 @@ from spicy_regs.sources.publication import PublicationError
 #: (docs/court-receipt-archive.md). uscode-editions has none: each edition is added by an explicit decision, after
 #: an independent audit of its original (docs/uscode-editions.md).
 LOCAL_FAMILIES = frozenset({
+    "gsa-iolp",
     "administration-policy",
     "census-geocoder",
     "court-opinions",

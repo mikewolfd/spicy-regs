@@ -13,6 +13,7 @@ from .agenda import AGENDA_VIEWS
 from .artifacts_topics import ARTIFACT_SQL_VIEWS, ARTIFACT_TOPIC_RELATIONSHIPS, NATIVE_BILL_SUBJECTS
 from .courts import COURT_VIEWS
 from .bill_publication import BILL_PUBLICATION_VIEWS
+from .gsa_iolp import GSA_IOLP_VIEWS
 from .legislative_diffs import NATIVE_DIFF_VIEWS as DIFF_VIEWS
 from .diffs import DIFF_VIEWS as LEGACY_DIFF_VIEWS
 from .entities import ENTITY_VIEWS
@@ -39,6 +40,7 @@ FEC_QUERY_VIEWS = tuple(
 )
 SQL_RELATIONSHIP_VIEWS = (
     *BILL_PUBLICATION_VIEWS,
+    *GSA_IOLP_VIEWS,
     *ARTIFACT_SQL_VIEWS,
     *ENTITY_VIEWS,
     *COURT_VIEWS,
