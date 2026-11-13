@@ -198,3 +198,67 @@ def test_window_cap_never_yields_a_partial_selection(tmp_path):
         pipeline.acquire(
             "2026-11-01", "2026-11-13", tmp_path / "capped", max_pages=1, archive_root=tmp_path / "raw", transport=mock
         )
+
+
+def test_local_publication_cli_accepts_declared_cohort_and_keeps_guards(tmp_path, monkeypatch):
+    """Fixtures prove CLI admission; real retained-source qualification is separate lane evidence."""
+    from rulespec_artifacts import ArtifactInput
+
+    from spicy_regs import local_publication
+    from spicy_regs.generations import build_generation
+    from spicy_regs.source_evidence import INPUT_ROLE, verify_evidence
+    from spicy_regs.sources import publication
+
+    monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(tmp_path / "raw"))
+    selected = capture(tmp_path)
+    artifact, evidence, _ = pipeline.build_from_captures(selected, tmp_path / "build", archive_root=tmp_path / "raw")
+    index = tmp_path / "private-index.json"
+    index.write_text(json.dumps(publication.empty_index()))
+    output = tmp_path / "dry-run"
+    args = [
+        "--generation",
+        str(tmp_path / "build" / "generation"),
+        "--family",
+        pipeline.FAMILY,
+        "--evidence",
+        str(evidence),
+        "--dry-run",
+        "--scratch-raw",
+        "--live-index",
+        str(index),
+        "--output",
+        str(output),
+    ]
+    wrong = list(args)
+    wrong[wrong.index(pipeline.FAMILY)] = "treasury-fiscal"
+    with pytest.raises(publication.PublicationError, match="not the expected treasury-fiscal"):
+        local_publication.main(wrong)
+    missing = list(args)
+    del missing[missing.index("--evidence") : missing.index("--evidence") + 2]
+    with pytest.raises(publication.PublicationError, match="pass --evidence"):
+        local_publication.main(missing)
+    assert not output.exists()
+    local_publication.main(args)
+    receipt = json.loads((output / "dry-run.json").read_text())
+    assert receipt["status"] == "dry_run_accepted" and receipt["family"] == pipeline.FAMILY
+    assert receipt["artifactDigest"] == artifact.pin.artifact_digest
+    assert receipt["tables"][pipeline.TABLE + ".parquet"]["rows"] == 2
+    assert receipt["other_family_changes"] == []
+    assert json.loads(index.read_text()) == publication.empty_index()
+
+    # Classify this control as partial through the builder; do not edit a pinned artifact.
+    evidence_artifact = verify_evidence(evidence, archive_root=tmp_path / "raw")
+    build_generation(
+        tmp_path / "partial",
+        family=pipeline.FAMILY,
+        files=[tmp_path / "build" / (pipeline.TABLE + ".parquet")],
+        expected_keys=[pipeline.TABLE + ".parquet"],
+        publication_status="local-partial",
+        inputs=[ArtifactInput(INPUT_ROLE, evidence_artifact.pin.logical_id, evidence_artifact.pin.artifact_digest)],
+    )
+    partial = list(args)
+    partial[partial.index("--generation") + 1] = str(tmp_path / "partial")
+    partial[partial.index("--output") + 1] = str(tmp_path / "partial-refused")
+    with pytest.raises(publication.PublicationError, match="local partial candidate cannot be published"):
+        local_publication.main(partial)
+    assert not (tmp_path / "partial-refused").exists()

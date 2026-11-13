@@ -55,6 +55,7 @@ LOCAL_FAMILIES = frozenset({
     "treasury-fiscal",
     "foreign-assistance",
     "uscode-editions",
+    "white-house-actions",
 })
 RAW_ROOT_ENV = "SPICYGOV_RAW_ROOT"
 #: Either one loosens the publisher's shrink guard (``r2._assert_upload_safe``).

@@ -26,6 +26,25 @@ inputs produce no candidate generation. A successful empty window produces an
 explicit empty table. The ordinary publication path accepts the generation;
 building it alone does not publish it or select the shared catalog.
 
+The maintained `publish-local-generation` CLI accepts the exact family
+`white-house-actions`. Rehearse the genuine candidate against a saved publication
+index without changing public or selected state:
+
+```sh
+uv run publish-local-generation --family white-house-actions \
+  --generation /absolute/work/build/generation \
+  --evidence /absolute/work/build/source-evidence/BUILD_ID/artifact \
+  --dry-run --live-index /absolute/work/saved-publication.v2.json \
+  --output /absolute/work/fresh-private-dry-run
+```
+
+Pass the evidence from its original build directory. The CLI checks its pins and
+shared raw originals before using a temporary private disk store; it reads no
+publication credentials in a dry run. A complete declared window does not imply
+complete White House history. Wrong-family, missing-evidence and `local-partial`
+generations refuse through the existing publication guards. The dry-run receipt
+records the exact generation and any other-family changes.
+
 Refresh the same window with `acquire --prior-captures /absolute/work/captures.json`.
 Unchanged exact originals retain the earlier observation. Changed HTML remains a
 separate source version, including changes outside the article body. Previous
