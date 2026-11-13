@@ -39,7 +39,7 @@ class Tables:
         if request.method == "GET" and self.fail_get == table:
             return httpx.Response(503)
         if request.method == "POST":
-            assert set(body) == set(guard.FIELDS)
+            assert set(body) == set(self.configs[table]) & set(guard.FIELDS)
             assert all(set(value) <= set(guard.FIELDS[key]) for key, value in body.items())
             disabling = all(value == {"state": "disabled"} for value in body.values())
             if self.fail_restore and table == "comments" and not disabling:
@@ -51,7 +51,7 @@ class Tables:
                 raise httpx.ReadError("Lost response after update", request=request)
             return httpx.Response(200, json={"success": True, "result": self.configs[table]})
         config = deepcopy(self.configs[table])
-        for name in guard.FIELDS:
+        for name in set(guard.FIELDS) & set(config):
             config[name]["next_eligible_at"] = None if config[name]["state"] == "disabled" else "2026-11-14T00:00:00Z"
             config[name]["next_eligible_reason"] = "running" if self.running else config[name]["state"]
         return httpx.Response(200, json={"success": True, "result": {"maintenance_config": config}})
@@ -97,6 +97,19 @@ def test_capture_failure_changes_neither_table(configured, tmp_path):
     assert not state.exists()
     assert all(method == "GET" for method, _, _ in server.requests)
     assert server.configs == server.originals
+
+
+def test_omitted_optional_expiration_stays_absent_as_in_real_table_response(configured, tmp_path):
+    server, api = configured
+    for config in server.configs.values():
+        del config["snapshot_expiration"]
+    server.originals = deepcopy(server.configs)
+    state = tmp_path / "state.json"
+    guard.suspend(state, api)
+    guard.verify(state, api)
+    guard.restore(state, api)
+    assert server.configs == server.originals
+    assert all(set(body) == {"compaction"} for method, _, body in server.requests if method == "POST")
 
 
 def test_partial_disable_with_lost_response_rolls_back_both_tables(configured, tmp_path):

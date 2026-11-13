@@ -54,9 +54,11 @@ def _writable(config: dict) -> dict:
     # Scheduling observations are read-only. Never manufacture an enabled/default policy.
     result = {}
     for operation, fields in FIELDS.items():
+        if operation == "snapshot_expiration" and operation not in config:
+            continue  # The API omits unconfigured optional operations; do not create one.
         value = config.get(operation)
         if not isinstance(value, dict) or value.get("state") not in {"enabled", "disabled"}:
-            raise ValueError("Both table maintenance states must be explicit before suspension")
+            raise ValueError("Compaction and each configured maintenance operation need an explicit state")
         result[operation] = {key: deepcopy(value[key]) for key in fields if key in value}
     return result
 
@@ -101,8 +103,8 @@ def _load(path: Path) -> dict:
 
 
 def _disabled(config: dict) -> bool:
-    return all(config.get(name, {}).get("state") == "disabled"
-               and config[name].get("next_eligible_reason") != "running" for name in FIELDS)
+    return "compaction" in config and all(config[name].get("state") == "disabled"
+               and config[name].get("next_eligible_reason") != "running" for name in FIELDS if name in config)
 
 
 def restore(path: Path, api: MaintenanceAPI) -> dict:
@@ -159,10 +161,12 @@ def suspend(path: Path, api: MaintenanceAPI) -> dict:
             entry = state["tables"][name]
             entry["disable_attempted"] = True
             _save(path, state)  # A lost POST response still requires restoration.
-            api.request("POST", namespace, name, {operation: {"state": "disabled"} for operation in FIELDS})
+            api.request("POST", namespace, name, {
+                operation: {"state": "disabled"} for operation in entry["original_writable"]
+            })
             observed = api.request("GET", namespace, name)
             expected = deepcopy(entry["original_writable"])
-            for operation in FIELDS:
+            for operation in expected:
                 expected[operation]["state"] = "disabled"
             if (not _disabled(observed) or _writable(observed) != expected
                     or observed.get("interval") != entry["original"].get("interval")):
@@ -192,7 +196,7 @@ def verify(path: Path, api: MaintenanceAPI) -> dict:
             raise ValueError("Selected native table UUID changed")
         observed = api.request("GET", namespace, name)
         expected = deepcopy(entry["original_writable"])
-        for operation in FIELDS:
+        for operation in expected:
             expected[operation]["state"] = "disabled"
         if (not _disabled(observed) or _writable(observed) != expected
                 or observed.get("interval") != entry["original"].get("interval")):

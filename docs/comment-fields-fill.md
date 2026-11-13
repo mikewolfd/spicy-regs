@@ -302,8 +302,9 @@ run:
    so a committed failure from any run stops this one;
 3. saves the exact maintenance configuration and UUID of both selected native
    tables (`default_native.comments` and `default_native.etl_receipts` under the
-   default namespace), then disables and verifies their compaction and snapshot
-   expiration; the base namespace and catalog defaults are not those tables;
+   default namespace), then disables and verifies their compaction and any
+   configured snapshot expiration; the base namespace and catalog defaults are
+   not those tables;
 4. runs `prepare`, then `write` (or `undo`);
 5. always restores each table's saved writable settings, including an originally
    disabled operation and its original target size/retention policy, then pushes
@@ -407,8 +408,9 @@ concurrency group, so it excludes the other writers by hand:
 The helper uses Cloudflare's [table maintenance API](https://developers.cloudflare.com/api/resources/r2_data_catalog/subresources/namespaces/subresources/tables/subresources/maintenance_configs/methods/update/).
 It saves full observations and restores exactly the writable fields. Scheduler
 timestamps/reasons are read-only; the scheduling interval is left unchanged and
-checked, rather than invented or posted back. Unknown/absent operation states
-refuse before any change. This guard only covers the Comments subject and its
+checked, rather than invented or posted back. An omitted optional snapshot
+expiration setting stays absent. Missing compaction or a configured operation
+without an explicit state refuses before any change. This guard only covers the Comments subject and its
 shared native receipt table; it does not change catalog-wide settings.
 
 ## Seeding `comment_attributes`
