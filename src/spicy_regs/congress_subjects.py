@@ -14,7 +14,7 @@ from functools import lru_cache
 from typing import Any
 
 import pyarrow as pa
-from spicy_docs.schemas.cbo_estimate_cards import CBO_ESTIMATE_CARDS, validate_card
+from spicy_docs.schemas.cbo_estimate_cards import CBO_ESTIMATE_CARDS
 
 TEXT, INTEGER, BOOLEAN = pa.string(), pa.int64(), pa.bool_()
 
@@ -436,6 +436,8 @@ def map_record(dataset: str, row: Mapping[str, Any]) -> MappedRecord:
     Missing legacy columns remain null; they do not establish an empty list.
     """
     if dataset == "cbo_estimate_cards":
+        from spicy_docs.sources.cbo import validate_card
+
         if extra := set(row) - set(INPUT_COLUMNS[dataset]):
             raise ValueError(f"{dataset}: unclassified source fields {sorted(extra)}")
         validate_card(row)

@@ -41,6 +41,7 @@ def read_retained_cards(manifest_path: Path, archive_root: Path, *, max_pages: i
     """
     from spicy_docs.sources.cbo import (
         archived_publication_id,
+        card_row,
         CboCardAbsent,
         CboSourceError,
         parse_cbo_estimate_card,
@@ -157,8 +158,6 @@ def read_retained_cards(manifest_path: Path, archive_root: Path, *, max_pages: i
         except CboSourceError as refused:
             outcomes.append({**outcome, "outcome": "refused", "reason": str(refused)})
             continue
-        from spicy_docs.schemas.cbo_estimate_cards import card_row
-
         rows.append(card_row(card, **outcome, extraction_method="spicy_docs.sources.cbo.parse_cbo_estimate_card",
                              identity_rule="publication-canonical-and-warc-target"))
         outcomes.append({**outcome, "outcome": "card", "reason": None})

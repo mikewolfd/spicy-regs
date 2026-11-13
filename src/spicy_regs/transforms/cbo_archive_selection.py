@@ -298,7 +298,8 @@ def merge_card_rows(output_dir, rows, *, download_prior, prior_present=None):
     import duckdb
     import pyarrow as pa
     import pyarrow.parquet as pq
-    from spicy_docs.schemas.cbo_estimate_cards import CBO_ESTIMATE_CARDS, validate_card
+    from spicy_docs.schemas.cbo_estimate_cards import CBO_ESTIMATE_CARDS
+    from spicy_docs.sources.cbo import validate_card
     from spicy_regs.contract_types import arrow_schema
     from spicy_regs.transforms.table_merge import merge_local_prior, prior_scratch_path
 

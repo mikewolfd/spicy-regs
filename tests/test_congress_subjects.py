@@ -14,8 +14,7 @@ from spicy_regs.congress_subjects import (
 def test_every_declared_field_has_a_destination_and_unknown_fields_refuse(dataset):
     raw: dict[str, Any] = dict.fromkeys(INPUT_COLUMNS[dataset])
     if dataset == "cbo_estimate_cards":
-        from spicy_docs.schemas.cbo_estimate_cards import card_row
-        from spicy_docs.sources.cbo import parse_cbo_estimate_card
+        from spicy_docs.sources.cbo import card_row, parse_cbo_estimate_card
         from tests.test_bill_family_cbo import CARD
 
         raw = card_row(parse_cbo_estimate_card(CARD, publication_id="62720",
