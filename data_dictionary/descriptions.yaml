@@ -13131,3 +13131,62 @@ tables:
       source_selection_json: Complete selected metadata/distributions and capture descriptors binding the exact pair.
       raw_catalog_json: Complete parsed source catalog record including unknown fields; exact original bytes remain
         in source evidence.
+
+  foreign_assistance_observations:
+    label: Foreign assistance country and fiscal-period measures
+    subject: spending
+    summary: Reported recipient-country, regional and global assistance with distinct financial measures and dollar bases.
+    coverage: 'Window. Complete explicitly retained publisher country-summary files. Financial reporting may be partial or revised. Country or area recipients, regional programs and global programs remain distinct. Agency and program identities and the constant-dollar price base are not supplied by this summary.'
+    measured_on: '2026-11-13'
+    grain: One source summary row and dollar basis per retained snapshot.
+    identity_columns: [snapshot_id, source_record_id, dollar_basis]
+    columns:
+      snapshot_id: Exact capture selection including summary and dictionary identities and observation times.
+      recipient_code: Literal source recipient code; includes publisher codes such as CS-KM and regional codes. Not a verified ISO roster.
+      recipient_name: Literal source recipient name, including historical names and territories.
+      recipient_scope: country_or_area, regional for names ending in Region, or global for World. The geographic grouping column is separate.
+      region_id: Literal publisher grouping identifier; not the recipient identity.
+      region_name: Literal geographic grouping name. World here does not make the recipient a global program.
+      income_group_acronym: Literal source income-group acronym, including NULL and blanks.
+      income_group_name: Literal source income-group name, including NULL and blanks.
+      fiscal_period: Literal fiscal-year label; 1976tq remains a separate transition quarter.
+      period_start: Inclusive period start under the dictionary fiscal calendar, including the pre-1977 calendar.
+      period_end: Inclusive period end under the dictionary fiscal calendar.
+      measure_id: Literal transaction-type code; obligations, disbursements, planned assistance and budget requests remain separate.
+      measure: Literal publisher measure label; do not sum distinct measure types.
+      dollar_basis: current or constant from the corresponding original amount column; do not combine the bases.
+      amount: Exact signed USD amount; null for blank, publisher NULL, unparsed or unrepresentable cells. Never rounded.
+      amount_raw: Exact original amount cell before interpretation or correction.
+      amount_status: numeric, blank, publisher_null, unparsed or unrepresentable; zero remains numeric.
+      unit: USD, as defined by the retained dictionary. Read dollar_basis separately.
+      constant_dollar_base_year: Unknown because the reviewed dictionary does not state a price base. No inferred conversion year.
+      reporting_status: open_fiscal_period if captured before period end, otherwise completeness_not_asserted. Neither establishes final reporting.
+      agency_scope: Explicit statement that the summary aggregates reporting agencies and supplies no agency identities.
+      program_scope: Explicit statement that the summary aggregates reported programs and supplies no program identities.
+      source_record_id: Stable native-dimension identity within the source release.
+      source_ordinal: Zero-based position of the original CSV data record; source releases may iterate records in a different order.
+      source_release_digest: Exact admitted source-release artifact digest.
+      source_locator_json: Original source URL, digest, capture time, byte size, CSV record number and physical line range.
+      raw_cells_json: All original cells with native column names, preserving NULL, blanks, errors and original values.
+  foreign_assistance_snapshots:
+    label: Foreign assistance retained summary observations
+    subject: spending
+    summary: Retained country-summary versions and their separately pinned official dictionary.
+    coverage: 'Window. Explicitly captured complete country-summary distributions, including valid empty files. Capture time is separate from publisher release date. An absent key in a later file is unobserved, never inferred deleted or zero.'
+    measured_on: '2026-11-13'
+    grain: One retained country-summary and dictionary capture selection.
+    identity_columns: [snapshot_id]
+    columns:
+      snapshot_id: Exact identity of the selected summary and dictionary captures, including their observation times.
+      observed_at: UTC instant at which this summary response was observed; not its fiscal year or publisher release date.
+      source_sha256: SHA-256 of the complete original publisher CSV bytes.
+      source_bytes: Byte size of the complete original CSV.
+      source_url: Exact original country-summary request URL.
+      dictionary_sha256: SHA-256 of the separately retained and reviewed publisher dictionary PDF.
+      dictionary_url: Exact publisher dictionary request URL.
+      source_release_logical_id: Logical identity of the admitted SpicyDocs release.
+      source_release_digest: Exact admitted SpicyDocs artifact digest.
+      source_row_count: Original data records in the complete observed summary, before splitting current and constant dollars.
+      publisher_release_date: Unknown when the retained original does not state one; never copied from the capture clock.
+      coverage: Snapshot-specific coverage limits and available provenance.
+      source_scope_json: Complete replay selection binding every original by URL, digest, size and observation time.

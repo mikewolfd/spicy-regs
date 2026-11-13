@@ -43526,5 +43526,239 @@
     "identity_columns": [
       "snapshot_id"
     ]
+  },
+  "foreign_assistance_observations": {
+    "table": "foreign_assistance_observations",
+    "label": "Foreign assistance country and fiscal-period measures",
+    "summary": "Reported recipient-country, regional and global assistance with distinct financial measures and dollar bases.",
+    "coverage": "Window. Complete explicitly retained publisher country-summary files. Financial reporting may be partial or revised. Country or area recipients, regional programs and global programs remain distinct. Agency and program identities and the constant-dollar price base are not supplied by this summary.",
+    "kind": "window",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Exact capture selection including summary and dictionary identities and observation times."
+      },
+      {
+        "column_name": "recipient_code",
+        "column_type": "VARCHAR",
+        "description": "Literal source recipient code; includes publisher codes such as CS-KM and regional codes. Not a verified ISO roster."
+      },
+      {
+        "column_name": "recipient_name",
+        "column_type": "VARCHAR",
+        "description": "Literal source recipient name, including historical names and territories."
+      },
+      {
+        "column_name": "recipient_scope",
+        "column_type": "VARCHAR",
+        "description": "country_or_area, regional for names ending in Region, or global for World. The geographic grouping column is separate."
+      },
+      {
+        "column_name": "region_id",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher grouping identifier; not the recipient identity."
+      },
+      {
+        "column_name": "region_name",
+        "column_type": "VARCHAR",
+        "description": "Literal geographic grouping name. World here does not make the recipient a global program."
+      },
+      {
+        "column_name": "income_group_acronym",
+        "column_type": "VARCHAR",
+        "description": "Literal source income-group acronym, including NULL and blanks."
+      },
+      {
+        "column_name": "income_group_name",
+        "column_type": "VARCHAR",
+        "description": "Literal source income-group name, including NULL and blanks."
+      },
+      {
+        "column_name": "fiscal_period",
+        "column_type": "VARCHAR",
+        "description": "Literal fiscal-year label; 1976tq remains a separate transition quarter."
+      },
+      {
+        "column_name": "period_start",
+        "column_type": "DATE",
+        "description": "Inclusive period start under the dictionary fiscal calendar, including the pre-1977 calendar."
+      },
+      {
+        "column_name": "period_end",
+        "column_type": "DATE",
+        "description": "Inclusive period end under the dictionary fiscal calendar."
+      },
+      {
+        "column_name": "measure_id",
+        "column_type": "VARCHAR",
+        "description": "Literal transaction-type code; obligations, disbursements, planned assistance and budget requests remain separate."
+      },
+      {
+        "column_name": "measure",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher measure label; do not sum distinct measure types."
+      },
+      {
+        "column_name": "dollar_basis",
+        "column_type": "VARCHAR",
+        "description": "current or constant from the corresponding original amount column; do not combine the bases."
+      },
+      {
+        "column_name": "amount",
+        "column_type": "DECIMAL(38,6)",
+        "description": "Exact signed USD amount; null for blank, publisher NULL, unparsed or unrepresentable cells. Never rounded."
+      },
+      {
+        "column_name": "amount_raw",
+        "column_type": "VARCHAR",
+        "description": "Exact original amount cell before interpretation or correction."
+      },
+      {
+        "column_name": "amount_status",
+        "column_type": "VARCHAR",
+        "description": "numeric, blank, publisher_null, unparsed or unrepresentable; zero remains numeric."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "USD, as defined by the retained dictionary. Read dollar_basis separately."
+      },
+      {
+        "column_name": "constant_dollar_base_year",
+        "column_type": "INTEGER",
+        "description": "Unknown because the reviewed dictionary does not state a price base. No inferred conversion year."
+      },
+      {
+        "column_name": "reporting_status",
+        "column_type": "VARCHAR",
+        "description": "open_fiscal_period if captured before period end, otherwise completeness_not_asserted. Neither establishes final reporting."
+      },
+      {
+        "column_name": "agency_scope",
+        "column_type": "VARCHAR",
+        "description": "Explicit statement that the summary aggregates reporting agencies and supplies no agency identities."
+      },
+      {
+        "column_name": "program_scope",
+        "column_type": "VARCHAR",
+        "description": "Explicit statement that the summary aggregates reported programs and supplies no program identities."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Stable native-dimension identity within the source release."
+      },
+      {
+        "column_name": "source_ordinal",
+        "column_type": "BIGINT",
+        "description": "Zero-based position of the original CSV data record; source releases may iterate records in a different order."
+      },
+      {
+        "column_name": "source_release_digest",
+        "column_type": "VARCHAR",
+        "description": "Exact admitted source-release artifact digest."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Original source URL, digest, capture time, byte size, CSV record number and physical line range."
+      },
+      {
+        "column_name": "raw_cells_json",
+        "column_type": "VARCHAR",
+        "description": "All original cells with native column names, preserving NULL, blanks, errors and original values."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One source summary row and dollar basis per retained snapshot.",
+    "identity_columns": [
+      "snapshot_id",
+      "source_record_id",
+      "dollar_basis"
+    ]
+  },
+  "foreign_assistance_snapshots": {
+    "table": "foreign_assistance_snapshots",
+    "label": "Foreign assistance retained summary observations",
+    "summary": "Retained country-summary versions and their separately pinned official dictionary.",
+    "coverage": "Window. Explicitly captured complete country-summary distributions, including valid empty files. Capture time is separate from publisher release date. An absent key in a later file is unobserved, never inferred deleted or zero.",
+    "kind": "window",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Exact identity of the selected summary and dictionary captures, including their observation times."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "TIMESTAMP WITH TIME ZONE",
+        "description": "UTC instant at which this summary response was observed; not its fiscal year or publisher release date."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the complete original publisher CSV bytes."
+      },
+      {
+        "column_name": "source_bytes",
+        "column_type": "BIGINT",
+        "description": "Byte size of the complete original CSV."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Exact original country-summary request URL."
+      },
+      {
+        "column_name": "dictionary_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the separately retained and reviewed publisher dictionary PDF."
+      },
+      {
+        "column_name": "dictionary_url",
+        "column_type": "VARCHAR",
+        "description": "Exact publisher dictionary request URL."
+      },
+      {
+        "column_name": "source_release_logical_id",
+        "column_type": "VARCHAR",
+        "description": "Logical identity of the admitted SpicyDocs release."
+      },
+      {
+        "column_name": "source_release_digest",
+        "column_type": "VARCHAR",
+        "description": "Exact admitted SpicyDocs artifact digest."
+      },
+      {
+        "column_name": "source_row_count",
+        "column_type": "BIGINT",
+        "description": "Original data records in the complete observed summary, before splitting current and constant dollars."
+      },
+      {
+        "column_name": "publisher_release_date",
+        "column_type": "DATE",
+        "description": "Unknown when the retained original does not state one; never copied from the capture clock."
+      },
+      {
+        "column_name": "coverage",
+        "column_type": "VARCHAR",
+        "description": "Snapshot-specific coverage limits and available provenance."
+      },
+      {
+        "column_name": "source_scope_json",
+        "column_type": "VARCHAR",
+        "description": "Complete replay selection binding every original by URL, digest, size and observation time."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One retained country-summary and dictionary capture selection.",
+    "identity_columns": [
+      "snapshot_id"
+    ]
   }
 }

@@ -49,6 +49,7 @@ LOCAL_FAMILIES = frozenset({
     "irs-form990",
     "sec-edgar",
     "treasury-fiscal",
+    "foreign-assistance",
     "uscode-editions",
 })
 RAW_ROOT_ENV = "SPICYGOV_RAW_ROOT"

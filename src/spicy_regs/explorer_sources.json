@@ -156,6 +156,13 @@
       "kind": "government",
       "note": ""
     },
+    "foreign-assistance": {
+      "id": "foreign-assistance",
+      "name": "ForeignAssistance.gov",
+      "url": "https://foreignassistance.gov/data",
+      "kind": "government",
+      "note": "Country summaries retain regional/global recipients, fiscal periods and financial measures separately. Reporting completeness and constant-dollar base remain explicit unknowns."
+    },
     "census-acs": {
       "id": "census-acs",
       "name": "U.S. Census Bureau American Community Survey",
@@ -436,6 +443,9 @@
       "sources": [
         "register"
       ]
+    },
+    "foreign-assistance": {
+      "sources": ["foreign-assistance"]
     },
     "census-acs": {
       "sources": [

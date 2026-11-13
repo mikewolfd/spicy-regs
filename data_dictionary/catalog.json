@@ -11712,6 +11712,68 @@
         "source_selection_json",
         "raw_catalog_json"
       ]
+    },
+    {
+      "table": "foreign_assistance_observations",
+      "label": "Foreign assistance country and fiscal-period measures",
+      "summary": "Reported recipient-country, regional and global assistance with distinct financial measures and dollar bases.",
+      "coverage": "Window. Complete explicitly retained publisher country-summary files. Financial reporting may be partial or revised. Country or area recipients, regional programs and global programs remain distinct. Agency and program identities and the constant-dollar price base are not supplied by this summary.",
+      "kind": "window",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "snapshot_id",
+        "recipient_code",
+        "recipient_name",
+        "recipient_scope",
+        "region_id",
+        "region_name",
+        "income_group_acronym",
+        "income_group_name",
+        "fiscal_period",
+        "period_start",
+        "period_end",
+        "measure_id",
+        "measure",
+        "dollar_basis",
+        "amount",
+        "amount_raw",
+        "amount_status",
+        "unit",
+        "constant_dollar_base_year",
+        "reporting_status",
+        "agency_scope",
+        "program_scope",
+        "source_record_id",
+        "source_ordinal",
+        "source_release_digest",
+        "source_locator_json",
+        "raw_cells_json"
+      ]
+    },
+    {
+      "table": "foreign_assistance_snapshots",
+      "label": "Foreign assistance retained summary observations",
+      "summary": "Retained country-summary versions and their separately pinned official dictionary.",
+      "coverage": "Window. Explicitly captured complete country-summary distributions, including valid empty files. Capture time is separate from publisher release date. An absent key in a later file is unobserved, never inferred deleted or zero.",
+      "kind": "window",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "snapshot_id",
+        "observed_at",
+        "source_sha256",
+        "source_bytes",
+        "source_url",
+        "dictionary_sha256",
+        "dictionary_url",
+        "source_release_logical_id",
+        "source_release_digest",
+        "source_row_count",
+        "publisher_release_date",
+        "coverage",
+        "source_scope_json"
+      ]
     }
   ]
 }
