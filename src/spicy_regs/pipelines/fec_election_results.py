@@ -30,6 +30,8 @@ def build(capture, output_dir):
 
         reader_code = {}
         for module in (inspect.getmodule(workbook_rows), workbooks):
+            if module is None or module.__file__ is None:
+                raise ValueError("Election reader source module identity is unavailable")
             reader_code[module.__name__] = "sha256:" + hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest()
         evidence.retain_bytes(json.dumps(reader_code, sort_keys=True).encode(), stage="election-reader-code-identities")
         original = raw_original(evidence.store, capture["response_sha256"], capture["byte_size"])

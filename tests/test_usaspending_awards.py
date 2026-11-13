@@ -84,12 +84,11 @@ def test_obligations_award_totals_outlays_and_locations_have_distinct_grains(tmp
     )
     with duckdb.connect() as db:
         tx = str(files[0])
+        total = db.execute("select sum(federal_action_obligation) from read_parquet(?)", [tx]).fetchone()
+        assert total is not None and str(total[0]) == "80.00"
         assert (
-            str(db.execute("select sum(federal_action_obligation) from read_parquet(?)", [tx]).fetchone()[0]) == "80.00"
-        )
-        assert (
-            db.execute("select count(publisher_overall_award_outlayed_amount) from read_parquet(?)", [tx]).fetchone()[0]
-            == 0
+            db.execute("select count(publisher_overall_award_outlayed_amount) from read_parquet(?)", [tx]).fetchone()
+            == (0,)
         )
         award = pq.read_table(files[1]).to_pylist()[0]
         assert str(award["publisher_overall_award_obligated_amount"]) == "80.00"

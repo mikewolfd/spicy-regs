@@ -189,7 +189,7 @@ def profile(filings, selection):
     key = [POLICY, first["registrant_id"], first["client_id"], year, period]
     if not first["registrant_id"] or not first["client_id"]:
         key.append(first["filing_uuid"])
-    result = dict.fromkeys(TEXT_FIELDS)
+    result: dict[str, object] = dict.fromkeys(TEXT_FIELDS)
     result.update(
         profile_id=hashlib.sha256(json_bytes(key)).hexdigest(), scope_id=scope_sha,
         registrant_id=first["registrant_id"], client_id=first["client_id"],

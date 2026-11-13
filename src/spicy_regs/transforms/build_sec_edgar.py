@@ -173,7 +173,7 @@ def build_tables(selection, concepts, output_dir, *, fact_start, fact_end, store
         )
         metadata = (
             {**value.metadata, "continuations": list(value.continuations)}
-            if kind == "submissions"
+            if not isinstance(value, dict)
             else {k: v for k, v in value.items() if k != "facts"}
         )
         sources.append(

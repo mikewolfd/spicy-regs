@@ -101,6 +101,7 @@ def test_lookup_through_ordinary_service_keeps_parent_blank_and_amendment(tmp_pa
                                     v.source_url || v.source_locator
              FROM executive_disclosure_filings f JOIN executive_disclosure_facts v USING(filing_id)
              WHERE f.filing_id='whitehouse-harris-2024-annual' AND v.row_number_raw='1.'""").fetchone()
+        assert row is not None
         assert row[:5] == ("Kamala D. Harris", 2023, "$50,001 - $100,000", 50001, 100000)
         assert row[5].endswith(".pdf#page=8")
         assert con.execute("SELECT value_raw,value_lower FROM executive_disclosure_facts WHERE row_number_raw='4.'").fetchone() == ("", None)

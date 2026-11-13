@@ -50,10 +50,11 @@ def night(monkeypatch, tmp_path, index, members, *, receipts_allowed, empty_chil
             shutil.copyfile(FIXTURE / "window" / name, Path(output_dir) / name)
             path = Path(output_dir) / name
             if empty_children_for is not None and key != "lobbying_filings.parquet":
+                import pyarrow as pa
                 import pyarrow.compute as pc
                 table = pq.read_table(path)
                 if "filing_uuid" in table.column_names:
-                    pq.write_table(table.filter(pc.not_equal(table["filing_uuid"], empty_children_for)), path)
+                    pq.write_table(table.filter(pc.call_function("not_equal", [table["filing_uuid"], pa.scalar(empty_children_for)])), path)
             paths[key] = path
         return paths
 

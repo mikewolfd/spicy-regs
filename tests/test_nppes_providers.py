@@ -32,6 +32,11 @@ def parsed(rows, *, scope="member", columns=HEADER, kind="main"):
     text = io.StringIO(newline="")
     csv.writer(text).writerows([columns, *rows])
     payload = text.getvalue().encode()
+    def validate_npi(value):
+        if value not in NPIS:
+            raise ValueError("NPI is outside the synthetic test set")
+        return value
+
     return read_csv_cohort(
         io.BytesIO(payload),
         kind=kind,
@@ -42,7 +47,7 @@ def parsed(rows, *, scope="member", columns=HEADER, kind="main"):
         expected_bytes=len(payload),
         columns=columns,
         cohort=NPIS,
-        validate_npi=lambda value: value if value in NPIS else None,
+        validate_npi=validate_npi,
         max_scanned_rows=10,
         max_selected_rows=10,
     )

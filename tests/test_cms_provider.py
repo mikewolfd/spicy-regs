@@ -43,7 +43,7 @@ def inputs(rows=None):
     body = buffer.getvalue().encode()
     url = next(d["downloadURL"] for d in F["catalog"]["dataset"][0]["distribution"] if d["format"] == "CSV")
     scope = provider_scope(
-        *controls,
+        controls[0], controls[1], controls[2],
         {
             "request_url": url,
             "response_sha256": "sha256:" + hashlib.sha256(body).hexdigest(),

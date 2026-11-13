@@ -29,9 +29,10 @@ class Reader:
 
 def reader(case="matched", suffix=""):
     selection = GeocoderSelection("onelineaddress", BENCHMARK, VINTAGE, address="1 Main St " + case + suffix)
+    coordinates: dict[str, float | str] = {"x": -122.25, "y": 37.5}
     candidate = {
         "matchedAddress": "SYNTHETIC",
-        "coordinates": {"x": -122.25, "y": 37.5},
+        "coordinates": coordinates,
         "geographies": {
             "Counties": [
                 {"GEOID": "06001", "STATE": "06", "COUNTY": "001", "NAME": "Alameda", "unknown": [None, "", 0]}
@@ -44,7 +45,7 @@ def reader(case="matched", suffix=""):
     elif case == "ambiguous":
         matches.append(deepcopy(candidate))
     elif case == "conversion_failed":
-        candidate["coordinates"]["x"] = "malformed"
+        coordinates["x"] = "malformed"
     elif case == "refused":
         candidate.pop("geographies")
     value = {
@@ -97,6 +98,7 @@ def test_generation_query_and_publication_preserve_all_outcomes(tmp_path, monkey
             WHERE l.outcome = 'matched' AND g.layer = 'Counties' AND g.unique_assignment""").fetchone()
         failures = con.execute("""SELECT outcome,count(*) FROM census_geocoder_lookups
             WHERE outcome <> 'matched' GROUP BY outcome ORDER BY outcome""").fetchall()
+    assert answer is not None
     assert answer[:3] == ("matched", "06001", "-122.250000123456789000")
     assert answer[3].startswith("sha256:")
     assert failures == [("ambiguous", 1), ("conversion_failed", 1), ("refused", 1), ("unmatched", 1)]

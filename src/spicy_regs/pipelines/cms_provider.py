@@ -17,7 +17,8 @@ def build(scope, controls, csv_path: Path, output_dir: Path, *, year: int):
     output_dir = Path(output_dir)
     if (output_dir / "generation").exists():
         raise ValueError("Use a fresh CMS provider generation directory")
-    if provider_scope(*controls, scope["csv"], release_date=scope["selection"]["release_date"]) != scope:
+    catalog, dictionary, stats = controls
+    if provider_scope(catalog, dictionary, stats, scope["csv"], release_date=scope["selection"]["release_date"]) != scope:
         raise ValueError("CMS provider selection differs from its original controls")
     fields = {f["name"] for f in json.loads(controls[1].body)["data"]["fields"]}
     if not required_fields() <= fields:

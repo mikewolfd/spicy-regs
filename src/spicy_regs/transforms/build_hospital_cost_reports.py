@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import json
+from importlib import import_module
 from pathlib import Path
 
 import pyarrow as pa
@@ -104,7 +105,7 @@ def build_hospital_cost_reports(reader, output_dir: Path, *, measures=tuple(MEAS
     definitions = selected_measures(measures)
     if validate_ccn is None:
         try:
-            from refspec.registry.nppes_npi_identifiers import validate_ccn
+            validate_ccn = import_module("refspec.registry.nppes_npi_identifiers").validate_ccn
         except ImportError as error:
             raise RuntimeError("Hospital builds require RefSpec's CCN validator on the Python path") from error
     output_dir = Path(output_dir)

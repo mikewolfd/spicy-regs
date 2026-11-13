@@ -71,7 +71,8 @@ def test_generation_and_ordinary_company_period_query(tmp_path, monkeypatch):
     from spicy_regs.local_data import selection_record
     from spicy_regs.sources.publication import empty_index, generation_entry
 
-    index = {**empty_index(), "version": 2}
+    index = empty_index()
+    index["version"] = 2
     index["families"]["sec-edgar"] = generation_entry(
         artifact, iter_member_descriptors(artifact, LocalMemberSource(output / "generation"))
     )
@@ -121,7 +122,7 @@ def test_generation_and_ordinary_company_period_query(tmp_path, monkeypatch):
             ]
             == "not_selected"
         )
-        assert con.execute(f"select count(*) from {FILINGS} where form='10-K'").fetchone()[0] == 2
+        assert con.execute(f"select count(*) from {FILINGS} where form='10-K'").fetchone() == (2,)
     from tests.published_paths import local_paths
 
     assert local_paths(output / "generation", evidence) == []

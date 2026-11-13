@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, cast
 
 import pyarrow as pa
 
@@ -128,13 +129,16 @@ def rows(readers):
         )
         if r["outcome"] not in {"matched", "ambiguous"}:
             continue
-        native = load_bounded_json(
+        decoded = load_bounded_json(
             captured.body,
             source="Census geocoder table",
             error_type=ValueError,
             number_policy="decimal",
             max_bytes=MAX_BYTES,
-        )["result"]
+        )
+        if not isinstance(decoded, dict):
+            raise ValueError("Census geocoder response must be an object")
+        native = cast(dict[str, Any], decoded)["result"]
         for index, candidate in enumerate(r["candidates"]):
             obj = native["addressMatches"][index] if selected.kind == "onelineaddress" else native
             for layer, layer_rows in obj["geographies"].items():

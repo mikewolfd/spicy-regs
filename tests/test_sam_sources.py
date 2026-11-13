@@ -104,6 +104,7 @@ def test_native_generation_replay_query_and_update(tmp_path,monkeypatch):
         monkeypatch.setattr(mcp_server,"DATA_DIR",output/"generation")
         with mcp_server._build_connection() as con:
             row=con.execute("SELECT native_id,name_raw,uei,additional_comments_raw,source_sha256 FROM sam_exclusion_observations WHERE native_id='S4NATIVE'").fetchone()
+        assert row is not None
         assert row[:4]==("S4NATIVE","Unregistered party","",comment)
         assert summary["text_encoding"] == "utf-8-sig"
         summaries.append(summary)

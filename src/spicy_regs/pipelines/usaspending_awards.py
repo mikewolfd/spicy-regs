@@ -73,6 +73,8 @@ def capture(evidence, *, agency_id, agency_code, fiscal_year, award_family, file
         completed = response.extensions["spicy_docs.completed_capture"]
         pin = {**item, "sha256": completed.sha256, "bytes": completed.byte_size}
         read_transaction_archive(response.content, sha256=pin["sha256"], award_family=award_family)
+    if inventory.request_body is None:
+        raise ValueError("USAspending inventory lacks its retained request body")
     metadata = asdict(inventory)
     metadata.pop("body")
     metadata.pop("_digest")
