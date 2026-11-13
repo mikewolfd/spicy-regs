@@ -103,7 +103,7 @@ def split(manifest, source_pins, out, *, local_groups=8, runner_groups=128, max_
                 CREATE TEMP TABLE local_ids AS
                 SELECT DISTINCT {_comment_identity('key')} AS comment_id FROM held WHERE raw_custody='local'
             """)
-            expected = con.execute("SELECT count(*) FROM selected_keys").fetchone()[0]
+            expected = con.execute("SELECT count(*) FROM selected_keys").fetchall()[0][0]
             if not expected:
                 raise ValueError("The selected manifest has no comment keys")
             with con.execute(f"""
@@ -125,7 +125,7 @@ def split(manifest, source_pins, out, *, local_groups=8, runner_groups=128, max_
                            count(*) FILTER (WHERE h.raw_custody='local'),
                            count(*) FILTER (WHERE h.raw_custody='r2')
                     FROM {table} k LEFT JOIN held h USING (key)
-                """).fetchone()
+                """).fetchall()[0]
                 if count != distinct or count > max_keys or (group.startswith("runner-") and local):
                     raise ValueError(f"Source group {group} violates key uniqueness, custody or size ({count} keys)")
                 pins = None
