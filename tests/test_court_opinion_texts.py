@@ -209,6 +209,10 @@ def test_a_failed_phase_2_resumes_at_the_first_uncommitted_block(built, tmp_path
     assert [p.name for p in (spill / "_receipts").glob("*.parquet")] == ["0.parquet"]  # block 1 uncommitted
     monkeypatch.setattr(build, "_write_bulk_pair", write)
 
+    with pytest.raises(ValueError, match="another compression level"):
+        build.build_court_opinion_texts(export, again, dump_date=date(2026, 6, 30), workers=0, convert=stand_in,
+                                        spill_compression_level=12)
+
     def never(row):
         raise AssertionError("a resumed run converted again")
 
@@ -342,3 +346,15 @@ def test_a_build_refuses_an_output_it_would_overwrite(built) -> None:
     out, _, _ = built
     with pytest.raises(FileExistsError):
         build.build_court_opinion_texts(Path("unused.csv.bz2"), out, dump_date=date(2026, 6, 30), convert=stand_in)
+
+
+def test_compressed_spill_preserves_final_body_and_receipt_values(built, tmp_path):
+    out, original, _ = built
+    export = out.parent / 'opinions-2026-06-30.csv.bz2'
+    compressed = tmp_path / 'compressed'
+    run = build.build_court_opinion_texts(export, compressed, dump_date=date(2026, 6, 30), workers=0,
+                                         convert=stand_in, parse_workers=1, row_group_text_bytes=2_000,
+                                         generation_id=original['generation_id'], spill_compression_level=12)
+    assert run['spill_compression_level'] == 12
+    for name in ('etl_receipts.parquet', *(m.relative_to(out).as_posix() for m in _members(out))):
+        assert pq.ParquetFile(compressed / name).read().equals(pq.ParquetFile(out / name).read()), name
