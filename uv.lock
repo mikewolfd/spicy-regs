@@ -2216,7 +2216,7 @@ provides-extras = ["acquisition", "bill-diff", "courtlistener-local", "html", "p
 
 [[package]]
 name = "spicy-regs"
-version = "0.1.6+reconcile.23"
+version = "0.1.6+crsops.20261114.1"
 source = { editable = "." }
 default-groups = ["dev", "source-readers"]
 dependencies = [
