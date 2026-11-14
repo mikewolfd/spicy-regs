@@ -347,20 +347,13 @@ class Discovery:
         )
 
 
-class Hearings(StubHearings):
-    def records(self, route, url, *, max_pages=1):
-        for page in super().records(route, url, max_pages=max_pages):
-            page.capture = capture(json.dumps(page.records).encode())
-            yield page
-
-
 def test_report_run_retains_used_listing_package_and_detail_then_unchanged_lineage(tmp_path):
     evidence = CaptureEvidence(tmp_path, "committee-reports")
     outputs = build_committee_reports(
         tmp_path,
         reader=Discovery(),
         acquirer=StubBodyAcquirer(),
-        hearings=Hearings(),
+        hearings=StubHearings(),
         download_prior=lambda *args: False,
         evidence=evidence,
     )
@@ -383,7 +376,7 @@ def test_report_run_retains_used_listing_package_and_detail_then_unchanged_linea
         return True
 
     build_committee_reports(
-        tmp_path, reader=Discovery(), acquirer=owner, hearings=Hearings(), download_prior=download, evidence=resumed
+        tmp_path, reader=Discovery(), acquirer=owner, hearings=StubHearings(), download_prior=download, evidence=resumed
     )
     assert owner.requested == []
     assert {key for row in journal(resumed) if row["event"] == "package-selection" for key in row["unchanged"]} == {
@@ -399,7 +392,7 @@ def test_capped_selection_and_detail_refusal_are_distinct(tmp_path):
         tmp_path,
         reader=Discovery(),
         acquirer=owner,
-        hearings=Hearings(),
+        hearings=StubHearings(),
         max_packages=0,
         download_prior=lambda *args: False,
         evidence=evidence,
@@ -432,7 +425,7 @@ def test_storage_failure_aborts_report_build(tmp_path, monkeypatch):
             tmp_path,
             reader=Discovery(),
             acquirer=StubBodyAcquirer(),
-            hearings=Hearings(),
+            hearings=StubHearings(),
             download_prior=lambda *args: False,
             evidence=evidence,
         )
@@ -454,7 +447,7 @@ def test_listing_failure_after_a_page_retains_both_and_builds_nothing(tmp_path):
             tmp_path,
             reader=BrokenDiscovery(),
             acquirer=StubBodyAcquirer(),
-            hearings=Hearings(),
+            hearings=StubHearings(),
             download_prior=lambda *args: False,
             evidence=evidence,
         )
@@ -478,7 +471,7 @@ def test_successful_owner_package_retains_all_originals_and_native_output(tmp_pa
             tmp_path,
             reader=ReportsOnly(),
             acquirer=owner,
-            hearings=Hearings(),
+            hearings=StubHearings(),
             download_prior=lambda *args: False,
             evidence=evidence,
         )
@@ -788,7 +781,7 @@ def test_owner_preyield_pagination_refusal_retains_both_pages_and_no_generation(
                     output_dir,
                     reader=reader,
                     acquirer=StubBodyAcquirer(),
-                    hearings=Hearings(),
+                    hearings=StubHearings(),
                     download_prior=lambda *args: False,
                     evidence=self.source_evidence,
                 )
