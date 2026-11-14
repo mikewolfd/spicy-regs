@@ -71,8 +71,10 @@ def plan(workdir: Path, stage: Path, *, max_rows: int, max_read_bytes: int,
         snapshot = iceberg._read_snapshot(con, COMMENT, namespace=namespace)
         native = iceberg._snapshot_query(COMMENT, snapshot, namespace=namespace)
         native = native.replace("SELECT *", f"SELECT comment_id, modify_date, {cfw.FILE_COLUMN} AS _file", 1)
+        # Repeated source IDs do not multiply native rows in a SEMI JOIN. Avoid a second hash table;
+        # classification below still reads every source copy, and duplicate native rows still refuse.
         con.execute(f"""COPY (SELECT n.* FROM ({native}) n
-                        SEMI JOIN (SELECT DISTINCT comment_id FROM {parts}) r USING (comment_id))
+                        SEMI JOIN (SELECT comment_id FROM {parts}) r USING (comment_id))
                         TO {cfw._sql(index_path)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
         if con.execute(f"SELECT comment_id FROM {index} GROUP BY 1 HAVING count(*) > 1 LIMIT 1").fetchone():
             raise ValueError("A staged comment identity appears more than once in the native catalog")

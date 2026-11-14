@@ -1,5 +1,10 @@
 """Physical-file groups feed the maintained consumer without losing conflicting or withheld copies."""
 
+import hashlib
+import json
+from pathlib import Path
+from types import SimpleNamespace
+
 import polars as pl
 import pytest
 
@@ -104,3 +109,67 @@ def test_group_byte_bound_splits_only_within_one_physical_file(tmp_path, catalog
     assert len(planned["groups"]) >= 2
     assert all(g["original_file"] == "EPA" and g["read_value_bytes"] <= size * 2 for g in planned["groups"])
     assert sum(g["read_copies"] for g in planned["groups"]) == 4
+
+
+def test_actual_attachment_originals_keep_every_source_copy(tmp_path, catalog):
+    originals = {
+        "HHS-OASH-2022-0006-0002": "ce146ada03ede758a871f124ce51ad087ba8fa8d397500750f5a04052db79d06",
+        "FWS-R4-ES-2020-0109-0210": "c852d64b7d38e4aecbdc0b3bc7b72611cfeaaaf3839fe6153ab644970b26b1f6",
+    }
+    source, expected = tmp_path / "source", []
+    for comment_id, digest in originals.items():
+        body = (Path(__file__).parent / "fixtures/comment_attachment_unknown_sizes" / f"{comment_id}.json").read_bytes()
+        assert hashlib.sha256(body).hexdigest() == digest
+        raw = json.loads(body)
+        part = cf._attachment_part_row(SimpleNamespace(key=f"{comment_id}.json", payload=raw))
+        agency = raw["data"]["attributes"]["agencyId"]
+        seed(catalog, [row(comment_id, agency=agency, modify=part["modify_date"])])
+        copies = [part, {**part, "key": f"retained-copy/{comment_id}.json"}]
+        reads(source, copies, agency=agency)
+        expected.extend({key: item[key] for key in groups.COLUMNS} for item in copies)
+    stage = tmp_path / "stage"
+    cf.stage(source, stage, profile="attachments")
+    work = tmp_path / "groups"
+    planned = groups.plan(work, stage, max_rows=100, max_read_bytes=100_000)
+    assert planned["outcomes"] == {"candidate": 2}
+    assert (planned["source_rows"], planned["source_identities"]) == (4, 2)
+    actual = []
+    for group in planned["groups"]:
+        out = tmp_path / f"group-{group['group_id']}"
+        staged = groups.stage_group(work, group["group_id"], out)
+        assert staged["rows"] == 2 and staged["distinct_comment_ids"] == 1
+        actual.extend(pl.read_parquet(out / "reads.parquet").to_dicts())
+    assert sorted(actual, key=lambda item: item["key"]) == sorted(expected, key=lambda item: item["key"])
+
+
+def test_group_plan_still_refuses_duplicate_native_ids_with_repeated_source_ids(tmp_path, catalog, monkeypatch):
+    from spicy_regs.schemas import COMMENT
+    from spicy_regs.sources import iceberg
+
+    seed(catalog, [row("A")])
+    stage = _stage(tmp_path, [{"key": key, "comment_id": "A", "attachments_json": LISTED} for key in ("a", "a-copy")])
+    native = iceberg._qualified(COMMENT)
+    monkeypatch.setattr(iceberg, "_snapshot_query", lambda *_args, **_kw:
+                        f"SELECT * FROM (SELECT * FROM {native} UNION ALL SELECT * FROM {native})")
+    with pytest.raises(ValueError, match="appears more than once in the native catalog"):
+        groups.plan(tmp_path / "groups", stage, max_rows=100, max_read_bytes=100_000)
+
+
+def test_group_plan_still_refuses_a_moving_native_snapshot(tmp_path, catalog, monkeypatch):
+    from spicy_regs.sources import iceberg
+
+    seed(catalog, [row("A")])
+    stage = _stage(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED}])
+    read_snapshot = iceberg._read_snapshot
+    calls = 0
+
+    def moving(*args, **kwargs):
+        nonlocal calls
+        held = read_snapshot(*args, **kwargs)
+        calls += 1
+        return iceberg.CatalogSnapshot(held.table_uuid, held.snapshot_id + (calls > 1), held.schema_id)
+
+    monkeypatch.setattr(iceberg, "_read_snapshot", moving)
+    with pytest.raises(RuntimeError, match="Catalog moved while grouping"):
+        groups.plan(tmp_path / "groups", stage, max_rows=100, max_read_bytes=100_000)
+    assert not (tmp_path / "groups/groups.json").exists()
