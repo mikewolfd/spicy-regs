@@ -43,21 +43,24 @@ def download(client, bucket, key, target, pin, limit):
     checked_download(client, bucket, str(key), target, sha256(pin["sha256"]), size, size)
 
 
-def local_controls(client, bucket, key, pin, work, reads, master_sha256, expected):
+def local_controls(client, bucket, key, pin, work, reads, master_sha256, expected, *, repair=False):
     if not expected:
         require(not key and not pin, "The master has no local groups")
         return {}
     require(key and pin, "Local groups require their exact compact controls manifest")
-    controls = work / "local-stages.json"
+    controls = work / ("repair-stages.json" if repair else "local-stages.json")
     base = staging_key(key, controls.name).parent
     checked_download(client, bucket, key, controls, sha256(pin), CONTROL_LIMIT)
     manifest = owner.read_json(controls)
-    require(manifest["format"] == "comment-attachment-local-stages/1" and manifest["groups_sha256"] == master_sha256
+    expected_format = "comment-attachment-repair-stages/1" if repair else "comment-attachment-local-stages/1"
+    require(manifest["format"] == expected_format and manifest["groups_sha256"] == master_sha256
             and set(manifest["groups"]) == expected, "Local controls do not match the frozen local groups")
     for name, selected in manifest["groups"].items():
         files = selected["files"]
-        plans = [file for file in files if re.fullmatch(fr"plan/{PLAN}", file)]
+        plans = [file for file in files if re.fullmatch(fr"{'(?:read/)?' if repair else ''}plan/{PLAN}", file)]
         required = {"result.json", "stage/staging.json", *plans}
+        if repair:
+            required.update({"repair.json", "repair-request.json", "execution.json"})
         optional = {"stage/reads.parquet.sha256", "stage/source-gaps.parquet"}
         require(len(plans) == 1 and required <= set(files) <= required | optional, f"Unexpected local controls for {name}")
         for file, member in files.items():
@@ -118,8 +121,21 @@ def collect(args, client, bucket):
     checked_download(client, bucket, args.groups_key, master, sha256(args.groups_sha256), CONTROL_LIMIT)
     receipt = owner.read_json(master)
     groups = {item["group"]: item for item in receipt["groups"]}
+    repair_key, repair_sha = getattr(args, "repair_key", None), getattr(args, "repair_sha256", None)
+    repair_groups = set()
+    compatible = receipt["reader_sha256"] == comment_fields._reader_sha256()
+    if repair_key or repair_sha:
+        from spicy_regs.pipelines.comment_stage_aggregate import repair_admission
+
+        require(repair_key and repair_sha, "Repair key and SHA-256 are required together")
+        repair_path = work / "repair-stages.json"
+        staging_key(repair_key, repair_path.name)
+        checked_download(client, bucket, repair_key, repair_path, sha256(repair_sha), CONTROL_LIMIT)
+        admission = repair_admission(repair_path, repair_sha, receipt, args.groups_sha256)
+        repair_groups = set(admission["groups"])
+        compatible = True
     require(receipt["format"] == "comment-source-groups/1" and receipt["profile"] == "attachments"
-            and receipt["reader_sha256"] == comment_fields._reader_sha256()
+            and compatible
             and receipt["implementation_sha256"] == digest(Path(comment_source_groups.__file__))
             and groups and len(groups) == len(receipt["groups"])
             and all(re.fullmatch(r"(local|runner)-[0-9]{3}", name) for name in groups),
@@ -128,7 +144,9 @@ def collect(args, client, bucket):
     reads.mkdir()
     local = {name for name in groups if name.startswith("local-")}
     local_keys = local_controls(client, bucket, args.local_key, args.local_sha256, work, reads, args.groups_sha256, local)
-    github_controls(args.source_runs, args.repository, args.groups_sha256, work, reads, set(groups) - local)
+    if repair_groups:
+        local_controls(client, bucket, repair_key, repair_sha, work, reads, args.groups_sha256, repair_groups, repair=True)
+    github_controls(args.source_runs, args.repository, args.groups_sha256, work, reads, set(groups) - local - repair_groups)
     stages = {}
     for name, group in groups.items():
         directory = reads / name
@@ -179,7 +197,9 @@ def execute(args):
     client, bucket = verified_target_client()
     master, reads = collect(args, client, bucket)
     stage = args.workdir / "stage"
-    receipt = aggregate(master, args.groups_sha256, reads, stage, max_spill=f"{SPILL_BYTES}B")
+    repair_path = args.workdir / "repair-stages.json" if getattr(args, "repair_key", None) else None
+    receipt = aggregate(master, args.groups_sha256, reads, stage, max_spill=f"{SPILL_BYTES}B",
+                        repair_admissions=repair_path, repair_admissions_sha256=getattr(args, "repair_sha256", None))
     census(stage, stage / "attachment-census.json")
     uploaded = publish_stage(stage, client, bucket)
     controls = {}
@@ -193,6 +213,7 @@ def execute(args):
         controls[filename] = {"key": remote, "sha256": checksum, "bytes": path.stat().st_size}
     owner.durable(args.workdir / "result.json", {
         "groups_sha256": args.groups_sha256, "source_run_ids": args.source_runs, "local_controls_sha256": args.local_sha256,
+        "repair_controls_sha256": getattr(args, "repair_sha256", None),
         "runtime_ref": args.runtime_ref, "rows": receipt["rows"], "source_gaps": receipt.get("source_gaps"),
         "upload": uploaded, "controls": controls,
     })
@@ -204,6 +225,8 @@ def main():
     parser.add_argument("--groups-sha256", required=True)
     parser.add_argument("--local-key", default="")
     parser.add_argument("--local-sha256", default="")
+    parser.add_argument("--repair-key", default="")
+    parser.add_argument("--repair-sha256", default="")
     parser.add_argument("--source-runs", type=json.loads, required=True)
     parser.add_argument("--repository", required=True)
     parser.add_argument("--runtime-ref", required=True)

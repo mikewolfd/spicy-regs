@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+from copy import deepcopy
 from functools import cache
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any, cast
 
 import pyarrow as pa
 
@@ -290,12 +292,61 @@ def _comment_formats(value, field):
             result.append(None)
             continue
         rendition = dict(_object(rendition, FORMAT.names, field))
+        # Native replay also runs in base installs without the optional source readers.
         size = rendition.get("size")
-        if isinstance(size, str) and size.isdecimal() and len(size.lstrip("0")) <= 19:
+        if type(size) is int and size == -1:
+            size = None
+        elif isinstance(size, str) and size.isdecimal() and len(size.lstrip("0")) <= 19:
             size = int(size.lstrip("0") or "0")
+        if size is not None and (type(size) is not int or not 0 <= size <= 2**63 - 1):
+            raise RegulationsShapeError(f"{field}.size: expected a nonnegative 64-bit byte count or unknown")
         if "size" in rendition:
             rendition["size"] = size
         result.append(rendition)
+    return result
+
+
+def comment_size_normalizations(original):
+    """Explain exact integer -1 sizes without dropping the original input."""
+    if "data" in original:
+        entries = [(f"included[{i}].attributes.fileFormats", (item.get("attributes") or {}).get("fileFormats"))
+                   for i, item in enumerate(original.get("included") or []) if item.get("type") == "attachments"]
+    else:
+        value = original.get("attachments_json")
+        if value is None or isinstance(value, str) and "-1" not in value:
+            return []
+        entries = [(f"attachments_json[{i}].formats", item.get("formats"))
+                   for i, item in enumerate(_array(value, "attachments_json") or []) if item is not None]
+    return [{"field": f"{path}[{i}].size", "original": -1, "normalized": None,
+             "reason": "Publisher integer -1 is not a usable byte count; the byte size remains unknown"}
+            for path, formats in entries for i, item in enumerate(formats or [])
+            if item is not None and type(item.get("size")) is int and item["size"] == -1]
+
+
+def normalize_legacy_comment_sizes(held: Any, original: Any) -> Any:
+    """Compare an earlier native -1 with today's unknown only at the same raw -1 occurrence.
+
+    Historical subjects and receipts stay unchanged. Callers still compare
+    every other value exactly; a missing or different original cannot qualify.
+    """
+    raw = _array(original, "attachments_json")
+    if not isinstance(held, list) or raw is None or len(held) != len(raw):
+        return held
+    result = deepcopy(held)
+    for stated, native in zip(raw, result, strict=True):
+        if not isinstance(stated, dict) or not isinstance(native, dict):
+            continue
+        native = cast(dict[str, Any], native)
+        formats, prior = stated.get("formats"), native.get("formats")
+        if not isinstance(formats, list) or not isinstance(prior, list) or len(formats) != len(prior):
+            continue
+        for source, target in zip(formats, prior, strict=True):
+            if not isinstance(source, dict) or not isinstance(target, dict):
+                continue
+            source, target = cast(dict[str, Any], source), cast(dict[str, Any], target)
+            if (type(source.get("size")) is int and source["size"] == -1
+                    and type(target.get("size")) is int and target["size"] == -1):
+                target["size"] = None
     return result
 
 

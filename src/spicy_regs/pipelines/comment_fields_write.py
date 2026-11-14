@@ -147,7 +147,13 @@ def _matches_promoted_attachments(held: str, *earlier_spellings: str | None) -> 
         candidate = _native("comments", "attachments_json", spelling)
         _validate(candidate, COMMENT_ATTACHMENTS, "attachments")
         normalized = pa.array([candidate], type=v2).to_pylist()[0]
-        if json.dumps(normalized, ensure_ascii=False, separators=(",", ":")) == held:
+        encoded = json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
+        if encoded == held:
+            return True
+        from spicy_regs.transforms.regulations_shape import normalize_legacy_comment_sizes
+
+        earlier = normalize_legacy_comment_sizes(decoded, spelling)
+        if encoded == json.dumps(earlier, ensure_ascii=False, separators=(",", ":")):
             return True
     return False
 
