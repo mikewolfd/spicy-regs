@@ -73,6 +73,10 @@ uncompressed column bytes. These identify the exact inherited inputs without
 another full-file read or published local filesystem paths.
 A candidate with failed detail attempts remains available for inspection and
 retry; the command exits with an error after recording that result.
+`coverage.detail_failed` counts failed attempts in this operation;
+`coverage.retained_detail_failed` counts all retained revisions whose latest
+attempt failed. An unselected historical failure remains in the table and its
+receipts without making a healthy selected cohort or unchanged repeat fail.
 
 This local command accepts a native pair, which does not establish a qualified
 live discovery cursor. Its detail-only discovery remains `not_requested` and its
