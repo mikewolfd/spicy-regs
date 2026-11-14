@@ -31,8 +31,9 @@ from spicy_regs.transforms.table_merge import merge_contract_table
 
 CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 
-#: A contract here leaves the set when its owning rollup hosts it.
-UNHOSTED_CONTRACTS = frozenset()
+#: A contract here leaves the set when its owning rollup hosts it. House floor
+#: observations currently have an offline local-partial builder only.
+UNHOSTED_CONTRACTS = frozenset({"house_floor_feeds", "house_floor_entries", "house_floor_links"})
 
 #: Contracts this repository publishes through its own ``RECORD_TYPES`` (the
 #: regulatory base tables), not through ``CONTRACT_TABLES``. SpicyDocs 0.34.1
