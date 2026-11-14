@@ -1,0 +1,65 @@
+{
+  "operational_source": "d2e5951d036a3bea6ba37c7859697289f3023aa4",
+  "operational_files": {
+    "src/spicy_regs/sources/iceberg.py": "aa5dbbd6babb4b9783dac203b14b685ac86499991660626ae636a0c06f014404",
+    "src/spicy_regs/sources/regulatory_catalog.py": "bc8cd9b35d67cb3a4839e0c464c6db00ede8dd227d3687d939d47c8f914f1ec0",
+    "src/spicy_regs/etl_receipts.py": "70d450012972de6b95b50f6b1cd8ca64e36d50c3e6b6f822161d96dc35620deb",
+    "src/spicy_regs/transforms/regulations_receipts.py": "5185b4e6cfe2707b3a5dbea62a43bf2dff83a5543c40a883f17fe0628c6efad5",
+    "src/spicy_regs/transforms/regulations_shape.py": "b9cd05a72c841509635bda57612bad9f6bb4923c4c62f054a630c08fea6c1e85",
+    "scripts/read_comment_attachment_group.py": "98c589beb3bb658e972679dacbecc64febce772cbacae0560e09e5c8c5baaff8",
+    "src/spicy_regs/operational_runner.py": "c49b661b524ac8761449350b19ad9f42978388f2d37cac82adaaa19b5d2f0a8f",
+    "src/spicy_regs/sources/remote_parquet.py": "051cf848a2d382b23fb62ce149b8b09647db4ea7930c2fd923a1fe9ed2ebc239",
+    "src/spicy_regs/explorer_publications.py": "dc3c91ad6dcf88dfc6c68d377d685c39f446546cfeff80f48db0924f84f237bb"
+  },
+  "witnesses": [
+    {
+      "comment_id": "ACF-2026-0595-14977",
+      "parent_modify_date": "2026-09-23T01:30:18Z",
+      "original_sha256_observed": "4a481b62eb0ff1412905cb4b795ca3db260935ed95caa50c6fe7f363bcae5614",
+      "slug": "acf-null",
+      "agency_code": "ACF"
+    },
+    {
+      "comment_id": "AMS-FTPP-19-0037-0071",
+      "parent_modify_date": "2019-06-09T13:59:07Z",
+      "original_sha256_observed": "8c66a75d802f032128df34eaa24566481b6e0e015f64d067b0c4fc229d932865",
+      "slug": "ams-note",
+      "agency_code": "AMS"
+    },
+    {
+      "comment_id": "ATF-2021-0002-134665",
+      "parent_modify_date": "2021-08-29T20:39:01Z",
+      "original_sha256_observed": "67a1e7654e579bccc4f25b404a6b4147e47771d3d8e977630caf43601a5063c3",
+      "slug": "atf-withheld",
+      "agency_code": "ATF"
+    },
+    {
+      "comment_id": "ATSDR-2015-0004-0014",
+      "parent_modify_date": "2018-06-25T17:31:30Z",
+      "original_sha256_observed": "1fedce7b9d10f3f30053100183ea7b1afe1fcbd0c9740be25d0b2f28865e9e78",
+      "slug": "atsdr-formats",
+      "agency_code": "ATSDR"
+    },
+    {
+      "comment_id": "EPA-HQ-OAR-2025-0124-3063",
+      "parent_modify_date": "2026-10-06T20:12:46Z",
+      "original_sha256_observed": "ac8a0a3f5abefb8f7720943fb966c4a461f3c8e3d8dbbca9d17fa6e446aed1ba",
+      "slug": "epa-publication",
+      "agency_code": "EPA"
+    },
+    {
+      "comment_id": "HHS-OASH-2022-0006-0002",
+      "parent_modify_date": "2023-04-07T17:54:22Z",
+      "original_sha256_observed": "ce146ada03ede758a871f124ce51ad087ba8fa8d397500750f5a04052db79d06",
+      "slug": "hhs-size",
+      "agency_code": "HHS"
+    },
+    {
+      "comment_id": "FWS-R4-ES-2020-0109-0210",
+      "parent_modify_date": "2022-08-10T19:41:35Z",
+      "original_sha256_observed": "c852d64b7d38e4aecbdc0b3bc7b72611cfeaaaf3839fe6153ab644970b26b1f6",
+      "slug": "fws-size",
+      "agency_code": "FWS"
+    }
+  ]
+}
