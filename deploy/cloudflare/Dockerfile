@@ -37,10 +37,11 @@ WORKDIR /app
 # beside the 93 MB the others take. The lock and the check stay in the image,
 # so the binding step can rerun the check inside the pushed image.
 # marko: every ordinary discovery/query connection registers opinion text search.
+# numpy: DuckDB requires it when registering that search's Arrow function.
 # The ordinary-tool smoke below must run, not just import the calling module.
 COPY uv.lock deploy/cloudflare/lock_pins.py deploy/cloudflare/runtime_readers.py /app/lock/
 RUN python /app/lock/lock_pins.py constraints /app/lock/uv.lock > /app/lock/constraints.txt \
-    && pip install -c /app/lock/constraints.txt mcp duckdb uvicorn loguru httpx pytz pyarrow marko && pip check
+    && pip install -c /app/lock/constraints.txt mcp duckdb uvicorn loguru httpx pytz pyarrow marko numpy && pip check
 
 # Install the package code without its declared (ETL) dependencies. mcp_server
 # imports only the local _icon module plus mcp/duckdb, so this is sufficient and
