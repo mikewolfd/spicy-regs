@@ -80,14 +80,14 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --extra operational-runner
 
       - name: Record actual export placement
         env:
           TMPDIR: ${{ runner.temp }}
         run: |
           mkdir -p output
-          uv run --frozen python - <<'PY'
+          uv run --no-sync python - <<'PY'
           import json, os, platform, shutil
           from pathlib import Path
           directory = Path('output').resolve()
@@ -138,9 +138,10 @@ jobs:
           if [ "${{ inputs.skip_upload }}" = "true" ]; then
             ARGS="$ARGS --skip-upload"
           fi
-          echo "Running: uv run python scripts/publish_comments_mirror.py $ARGS"
+          echo "Running admitted comments publication at $GITHUB_SHA"
           measure \
-            uv run --frozen python scripts/publish_comments_mirror.py $ARGS
+            uv run --no-sync python scripts/publish_comments_mirror_guarded.py \
+              --expected-source-sha "$GITHUB_SHA" $ARGS
 
       - name: Retain publication receipts and resource measurements
         if: always()
@@ -153,6 +154,11 @@ jobs:
             output/comments-publication.json
             output/comments-resources.txt
             output/comments-placement.json
+            output/comments-admission.json
+            output/comments-admit-*.json
+            output/comments-admit-*.log
+            output/comments-publish-*.json
+            output/comments-publish-*.log
           retention-days: 30
 
       - name: Capture published base versions for dependent jobs
@@ -161,7 +167,7 @@ jobs:
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
         run: |
           : "${R2_PUBLIC_URL:?Set the fork public data URL}"
-          uv run --frozen python scripts/check_refresh_inputs.py capture
+          uv run --no-sync python scripts/check_refresh_inputs.py capture
       - name: Retain refresh input versions
         if: ${{ !inputs.skip_upload && !inputs.comments_only }}
         uses: actions/upload-artifact@v4
