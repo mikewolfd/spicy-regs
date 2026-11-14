@@ -443,6 +443,11 @@ def recorded_subject(dataset: str, raw: Mapping[str, Any], subject: Mapping[str,
                     return {f.name: historical(value.get(f.name), f.type) for f in dtype}
                 return value
             mapped = {f.name: historical(mapped.get(f.name), f.type) for f in earlier}
+    if mapped is not None and dataset == "hearing_transcripts" and policy_version == "legislative-documents/3":
+        from spicy_regs.policy_migrations import earlier_policy
+
+        earlier = earlier_policy(dataset, policy_version).subject_schema
+        mapped = {name: mapped[name] for name in earlier.names}
     earlier_shape = _earlier_legislative_schema(dataset)
     if (mapped is not None and earlier_shape is not None
             and set(subject) - {"raw_source_row"} == set(earlier_shape.names)):

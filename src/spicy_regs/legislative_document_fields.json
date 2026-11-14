@@ -2814,7 +2814,7 @@
       {
         "name": "event_id",
         "source_type": "VARCHAR",
-        "meaning": "The committee-meeting event id the Congress.gov hearing record names as its associatedMeeting, which committee_meetings.event_id joins on; NULL where the hearing names none or was not looked up.",
+        "meaning": "The meeting ID Congress.gov names and this dated GovInfo MODS corroborates; earlier retained rows follow their original receipt policy.",
         "decision": "keep",
         "target": "event_id",
         "target_type": "string",
@@ -2873,8 +2873,72 @@
         "target": "mods_event_id",
         "target_type": "string",
         "reason": "Preserve the source-stated domain value in native columns; retain original conversion input in receipts."
+      },
+      {
+        "name": "body_text",
+        "source_type": "VARCHAR",
+        "meaning": "Text from the exact retained rendition. NULL for legacy rows or publisher placeholders.",
+        "decision": "keep",
+        "target": "body_text",
+        "target_type": "string",
+        "reason": "Expose source-backed hearing text and relationship evidence without changing the dated key."
+      },
+      {
+        "name": "hearing_detail_json",
+        "source_type": "VARCHAR",
+        "meaning": "Independently dated Congress.gov detail state and exact capture locator. Only MODS-corroborated evidence supplies a dated meeting join; newer observations do not retract a held join.",
+        "decision": "move-to-receipt",
+        "target": null,
+        "target_type": "receipt exact typed value",
+        "reason": "Keep the complete independent observation in its exact receipt; promote named source facts below."
+      },
+      {
+        "name": "mods_event_ids_json",
+        "source_type": "VARCHAR",
+        "meaning": "Every GovInfo MODS event ID, in source order with repetitions. Empty is distinct from an unprocessed legacy row.",
+        "decision": "native-list",
+        "target": "mods_event_ids",
+        "target_type": "list<string>",
+        "reason": "Expose source-backed hearing text and relationship evidence without changing the dated key."
       }
-    ]
+    ],
+    "derived_fields": {
+      "detail_state": {
+        "from": "hearing_detail_json",
+        "property": "state",
+        "type": "string"
+      },
+      "detail_event_id": {
+        "from": "hearing_detail_json",
+        "property": "event_id",
+        "type": "string"
+      },
+      "detail_relationship": {
+        "from": "hearing_detail_json",
+        "property": "relationship",
+        "type": "string"
+      },
+      "detail_sha256": {
+        "from": "hearing_detail_json",
+        "property": "sha256",
+        "type": "string"
+      },
+      "detail_source_url": {
+        "from": "hearing_detail_json",
+        "property": "source_url",
+        "type": "string"
+      },
+      "detail_observed_at": {
+        "from": "hearing_detail_json",
+        "property": "observed_at",
+        "type": "string"
+      },
+      "detail_locator": {
+        "from": "hearing_detail_json",
+        "property": "locator",
+        "type": "string"
+      }
+    }
   },
   "house_activity_reports": {
     "identity_fields": [
