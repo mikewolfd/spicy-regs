@@ -262,6 +262,7 @@ def build_crs_reports(
                     old_witnesses.append(witness)
             row["list_witness_json"] = json_text(old_witnesses) if old_witnesses else None
         merged[key] = row
+    failed_details_this_run = 0
     if detail_limit:
         from spicy_regs.source_evidence import acquisition_evidence
 
@@ -298,6 +299,7 @@ def build_crs_reports(
                     check_detail_replacement(row, outcome["report"])
                     row.update(qualified_detail(outcome["report"], outcome["witnesses"]))
                 else:
+                    failed_details_this_run += 1
                     row.update(detail_attempt_state="failed", detail_error=outcome["error"],
                                detail_attempt_witness_json=json_text(outcome["witnesses"]))
     rows = sorted(merged.values(), key=lambda row: (row["update_date"] or "", row["report_id"] or ""), reverse=True)
@@ -316,11 +318,12 @@ def build_crs_reports(
 
     total = pq.ParquetFile(out_file).metadata.num_rows
     logger.info("CRS reports: {:,} rows", total)
-    failed_details = sum(row.get("detail_attempt_state") == "failed" for row in rows)
+    retained_failed_details = sum(row.get("detail_attempt_state") == "failed" for row in rows)
     status = {"discovery": "complete" if refresh_list else "not_requested",
               "scope": "detail-cohort" if not refresh_list else "native-inventory" if reconcile or since is None else "date-window",
               "since": str(since) if since is not None else None,
-              "listed": list_rows, "detail_failed": failed_details,
+              "listed": list_rows, "detail_failed": failed_details_this_run,
+              "retained_detail_failed": retained_failed_details,
               "table_generation": "prepared", "atomic_snapshot": False,
               "whole_history_complete": False, "origin_requests": requests.requests,
               "prior_inputs": prior_admission,

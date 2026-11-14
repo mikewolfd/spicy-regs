@@ -16,7 +16,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_regs.etl_receipts import validate_receipt_bundle
+from spicy_regs.etl_receipts import read_with_receipts, validate_receipt_bundle
 from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.transforms.build_crs_reports import _SCHEMA, CrsOperationLimitError, _shape, build_crs_reports
 from spicy_regs.transforms.government_receipts import POLICIES, migrate_outputs
@@ -53,7 +53,37 @@ def selected_build(prior, output, **kwargs):
     )
 
 
-def test_installed_local_command_enriches_exact_old_revision_and_repeats_without_requests(prior, tmp_path):
+@pytest.mark.parametrize("unselected_failed", [False, True])
+def test_installed_local_command_enriches_exact_old_revision_and_repeats_without_requests(
+    prior, tmp_path, unselected_failed
+):
+    failed_raw = None
+    if unselected_failed:
+        rows = [
+            row["raw_record"]
+            for row in read_with_receipts([prior[0]], [prior[1]], POLICIES["crs_reports"], generation_id="selected")
+        ]
+        failed_raw = next(row for row in rows if row["report_id"] == "R2")
+        failed_raw.update(
+            detail_attempt_state="failed",
+            detail_error="prior source unavailable",
+            detail_attempt_witness_json=json.dumps(
+                [
+                    {
+                        "source_id": "congress.gov:crs-detail",
+                        "source_uri": "https://api.congress.gov/v3/crsreport/R2",
+                        "sha256": "sha256:" + hashlib.sha256(b"prior source unavailable").hexdigest(),
+                        "locator": None,
+                        "body_version": None,
+                    }
+                ]
+            ),
+        )
+        failed_directory = tmp_path / "selected-with-failure"
+        failed_directory.mkdir()
+        prior = failed_directory / "crs_reports.parquet", failed_directory / "etl_receipts.parquet"
+        pq.write_table(pa.Table.from_pylist(rows, schema=_SCHEMA), prior[0])
+        migrate_outputs((prior[0],), generation_id="selected")
     original = tmp_path / "detail.json"
     body = json.dumps({"CRSReport": {**DETAIL, "topics": [{"topic": "Health"}, {"topic": "Health"}, None]}}).encode()
     original.write_bytes(body)
@@ -95,6 +125,8 @@ def test_installed_local_command_enriches_exact_old_revision_and_repeats_without
     assert status["coverage"]["origin_requests"] == 0
     assert status["coverage"]["discovery"] == "not_requested"
     assert status["coverage"]["detail_attempted"] == 1
+    assert status["coverage"]["detail_failed"] == 0
+    assert status["coverage"]["retained_detail_failed"] == int(unselected_failed)
     assert status["coverage"]["prior_inputs"]["members"] == [
         {"name": path.name, "sha256": "sha256:" + hashlib.sha256(body).hexdigest(), "bytes": len(body), "rows": 3}
         for path, body in zip(prior, before, strict=True)
@@ -126,10 +158,21 @@ def test_installed_local_command_enriches_exact_old_revision_and_repeats_without
     repeat[repeat.index("--prior-subject") + 1] = str(native)
     repeat[repeat.index("--prior-receipts") + 1] = str(output / "etl_receipts.parquet")
     generation = json.loads((output / ".government-etl-build.json").read_text())["generation_id"]
+    if unselected_failed:
+        [failed] = [
+            row["raw_record"]
+            for row in read_with_receipts(
+                [native], [output / "etl_receipts.parquet"], POLICIES["crs_reports"], generation_id=generation
+            )
+            if row["raw_record"]["report_id"] == "R2"
+        ]
+        assert failed == failed_raw  # Includes the original failed-attempt witness.
     repeat[repeat.index("--prior-generation-id") + 1] = generation
     result = subprocess.run(repeat, check=False, capture_output=True, text=True, env=dict(os.environ), timeout=90)
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["coverage"]["detail_attempted"] == 0
+    repeated_status = json.loads(result.stdout)["coverage"]
+    assert repeated_status["detail_attempted"] == repeated_status["detail_failed"] == 0
+    assert repeated_status["retained_detail_failed"] == int(unselected_failed)
     assert pq.read_table(second / "crs_reports.parquet").to_pylist() == pq.read_table(native).to_pylist()
     assert pq.read_table(second / "etl_receipts.parquet").to_pylist() == receipts
 
@@ -316,6 +359,7 @@ def test_intentional_reconciliation_uses_unfiltered_inventory_without_deleting_h
     )
     assert len(asked) == 1 and "fromDateTime" not in asked[0].url.params
     assert coverage["scope"] == "native-inventory" and coverage["listed"] == 2
+
     # One later revision absent from the current inventory remains available.
     def key(row):
         return row["report_id"], row["update_date"]
@@ -351,4 +395,5 @@ def test_local_command_records_failed_candidate_before_reporting_failure(prior, 
         )
     result = json.loads((output / "crs-operation.json").read_text())
     assert result["coverage"]["detail_failed"] == 1
+    assert result["coverage"]["retained_detail_failed"] == 1
     assert pq.read_metadata(output / "crs_reports.parquet").num_rows == 3
