@@ -1,11 +1,26 @@
-name: Build and publish MCP reader image (manual)
+name: Build or qualify MCP reader image (manual)
 
 on:
   workflow_dispatch:
     inputs:
+      operation:
+        description: Build/publish an image, or qualify an existing image and its published FEC receipt without deploying
+        required: true
+        default: build
+        type: choice
+        options: [build, qualify]
       expected_source_sha:
         description: Exact source commit to build; must match the dispatched ref
         required: true
+        type: string
+      image_digest:
+        description: Qualification only; exact sha256 digest of the previously built reader image
+        type: string
+      fec_release_sha256:
+        description: Qualification only; published receipt bound to that exact image
+        type: string
+      data_base_url:
+        description: Qualification only; HTTPS public data base hosting the selected receipt and generations
         type: string
 
 permissions:
@@ -17,6 +32,11 @@ jobs:
     timeout-minutes: 25
     env:
       EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+      IMAGE_OPERATION: ${{ inputs.operation }}
+      QUALIFIED_IMAGE_DIGEST: ${{ inputs.image_digest }}
+      QUALIFIED_RECEIPT_SHA256: ${{ inputs.fec_release_sha256 }}
+      QUALIFIED_DATA_BASE_URL: ${{ inputs.data_base_url }}
+      QUALIFICATION_CONTAINER: reader-qualification-${{ github.run_id }}-${{ github.run_attempt }}
       IMAGE_TAG: spicy-regs-reader:${{ github.sha }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       WRANGLER_WRITE_LOGS: 'false'
@@ -49,6 +69,7 @@ jobs:
           test -z "$SOURCE_STATUS"
           sha256sum uv.lock deploy/cloudflare/Dockerfile \
             deploy/cloudflare/lock_pins.py deploy/cloudflare/runtime_readers.py \
+            deploy/cloudflare/qualify_reader.py deploy/cloudflare/start_reader.py \
             deploy/cloudflare/package-lock.json > image-output/build-inputs.sha256
           python3 - <<'PY'
           import os, re
@@ -57,6 +78,19 @@ jobs:
                                  Path('deploy/cloudflare/wrangler.template.jsonc').read_text())
           if configured != [os.environ['CLOUDFLARE_ACCOUNT_ID']]:
               raise SystemExit('Repository account variable must match the pinned Worker account')
+          operation = os.environ['IMAGE_OPERATION']
+          if operation not in {'build', 'qualify'}:
+              raise SystemExit('Unknown image operation')
+          values = [os.environ[name] for name in ('QUALIFIED_IMAGE_DIGEST', 'QUALIFIED_RECEIPT_SHA256', 'QUALIFIED_DATA_BASE_URL')]
+          if operation == 'qualify':
+              if not all(re.fullmatch(r'sha256:[0-9a-f]{64}', value) for value in values[:2]):
+                  raise SystemExit('Qualification requires exact image and receipt digests')
+              from urllib.parse import urlsplit
+              url = urlsplit(values[2])
+              if url.scheme != 'https' or not url.netloc or url.username or url.password or url.query or url.fragment:
+                  raise SystemExit('Qualification requires an HTTPS public data base')
+          elif any(values):
+              raise SystemExit('Qualification pins cannot be supplied to a build operation')
           PY
       - uses: actions/setup-node@v4
         with:
@@ -67,7 +101,7 @@ jobs:
           npm ci
           npm run configure
           node -p 'require("./node_modules/wrangler/package.json").version' > ../../image-output/wrangler-version.txt
-      - name: Authenticate the registry before building
+      - name: Authenticate the selected registry operation
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_CONTAINER_REGISTRY_TOKEN }}
           REGISTRY_USERNAME: ${{ secrets.CLOUDFLARE_CONTAINER_REGISTRY_USERNAME }}
@@ -86,9 +120,10 @@ jobs:
           if bool(username) != bool(password):
               raise SystemExit('Set both temporary registry secrets or remove both.')
           if not username:
+              scope = ['--pull'] if os.environ['IMAGE_OPERATION'] == 'qualify' else ['--push', '--pull']
               command = ['deploy/cloudflare/node_modules/.bin/wrangler', '--cwd', 'deploy/cloudflare',
                          'containers', 'registries', 'credentials', registry,
-                         '--push', '--pull', '--expiration-minutes', '30', '--json']
+                         *scope, '--expiration-minutes', '30', '--json']
               result = subprocess.run(command, capture_output=True, text=True, timeout=60)
               if result.returncode:
                   raise SystemExit('Registry credential request refused before build; check the account token permissions')
@@ -119,13 +154,16 @@ jobs:
               json.dump({'auths': {registry: {'auth': auth}}}, handle)
           PY
       - name: Build the existing locked reader image
+        if: inputs.operation == 'build'
         shell: bash
         run: |
           set -o pipefail
           docker build --platform linux/amd64 --provenance=false \
+            --label "org.opencontainers.image.revision=$EXPECTED_SOURCE_SHA" \
             -f deploy/cloudflare/Dockerfile -t "$IMAGE_TAG" . \
             2>&1 | tee image-output/build.log
       - name: Record installed runtime and image
+        if: inputs.operation == 'build'
         shell: bash
         run: |
           set -o pipefail
@@ -137,6 +175,7 @@ jobs:
             'import json; from spicy_regs.fec_release import runtime_consumer; print(json.dumps(runtime_consumer(None), sort_keys=True))' \
             > image-output/installed-consumer.json 2> image-output/runtime-stderr.log
       - name: Publish and verify the same image
+        if: inputs.operation == 'build'
         shell: bash
         run: |
           set -o pipefail
@@ -192,6 +231,42 @@ jobs:
           (output / 'registry-association.json').write_text(json.dumps(association, indent=2) + '\n')
           print(reference)
           PY
+      - name: Qualify the existing image through ordinary loopback MCP
+        if: inputs.operation == 'qualify'
+        shell: bash
+        run: |
+          set -o pipefail
+          QUALIFIED_IMAGE="registry.cloudflare.com/$CLOUDFLARE_ACCOUNT_ID/spicy-regs-reader@$QUALIFIED_IMAGE_DIGEST"
+          docker pull "$QUALIFIED_IMAGE" 2>&1 | tee image-output/qualification-pull.log
+          docker image inspect "$QUALIFIED_IMAGE" > image-output/qualified-image-inspect.json
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          image, = json.loads(Path('image-output/qualified-image-inspect.json').read_text())
+          reference = 'registry.cloudflare.com/' + os.environ['CLOUDFLARE_ACCOUNT_ID'] + '/spicy-regs-reader@' + os.environ['QUALIFIED_IMAGE_DIGEST']
+          assert reference in image['RepoDigests'], 'Pulled image does not match the selected registry digest'
+          assert (image['Os'], image['Architecture']) == ('linux', 'amd64'), 'Wrong qualification platform'
+          assert image['Config']['Labels']['org.opencontainers.image.revision'] == os.environ['EXPECTED_SOURCE_SHA'], 'Image source does not match this qualification checkout'
+          PY
+          docker run --detach --name "$QUALIFICATION_CONTAINER" --memory=12g --cpus=4 \
+            --mount "type=bind,src=$PWD/image-output,dst=/qualification-output" \
+            -e "SPICY_REGS_R2_URL=$QUALIFIED_DATA_BASE_URL" \
+            -e "SPICY_REGS_FEC_RELEASE_SHA256=$QUALIFIED_RECEIPT_SHA256" \
+            -e "SPICY_REGS_CONSUMER_IMAGE_DIGEST=$QUALIFIED_IMAGE_DIGEST" \
+            -e SPICY_REGS_MEMORY_LIMIT=9GB -e SPICY_REGS_TEMP_DIR=/tmp \
+            -e SPICY_REGS_STATEMENT_TIMEOUT=18s \
+            "$QUALIFIED_IMAGE" > image-output/qualification-container-id.txt
+          timeout 240s docker exec "$QUALIFICATION_CONTAINER" python /app/lock/qualify_reader.py \
+            --output /qualification-output/qualification \
+            2>&1 | tee image-output/qualification-client.log
+      - name: Retain and remove only the qualification container
+        if: always() && inputs.operation == 'qualify'
+        shell: bash
+        run: |
+          if docker container inspect "$QUALIFICATION_CONTAINER" > image-output/qualification-container-inspect.json 2>/dev/null; then
+            docker logs "$QUALIFICATION_CONTAINER" > image-output/qualification-server.log 2>&1
+            docker rm --force "$QUALIFICATION_CONTAINER"
+          fi
       - name: Remove temporary registry credentials
         if: always()
         run: rm -rf -- "$RUNNER_TEMP/mcp-registry-auth"

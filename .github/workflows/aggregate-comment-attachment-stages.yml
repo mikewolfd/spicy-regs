@@ -23,6 +23,14 @@ on:
         description: Exact SHA-256 of local-stages.json
         type: string
         required: false
+      repair_key:
+        description: Optional exact staging key for reviewed repair-stages.json
+        type: string
+        required: false
+      repair_sha256:
+        description: Exact SHA-256 admitting only the named repaired results
+        type: string
+        required: false
       source_runs:
         description: JSON array of completed source workflow run IDs
         type: string
@@ -68,6 +76,8 @@ jobs:
           GROUPS_SHA256: ${{ inputs.groups_sha256 }}
           LOCAL_KEY: ${{ inputs.local_key }}
           LOCAL_SHA256: ${{ inputs.local_sha256 }}
+          REPAIR_KEY: ${{ inputs.repair_key }}
+          REPAIR_SHA256: ${{ inputs.repair_sha256 }}
           SOURCE_RUNS: ${{ inputs.source_runs }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -78,6 +88,7 @@ jobs:
             --runtime-ref "$RUNTIME_REF" --repository "$GITHUB_REPOSITORY" \
             --groups-key "$GROUPS_KEY" --groups-sha256 "$GROUPS_SHA256" \
             --local-key "$LOCAL_KEY" --local-sha256 "$LOCAL_SHA256" --source-runs "$SOURCE_RUNS" \
+            --repair-key "$REPAIR_KEY" --repair-sha256 "$REPAIR_SHA256" \
             --workdir "$WORKDIR"
       - name: Retain aggregate receipts and resource evidence
         if: always()
@@ -90,6 +101,7 @@ jobs:
             ${{ env.WORKDIR }}/execution.log
             ${{ env.WORKDIR }}/process-closure.json
             ${{ env.WORKDIR }}/result.json
+            ${{ env.WORKDIR }}/repair-stages.json
             ${{ env.WORKDIR }}/stage/staging.json
             ${{ env.WORKDIR }}/stage/reads.parquet.sha256
             ${{ env.WORKDIR }}/stage/attachment-census.json

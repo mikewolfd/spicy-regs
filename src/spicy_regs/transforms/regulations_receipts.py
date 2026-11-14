@@ -7,7 +7,7 @@ shared receipt member together. It never updates a remote pointer or catalog.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import cache
 from hashlib import file_digest, sha256
 import json
@@ -38,6 +38,8 @@ from spicy_regs.transforms.regulations_shape import (
     shape_record,
     shape_records,
     subject_schema,
+    comment_size_normalizations,
+    normalize_legacy_comment_sizes,
 )
 
 # Datasets whose retained processing input restores through the private batch reader.
@@ -239,7 +241,13 @@ def _processor_input(dataset, row, *, processor=None, selected=None):
     # (a list its receipt held as JSON text) has no selected value to compare: it is reproduced from the retained
     # input alone. A pair under the current policy holds every column, so nothing is left out for it.
     held = [name for name in schema.names if name in row]
-    if exact_json({name: reproduced[name] for name in held}) != exact_json({name: row[name] for name in held}):
+    original_subject = {name: row[name] for name in held}
+    reproduced_json = exact_json({name: reproduced[name] for name in held})
+    if (exact_json(original_subject) != reproduced_json
+            and dataset == "comments" and "attachments" in original_subject):
+        original_subject["attachments"] = normalize_legacy_comment_sizes(
+            original_subject["attachments"], value.get("attachments_json"))
+    if reproduced_json != exact_json(original_subject):
         raise ValueError(f"{dataset}: retained processor input differs from selected native subject")
     if any(exact_json(shaped.get(name)) != exact_json(row.get(name)) for name in RECEIPT_COLUMNS[dataset]):
         raise ValueError(f"{dataset}: retained processor input differs from selected processing evidence")
@@ -427,7 +435,15 @@ def map_regulations_attempt(dataset: str, row: Mapping, context: ReceiptContext,
     """One row attempt for bounded bulk fallbacks, with the exact writer classification."""
     from spicy_regs.etl_receipts import split_record
     shaped, failure = _shape_regulations_attempt(dataset, row, context, project=project, input_metadata=input_metadata)
-    return (None, failure) if shaped is None else split_record(policy(dataset), shaped, context)
+    return (None, failure) if shaped is None else split_record(
+        policy(dataset), shaped, _normalization_context(dataset, shaped, context))
+
+
+def _normalization_context(dataset, shaped, context):
+    if dataset == "comments" and (changes := comment_size_normalizations(shaped["raw_source_record"])):
+        return replace(context, diagnostics={**context.diagnostics,
+                                            "attachment_size_normalizations": changes})
+    return context
 
 
 def write_records(
@@ -477,7 +493,7 @@ def write_records(
                         if len(refused) >= 2000:
                             flush()
                         continue
-                    yield shaped, context
+                    yield shaped, _normalization_context(dataset, shaped, context)
             finally:
                 flush()
                 writer.close()

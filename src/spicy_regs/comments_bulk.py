@@ -43,13 +43,17 @@ def eligible(schema: pa.Schema) -> bool:
 
 def _attachments(values):
     """Use the shared strict parser; a refusal belongs to the reference attempt."""
+    from spicy_regs.transforms.regulations_shape import comment_size_normalizations
+
     rows = []
     for value in values.to_pylist():
         try:
             native = _native('comments', 'attachments_json', value)
             _validate(native, COMMENT_ATTACHMENTS, 'comments.attachments')
             stored = pa.array([native], type=COMMENT_ATTACHMENTS).to_pylist()[0]
-            rows.append({'native': None if stored is None else json.dumps(stored, ensure_ascii=False, separators=(',', ':')), 'reference': False})
+            # Only the rare unknown-size row needs the reference writer's diagnostic receipt.
+            reference = bool(comment_size_normalizations({'attachments_json': value}))
+            rows.append({'native': None if stored is None else json.dumps(stored, ensure_ascii=False, separators=(',', ':')), 'reference': reference})
         except (ValueError, TypeError, OverflowError, RecursionError, pa.ArrowException):
             rows.append({'native': None, 'reference': True})
     return pa.array(rows, type=_ATTACHMENT_RESULT)
@@ -295,6 +299,13 @@ def restore_catalog(subjects: Path, receipts: Path, destination: Path, *, genera
                             shaped = [shape_record('comments', value) for value in raw]
                             reproduced = etl_bulk.mapper_table(shaped, selected.subject_schema, 'Comments reproduction')
                             actual = table.select(selected.subject_schema.names).cast(selected.subject_schema)
+                            if not reproduced.equals(actual):
+                                from spicy_regs.transforms.regulations_shape import normalize_legacy_comment_sizes
+                                earlier = actual.to_pylist()
+                                for subject, original in zip(earlier, raw, strict=True):
+                                    subject['attachments'] = normalize_legacy_comment_sizes(
+                                        subject['attachments'], original.get('attachments_json'))
+                                actual = etl_bulk.mapper_table(earlier, selected.subject_schema, 'Historical size comparison')
                             if not reproduced.equals(actual):
                                 raise etl_bulk.NotBulkEligible('Comments processor input differs from selected native subjects')
                             names = RECEIPT_COLUMNS['comments']

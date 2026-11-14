@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
+import re
 from collections import Counter
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -39,7 +41,46 @@ def _file(path: Path, pin: dict, *, name: str) -> Path:
     return path
 
 
-def _group_result(root: Path, expected: dict, master_sha256: str, reader_sha256: str) -> tuple[Path, dict, dict[Path, str]]:
+def repair_admission(path: Path, pin: str | None, master: dict, master_sha256: str, *, candidate_only=False) -> dict:
+    """Admit exact derived results, keeping the baseline reader for every carried group."""
+    from spicy_regs.transforms import regulations_shape
+
+    if not pin or file_sha256(path) != pin:
+        raise ValueError("Repair admission differs from its exact SHA-256")
+    admission = json.loads(path.read_text())
+    producer = admission["producer"]
+    executor = Path(__file__).resolve().parents[3] / "scripts/repair_comment_attachment_group.py"
+    groups = {g["group"] for g in master["groups"]}
+    if (admission["format"] != "comment-attachment-repair-stages/1"
+            or admission["groups_sha256"] != master_sha256
+            or admission["previous_reader_sha256"] != master["reader_sha256"]
+            or set(producer) != {"runtime_ref", "reader_sha256", "executor_sha256", "shape_sha256", "candidate_only"}
+            or not re.fullmatch(r"[0-9a-f]{40}", producer["runtime_ref"])
+            or producer["reader_sha256"] != cf._reader_sha256()
+            or producer["executor_sha256"] != file_sha256(executor)
+            or producer["shape_sha256"] != file_sha256(Path(regulations_shape.__file__))
+            or producer["candidate_only"] is not candidate_only
+            or not admission["groups"] or not admission["groups"].keys() <= groups
+            or any(not re.fullmatch(r"runner-[0-9]{3}", name) for name in admission["groups"])):
+        raise ValueError("Repair admission does not match the exact producer and frozen groups")
+    for selected in admission["groups"].values():
+        records = selected["records"]
+        files = selected["files"]
+        plans = [name for name in files if re.fullmatch(r"(?:read/)?plan/pinned-[a-z0-9-]+\.json", name)]
+        required = {"result.json", "repair.json", "repair-request.json", "execution.json", "stage/staging.json",
+                    "stage/reads.parquet.sha256", *plans}
+        if (not records or len({row["key"] for row in records}) != len(records)
+                or len(plans) != 1 or set(files) != required
+                or any(type(member["bytes"]) is not int or not 0 < member["bytes"] <= 4 * 2**20
+                       or not re.fullmatch(r"[0-9a-f]{64}", member["sha256"]) for member in files.values())
+                or selected["request_sha256"] != files["repair-request.json"]["sha256"]
+                or not re.fullmatch(r"[0-9a-f]{64}", selected["previous_archive_sha256"])):
+            raise ValueError("Repair admission requires exact request, archive and distinct source keys")
+    return admission
+
+
+def _group_result(root: Path, expected: dict, master_sha256: str, reader_sha256: str,
+                  repair: dict | None = None, repair_producer: dict | None = None) -> tuple[Path, dict, dict[Path, str]]:
     name = expected["group"]
     directory = root / name
     result_path = directory / "result.json"
@@ -51,10 +92,69 @@ def _group_result(root: Path, expected: dict, master_sha256: str, reader_sha256:
     documents = {path: path.read_bytes() for path in (result_path, stage_path, plan_paths[0])}
     result, stage, plan = (json.loads(content) for content in documents.values())
     receipt_pins = {path: hashlib.sha256(content).hexdigest() for path, content in documents.items()}
+    result_reader = reader_sha256
+    if repair is not None:
+        if repair_producer is None:
+            raise ValueError("Repair requires its exact producer admission")
+        report_path = directory / "repair.json"
+        report = json.loads(report_path.read_text())
+        request_path = directory / "repair-request.json"
+        request = json.loads(request_path.read_text())
+        execution = json.loads((directory / "execution.json").read_text())
+        def records(rows):
+            return [{key: row[key] for key in ("key", "raw_sha256", "raw_bytes")} for row in rows]
+
+        for relative, member in repair["files"].items():
+            path = directory / relative
+            _file(path, {"file": path.name, **member}, name=path.name)
+        limits = execution["limits"]
+        elapsed = execution["elapsed_seconds"]
+        if (execution["status"] != "complete" or execution["remaining_processes"]
+                or limits != report["resource_admission"]["limits"]
+                or not 0 < limits["wall_seconds"] <= 5400
+                or limits["rss_bytes"] != 2 * 2**30 or limits["output_bytes"] != 2**30
+                or limits["stop_free_bytes"] != 4 * 2**30 or limits["start_free_bytes"] != 4 * 2**30
+                or type(elapsed) not in (int, float) or not math.isfinite(elapsed) or elapsed < 0
+                or elapsed > limits["wall_seconds"]
+                or execution["peaks"]["rss"] > limits["rss_bytes"]
+                or execution["peaks"]["allocated"] > limits["output_bytes"]
+                or execution["last"]["free"] < limits["stop_free_bytes"]
+                or report["previous_active_seconds"] + report["supplementary_active_seconds"] + elapsed > 5400):
+            raise ValueError(f"Repair lacks successful bounded supervisor closure: {name}")
+        if (receipt_pins[result_path] != repair["files"]["result.json"]["sha256"]
+                or file_sha256(report_path) != repair["files"]["repair.json"]["sha256"]
+                or result.get("repair_sha256") != file_sha256(report_path)
+                or report["format"] != "comment-attachment-size-repair/1"
+                or report["group"] != name or report["groups_sha256"] != master_sha256
+                or report["previous"]["identity"]["reader_sha256"] != reader_sha256
+                or report["previous"]["identity"]["group"] != name
+                or report["previous"]["identity"]["groups_sha256"] != master_sha256
+                or file_sha256(request_path) != repair["request_sha256"]
+                or report["request_sha256"] != repair["request_sha256"]
+                or report["previous"] != request["previous"]
+                or report["previous"]["archive"]["sha256"] != repair["previous_archive_sha256"]
+                or report["producer"] != repair_producer or request["producer"] != repair_producer
+                or records(report["repaired_records"]) != repair["records"]
+                or records(request["records"]) != repair["records"]
+                or report["preserved_rows"] + report["added_rows"] != expected["keys"]
+                or report["added_rows"] != len(repair["records"])
+                or report["source_usage"]["attempts"] > 2 * expected["keys"]
+                or report["source_usage"]["bytes"] > 3 * 2**30
+                or report["previous_active_seconds"] + report["supplementary_active_seconds"] + report["repair_seconds"] > 5400
+                or not report["checks"] or not all(report["checks"].values()) or report["new_source_gets"] != 0
+                or not report["repaired_records"] or len({row["key"] for row in report["repaired_records"]}) != len(report["repaired_records"])
+                or any(result[key] != report["producer"][key] for key in repair_producer)):
+            raise ValueError(f"Repair differs from its exact admitted derivation: {name}")
+        result_reader = report["producer"]["reader_sha256"]
+        receipt_pins[report_path] = result["repair_sha256"]
+        receipt_pins[request_path] = repair["request_sha256"]
+        receipt_pins[directory / "execution.json"] = repair["files"]["execution.json"]["sha256"]
+    elif result.get("repair_sha256"):
+        raise ValueError(f"Repaired source group requires explicit admission: {name}")
     # The runner uses these names; local receipts predate the runner.
     if "groups_sha256" in result:
         master_pin, descriptor, stage_file = result["groups_sha256"], result["group_descriptor"], result["stage_file"]
-        if result["status"] != "complete" or result["reader_sha256"] != reader_sha256:
+        if result["status"] != "complete" or result["reader_sha256"] != result_reader:
             raise ValueError(f"Runner did not complete the pinned reader: {name}")
     else:
         master_pin, descriptor, stage_file = result["master_receipt_sha256"], result["inputs"], result["stage"]
@@ -158,7 +258,9 @@ def _check_routing(con: duckdb.DuckDBPyConnection, manifests: dict[str, Path], m
             raise ValueError(f"Source identity is routed to another group: {group}")
 
 
-def aggregate(master_path: Path, master_sha256: str, reads_root: Path, out: Path, *, max_spill: str = "512MB") -> dict:
+def aggregate(master_path: Path, master_sha256: str, reads_root: Path, out: Path, *, max_spill: str = "512MB",
+              repair_admissions: Path | None = None, repair_admissions_sha256: str | None = None,
+              candidate_only: bool = False) -> dict:
     """Verify all compact group stages and emit one ordinary checked attachment stage."""
     master_content = master_path.read_bytes()
     if hashlib.sha256(master_content).hexdigest() != master_sha256:
@@ -167,6 +269,14 @@ def aggregate(master_path: Path, master_sha256: str, reads_root: Path, out: Path
     # The caller pins this previously verified partition of the full manifest.
     # Check routing again before summing group counts as globally distinct.
     groups = {group["group"]: group for group in master["groups"]}
+    repairs = {}
+    admitted = None
+    if repair_admissions is not None:
+        admitted = repair_admission(repair_admissions, repair_admissions_sha256, master, master_sha256,
+                                    candidate_only=candidate_only)
+        repairs = admitted["groups"]
+    elif repair_admissions_sha256:
+        raise ValueError("Repair SHA-256 requires its admission file")
     if (master["format"] != "comment-source-groups/1" or master["profile"] != "attachments"
             or min(master["local_groups"], master["runner_groups"], master["max_group_keys"]) < 1
             or not groups or len(groups) != len(master["groups"])
@@ -198,13 +308,17 @@ def aggregate(master_path: Path, master_sha256: str, reads_root: Path, out: Path
         frozen = {master_path: master_sha256, **{
             path: groups[name]["manifest"]["sha256"] for name, path in manifests.items()
         }}
+        if repair_admissions is not None:
+            frozen[repair_admissions] = repair_admissions_sha256
         with duckdb.connect() as con:
             _RESOURCES.configure(con, temporary / "spill")
             con.execute("SET max_temp_directory_size = ?", [max_spill])
             _check_routing(con, manifests, master)
             with pq.ParquetWriter(target, _SCHEMA, compression="zstd") as writer:
                 for name, group in sorted(groups.items()):
-                    reads, stage, receipt_pins = _group_result(reads_root, group, master_sha256, master["reader_sha256"])
+                    reads, stage, receipt_pins = _group_result(
+                        reads_root, group, master_sha256, master["reader_sha256"], repairs.get(name),
+                        admitted["producer"] if admitted else None)
                     outcomes, withheld = _expected_keys(con, manifests[name], reads, stage, receipt_pins)
                     frozen.update(receipt_pins)
                     counts = cf._column_totals(con, _read(reads), _COLUMNS)
@@ -249,6 +363,9 @@ def aggregate(master_path: Path, master_sha256: str, reads_root: Path, out: Path
             "file": {"name": target.name, "bytes": identity["bytes"], "sha256": digest, "etag": identity["etag"]},
             "master_source_groups_sha256": master_sha256, "group_stages": summaries, "checks": checks,
         }
+        if admitted:
+            receipt["repair_admission_sha256"] = repair_admissions_sha256 or ""
+            receipt["candidate_only"] = candidate_only
         if gaps:
             receipt["source_gaps"] = {"unresolved_keys": sum(gaps.values()), "withheld_comment_ids": totals["withheld"],
                                       "quarantined_keys": totals["quarantined_keys"], "statuses": dict(gaps)}
