@@ -12,15 +12,74 @@ build_crs_reports(output_dir, detail_limit=10)
 ```
 
 For a prepared local prior, `refresh_list=False` reads only that prior and the
-selected detail responses. It requires a positive detail limit. Supply
+selected detail responses. It requires a positive detail limit. `detail_reports`
+names an explicit cohort as `ID@timestamp` strings. Bare IDs require `latest=True`;
+unknown IDs, unknown revisions, duplicate picks and malformed timestamps refuse
+before inherited receipt restoration. The declared detail limit must admit every
+explicit selection; it never silently truncates that cohort. An exact selection
+can enrich an older retained revision. Every unselected revision survives.
+
+Supply
 `retained_details={report_id: (original_path, "sha256:...")}` to reuse explicitly
 pinned original JSON with no origin fallback. Otherwise the configured
 api.data.gov key authorizes the live detail route. The detail pass admits at most
-100 selected current report revisions per call and bounds each response to
-2 MiB. This does not bound the inherited table or list traversal: size their
-retained subjects, receipts, restored input, replacement and recovery reserve
-before a campaign. The incremental merge reads the inherited table once into
-memory; it does not require replaying the original corpus.
+100 selected report revisions per call and bounds each response to 2 MiB. Without
+`detail_reports`, the existing eligible latest-revision prefix remains supported.
+Explicit detail cohorts and list acquisition are separate operations.
+
+The builder admits the complete inherited subject/receipt pair before selecting
+or restoring receipts: stored bytes, Parquet uncompressed column bytes and both
+member row counts must fit `max_prior_bytes` and `max_prior_rows`. Receipt-held
+processing input and restoration scratch are included in that decoded input
+budget. The merge still holds the admitted revision table in memory and writes a
+replacement; reserve space for that output and recovery. `max_requests` charges
+all origin attempts, including retries and redirects, before sending them.
+`max_list_bytes` bounds cumulative received list bytes and `max_list_rows` bounds
+observed revisions admitted into the merge. Limit failures preserve the prior.
+These limits bound work; Parquet decoded bytes are not a measurement of process
+memory.
+
+## Prepare a local detail cohort
+
+The installed module command uses `build_crs_reports`, `CaptureEvidence` and the
+shared native receipt writer. It requires an explicitly selected local native
+table, matching receipts and receipt generation. It writes a separate local
+candidate and never uploads, selects a release or activates a schedule.
+
+```bash
+python -m spicy_regs.crs_report_operations /work/crs-candidate \
+  --operation detail \
+  --prior-subject /work/selected/crs_reports.parquet \
+  --prior-receipts /work/selected/etl_receipts.parquet \
+  --prior-generation-id selected-generation \
+  --report IN12418@2026-09-19T16:37:49Z \
+  --max-details 1 --max-requests 0 \
+  --max-prior-bytes 134217728 --max-prior-rows 100000 \
+  --retained-details /work/retained-details.json
+```
+
+`retained-details.json` is an array of `{ "report_id": "IN12418", "path":
+"/exact/original.json", "sha256": "sha256:..." }` entries. Paths may also be
+relative to this manifest. Entries must be unique, and each original must fit
+2 MiB and match its digest when read. For multiple reports, repeat `--report`.
+Use `--latest` with bare report IDs to choose the newest admitted revision.
+`--retry-completed` explicitly rereads a qualified revision. An unchanged repeat
+uses the candidate table/receipts and the new generation from
+`.government-etl-build.json` as its next prior; it makes no detail request.
+`crs-operation.json` records request counts, selected/attempted details and scope.
+Its `coverage.prior_inputs` and the `crs-prior-admission` evidence event retain
+the admitted subject/receipt SHA256 values, stored bytes, row counts and combined
+uncompressed column bytes. These identify the exact inherited inputs without
+another full-file read or published local filesystem paths.
+A candidate with failed detail attempts remains available for inspection and
+retry; the command exits with an error after recording that result.
+
+This local command accepts a native pair, which does not establish a qualified
+live discovery cursor. Its detail-only discovery remains `not_requested` and its
+cursor remains unknown. A release caller must supply the selected generation's
+verified evidence through the normal rollup before a later live refresh. The
+normal builder carries that inherited cursor unchanged during detail-only work;
+it never derives progress from report dates.
 
 SpicyDocs reads the complete original through the same native checks for live
 and retained input. List `version` and item `currentVersion` name the publication
@@ -38,6 +97,12 @@ JSON uses `formats[].url` and `relatedMaterials[].URL`; the latter becomes nativ
 Law numbers such as `118-159` and numeric bill numbers use text in the native
 identifier column, while the original JSON retains their original types. No
 bill/law relationship is inferred from summary prose or a topic label.
+
+CRS `topics` are native `STRUCT(topic)[]` values attached to the selected
+`report_id`, `update_date` and publisher `version`. They retain source order,
+duplicates, null members, null arrays and empty arrays. A topic label is not a
+controlled vocabulary entry or a shared concept identifier; no topic taxonomy
+or topic-derived membership is inferred.
 
 `detail_fields` records `missing`, `null`, `empty` or `value` for each promoted
 member. `detail_state` identifies the qualified read; `detail_attempt_state`

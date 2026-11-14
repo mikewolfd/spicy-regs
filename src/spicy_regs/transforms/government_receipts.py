@@ -13,6 +13,7 @@ import json
 import os
 import re
 import shutil
+from collections.abc import Callable
 from contextvars import ContextVar
 from functools import wraps
 from pathlib import Path
@@ -25,20 +26,21 @@ import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from spicy_regs import etl_bulk, government_bulk
-from spicy_regs.policy_migrations import earlier_policies
 from spicy_regs.etl_receipts import (
     RECEIPT_KEY,
-    RECEIPT_SCHEMA, open_receipt_writer,
+    RECEIPT_SCHEMA,
     DatasetPolicy,
     ReceiptContext,
     combine_receipts,
     failure_receipt,
     observation_receipt,
+    open_receipt_writer,
     read_with_receipts,
     select_receipts,
     split_record,
     subject_identity,
 )
+from spicy_regs.policy_migrations import earlier_policies
 from spicy_regs.receipt_history import RefusalIdentity, carry_receipt_history, crs_revision_identity_migrations
 from spicy_regs.sources import publication
 from spicy_regs.transforms.government_source_shapes import (
@@ -156,6 +158,8 @@ def _prior_policy(dataset: str, path: Path) -> DatasetPolicy:
 
 def internal_prior(
     dataset: str, path: Path, *, receipt_path: Path | None = None, generation_id: str | None = None,
+    admit: Callable[[Path, Path | None], None] | None = None,
+    work_dir: Path | None = None,
 ) -> Path:
     """Restore literal processing input from a validated native subject/receipt pair.
 
@@ -165,12 +169,15 @@ def internal_prior(
     Legacy source-shaped inputs remain explicitly distinguishable by schema.
     """
     if not _native(path, dataset):
+        if admit is not None:
+            admit(path, None)
         if unknown := set(pq.read_schema(path).names) - set(LEGACY_COLUMNS[dataset]):
             raise GovernmentShapeError(f"{dataset}: unclassified prior fields {sorted(unknown)}")
         return path
-    scratch = path.parent / f".{path.name}.receipts.parquet"
-    selected = path.parent / f".{path.name}.selected-receipts.parquet"
-    restored = path.parent / f".{path.name}.processing.parquet"
+    work_dir = work_dir or path.parent
+    scratch = work_dir / f".{path.name}.receipts.parquet"
+    selected = work_dir / f".{path.name}.selected-receipts.parquet"
+    restored = work_dir / f".{path.name}.processing.parquet"
     try:
         if receipt_path is None:
             local = path.parent / BUILD_METADATA
@@ -199,6 +206,8 @@ def internal_prior(
                 generation_id = owner[1]["etlReceipts"]["generationId"]
         if generation_id is None:
             raise ValueError("An explicit receipt generation identity is required")
+        if admit is not None:
+            admit(path, receipt_path)
         select_receipts(receipt_path, selected, dataset=dataset)
         inherited = _INHERITED.get()
         if inherited is not None:
@@ -397,7 +406,7 @@ def migrate_outputs(
                 retained, subject_path, receipt_path, dataset=dataset, policy=policy, generation_id=generation_id,
                 digest=digest,
                 last_receipts=[] if rows else [_empty_observation(dataset, digest, generation_id)],
-                row_attempt=lambda raw, ordinal, dataset=dataset: attempt(dataset, raw, ordinal, **context),
+                row_attempt=lambda raw, ordinal, dataset=dataset, context=context: attempt(dataset, raw, ordinal, **context),
             )
         except etl_bulk.NotBulkEligible as error:
             _row_route("receipt write", error, dataset=dataset, rows=rows)
@@ -409,7 +418,7 @@ def migrate_outputs(
             carry_receipt_history(receipt_path, [prior], shard / "carried.parquet",
                                   refusal_identities={dataset: REFUSAL_IDENTITIES[dataset]},
                                   identity_migrations=crs_revision_identity_migrations(
-                                      policy, lambda raw: map_subject(dataset, raw)))
+                                      policy, lambda raw, dataset=dataset: map_subject(dataset, raw)))
             (shard / "carried.parquet").replace(receipt_path)
         subjects = pq.ParquetFile(subject_path).metadata.num_rows
         bundles.append((path, subject_path, receipt_path))
