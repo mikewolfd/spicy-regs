@@ -1,0 +1,79 @@
+name: Read exact attachment witnesses
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_ref:
+        description: 'Reviewed exact commit containing this reader; operational byte pins are checked'
+        required: true
+        type: string
+      surface:
+        description: 'Read selected native rows or final fixed public rows'
+        required: true
+        type: choice
+        options: [native, public]
+      native_snapshot:
+        description: 'Accepted subject JSON: table_uuid, snapshot_id, schema_id'
+        required: true
+        type: string
+      publication_receipt_sha256:
+        description: 'Public only: accepted full comments-publication.json SHA-256'
+        type: string
+      generation_digest:
+        description: 'Public only: accepted comments generation sha256: digest'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: comments-catalog-write
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Validate exact runtime input
+        env:
+          RUNTIME_REF: ${{ inputs.runtime_ref }}
+        run: '[[ "$RUNTIME_REF" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.runtime_ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --frozen --extra operational-runner
+      - name: Retain bounded actual witness values
+        env:
+          RUNTIME_REF: ${{ inputs.runtime_ref }}
+          SURFACE: ${{ inputs.surface }}
+          NATIVE_SNAPSHOT: ${{ inputs.native_snapshot }}
+          PUBLICATION_RECEIPT_SHA256: ${{ inputs.publication_receipt_sha256 }}
+          GENERATION_DIGEST: ${{ inputs.generation_digest }}
+          R2_CATALOG_URI: ${{ secrets.R2_CATALOG_URI }}
+          R2_CATALOG_WAREHOUSE: ${{ secrets.R2_CATALOG_WAREHOUSE }}
+          R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
+          R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE || 'default' }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          SPICY_REGS_CATALOG_LOCK: comments-catalog-write
+        run: |
+          uv run --no-sync python scripts/read_comment_attachment_witnesses.py \
+            --runtime-ref "$RUNTIME_REF" --surface "$SURFACE" --native-snapshot "$NATIVE_SNAPSHOT" \
+            --publication-receipt-sha256 "$PUBLICATION_RECEIPT_SHA256" --generation-digest "$GENERATION_DIGEST" \
+            --workdir "$RUNNER_TEMP/attachment-witnesses"
+      - name: Preserve values, admission and process closure even on refusal
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: attachment-witnesses-${{ inputs.surface }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/attachment-witnesses/
+          include-hidden-files: true
+          retention-days: 30
