@@ -73,9 +73,29 @@ def plan(workdir: Path, stage: Path, *, max_rows: int, max_read_bytes: int,
         native = native.replace("SELECT *", f"SELECT comment_id, modify_date, {cfw.FILE_COLUMN} AS _file", 1)
         # Repeated source IDs do not multiply native rows in a SEMI JOIN. Avoid a second hash table;
         # classification below still reads every source copy, and duplicate native rows still refuse.
-        con.execute(f"""COPY (SELECT n.* FROM ({native}) n
-                        SEMI JOIN (SELECT comment_id FROM {parts}) r USING (comment_id))
-                        TO {cfw._sql(index_path)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
+        membership_sql = f"""COPY (SELECT n.* FROM ({native}) n
+                            SEMI JOIN (SELECT comment_id FROM {parts}) r USING (comment_id))
+                            TO {cfw._sql(index_path)} (FORMAT PARQUET, COMPRESSION ZSTD)"""
+        # Ordinary EXPLAIN binds/plans but does not execute COPY or scan native rows.
+        # Keep bounded physical-operator evidence even if the following COPY refuses.
+        explained = "\n".join(str(value) for row in con.execute("EXPLAIN " + membership_sql).fetchall() for value in row)
+        evidence = {
+            "format": "comment-membership-explain/1", "analyze": False,
+            "snapshot": snapshot.__dict__, "namespace": namespace,
+            "resources": {"memory": RESOURCES.memory, "threads": RESOURCES.threads, "max_spill": max_spill},
+            "truncated": False, "text": explained,
+        }
+        while True:
+            content = json.dumps(evidence, ensure_ascii=False, indent=2) + "\n"
+            if len(content.encode()) <= 65536:
+                break
+            if not explained:
+                raise ValueError("Membership EXPLAIN metadata exceeds its 64KiB record limit")
+            explained = explained[:len(explained) // 2]
+            evidence["text"] = explained
+            evidence["truncated"] = True
+        (workdir / "membership-explain.json").write_text(content)
+        con.execute(membership_sql)
         if con.execute(f"SELECT comment_id FROM {index} GROUP BY 1 HAVING count(*) > 1 LIMIT 1").fetchone():
             raise ValueError("A staged comment identity appears more than once in the native catalog")
         con.execute(f"""COPY (

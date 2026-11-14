@@ -100,6 +100,40 @@ def test_group_plan_refuses_an_identity_whose_copies_exceed_its_budget(tmp_path,
     assert not (work / "groups.json").exists()
 
 
+@pytest.mark.parametrize("oversized", [False, True])
+def test_membership_explain_is_retained_before_copy_and_does_not_execute_it(tmp_path, catalog, oversized):
+    seed(catalog, [row("A")])
+    stage = _stage(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED}])
+    work = tmp_path / "groups"
+    executed = []
+    with catalog() as con:
+        class StopBeforeCopy:
+            def execute(self, sql, *args):
+                if sql.startswith("EXPLAIN COPY"):
+                    result = con.execute(sql, *args)
+                    assert not (work / "catalog-index.parquet").exists()
+                    executed.append(sql.removeprefix("EXPLAIN "))
+                    rows = result.fetchall()
+                    if oversized:
+                        rows.append(("bounded diagnostic probe", "\U0001f642" * 100_000))
+                    return SimpleNamespace(fetchall=lambda: rows)
+                if sql.startswith("COPY (SELECT n.*"):
+                    assert executed == [sql]
+                    assert not (work / "catalog-index.parquet").exists()
+                    evidence = json.loads((work / "membership-explain.json").read_text())
+                    assert evidence["analyze"] is False and evidence["truncated"] is oversized
+                    assert evidence["snapshot"]["table_uuid"] == "local"
+                    assert evidence["resources"] == {"memory": groups.RESOURCES.memory,
+                                                     "threads": groups.RESOURCES.threads, "max_spill": "3GB"}
+                    assert "HASH_JOIN" in evidence["text"] and "COPY" in evidence["text"]
+                    raise RuntimeError("planted membership refusal before COPY")
+                return con.execute(sql, *args)
+        with pytest.raises(RuntimeError, match="planted membership refusal"):
+            groups.plan(work, stage, max_rows=100, max_read_bytes=100_000, con=StopBeforeCopy())
+    assert (work / "membership-explain.json").stat().st_size <= 65_536
+    assert not (work / "groups.json").exists()
+
+
 def test_group_byte_bound_splits_only_within_one_physical_file(tmp_path, catalog):
     seed(catalog, [row(f"C-{i}") for i in range(4)])
     stage = _stage(tmp_path, [{"key": str(i), "comment_id": f"C-{i}", "attachments_json": LISTED} for i in range(4)])
