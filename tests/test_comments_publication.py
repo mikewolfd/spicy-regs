@@ -545,4 +545,5 @@ def test_the_mirror_workflow_refuses_the_retired_v1_promotion_before_checkout():
     assert all(f"inputs.{name}" in first["if"] for name in retired) and first["run"].rstrip().endswith("exit 1")
     assert not any("prepare_comments_selected_export" in str(step) for step in mirror_job["steps"])
     dispatch = yaml.safe_load((workflows / "publish-comments-mirror.yml").read_text())
-    assert set(dispatch[True]["workflow_dispatch"]["inputs"]) == {"skip_upload", "comments_only", "comments_runner"}
+    assert set(dispatch[True]["workflow_dispatch"]["inputs"]) == {
+        "skip_upload", "comments_only", "comments_runner", "diagnostic_native_snapshot"}

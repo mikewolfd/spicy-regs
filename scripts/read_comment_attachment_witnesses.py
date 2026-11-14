@@ -1,20 +1,32 @@
 #!/usr/bin/env python3
 """Retain actual values for seven pinned attachment witnesses; never judge semantics or write remotely."""
+# ruff: noqa: E402
+# Fatal diagnostics must be active before importing native dependencies.
 from __future__ import annotations
 
 import argparse
 from dataclasses import asdict
+import faulthandler
 import hashlib
+from importlib.util import find_spec
 import io
 import json
 import os
 from pathlib import Path
+import platform
 import re
+import resource
 import struct
 import subprocess
 import sys
 from typing import Any, cast
 from urllib.parse import urlsplit
+
+# Python 3.12 retains Python stacks on native aborts, not a C/C++ backtrace.
+# Core dumps can exceed the owned-output budget and may contain credentials.
+if __name__ == '__main__':
+    faulthandler.enable(all_threads=True)
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
 if __package__ is None:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -50,6 +62,46 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def retain_phase(args, report, phase):
+    report['phase'] = phase
+    require(len(json.dumps(report).encode()) <= 8 * MiB, 'Witness evidence exceeds output bound')
+    owner.durable(args.workdir / 'observation.json', report)
+
+
+def binary_identity(path, budget):
+    """Hash only a bounded installed local binary, refusing a file changed during hashing."""
+    path = Path(path)
+    require(path.is_absolute() and path.is_file(), 'Loaded binary has no local installed path')
+    before = path.stat()
+    require(0 < before.st_size <= 256 * MiB, 'Loaded binary exceeds identity bound')
+    budget.reserve(before.st_size)
+    with path.open('rb') as stream:
+        digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+    after = path.stat()
+    require((before.st_size, before.st_mtime_ns, before.st_ino, before.st_dev)
+            == (after.st_size, after.st_mtime_ns, after.st_ino, after.st_dev), 'Loaded binary changed during hashing')
+    return {'path': str(path), 'bytes': before.st_size, 'sha256': digest}
+
+
+def runtime_identity(con):
+    """Local engine metadata only; never install extensions or inspect credentials."""
+    spec = find_spec('_duckdb')
+    if spec is None or spec.origin is None:
+        raise ValueError('DuckDB native binary location is unavailable')
+    budget = ByteBudget(512 * MiB)
+    engine = binary_identity(spec.origin, budget)
+    extensions = read_sql(con, 'SELECT extension_name, extension_version, install_path, install_mode '
+                         'FROM duckdb_extensions() WHERE loaded ORDER BY extension_name')
+    require(len(extensions) <= 32, 'Loaded extension inventory exceeds identity bound')
+    for extension in extensions:
+        extension['binary'] = ({'engine_sha256': engine['sha256']} if extension['install_mode'] == 'STATICALLY_LINKED'
+                               else binary_identity(extension['install_path'], budget))
+    return {'python': sys.version, 'platform': platform.platform(), 'engine': engine,
+            'engine_version': read_sql(con, 'SELECT * FROM pragma_version()'), 'extensions': extensions,
+            'local_binary_bytes_hashed': budget.used, 'python_fatal_stacks': faulthandler.is_enabled(), 'native_backtrace': False,
+            'core_dump_limit_bytes': resource.getrlimit(resource.RLIMIT_CORE)[0]}
+
+
 def subject_pin(value):
     require(isinstance(value, dict) and set(value) == {'table_uuid', 'snapshot_id', 'schema_id'}, 'Exact subject pin required')
     require(isinstance(value['table_uuid'], str) and bool(value['table_uuid']), 'Table UUID required')
@@ -76,6 +128,14 @@ def footer(size, read):
     require(tail[4:] == b'PAR1' and 0 < count <= min(MAX_FOOTER, size - 12), 'Footer exceeds admitted bound or is invalid')
     body = read(size - 8 - count, size - 1)
     return pq.ParquetFile(io.BytesIO(b'PAR1' + body)).metadata
+
+
+def physical_schema_text(metadata):
+    lines = str(metadata.schema).splitlines()
+    # PyArrow's representation header contains an allocation address, not schema information.
+    if lines and lines[0].startswith('<pyarrow.') and lines[0].endswith('>'):
+        lines = lines[1:]
+    return '\n'.join(lines)
 
 
 def projected_bytes(metadata, groups):
@@ -118,11 +178,15 @@ def native(args, config, report):
     budget = ByteBudget(MAX_METADATA)
     report['range_budget'] = budget.__dict__
     namespace = iceberg._catalog_namespace(COMMENT)
+    retain_phase(args, report, 'native_connect')
     with iceberg._connect() as con:
         con.execute("SET memory_limit='1GB'; SET threads=1; SET max_temp_directory_size='0B'; SET http_retries=0; SET http_timeout=20")
         observed = iceberg._read_snapshot(con, COMMENT, namespace=namespace)
         report['observed_subject'] = asdict(observed)
         require(asdict(observed) == args.native_snapshot, 'Selected native snapshot differs')
+        retain_phase(args, report, 'native_runtime_identity')
+        report['runtime'] = runtime_identity(con)
+        retain_phase(args, report, 'native_inventory')
         inventory = read_sql(con, "SELECT DISTINCT file_path,manifest_content,content FROM iceberg_metadata(?, snapshot_from_id=?) WHERE status <> 'DELETED'", [iceberg._qualified(COMMENT), observed.snapshot_id])
         report['inventory_snapshot_id'] = observed.snapshot_id
         require(0 < len(inventory) <= 2048, 'Native file inventory outside the admitted bound')
@@ -150,6 +214,12 @@ def native(args, config, report):
                     budget.record(item['file_path'], start, data, etag)
                     return data
                 metadata = footer(size, read)
+                # Reuse the admitted footer bytes; no additional metadata or payload GET.
+                schema_text = physical_schema_text(metadata)
+                schema_sha = sha(schema_text.encode())
+                report.setdefault('physical_schemas', {})[schema_sha] = schema_text
+                record['parquet_schema_sha256'] = schema_sha
+                record['parquet_created_by'] = metadata.created_by
                 count, _ = projected_bytes(metadata, range(metadata.num_row_groups))
                 record['projected_column_bytes'] = count
                 projected += count
@@ -159,20 +229,23 @@ def native(args, config, report):
                 projected += size
             report['admission'] = {'objects': objects, 'projected_columns_and_deletes_bytes': projected,
                                    'maximum': MAX_NATIVE_COLUMNS, 'metadata_bytes': budget.used}
-            owner.durable(args.workdir / 'observation.json', report)
+            retain_phase(args, report, 'native_admission')
             require(projected <= MAX_NATIVE_COLUMNS, 'Native projected columns/delete bytes exceed admission')
         with iceberg._connect() as admission_check:
             admitted_subject = asdict(iceberg._read_snapshot(admission_check, COMMENT, namespace=namespace))
         report['subject_after_admission'] = admitted_subject
         require(admitted_subject == args.native_snapshot, 'Native moved during admission')
         relation = iceberg._snapshot_query(COMMENT, observed, namespace=namespace)
+        retain_phase(args, report, 'native_schema')
         report['schema'] = read_sql(con, f'DESCRIBE ({relation})')
         predicate = ' OR '.join('(agency_code=? AND comment_id=? AND modify_date=?)' for _ in config['witnesses'])
         parameters = [v for w in config['witnesses'] for v in (w['agency_code'], w['comment_id'], w['parent_modify_date'])]
         sql = 'SELECT ' + ','.join(COLUMNS) + f' FROM ({relation}) WHERE {predicate} LIMIT 15'
         report['query'] = {'sql': sql, 'parameters': parameters}
+        retain_phase(args, report, 'native_payload')
         report['rows'] = read_sql(con, sql, parameters)
         require(len(report['rows']) < 15, 'Witness row bound reached; review multiplicity')
+        retain_phase(args, report, 'native_payload_complete')
         for item in objects:
             key = urlsplit(item['file_path']).path.lstrip('/')
             after = client.head_object(Bucket=bucket, Key=key)
@@ -274,6 +347,7 @@ def worker(args, config):
               'operational_files': config['operational_files'], 'expected_subject': args.native_snapshot,
               'witnesses': config['witnesses'], 'semantic_verdict': None}
     try:
+        retain_phase(args, report, 'starting')
         (native if args.surface == 'native' else public)(args, config, report)
         report['transport_completed'] = True
     except BaseException as error:

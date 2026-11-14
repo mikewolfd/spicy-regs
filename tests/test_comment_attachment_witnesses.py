@@ -2,7 +2,12 @@
 import io
 import json
 from dataclasses import asdict
+import faulthandler
+import os
+import resource
 import struct
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import duckdb
@@ -38,6 +43,11 @@ def test_footer_and_column_admission_use_actual_metadata():
     group = metadata.row_group(0)
     assert compressed == sum(group.column(i).total_compressed_size for i in range(4))
     assert uncompressed == sum(group.column(i).total_uncompressed_size for i in range(4))
+    repeated = witness.footer(len(data), read)
+    assert witness.physical_schema_text(metadata) == witness.physical_schema_text(repeated)
+    assert '<pyarrow.' not in witness.physical_schema_text(metadata)
+    assert witness.sha(witness.physical_schema_text(metadata).encode()) == witness.sha(
+        witness.physical_schema_text(repeated).encode())
 
 
 def test_oversized_footer_refuses_before_second_request():
@@ -150,6 +160,7 @@ def test_native_snapshot_mismatch_precedes_file_reads(monkeypatch, tmp_path):
     monkeypatch.setattr(witness.iceberg, '_connect', Connection)
     monkeypatch.setattr(witness.iceberg, '_read_snapshot', lambda *_, **__: witness.iceberg.CatalogSnapshot('actual', 1, 3))
     monkeypatch.setattr(witness.r2, 'verified_target_client', lambda: (object(), 'spicy-regs'))
+    monkeypatch.setattr(witness, 'runtime_identity', lambda _: {'fixture': True})
     args = SimpleNamespace(native_snapshot={'table_uuid': 'expected', 'snapshot_id': 1, 'schema_id': 3}, workdir=tmp_path)
     with pytest.raises(ValueError, match='snapshot differs'):
         witness.native(args, {'witnesses': []}, {})
@@ -178,6 +189,7 @@ def test_native_byte_refusal_precedes_payload_query(monkeypatch, tmp_path):
     monkeypatch.setattr(witness.iceberg, '_connect', Connection)
     monkeypatch.setattr(witness.iceberg, '_read_snapshot', lambda *_, **__: witness.iceberg.CatalogSnapshot('actual', 1, 3))
     monkeypatch.setattr(witness.r2, 'verified_target_client', lambda: (HeadsOnly(), 'spicy-regs'))
+    monkeypatch.setattr(witness, 'runtime_identity', lambda _: {'fixture': True})
     monkeypatch.setattr(witness, 'read_sql', inventory)
     args = SimpleNamespace(native_snapshot={'table_uuid': 'actual', 'snapshot_id': 1, 'schema_id': 3}, workdir=tmp_path)
     report = {}
@@ -185,6 +197,116 @@ def test_native_byte_refusal_precedes_payload_query(monkeypatch, tmp_path):
         witness.native(args, {'witnesses': []}, report)
     assert report['admission']['projected_columns_and_deletes_bytes'] == witness.MAX_NATIVE_COLUMNS + 1
     assert 'rows' not in report
+
+
+def test_binary_identity_is_bounded_and_checks_actual_bytes(tmp_path):
+    path = tmp_path / 'engine.so'
+    path.write_bytes(b'installed-binary-control')
+    budget = witness.ByteBudget(100)
+    assert witness.binary_identity(path, budget) == {
+        'path': str(path), 'bytes': 24, 'sha256': witness.sha(path.read_bytes())}
+    assert budget.used == 24
+    with pytest.raises(ValueError, match='budget exceeded'):
+        witness.binary_identity(path, witness.ByteBudget(1))
+    with pytest.raises(ValueError, match='local installed path'):
+        witness.binary_identity('https://example.invalid/engine.so', witness.ByteBudget(100))
+
+
+def test_runtime_identity_uses_installed_engine_and_local_metadata(monkeypatch):
+    monkeypatch.setenv('R2_CATALOG_TOKEN', 'credential-must-not-appear')
+    with duckdb.connect() as con:
+        result = witness.runtime_identity(con)
+    assert result['engine_version'][0]['library_version'] == duckdb.__version__ or (
+        result['engine_version'][0]['library_version'] == 'v' + duckdb.__version__)
+    assert len(result['engine']['sha256']) == 64
+    assert result['extensions']
+    assert all('binary' in row for row in result['extensions'])
+    assert result['local_binary_bytes_hashed'] >= result['engine']['bytes']
+    assert result['python_fatal_stacks'] == faulthandler.is_enabled()
+    assert result['core_dump_limit_bytes'] == resource.getrlimit(resource.RLIMIT_CORE)[0]
+    assert result['native_backtrace'] is False
+    assert 'credential-must-not-appear' not in json.dumps(result)
+
+
+def test_script_main_enables_fatal_stacks_and_disables_core_in_its_child():
+    # --help exits before credentials, catalog connections, or any source read.
+    code = '''import faulthandler, json, resource, runpy, sys
+sys.argv = [sys.argv[1], '--help']
+before = resource.getrlimit(resource.RLIMIT_CORE)
+fatal_before = faulthandler.is_enabled()
+runpy.run_path(sys.argv[0], run_name='import_probe')
+assert resource.getrlimit(resource.RLIMIT_CORE) == before
+assert faulthandler.is_enabled() == fatal_before
+try:
+    runpy.run_path(sys.argv[0], run_name='__main__')
+except SystemExit as error:
+    assert error.code == 0
+print(json.dumps({'fatal': faulthandler.is_enabled(), 'core': resource.getrlimit(resource.RLIMIT_CORE)}))
+'''
+    before = resource.getrlimit(resource.RLIMIT_CORE)
+    env = {key: value for key, value in os.environ.items() if key in {'PATH', 'PYTHONPATH', 'LANG', 'TMPDIR'}}
+    result = subprocess.run([sys.executable, '-B', '-c', code, witness.__file__],
+                            capture_output=True, text=True, timeout=15, check=True, env=env)
+    assert json.loads(result.stdout.splitlines()[-1]) == {'fatal': True, 'core': [0, 0]}
+    assert resource.getrlimit(resource.RLIMIT_CORE) == before
+
+
+def test_native_payload_phase_and_field_ids_survive_failure(monkeypatch, tmp_path):
+    out = io.BytesIO()
+    schema = pa.schema([pa.field('comment_id', pa.string(), metadata={b'PARQUET:field_id': b'1'}),
+                        pa.field('agency_code', pa.string()), pa.field('modify_date', pa.string()),
+                        pa.field('attachments', pa.list_(pa.struct([pa.field('title', pa.string())])))])
+    pq.write_table(pa.Table.from_pylist([{'comment_id': 'A', 'agency_code': 'FWS', 'modify_date': 'v',
+                                       'attachments': [{'title': 'retained'}]}], schema=schema), out)
+    data = out.getvalue()
+    requests = []
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+        def execute(self, sql):
+            assert sql.startswith('SET ')
+
+    class LocalObject:
+        def head_object(self, **_):
+            return {'ContentLength': len(data), 'ETag': '"file"'}
+
+        def get_object(self, **kwargs):
+            requests.append(kwargs)
+            assert kwargs['IfMatch'] == '"file"'
+            start, end = map(int, kwargs['Range'].removeprefix('bytes=').split('-'))
+            return {'Body': io.BytesIO(data[start:end + 1]), 'ETag': '"file"',
+                    'ContentRange': f'bytes {start}-{end}/{len(data)}'}
+
+    def observe(_con, sql, _parameters=()):
+        if sql.startswith('SELECT DISTINCT file_path'):
+            return [{'file_path': 's3://spicy-regs/file.parquet', 'manifest_content': 'DATA', 'content': 'DATA'}]
+        if sql.startswith('DESCRIBE'):
+            return [{'column_name': 'attachments', 'column_type': 'STRUCT(title VARCHAR)[]'}]
+        assert sql.startswith('SELECT comment_id,agency_code,modify_date,attachments')
+        saved = json.loads((tmp_path / 'observation.json').read_text())
+        assert saved['phase'] == 'native_payload'
+        assert saved['query']['sql'] == sql
+        assert saved['runtime'] == {'fixture': True}
+        assert saved['subject_after_admission'] == {'table_uuid': 'actual', 'snapshot_id': 1, 'schema_id': 3}
+        assert any('field_id=1 comment_id' in value for value in saved['physical_schemas'].values())
+        assert len(requests) == 2  # Only the original footer tail and body; diagnostics add no GET.
+        raise RuntimeError('controlled payload failure')
+
+    monkeypatch.setattr(witness.iceberg, '_connect', Connection)
+    monkeypatch.setattr(witness.iceberg, '_read_snapshot', lambda *_, **__: witness.iceberg.CatalogSnapshot('actual', 1, 3))
+    monkeypatch.setattr(witness.iceberg, '_snapshot_query', lambda *_, **__: 'SELECT * FROM pinned_fixture')
+    monkeypatch.setattr(witness.r2, 'verified_target_client', lambda: (LocalObject(), 'spicy-regs'))
+    monkeypatch.setattr(witness, 'runtime_identity', lambda _: {'fixture': True})
+    monkeypatch.setattr(witness, 'read_sql', observe)
+    args = SimpleNamespace(native_snapshot={'table_uuid': 'actual', 'snapshot_id': 1, 'schema_id': 3}, workdir=tmp_path)
+    with pytest.raises(RuntimeError, match='controlled payload failure'):
+        witness.native(args, {'witnesses': [{'comment_id': 'A', 'agency_code': 'FWS', 'parent_modify_date': 'v'}]}, {})
+    assert json.loads((tmp_path / 'observation.json').read_text())['phase'] == 'native_payload'
 
 
 @pytest.mark.parametrize('conflicting_in_file_agency', [False, True])

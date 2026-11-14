@@ -132,3 +132,143 @@ def test_workflow_preserves_lock_runtime_and_always_evidence():
     assert "uv run --frozen" not in runs
     evidence = next(step for step in steps if step.get("name") == "Retain publication receipts and resource measurements")
     assert evidence["if"] == "always()" and "comments-admit-*.json" in evidence["with"]["path"]
+    assert "comments-publish-*.json" in evidence["with"]["path"]
+    refresh = yaml.safe_load((root / ".github/workflows/_regulations-refresh.yml").read_text())
+    for job in (wrapper["jobs"]["refresh"], refresh["jobs"]["mirror"]):
+        assert job["with"]["diagnostic_native_snapshot"] == "${{ inputs.diagnostic_native_snapshot }}"
+    assert 'ARGS+=(--diagnostic-native-snapshot "$DIAGNOSTIC_NATIVE_SNAPSHOT")' in runs
+    assert '"${ARGS[@]}"' in runs
+
+
+def test_diagnostic_refuses_upload_and_wrong_subject_before_object_reads(tmp_path, monkeypatch):
+    args = SimpleNamespace(skip_upload=False, diagnostic_native_snapshot={"table_uuid": "subject", "snapshot_id": 10, "schema_id": 3})
+    with pytest.raises(ValueError, match="require --skip-upload"):
+        guard.diagnostic_subject(args)
+    client, _ = metadata(monkeypatch)
+    wrong = {**args.diagnostic_native_snapshot, "snapshot_id": 11}
+    with pytest.raises(ValueError, match="Diagnostic native snapshot differs"):
+        guard.observe(client, "owned", evidence=tmp_path / "observed.json", expected_snapshot=wrong)
+    assert not client.calls
+    assert json.loads((tmp_path / "observed.json").read_text())["complete"] is False
+
+
+def test_diagnostic_copy_retains_failure_phase_and_restores_original(tmp_path, monkeypatch):
+    from scripts import read_comment_attachment_witnesses as witness
+    from spicy_regs.sources import regulatory_catalog as native
+
+    subject = {"table_uuid": "subject", "snapshot_id": 10, "schema_id": 3}
+    args = SimpleNamespace(workdir=tmp_path, expected_source_sha="a" * 40, skip_upload=True,
+                           diagnostic_native_snapshot=subject)
+    monkeypatch.setattr(guard.iceberg, "_qualified", lambda _: "controlled_comments")
+    connection, resources, parameters = object(), guard.ExportResources(), ["unchanged"]
+    monkeypatch.setattr(witness, "runtime_identity", lambda con: {"same_connection": con is connection})
+    pair = guard.iceberg.CatalogPairSnapshot(**subject, receipts=guard.iceberg.CatalogSnapshot("receipts", 51, 0))
+    def same_transaction(con, record_type, *, namespace):
+        assert con is connection and record_type is guard.COMMENT
+        assert namespace == guard.iceberg._catalog_namespace(guard.COMMENT)
+        return pair
+    monkeypatch.setattr(guard.iceberg, "_read_pair_snapshot", same_transaction)
+    calls = []
+
+    def failing(con, sql, path, **kwargs):
+        calls.append((con, sql, path, kwargs))
+        saved = json.loads((tmp_path / "comments-publish-diagnostic.json").read_text())
+        assert saved["phase"] == "native_copy" and saved["runtime"]["same_connection"]
+        assert saved["copy_transaction_pair"] == guard.asdict(pair)
+        raise RuntimeError("credential-like error must not enter structured diagnostic")
+
+    monkeypatch.setattr(native, "_copy", failing)
+    with pytest.raises(RuntimeError, match="credential-like"):
+        with guard.copy_diagnostics(args, {"snapshot": subject}):
+            native._copy(connection, "SELECT * FROM controlled_comments", tmp_path / "copy.parquet",
+                         resources=resources, parameters=parameters, ordered=False)
+    assert native._copy is failing
+    assert calls == [(connection, "SELECT * FROM controlled_comments", tmp_path / "copy.parquet",
+                      {"resources": resources, "parameters": parameters, "ordered": False})]
+    text = (tmp_path / "comments-publish-diagnostic.json").read_text()
+    saved = json.loads(text)
+    assert saved["outcome"] == "failed" and saved["phase"] == "native_copy"
+    assert saved["native_backtrace"] is False and saved["debugger"]["status"] == "unavailable"
+    assert "credential-like" not in text and "unchanged" not in text
+
+
+def test_diagnostic_uses_real_maintained_copy_and_preserves_nested_values(tmp_path, monkeypatch):
+    import duckdb
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from spicy_regs.sources import regulatory_catalog as native
+
+    subject = {"table_uuid": "subject", "snapshot_id": 10, "schema_id": 3}
+    args = SimpleNamespace(workdir=tmp_path, expected_source_sha="a" * 40, skip_upload=True,
+                           diagnostic_native_snapshot=subject)
+    table = pa.Table.from_pylist([
+        {"comment_id": "A", "attachments": None}, {"comment_id": "B", "attachments": []},
+        {"comment_id": "C", "attachments": [{"title": "fourth", "formats": [{"size": -1, "format": "mp4"}]},
+                                                {"title": "second", "formats": None}]}])
+    monkeypatch.setattr(guard.iceberg, "_qualified", lambda _: "controlled_comments")
+    pair = guard.iceberg.CatalogPairSnapshot(**subject, receipts=guard.iceberg.CatalogSnapshot("receipts", 52, 0))
+    monkeypatch.setattr(guard.iceberg, "_read_pair_snapshot", lambda *_a, **_kw: pair)
+    original = native._copy
+    resources = guard.ExportResources()
+    with duckdb.connect() as con:
+        resources.configure(con, tmp_path / "spill")
+        con.register("controlled_comments", table)
+        with guard.copy_diagnostics(args, {"snapshot": subject}):
+            native._copy(con, "SELECT * FROM controlled_comments", tmp_path / "copy.parquet", resources=resources)
+    assert native._copy is original
+    assert pq.read_table(tmp_path / "copy.parquet").to_pylist() == table.to_pylist()
+    saved = json.loads((tmp_path / "comments-publish-diagnostic.json").read_text())
+    assert saved["phase"] == "validated_no_upload" and saved["native_copy_calls"] == 1
+    assert saved["runtime"]["engine_version"] and saved["resources"] == guard.asdict(resources)
+    assert saved["copy_transaction_pair"]["receipts"]["snapshot_id"] == 52
+
+
+@pytest.mark.parametrize("table_uuid,snapshot_id,schema_id", [("new-table", 10, 3), ("subject", 11, 3), ("subject", 10, 4)])
+def test_copy_transaction_subject_drift_refuses_before_original_copy(tmp_path, monkeypatch, table_uuid, snapshot_id, schema_id):
+    from scripts import read_comment_attachment_witnesses as witness
+    from spicy_regs.sources import regulatory_catalog as native
+
+    subject = {"table_uuid": "subject", "snapshot_id": 10, "schema_id": 3}
+    args = SimpleNamespace(workdir=tmp_path, expected_source_sha="a" * 40, skip_upload=True,
+                           diagnostic_native_snapshot=subject)
+    monkeypatch.setattr(guard.iceberg, "_qualified", lambda _: "controlled_comments")
+    pair = guard.iceberg.CatalogPairSnapshot(table_uuid, snapshot_id, schema_id,
+                                           receipts=guard.iceberg.CatalogSnapshot("actual-receipts", 77, 2))
+    monkeypatch.setattr(guard.iceberg, "_read_pair_snapshot", lambda *_a, **_kw: pair)
+    monkeypatch.setattr(witness, "runtime_identity", lambda _: pytest.fail("Refuse before runtime inspection"))
+    def original(*_a, **_kw):
+        pytest.fail("Original COPY must not start")
+    monkeypatch.setattr(native, "_copy", original)
+    with pytest.raises(ValueError, match="COPY transaction subject differs"):
+        with guard.copy_diagnostics(args, {"snapshot": subject}):
+            native._copy(object(), "SELECT * FROM controlled_comments", tmp_path / "copy.parquet",
+                         resources=guard.ExportResources())
+    assert native._copy is original
+    saved = json.loads((tmp_path / "comments-publish-diagnostic.json").read_text())
+    assert saved["phase"] == "native_copy_snapshot" and saved["outcome"] == "failed"
+    assert saved["copy_transaction_pair"] == guard.asdict(pair)
+    assert not (tmp_path / "copy.parquet").exists()
+
+
+def test_publisher_main_fatal_setup_does_not_change_importer():
+    import os
+    import subprocess
+    import sys
+
+    code = '''import faulthandler, json, resource, runpy, sys
+sys.argv = [sys.argv[1], '--help']
+before = resource.getrlimit(resource.RLIMIT_CORE)
+fatal_before = faulthandler.is_enabled()
+runpy.run_path(sys.argv[0], run_name='import_probe')
+assert resource.getrlimit(resource.RLIMIT_CORE) == before
+assert faulthandler.is_enabled() == fatal_before
+try:
+    runpy.run_path(sys.argv[0], run_name='__main__')
+except SystemExit as error:
+    assert error.code == 0
+print(json.dumps({'fatal': faulthandler.is_enabled(), 'core': resource.getrlimit(resource.RLIMIT_CORE)}))
+'''
+    env = {k: v for k, v in os.environ.items() if k in {"PATH", "PYTHONPATH", "LANG", "TMPDIR"}}
+    result = subprocess.run([sys.executable, "-B", "-c", code, guard.__file__], env=env,
+                            text=True, capture_output=True, timeout=15, check=True)
+    assert json.loads(result.stdout.splitlines()[-1]) == {"fatal": True, "core": [0, 0]}

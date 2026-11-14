@@ -15,6 +15,9 @@ on:
       comments_runner:
         type: string
         default: ubuntu-latest
+      diagnostic_native_snapshot:
+        type: string
+        default: ''
       comments_original_pair:
         type: string
         default: ''
@@ -109,6 +112,7 @@ jobs:
       promote_v1: ${{ inputs.promote_v1 }}
       comments_only: ${{ inputs.comments_only }}
       comments_runner: ${{ inputs.comments_runner }}
+      diagnostic_native_snapshot: ${{ inputs.diagnostic_native_snapshot }}
       comments_original_pair: ${{ inputs.comments_original_pair }}
       comments_captured_input: ${{ inputs.comments_captured_input }}
       comments_captured_input_sha256: ${{ inputs.comments_captured_input_sha256 }}
