@@ -437,8 +437,9 @@ class _DomainDeclaration:
 #   holds 255 distinct ids), so there is nothing to check them against.
 # * ``gao_reports.topics`` mixes published topics with free keywords (12,100
 #   distinct values), and ``gao_decisions.topics`` holds decision-type labels,
-#   not topics; neither is GAO's topic list. CBO and CRS taxonomies wait for
-#   their archive routes.
+#   not topics; neither is GAO's topic list. CBO's taxonomy waits for its archive
+#   route. CRS topics already retain literal report-revision labels in native
+#   STRUCT(topic)[] values; they do not establish a controlled topic domain.
 _DECLARATIONS: tuple[_DomainDeclaration, ...] = (
     _DomainDeclaration(
         key="regulations-gov-document-type",
