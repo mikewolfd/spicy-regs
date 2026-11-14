@@ -4133,13 +4133,15 @@ tables:
     columns_from: spicy_docs
 
   cbo_estimate_cards:
-    measured_on: "2026-11-13"
+    measured_on: "2026-11-14"
     label: "Archived CBO cost-estimate cards"
     subject: congress
     coverage: >-
-      Window. Explicit retained Common Crawl publication captures selected through the bill-family
-      archive manifest. The build accounts for every item of the selected feed and records
-      unread indexes, unretained pages, observed absence and unresolved PDF candidates separately.
+      Empty. The published bill-family generation contains no card rows. Retained Common Crawl
+      cards remain in a separate local candidate. Candidate builds use explicit retained captures
+      selected through the bill-family archive manifest, account for every item of the selected
+      feed, and record unread indexes, unretained pages, observed absence and unresolved PDF
+      candidates separately.
     summary: >-
       One qualified card per CBO publication, with three positional fiscal windows,
       literal and typed millions, PAYGO and mandate answers, source context and original evidence.
