@@ -508,7 +508,12 @@ reads both old and new rows and that a normal comments merge and receipt-free
 mirror export succeed. For the selected catalog, hold the existing
 `comments-catalog-write` lock and preview the change with
 `uv run --frozen --extra comments-reader python scripts/migrate_comments_attachment_schema.py`.
-Suspend both tables with the helper above before applying. Apply with
+For this schema migration only, suspend both tables with the exact reviewed
+preview pins:
+`uv run --no-sync python -m spicy_regs.comments_maintenance suspend --state W/maintenance-state.json --migration-table-uuid UUID --migration-snapshot-id ID --migration-schema-id ID`.
+This path validates the checked initialization receipt and the migration's exact
+old/current schema rule before changing maintenance. It refuses unknown layouts
+or changed pins. Ordinary fill guards still require the current schema. Apply with
 `--apply --table-uuid UUID --snapshot-id ID --schema-id ID --maintenance-state W/maintenance-state.json` using the
 values from the preview. The command checks the initialization receipt and
 requires the exact v2 schema and pinned snapshot at commit. It changes schema

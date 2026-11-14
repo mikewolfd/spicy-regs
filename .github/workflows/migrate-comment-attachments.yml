@@ -56,7 +56,15 @@ jobs:
           cat "$RUNNER_TEMP/attachment-migration/preview.json"
       - name: Suspend maintenance on both selected native tables
         if: inputs.apply
-        run: uv run --no-sync python -m spicy_regs.comments_maintenance suspend --state "$RUNNER_TEMP/attachment-migration/maintenance-state.json"
+        env:
+          TABLE_UUID: ${{ inputs.table_uuid }}
+          SNAPSHOT_ID: ${{ inputs.snapshot_id }}
+          SCHEMA_ID: ${{ inputs.schema_id }}
+        run: |
+          : "${TABLE_UUID:?table_uuid is required}" "${SNAPSHOT_ID:?snapshot_id is required}" "${SCHEMA_ID:?schema_id is required}"
+          uv run --no-sync python -m spicy_regs.comments_maintenance suspend \
+            --state "$RUNNER_TEMP/attachment-migration/maintenance-state.json" \
+            --migration-table-uuid "$TABLE_UUID" --migration-snapshot-id "$SNAPSHOT_ID" --migration-schema-id "$SCHEMA_ID"
       - name: Apply only against the reviewed pin
         if: inputs.apply
         env:

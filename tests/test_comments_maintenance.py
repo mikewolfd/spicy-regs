@@ -194,3 +194,176 @@ def test_apply_requires_maintenance_state_before_connecting(monkeypatch):
     with pytest.raises(SystemExit) as error:
         main()
     assert error.value.code == 2
+
+
+@pytest.fixture
+def old_native_catalog(tmp_path, monkeypatch):
+    """Real initialized DuckDB v2 table and PyIceberg metadata; only hosted transport is substituted."""
+    from types import SimpleNamespace
+    from typing import cast
+
+    import duckdb
+    import pyarrow as pa
+    from pyiceberg.catalog import Catalog as IcebergCatalog
+    from pyiceberg.io.pyarrow import PyArrowFileIO, _pyarrow_to_schema_without_ids
+    from pyiceberg.partitioning import UNPARTITIONED_PARTITION_SPEC
+    from pyiceberg.table import Table
+    from pyiceberg.table.metadata import new_table_metadata
+    from pyiceberg.table.refs import SnapshotRef
+    from pyiceberg.table.snapshots import Snapshot
+    from pyiceberg.table.sorting import UNSORTED_SORT_ORDER
+    from pyiceberg.table.update import update_table_metadata
+
+    from spicy_regs.policy_migrations import earlier_policy
+    from spicy_regs.schemas import COMMENT
+    from spicy_regs.sources import regulatory_catalog as native
+
+    monkeypatch.setenv("R2_CATALOG_URI", "https://catalog.cloudflarestorage.com/account/spicy-regs")
+    monkeypatch.setenv("R2_CATALOG_NAMESPACE", "default")
+    monkeypatch.setenv("R2_CATALOG_WAREHOUSE", "warehouse")
+    monkeypatch.setenv("R2_CATALOG_TOKEN", "offline-test")
+    monkeypatch.setenv(guard.iceberg.CATALOG_LOCK_ENV, "test-held-lock")
+    prior = earlier_policy("comments", "regulations-native-v2").subject_schema
+    metadata = new_table_metadata(_pyarrow_to_schema_without_ids(prior), UNPARTITIONED_PARTITION_SPEC,
+                                  UNSORTED_SORT_ORDER, tmp_path.as_uri())
+    snapshot = Snapshot.model_validate({"snapshot-id": 81, "sequence-number": 1,
+                                       "timestamp-ms": 1, "manifest-list": "local"})
+    metadata = metadata.model_copy(update={"current_snapshot_id": 81, "snapshots": [snapshot],
+        "refs": {"main": SnapshotRef.model_validate({"snapshot-id": 81, "type": "branch"})}})
+
+    class Catalog:
+        def __init__(self):
+            self.metadata = metadata
+            self.commits = []
+
+        def load_table(self, name):
+            return Table(name, self.metadata, "local", PyArrowFileIO(), cast(IcebergCatalog, self))
+
+        def commit_table(self, table, requirements, updates):
+            for requirement in requirements:
+                requirement.validate(self.metadata)
+            self.commits.append((requirements, updates))
+            self.metadata = update_table_metadata(self.metadata, updates)
+            return SimpleNamespace(metadata=self.metadata, metadata_location=table.metadata_location)
+
+        def _delete_old_metadata(self, *args):
+            pass
+
+    catalog = Catalog()
+    server = Tables()
+    original_client = httpx.Client
+    monkeypatch.setattr(httpx, "Client", lambda **kwargs: original_client(
+        transport=httpx.MockTransport(server), **kwargs))
+    monkeypatch.setattr("pyiceberg.catalog.rest.RestCatalog", lambda *args, **kwargs: catalog)
+    with duckdb.connect(config={"threads": 1, "memory_limit": "128MiB"}) as con:
+        con.execute("ATTACH ':memory:' AS reg_catalog")
+        native.ensure_native(con, COMMENT)
+        con.execute(f"DROP TABLE {native.qualified(COMMENT)}")
+        con.register("prior_shape", pa.Table.from_pylist([], schema=prior))
+        con.execute(f"CREATE TABLE {native.qualified(COMMENT)} AS SELECT * FROM prior_shape")
+        monkeypatch.setattr(guard.iceberg, "_connect", con.cursor)
+
+        def table_metadata(connection, namespace, name):
+            assert namespace == native.namespace()
+            if name == "comments":
+                return json.loads(catalog.metadata.model_dump_json(by_alias=True))
+            assert name == "etl_receipts"
+            return deepcopy(PINS[name])
+
+        monkeypatch.setattr(guard.iceberg, "_catalog_metadata", table_metadata)
+        yield con, catalog, server
+
+
+def test_old_schema_guard_requires_migration_pins_then_actual_apply_and_restore(old_native_catalog, tmp_path, monkeypatch):
+    from scripts.migrate_comments_attachment_schema import main, table_pin
+
+    con, catalog, server = old_native_catalog
+    state = tmp_path / "maintenance.json"
+    pin = table_pin(catalog.load_table(("default_native", "comments")))
+    assert pin[1] is not None
+    expected = (pin[0], pin[1], pin[2])
+    # Reproduce the hosted failure through the actual ordinary selection/schema path.
+    with pytest.raises(ValueError, match="schema differs from declared policy"):
+        guard.run("suspend", state)
+    assert not state.exists() and not server.requests
+    monkeypatch.setattr("sys.argv", ["maintenance", "suspend", "--state", str(state),
+        "--migration-table-uuid", expected[0], "--migration-snapshot-id", str(expected[1]),
+        "--migration-schema-id", str(expected[2])])
+    guard.main()
+    held = json.loads(state.read_text())
+    assert held["attachment_migration_pin"] == list(expected)
+    assert all(guard._disabled(config) for config in server.configs.values())
+    with pytest.raises(ValueError, match="exact migration preview pins"):
+        guard.run("verify", state)
+    monkeypatch.setattr("sys.argv", ["migrate", "--apply", "--table-uuid", expected[0],
+        "--snapshot-id", str(expected[1]), "--schema-id", str(expected[2]), "--maintenance-state", str(state)])
+    main()
+    assert len(catalog.commits) == 1
+    assert catalog.metadata.current_snapshot_id == expected[1]
+    assert catalog.metadata.current_schema_id != expected[2]
+    with pytest.raises(ValueError, match="migration preview pin"):
+        guard.run("verify", state, migration_pin=expected)
+    guard.run("restore", state)
+    assert server.configs == server.originals
+    assert json.loads(state.read_text())["restored"]
+    # The independent ordinary writer gate still refuses the unchanged local v2 table.
+    with pytest.raises(ValueError, match="schema differs from declared policy"):
+        guard.iceberg._selected_catalog_namespace(con, guard.COMMENT)
+
+
+@pytest.mark.parametrize("broken", ["uuid", "snapshot", "schema", "unknown-layout", "uninitialized"])
+def test_migration_selection_refuses_before_maintenance_changes(old_native_catalog, tmp_path, broken):
+    from scripts.migrate_comments_attachment_schema import table_pin
+    from pyiceberg.types import NestedField, StringType
+
+    con, catalog, server = old_native_catalog
+    pin = table_pin(catalog.load_table(("default_native", "comments")))
+    assert pin[1] is not None
+    expected = (pin[0], pin[1], pin[2])
+    if broken == "uuid":
+        expected = ("different", expected[1], expected[2])
+    elif broken == "snapshot":
+        expected = (expected[0], expected[1] + 1, expected[2])
+    elif broken == "schema":
+        expected = (expected[0], expected[1], expected[2] + 1)
+    elif broken == "unknown-layout":
+        schema = catalog.metadata.schema()
+        schema = schema.model_copy(update={"fields": (*schema.fields, NestedField(9999, "unknown", StringType()))})
+        catalog.metadata = catalog.metadata.model_copy(update={"schemas": [schema]})
+    else:
+        con.execute(f"DELETE FROM {guard.regulatory_catalog.receipts_table()}")
+    state = tmp_path / "refused.json"
+    with pytest.raises(ValueError):
+        guard.run("suspend", state, migration_pin=expected)
+    assert not state.exists() and not server.requests and not catalog.commits
+    assert server.configs == server.originals
+
+
+def test_migration_partial_disable_preserves_both_originals(old_native_catalog, tmp_path):
+    from scripts.migrate_comments_attachment_schema import table_pin
+
+    _, catalog, server = old_native_catalog
+    pin = table_pin(catalog.load_table(("default_native", "comments")))
+    assert pin[1] is not None
+    expected = (pin[0], pin[1], pin[2])
+    server.lose_disable_response = True
+    state = tmp_path / "partial.json"
+    with pytest.raises(httpx.ReadError):
+        guard.run("suspend", state, migration_pin=expected)
+    assert server.configs == server.originals
+    assert json.loads(state.read_text())["restored"]
+    assert not catalog.commits
+
+
+def test_migration_workflow_supplies_pins_and_always_restores():
+    import yaml
+
+    workflow = yaml.safe_load((Path(__file__).parents[1] / ".github/workflows/migrate-comment-attachments.yml").read_text())
+    assert workflow["concurrency"]["group"] == "comments-catalog-write"
+    steps = workflow["jobs"]["migrate"]["steps"]
+    suspend = next(step for step in steps if step.get("name", "").startswith("Suspend maintenance"))
+    assert all(flag in suspend["run"] for flag in (
+        "--migration-table-uuid", "--migration-snapshot-id", "--migration-schema-id"))
+    restore = next(step for step in steps if step.get("name", "").startswith("Restore exact"))
+    assert restore["if"] == "always() && inputs.apply"
+    assert "--migration-" not in restore["run"]

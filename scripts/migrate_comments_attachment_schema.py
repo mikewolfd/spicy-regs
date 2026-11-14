@@ -11,10 +11,9 @@ from pathlib import Path
 
 import pyarrow as pa
 
-from spicy_regs.policy_migrations import earlier_policy
+from spicy_regs.comment_attachment_schema import attachment_additions
 from spicy_regs.schemas import COMMENT
 from spicy_regs.sources import iceberg, regulatory_catalog
-from spicy_regs.transforms.regulations_receipts import policy
 
 
 def table_pin(table) -> tuple[str, int | None, int]:
@@ -24,7 +23,6 @@ def table_pin(table) -> tuple[str, int | None, int]:
 
 def migrate(table, *, expected: tuple[str, int | None, int], apply: bool = False) -> dict:
     """Plan or commit a schema-only update against the named table and snapshot."""
-    from pyiceberg.io.pyarrow import _pyarrow_to_schema_without_ids
     from pyiceberg.table.update import AssertRefSnapshotId
     from pyiceberg.types import ListType, LongType, StringType
 
@@ -33,32 +31,10 @@ def migrate(table, *, expected: tuple[str, int | None, int], apply: bool = False
     if table.metadata.current_snapshot_id is None or table.metadata.current_snapshot_id < 0:
         raise ValueError("Comments catalog has no selected snapshot")
 
-    current = policy("comments").subject_schema
-    prior = earlier_policy("comments", "regulations-native-v2").subject_schema
-    observed = table.schema()
-    # Iceberg assigns IDs to nested list elements and uses one string/list type.
-    # Normalize the policy declarations to Iceberg types before comparing shapes.
-    def matches(schema):
-        from pyiceberg.io.pyarrow import schema_to_pyarrow
-
-        normalized = _pyarrow_to_schema_without_ids(schema)
-        return schema_to_pyarrow(observed, include_field_ids=False).equals(
-            schema_to_pyarrow(normalized, include_field_ids=False)
-        )
+    added = attachment_additions(table.schema())
     plan = {"table_uuid": expected[0], "snapshot_id": expected[1], "schema_id": expected[2], "added": []}
-    if matches(current):
+    if not added:
         return plan
-    if not matches(prior):
-        raise ValueError("Comments migration requires the exact prior native schema")
-
-    prior_fields = prior.field("attachments").type.value_type
-    current_fields = current.field("attachments").type.value_type
-    added = list(current_fields)[len(prior_fields):]
-    if (not pa.struct(list(current_fields)[:len(prior_fields)]).equals(prior_fields)
-            or not all(field.nullable for field in added)
-            or not current.remove(current.get_field_index("attachments")).equals(
-                prior.remove(prior.get_field_index("attachments")))):
-        raise ValueError("Comments migration must only append nullable attachment fields")
 
     def iceberg_type(dtype):
         if pa.types.is_string(dtype):
@@ -80,8 +56,7 @@ def migrate(table, *, expected: tuple[str, int | None, int], apply: bool = False
             transaction._stage((), (AssertRefSnapshotId.model_validate({"ref": "main", "snapshot-id": expected[1]}),))
         table.refresh()
         after = table_pin(table)
-        observed = table.schema()
-        if after[:2] != expected[:2] or not matches(current):
+        if after[:2] != expected[:2] or attachment_additions(table.schema()):
             raise RuntimeError("Comments schema commit needs read-back verification before ingestion")
         plan["new_schema_id"] = after[2]
     return plan
@@ -109,7 +84,7 @@ def main() -> None:
     if args.apply:
         from spicy_regs.comments_maintenance import run
 
-        guard = run("verify", args.maintenance_state)
+        guard = run("verify", args.maintenance_state, migration_pin=pins)
 
     catalog = RestCatalog(
         "comments",
