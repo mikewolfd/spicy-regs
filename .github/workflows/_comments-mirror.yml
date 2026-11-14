@@ -12,6 +12,9 @@ on:
       comments_runner:
         type: string
         default: ubuntu-latest
+      diagnostic_native_snapshot:
+        type: string
+        default: ''
       # The 2026-10-10 v1 promotion's inputs. That route published ETL receipts, which
       # comments no longer do (ss-juz8); the first step refuses any of them. They stay
       # declared only because _regulations-refresh.yml, shared with the ETL, still
@@ -108,6 +111,7 @@ jobs:
         shell: bash
         env:
           TMPDIR: ${{ runner.temp }}
+          DIAGNOSTIC_NATIVE_SNAPSHOT: ${{ inputs.diagnostic_native_snapshot }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
@@ -134,14 +138,17 @@ jobs:
               /usr/bin/time -v -o output/comments-resources.txt "$@"
             fi
           }
-          ARGS=""
+          ARGS=()
           if [ "${{ inputs.skip_upload }}" = "true" ]; then
-            ARGS="$ARGS --skip-upload"
+            ARGS+=(--skip-upload)
+          fi
+          if [ -n "$DIAGNOSTIC_NATIVE_SNAPSHOT" ]; then
+            ARGS+=(--diagnostic-native-snapshot "$DIAGNOSTIC_NATIVE_SNAPSHOT")
           fi
           echo "Running admitted comments publication at $GITHUB_SHA"
           measure \
             uv run --no-sync python scripts/publish_comments_mirror_guarded.py \
-              --expected-source-sha "$GITHUB_SHA" $ARGS
+              --expected-source-sha "$GITHUB_SHA" "${ARGS[@]}"
 
       - name: Retain publication receipts and resource measurements
         if: always()

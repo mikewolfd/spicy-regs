@@ -17,6 +17,10 @@ on:
         description: 'Linux/macOS runner label for comments; select verified export storage'
         type: string
         default: ubuntu-latest
+      diagnostic_native_snapshot:
+        description: 'Optional exact UUID/snapshot/schema JSON; requires skip_upload and retains native COPY diagnostics'
+        type: string
+        default: ''
 concurrency:
   group: comments-catalog-write
   cancel-in-progress: false
@@ -34,3 +38,4 @@ jobs:
       skip_upload: ${{ inputs.skip_upload }}
       comments_only: ${{ inputs.comments_only }}
       comments_runner: ${{ inputs.comments_runner }}
+      diagnostic_native_snapshot: ${{ inputs.diagnostic_native_snapshot }}
