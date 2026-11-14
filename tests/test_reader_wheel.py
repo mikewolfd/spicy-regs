@@ -6,6 +6,7 @@ import json
 import re
 import tomllib
 import zipfile
+from email.parser import BytesParser
 from pathlib import Path
 
 import pytest
@@ -19,15 +20,17 @@ def test_pinned_reader_wheel_matches_its_receipt():
     project = tomllib.loads((root / "pyproject.toml").read_text())
     wheel = root / project["tool"]["uv"]["sources"]["spicy-docs"]["path"]
     version = wheel.name.removeprefix("spicy_docs-").removesuffix("-py3-none-any.whl")
-    # Numbered releases or the explicitly delegated reader integration build family;
-    # arbitrary local versions still require a reviewed gate change.
-    assert re.fullmatch(r"\d+\.\d+\.\d+(?:\+readers\.\d{8}\.\d+)?", version), version
+    # The reviewed House feed preview extends the retained reader build family.
+    # Other local version families still require a reviewed gate change.
+    assert re.fullmatch(r"\d+\.\d+\.\d+(?:\+readers\.\d{8}\.\d+(?:\.housefeed\.\d+)?)?", version), version
     receipt = json.loads((root / f"vendor/spicy_docs-{version}.json").read_text())
     assert receipt["filename"] == wheel.name and receipt["version"] == version
     assert receipt["byte_size"] == wheel.stat().st_size
     assert hashlib.sha256(wheel.read_bytes()).hexdigest() == receipt["sha256"]
     with zipfile.ZipFile(wheel) as archive:
         assert {"spicy_docs/storage/raw_archive.py", "spicy_docs/reading/refusals.py"} <= set(archive.namelist())
+        metadata = BytesParser().parsebytes(archive.read(f"spicy_docs-{version}.dist-info/METADATA"))
+        assert metadata["Name"] == "spicy-docs" and metadata["Version"] == version
 
 
 @pytest.mark.parametrize("existing", [None, "raw", "gzip"])
