@@ -83,7 +83,9 @@ def test_reuse_depends_on_text_rules_and_exact_body_not_unrelated_provider_code(
            "text_derivation": "pdf-extraction-gpo-normalized", "page_count": "1"}
     prior = {(body.identity.package_id, "stamp"): row}
     checkpoint = {"last_modified": "stamp", "rule_version": RULE_VERSIONS["CHRG"] + ";code=unrelated"}
-    assert _reuse_hearing_text(body, prior, checkpoint).text == text
+    reused = _reuse_hearing_text(body, prior, checkpoint)
+    assert reused is not None
+    assert reused.text == text
     old = dict(checkpoint, rule_version=checkpoint["rule_version"].replace("pymupdf=" + version("pymupdf"), "pymupdf=old"))
     assert _reuse_hearing_text(body, prior, old) is None
     assert _reuse_hearing_text(body, prior, dict(checkpoint, rule_version=None)) is None
@@ -120,6 +122,7 @@ def test_hearing_v3_receipts_keep_their_original_shape_under_v4():
     raw = {"package_id": "CHRG-119hhrg64431", "last_modified": "2026-09-01T00:00:00Z",
            "event_id": "legacy-detail-id", "mods_event_id": None}
     current = map_subject("hearing_transcripts", raw)
+    assert current is not None
     subject = {name: current[name] for name in old.subject_schema.names}
     assert recorded_subject("hearing_transcripts", raw, subject, policy_version=old.policy_version) == subject
     assert policy("hearing_transcripts").policy_version == "legislative-documents/4"

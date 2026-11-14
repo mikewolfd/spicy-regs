@@ -29,7 +29,7 @@ from spicy_regs.sources.retained import (
     RetainedCongressListingReader,
 )
 from spicy_regs.transforms.build_members import build_members
-from spicy_regs.transforms.build_committee_reports import build_committee_reports, _event_id
+from spicy_regs.transforms.build_committee_reports import build_committee_reports, _hearing_detail
 from tests.generation_fakes import Store
 from tests.test_committee_reports import BUDGET, CRPT_ID, CHRG_ID, FIXTURES, StubBodyAcquirer, StubHearings, _package
 from tests.test_generation_publication import build
@@ -414,7 +414,9 @@ def test_capped_selection_and_detail_refusal_are_distinct(tmp_path):
         def records(self, *args, **kwargs):
             yield SimpleNamespace(records=[], capture=capture(b'{"hearings": []}'))
 
-    assert _event_id(WrongDetail(), _package(CHRG_ID), evidence) == (None, "refused")
+    assert _hearing_detail(WrongDetail(), _package(CHRG_ID), evidence) == (
+        None, "refused", {"state": "refused", "relationship": "unproved"},
+    )
     assert b'{"hearings": []}' in bodies(evidence)
 
 
@@ -820,7 +822,9 @@ def test_congress_detail_preyield_overflow_retains_original(tmp_path):
             )
         ),
     ) as owner:
-        assert _event_id(owner, _package(CHRG_ID), evidence) == (None, "refused")
+        assert _hearing_detail(owner, _package(CHRG_ID), evidence) == (
+            None, "refused", {"state": "refused", "relationship": "unproved"},
+        )
     assert raw in bodies(evidence)
     assert any(row.get("stage") == "congress-listing-response" for row in journal(evidence))
 

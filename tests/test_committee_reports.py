@@ -148,6 +148,8 @@ def _parts(package_id: str, *, bodies: dict[str, bytes] | None = None, **kwargs)
 
 
 class _Page:
+    capture: CapturedBodyResponse
+
     def __init__(self, records):
         self.records = records
 
