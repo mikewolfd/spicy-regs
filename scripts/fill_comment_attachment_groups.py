@@ -379,6 +379,9 @@ def main():
     require(re.fullmatch(r"[0-9a-f]{40}", args.runtime_ref), "Exact runtime commit required")
     actual = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[1], text=True).strip()
     require(actual == args.runtime_ref, "Checked-out runtime differs")
+    # This hosted process owns the planner/stager budget; preserve their single-thread execution.
+    # Standalone module calls retain the smaller default. Watchdog and spill limits stay independent.
+    groups.RESOURCES = ExportResources(memory=RESOURCES.memory, threads=1)
     args.config = json.loads(args.config)
     args.workdir.mkdir(parents=True, exist_ok=True)
     if args.finalize:
