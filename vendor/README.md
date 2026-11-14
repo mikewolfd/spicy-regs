@@ -38,7 +38,18 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
-- **Selected local integration provider** `spicy_docs-0.85.0+readers.20261113.5`
+- **Selected hearing provider** `spicy_docs-0.85.0+readers.20261114.2` is built from
+  `bbdbe15b8648f7ec304dd336b87f9403d0c689e9`. It appends exact-rendition transcript text,
+  independently dated Congress.gov detail evidence and all native MODS event IDs.
+  A dated meeting join requires corroboration in that hearing's retained MODS.
+  See [the receipt](spicy_docs-0.85.0+readers.20261114.2.json) for source, wheel and RECORD identity.
+  The wheel uses the declared PEP 517 backend (uv 0.11.33); one clean-source build
+  is recorded. Local hearing qualification and remaining source gaps are recorded
+  on ss-d4q2 and the hearing milestone in ss-wxrf. Public `0.86` remains reserved.
+  The superseded `.20261114.1` wheel is recoverable from this adoption commit's parent;
+  its receipt remains.
+
+- **Prior local integration provider** `spicy_docs-0.85.0+readers.20261113.5`
   is built from `5961c4f05d765be9bb6956402ac731075e674eb4`. It adds reviewed historical
   archive/Senate fallback readers, bill context and older bill child reads, GovInfo
   preservation/native budget evidence, and comment attachment metadata. Source inputs,
