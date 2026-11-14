@@ -73,6 +73,13 @@ def test_observations_remain_separate_even_when_body_and_entry_ids_repeat(select
     entries = rows(tmp_path / "history/generation", "house_floor_entries")
     assert len(feeds) == 2 and len({feed["capture_id"] for feed in feeds}) == 2
     assert len(entries) == 6 and len({entry["entry_id"] for entry in entries}) == 3
+    links = rows(tmp_path / "history/generation", "house_floor_links")
+    feed_keys = {feed["capture_id"] for feed in feeds}
+    entry_keys = {(entry["capture_id"], entry["entry_index"]) for entry in entries}
+    assert len(entry_keys) == len(entries)
+    assert {entry["capture_id"] for entry in entries} == feed_keys
+    assert {(link["capture_id"], link["entry_index"]) for link in links} == entry_keys
+    assert len({(link["capture_id"], link["entry_index"], link["link_index"]) for link in links}) == len(links)
 
 
 def test_repaired_target_and_original_spelling_both_reach_generation(selected, tmp_path):

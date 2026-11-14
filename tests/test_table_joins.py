@@ -74,17 +74,21 @@ def test_the_contract_shape_carries_no_measurement():
 
 
 def test_the_spicy_docs_contracts_reference_the_identity_joins_declared_here():
-    """Every provider reference is declared; local declarations may add relationships.
+    """Every hosted provider reference is declared; local declarations may add joins.
 
     The producer's schema references are a minimum, not an exhaustive registry
-    of relationships between tables built by this repository. Every local
+    of relationships between tables hosted by this repository. Every local
     addition still has schema validation, an operational baseline and live CI.
+    Explicitly unhosted source tables are accounted for by test_contract_tables;
+    their offline candidate outputs do not enter this public join registry.
     """
     from spicy_docs.schemas import TABLE_CONTRACTS
 
     declared = {(j.child, j.child_columns, j.parent, j.parent_columns): j for j in table_joins.JOINS}
     referenced = {(contract.name, tuple(ref.child_columns), ref.parent_table, tuple(ref.parent_columns))
-                  for contract in TABLE_CONTRACTS.values() for ref in contract.references}
+                  for contract in TABLE_CONTRACTS.values()
+                  if contract.name in {*dd.CONTRACT_TABLES, *dd.RECORD_TYPES}
+                  for ref in contract.references}
     retired = {(j.child, j.child_columns, j.parent, j.parent_columns) for j in table_joins.RETIRED_PROCESSING_JOINS}
     translated = set()
     for child, child_columns, parent, parent_columns in referenced - retired:
