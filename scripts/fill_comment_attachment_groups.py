@@ -29,6 +29,10 @@ LIMITS = {**runner.LIMITS, "wall_seconds": 300 * 60, "rss_bytes": 8 * GiB, "outp
 RESOURCES = ExportResources(memory="2GB", threads=2)
 MAX_ROWS, MAX_VALUES = 1_000_000, 512 * 2**20
 SPILL_BYTES = GiB
+PLANNER_RESOURCES = ExportResources(memory="4GB", threads=1)
+PLANNER_SPILL = "3GB"
+PLANNER_SPILL_BYTES = 3 * GiB
+PLANNER_OUTPUT_BYTES = 2 * GiB
 require, digest = runner.require, runner.digest
 
 
@@ -71,13 +75,24 @@ def publish(client, bucket, path, prefix):
     return {"key": target, **identity}
 
 
-def admit(root, *, download=0, reserve=0):
+def admit(root, *, download=0, reserve=0, phase=None):
     """Account retained and proposed bytes before work; the watchdog enforces actual growth."""
     held = owner.sizes(root, float("inf"))
     used = max(held["logical"], held["allocated"])
-    require(used + download + reserve < LIMITS["output_bytes"] - 65536, "Owned input/recovery/spill admission exceeds 6GiB")
-    require(shutil.disk_usage(root).free - download - reserve >= LIMITS["stop_free_bytes"], "Disk reserve admission refused")
-    return {"held_bytes": used, "download_bytes": download, "reserved_bytes": reserve}
+    free = shutil.disk_usage(root).free
+    owned_ok = used + download + reserve < LIMITS["output_bytes"] - 65536
+    free_ok = free - download - reserve >= LIMITS["stop_free_bytes"]
+    admission = {"held_bytes": used, "download_bytes": download, "reserved_bytes": reserve}
+    if phase is not None:
+        owner.durable(root / f"admission-{phase}.json", {
+            **admission, "phase": phase, "status": "admitted" if owned_ok and free_ok else "refused",
+            "held_logical_bytes": held["logical"], "held_allocated_bytes": held["allocated"],
+            "free_bytes": free, "owned_ceiling_bytes": LIMITS["output_bytes"] - 65536,
+            "free_floor_bytes": LIMITS["stop_free_bytes"],
+        })
+    require(owned_ok, "Owned input/recovery/spill admission exceeds 6GiB")
+    require(free_ok, "Disk reserve admission refused")
+    return admission
 
 
 def make_plan(args, client, bucket):
@@ -87,16 +102,19 @@ def make_plan(args, client, bucket):
     receipt = load(stage / "staging.json")
     file = receipt["file"]
     require(file["sha256"] == args.config["reads"]["sha256"], "Aggregate stage/receipt differ")
-    admit(args.workdir, download=file["bytes"], reserve=2 * GiB)
+    # All planning outputs coexist with the aggregate and spill until the planner closes.
+    admit(args.workdir, download=file["bytes"], reserve=PLANNER_SPILL_BYTES + PLANNER_OUTPUT_BYTES, phase="plan")
     fetch(client, bucket, {**args.config["reads"], "bytes": file["bytes"]}, stage / "reads.parquet", 4 * GiB)
-    planned = groups.plan(args.workdir / "physical", stage, max_rows=MAX_ROWS, max_read_bytes=MAX_VALUES, max_spill="1GB")
+    planned = groups.plan(args.workdir / "physical", stage, max_rows=MAX_ROWS, max_read_bytes=MAX_VALUES, max_spill=PLANNER_SPILL)
     counts = Counter(g["original_file"] for g in planned["groups"])
     split = [name for name, n in counts.items() if n != 1]
     require(not split, "Physical files exceed whole-file bounds; retain plan for separately qualified bounds: " + repr(split[:3]))
     staged = []
     for group in planned["groups"]:
         out = args.workdir / "group"
-        admit(args.workdir, reserve=MAX_VALUES + SPILL_BYTES)
+        # Re-measure after planning cleanup and after each verified upload/removal.
+        # stage_group inherits this plan's retained spill ceiling.
+        admit(args.workdir, reserve=MAX_VALUES + PLANNER_SPILL_BYTES, phase=f"stage-{group['group_id']}")
         receipt = groups.stage_group(args.workdir / "physical", group["group_id"], out)
         uploaded = runner.publish_stage(out, client, bucket)
         control = publish(client, bucket, out / "staging.json", "staging/comment-attachment-stage-" + digest(out / "staging.json"))
@@ -381,7 +399,7 @@ def main():
     require(actual == args.runtime_ref, "Checked-out runtime differs")
     # This hosted process owns the planner/stager budget; preserve their single-thread execution.
     # Standalone module calls retain the smaller default. Watchdog and spill limits stay independent.
-    groups.RESOURCES = ExportResources(memory=RESOURCES.memory, threads=1)
+    groups.RESOURCES = PLANNER_RESOURCES
     args.config = json.loads(args.config)
     args.workdir.mkdir(parents=True, exist_ok=True)
     if args.finalize:

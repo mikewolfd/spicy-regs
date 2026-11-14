@@ -164,6 +164,95 @@ def test_tampered_recovery_and_budget_admission_refuse(tmp_path, monkeypatch):
         run.admit(args.workdir, download=1)
 
 
+def test_plan_refuses_before_aggregate_download_and_retains_admission(tmp_path, monkeypatch):
+    receipt = tmp_path / "source-staging.json"
+    receipt.write_text(json.dumps({"file": {"sha256": "b" * 64, "bytes": 668_371_805}}))
+    store = JournalStore({"staging/aggregate/staging.json": receipt.read_bytes()})
+    args = SimpleNamespace(workdir=tmp_path, config={
+        "staging": {"key": "staging/aggregate/staging.json", **run.pin(receipt)},
+        "reads": {"key": "staging/aggregate/reads.parquet", "sha256": "b" * 64},
+    })
+    # Planning needs the aggregate plus both spill and coexisting output capacity.
+    held = 6 * run.GiB - 65536 - 668_371_805 - 5 * run.GiB
+    monkeypatch.setattr(run.owner, "sizes", lambda *a: {"logical": 0, "allocated": held})
+    monkeypatch.setattr(run.shutil, "disk_usage", lambda p: SimpleNamespace(free=20 * run.GiB))
+    with pytest.raises(ValueError, match="Owned input/recovery/spill admission"):
+        run.make_plan(args, store, "test")
+    assert store.gets == ["staging/aggregate/staging.json"]
+    evidence = run.load(tmp_path / "admission-plan.json")
+    assert evidence["status"] == "refused" and evidence["phase"] == "plan"
+    assert evidence["held_bytes"] == held and evidence["download_bytes"] == 668_371_805
+    assert evidence["reserved_bytes"] == 5 * run.GiB
+    assert not (tmp_path / "physical").exists()
+
+
+@pytest.mark.parametrize("free_delta, admitted", [(0, True), (-1, False)])
+def test_actual_aggregate_reservation_checks_free_disk_floor(tmp_path, monkeypatch, free_delta, admitted):
+    monkeypatch.setattr(run.owner, "sizes", lambda *a: {"logical": 95_722, "allocated": 95_722})
+    # Exact aggregate + receipt + 3GiB spill + 2GiB outputs; allocation is not measured fit.
+    minimum_free = 668_371_805 + 5 * run.GiB + 4 * run.GiB
+    monkeypatch.setattr(run.shutil, "disk_usage", lambda p: SimpleNamespace(free=minimum_free + free_delta))
+    if admitted:
+        result = run.admit(tmp_path, download=668_371_805, reserve=5 * run.GiB, phase="plan")
+        assert sum(result.values()) == 6_037_176_647
+    else:
+        with pytest.raises(ValueError, match="Disk reserve admission"):
+            run.admit(tmp_path, download=668_371_805, reserve=5 * run.GiB, phase="plan")
+    evidence = run.load(tmp_path / "admission-plan.json")
+    assert evidence["status"] == ("admitted" if admitted else "refused")
+
+
+@pytest.mark.parametrize("held_delta, admitted", [(-1, True), (0, False)])
+def test_each_stage_rechecks_actual_holdings_and_full_retained_spill(tmp_path, catalog, monkeypatch,
+                                                                 held_delta, admitted):
+    calls, staged = [], []
+    # The exact boundary includes the unchanged 64KiB terminal reserve. Equality refuses.
+    stage_held = 2_684_289_024 + held_delta
+    def sizes(*a):
+        held = 95_722 if not calls else stage_held
+        calls.append(held)
+        return {"logical": 0, "allocated": held}
+    monkeypatch.setattr(run.owner, "sizes", sizes)
+    monkeypatch.setattr(run.shutil, "disk_usage", lambda p: SimpleNamespace(free=20 * run.GiB))
+    original = run.groups.stage_group
+    def stage(workdir, group, out):
+        assert run.load(workdir / "groups.json")["max_spill"] == "3GB"
+        assert run.load(out.parent / f"admission-stage-{group}.json")["status"] == "admitted"
+        staged.append(group)
+        return original(workdir, group, out)
+    monkeypatch.setattr(run.groups, "stage_group", stage)
+    if admitted:
+        setup_plan(tmp_path, catalog)
+        assert len(staged) == 3 and len(calls) == 4
+    else:
+        with pytest.raises(ValueError, match="Owned input/recovery/spill admission"):
+            setup_plan(tmp_path, catalog)
+        assert not staged and len(calls) == 2
+    controls = sorted((tmp_path / "plan").glob("admission-stage-*.json"))
+    assert len(controls) == (3 if admitted else 1)
+    for control in controls:
+        evidence = run.load(control)
+        assert evidence["held_bytes"] == stage_held and evidence["download_bytes"] == 0
+        assert evidence["reserved_bytes"] == 3 * run.GiB + 512 * 2**20
+        assert evidence["status"] == ("admitted" if admitted else "refused")
+
+
+def test_hosted_planner_allocation_leaves_writer_and_outer_limits_unchanged(tmp_path, monkeypatch):
+    import sys
+    monkeypatch.setattr(run.groups, "RESOURCES", run.groups.RESOURCES)
+    monkeypatch.setattr(sys, "argv", [str(run.__file__), "--runtime-ref", "a" * 40, "--config", "{}",
+                                     "--operation", "plan", "--workdir", str(tmp_path), "--worker"])
+    monkeypatch.setattr(run.subprocess, "check_output", lambda *a, **kw: "a" * 40)
+    observed = []
+    monkeypatch.setattr(run, "execute", lambda args: observed.append(run.groups.RESOURCES))
+    run.main()
+    assert len(observed) == 1 and observed[0].memory == "4GB" and observed[0].threads == 1
+    assert run.RESOURCES.memory == "2GB" and run.RESOURCES.threads == 2
+    assert run.SPILL_BYTES == run.GiB
+    assert run.LIMITS["rss_bytes"] == 8 * run.GiB and run.LIMITS["output_bytes"] == 6 * run.GiB
+    assert run.LIMITS["stop_free_bytes"] == 4 * run.GiB and run.LIMITS["wall_seconds"] == 300 * 60
+
+
 @pytest.mark.parametrize("failure", ["supervisor", "suspend"])
 def test_cleanup_restores_after_partial_suspend_or_watchdog_stop(tmp_path, monkeypatch, failure):
     args = arguments(tmp_path, {"sha256": "b" * 64})
