@@ -36,9 +36,11 @@ WORKDIR /app
 # running those calls with only this image's packages); about 117 MB installed
 # beside the 93 MB the others take. The lock and the check stay in the image,
 # so the binding step can rerun the check inside the pushed image.
+# marko: every ordinary discovery/query connection registers opinion text search.
+# The ordinary-tool smoke below must run, not just import the calling module.
 COPY uv.lock deploy/cloudflare/lock_pins.py deploy/cloudflare/runtime_readers.py /app/lock/
 RUN python /app/lock/lock_pins.py constraints /app/lock/uv.lock > /app/lock/constraints.txt \
-    && pip install -c /app/lock/constraints.txt mcp duckdb uvicorn loguru httpx pytz pyarrow && pip check
+    && pip install -c /app/lock/constraints.txt mcp duckdb uvicorn loguru httpx pytz pyarrow marko && pip check
 
 # Install the package code without its declared (ETL) dependencies. mcp_server
 # imports only the local _icon module plus mcp/duckdb, so this is sufficient and
@@ -48,7 +50,8 @@ COPY src ./src
 COPY packaging ./packaging
 COPY data_dictionary ./data_dictionary
 RUN pip install --no-deps . && python /app/lock/lock_pins.py check /app/lock/uv.lock
-# Exercise native receipt selection before checking the other runtime imports.
+# Exercise receipt selection and ordinary MCP discovery/query/error/recovery
+# before checking the other runtime imports. This uses only installed packages.
 RUN python /app/lock/runtime_readers.py
 # Fail the build, not the first request, when a module the server imports at
 # request time needs a package this image does not install. pyarrow,
@@ -62,5 +65,5 @@ ENV PORT=8080
 EXPOSE 8080
 # Shared with the Worker entrypoint override, including when an old image starts
 # during rollout. The guard execs the server, preserving PID 1 stop signals.
-COPY deploy/cloudflare/start_reader.py /app/lock/start_reader.py
+COPY deploy/cloudflare/start_reader.py deploy/cloudflare/qualify_reader.py /app/lock/
 CMD ["python", "/app/lock/start_reader.py"]
