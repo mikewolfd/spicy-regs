@@ -38,7 +38,15 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
-- **Selected T06 OLRC link reader provider** `spicy_docs-0.85.0+readers.20261124.1` is built from
+- **Selected OLRC static Table III & Live reader provider** `spicy_docs-0.85.0+readers.20261124.2` is built from
+  `1a2c3fafe481a1095a546037339b2172c50a0576` on `fork/main` (PRs #35, #36, #37). It adds
+  `table3_lookup.json.gz` and static `.html` Table III act page support (`acquire_table3_lookup` /
+  `acquire_table3_act(..., static=True)`), plus `live.yml` credential guards and fixture updates.
+  See [the receipt](spicy_docs-0.85.0+readers.20261124.2.json) for source, wheel and RECORD identity.
+  The superseded `.20261124.1` wheel is recoverable from this adoption commit's parent;
+  its receipt remains.
+
+- **Prior T06 OLRC link reader provider** `spicy_docs-0.85.0+readers.20261124.1` is built from
   `32c095212ad507d34bf2e466ad75a62432d423c5` on `fork/main` (`462bcb11`). It updates OLRC
   classification `_STAT_LINK` regex matching for `target="_blank"` and `.html?`/`.htm?` links
   without hiding Table III `table3-xml-bulk.zip` 404 refusals (`ss-uzaf`).

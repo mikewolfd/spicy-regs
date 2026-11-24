@@ -77,6 +77,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import replace
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -103,7 +104,11 @@ from spicy_docs.sources.govinfo.uslm_acquisition import (
     UslmSourceUnavailableError,
 )
 from spicy_docs.sources.uscode import Table3Page, Table3Record, UsCodeSourceError, iter_table3_acts
-from spicy_docs.sources.uscode.acquisition import UsCodeAcquirer, UsCodeAcquisitionBudget
+from spicy_docs.sources.uscode.acquisition import (
+    UsCodeAcquirer,
+    UsCodeAcquisitionBudget,
+    UsCodeSourceUnavailableError,
+)
 from spicy_docs.sources.uscode.classification import CLASSIFICATION_INDEX_URL
 from spicy_docs.transport.captured import attached_capture
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
@@ -596,6 +601,169 @@ class Table3Read(NamedTuple):
     release_point: str | None
 
 
+#: Maximum static-site Table III act pages fetched in one fallback run.
+MAX_TABLE3_STATIC_ACTS_PER_RUN = 50
+
+
+def _table3_static_rows(
+    olrc: Any,
+    congresses: set[int],
+    held: set[str],
+    published_release_point: str | None,
+    checkpoints: dict[str, dict],
+    evaluated: set[str],
+    evidence: CaptureEvidence | None,
+    *,
+    rule: str,
+    scope: list[int],
+    stated: dict[str, object],
+    refuse: Callable[..., Table3Read],
+) -> Table3Read:
+    """Fall back to OLRC's static ``table3_lookup.json.gz`` and ``.html`` act pages when the bulk zip returns 404/410."""
+    unchanged = Table3Read([], [], None)
+    try:
+        lookup_acq = olrc.acquire_table3_lookup()
+    except UsCodeSourceError as error:
+        if evidence:
+            evidence.refusal(error, stage="table3:lookup")
+        return refuse("lookup-refused", error_type=type(error).__name__, message=_transport_error(error)[:500])
+    except CredentialRefusedError as error:
+        if evidence:
+            evidence.refusal(error, stage="table3:lookup")
+        return refuse(ACCESS_REFUSED, error_type=type(error).__name__, message=_transport_error(error)[:500])
+    except (httpx.HTTPError, ConnectionError) as error:
+        if evidence:
+            evidence.refusal(error, stage="table3:lookup")
+        logger.warning("Laws: Table III static lookup not established — every row stands: {}", _transport_error(error))
+        return unchanged
+    if evidence:
+        evidence.capture(lookup_acq.capture, stage="table3:lookup")
+
+    entries = lookup_acq.result.entries
+    lookup_release_point = _newest_release_point(entry.citation for entry in entries)
+    point, held_point = _public_law(lookup_release_point), _public_law(published_release_point)
+    if point is None:
+        return refuse("release-point-unreadable", source="table3-lookup")
+    if held_point is not None and point < held_point:
+        return refuse("release-point-regressed", release_point=lookup_release_point, source="table3-lookup")
+
+    already_known = set(held)
+    for congress in scope:
+        checkpoint = checkpoints.get(str(congress))
+        if checkpoint and checkpoint.get("rule") == rule and checkpoint.get("mode") == "static-lookup":
+            already_known.update((checkpoint.get("acts") or {}).keys())
+
+    scoped_entries = [
+        (parsed, entry)
+        for entry in entries
+        if (parsed := _public_law(entry.citation)) is not None
+        and parsed[0] in congresses
+        and entry.citation not in already_known
+    ]
+    scoped_entries.sort(key=lambda item: item[0], reverse=True)
+    batch = scoped_entries[:MAX_TABLE3_STATIC_ACTS_PER_RUN]
+    deferred = max(0, len(scoped_entries) - len(batch))
+
+    if not batch:
+        logger.info(
+            "Laws: Table III bulk unavailable; static lookup current at release point {} ({}) for Congresses {}; "
+            "nothing derived",
+            lookup_release_point,
+            lookup_acq.capture.sha256,
+            scope,
+        )
+        if evidence:
+            evidence.event(
+                "table3-static-lookup",
+                **stated,
+                lookup_release_point=lookup_release_point,
+                lookup_sha256=lookup_acq.capture.sha256,
+                derived=False,
+                fetched=[],
+            )
+        return unchanged
+
+    rows: list[dict] = []
+    fetched: list[str] = []
+    transport_failed = False
+    for parsed, entry in batch:
+        stage = f"table3:act:{entry.citation}"
+        try:
+            act_acq = olrc.acquire_table3_act(entry.citation, static=True)
+        except CredentialRefusedError as error:
+            if evidence:
+                evidence.refusal(error, stage=stage)
+            return refuse(
+                ACCESS_REFUSED,
+                act_key=entry.citation,
+                error_type=type(error).__name__,
+                message=_transport_error(error)[:500],
+            )
+        except UsCodeSourceError as error:
+            if evidence:
+                evidence.refusal(error, stage=stage)
+            return refuse(
+                "act-refused",
+                act_key=entry.citation,
+                error_type=type(error).__name__,
+                message=_transport_error(error)[:500],
+            )
+        except (httpx.HTTPError, ConnectionError) as error:
+            if evidence:
+                evidence.refusal(error, stage=stage)
+            logger.warning("Laws: Table III static act {} not established: {}", entry.citation, _transport_error(error))
+            transport_failed = True
+            break
+        if evidence:
+            evidence.capture(act_acq.capture, stage=stage)
+        page = replace(act_acq.result, release_point=act_acq.result.release_point or lookup_release_point)
+        act_rows = [
+            shape_table3_record(rec, page=page, seq=idx, observed_at=act_acq.capture.observed_at)
+            for idx, rec in enumerate(page.records)
+        ]
+        rows.extend(act_rows)
+        evaluated.add(entry.citation)
+        fetched.append(entry.citation)
+        congress_key = str(parsed[0])
+        prior_cp = checkpoints.get(congress_key) or {}
+        prior_acts = dict(prior_cp.get("acts") or {}) if isinstance(prior_cp.get("acts"), Mapping) else {}
+        prior_acts[entry.citation] = _rows_digest(act_rows)
+        checkpoints[congress_key] = {
+            "congress": congress_key,
+            "rule": rule,
+            "mode": "static-lookup",
+            "member_sha256": lookup_acq.capture.sha256,
+            "sha256": lookup_acq.capture.sha256,
+            "release_point": lookup_release_point,
+            "observed_at": act_acq.capture.observed_at,
+            "acts": prior_acts,
+        }
+
+    if not fetched and transport_failed:
+        return unchanged
+
+    logger.info(
+        "Laws: Table III static fallback at release point {} — fetched {} acts {}, {:,} rows{}",
+        lookup_release_point,
+        len(fetched),
+        fetched,
+        len(rows),
+        f" ({deferred} deferred)" if deferred else "",
+    )
+    if evidence:
+        evidence.event(
+            "table3-static-lookup",
+            **stated,
+            lookup_release_point=lookup_release_point,
+            lookup_sha256=lookup_acq.capture.sha256,
+            derived=bool(fetched),
+            fetched=fetched,
+            deferred=deferred,
+            rows=len(rows),
+        )
+    return Table3Read(rows, [], lookup_release_point)
+
+
 def _table3_rows(
     olrc: OlrcSource,
     congresses: set[int],
@@ -615,12 +783,17 @@ def _table3_rows(
     act with none is published). A held or checkpointed act the file no longer
     lists is retired, ``evaluated`` with no rows, which removes them.
 
+    When ``acquire_table3_bulk`` answers 404/410 (:class:`UsCodeSourceUnavailableError`),
+    and the acquirer provides ``acquire_table3_lookup``, falls back cleanly to OLRC's
+    static ``table3_lookup.json.gz`` and ``.html`` act pages, deriving only newly listed
+    scoped acts not already held.
+
     The read is refused, publishing nothing and keeping every checkpoint, when
     its release point sorts before ``published_release_point`` (the newest the
     table or a checkpoint states), when it drops an act without advancing past
     it, when it drops more than :data:`TABLE3_MAX_RETIRED_PER_RELEASE`, or when
     the reader refuses the file itself (a renamed or reshaped member, a
-    malformed zip, a ``404``), or when the publisher answers ``401``/``403``
+    malformed zip, a ``404`` without lookup support), or when the publisher answers ``401``/``403``
     (:data:`ACCESS_REFUSED`). Each refusal journals ``table3-bulk-refused``,
     which the nightly ``scripts/check_source_refusals.py`` fails on, because it
     repeats every run until someone acts: the rest of the laws family still
@@ -640,6 +813,32 @@ def _table3_rows(
 
     try:
         acquired = olrc.acquire_table3_bulk()
+    except UsCodeSourceUnavailableError as error:
+        if hasattr(olrc, "acquire_table3_lookup"):
+            if evidence:
+                evidence.event(
+                    "table3-bulk-unavailable",
+                    stage="table3:bulk",
+                    error_type=type(error).__name__,
+                    message=_transport_error(error)[:500],
+                    **stated,
+                )
+            return _table3_static_rows(
+                olrc,
+                congresses,
+                held,
+                published,
+                checkpoints,
+                evaluated,
+                evidence,
+                rule=rule,
+                scope=scope,
+                stated=stated,
+                refuse=refuse,
+            )
+        if evidence:
+            evidence.refusal(error, stage="table3:bulk")
+        return refuse("file-refused", error_type=type(error).__name__, message=_transport_error(error)[:500])
     except UsCodeSourceError as error:
         if evidence:
             evidence.refusal(error, stage="table3:bulk")
