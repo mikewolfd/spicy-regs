@@ -1,12 +1,14 @@
 """The hand-run publish command: its dry run on a disk store, its refusals and its public readback."""
 
 import json
+from pathlib import Path
 import shutil
 from types import SimpleNamespace
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+import yaml
 
 from spicy_regs import local_publication as command
 from spicy_regs.generations import build_generation
@@ -15,7 +17,7 @@ from spicy_regs.sources import publication, r2
 from spicy_regs.sources.disk_store import DiskStore
 from tests.generation_fakes import Store
 
-FAMILY = "treasury-fiscal"
+FAMILY = "irs-form990"
 
 
 def generation(tmp_path, name, tables, *, read=None, family=FAMILY, publication_status="complete-family"):
@@ -57,7 +59,7 @@ def test_census_acs_cli_registration_keeps_family_and_evidence_guards(tmp_path):
     original_index = live.read_bytes()
     dry = ("--dry-run", "--scratch-raw", "--live-index", str(live))
 
-    with pytest.raises(publication.PublicationError, match="is family census-acs, not the expected treasury-fiscal"):
+    with pytest.raises(publication.PublicationError, match=f"is family census-acs, not the expected {FAMILY}"):
         run(tmp_path, "accepted-acs", directory, evidence, *dry)
     with pytest.raises(publication.PublicationError, match="published with the source evidence it pins"):
         run(tmp_path, "accepted-acs", directory, None, *dry, family=family)
@@ -79,7 +81,7 @@ def test_usaspending_cli_registration_retains_family_evidence_and_partial_guards
     original_index = json.dumps(publication.empty_index()).encode()
     live.write_bytes(original_index)
     dry = ("--dry-run", "--scratch-raw", "--live-index", str(live))
-    with pytest.raises(publication.PublicationError, match="not the expected treasury-fiscal"):
+    with pytest.raises(publication.PublicationError, match=f"not the expected {FAMILY}"):
         run(tmp_path, "wrong-family", directory, evidence, *dry)
     with pytest.raises(publication.PublicationError, match="pass --evidence"):
         run(tmp_path, "missing-evidence", directory, None, *dry, family=family)
@@ -112,8 +114,8 @@ def test_dry_run_runs_the_publication_guards_on_a_disk_store(tmp_path, capsys, m
     dry = ("--dry-run", "--scratch-raw", "--live-index", str(live))
     refused = publication.PublicationError
 
-    with pytest.raises(refused, match="is family treasury-fiscal, not the expected ofac-sanctions"):
-        run(tmp_path, "accepted", second, evidence, *dry, family="ofac-sanctions")
+    with pytest.raises(refused, match=f"is family {FAMILY}, not the expected fara"):
+        run(tmp_path, "accepted", second, evidence, *dry, family="fara")
     with pytest.raises(refused, match="published with the source evidence it pins"):
         run(tmp_path, "accepted", second, None, *dry)
     # A rehearsal build must say it is one: without --scratch-raw the dry run holds it to the shared archive.
@@ -121,7 +123,7 @@ def test_dry_run_runs_the_publication_guards_on_a_disk_store(tmp_path, capsys, m
         run(tmp_path, "accepted", second, evidence, "--dry-run", "--live-index", str(live))
     with pytest.raises(refused, match="Family membership changed; explicit migration is required"):
         run(tmp_path, "accepted", second, evidence, *dry)
-    with pytest.raises(refused, match=f"Live treasury-fiscal is {first_digest}, not the expected"):
+    with pytest.raises(refused, match=f"Live {FAMILY} is {first_digest}, not the expected"):
         run(tmp_path, "accepted", second, evidence, *dry, "--added-table", "cells.parquet",
             "--expect-prior", second_digest)
     with monkeypatch.context() as loosened:
@@ -230,9 +232,9 @@ def test_publish_holds_the_target_and_raw_root_then_reads_back_publicly(tmp_path
 
     # The family is live now. A build made before someone else's publish must not replace it unseen:
     # the publish needs the digest its dry run compared against, and that digest must still be live.
-    with pytest.raises(refused, match="treasury-fiscal is live: pass --expect-prior"):
+    with pytest.raises(refused, match=f"{FAMILY} is live: pass --expect-prior"):
         run(tmp_path, "later-receipt", later, later_evidence)
-    with pytest.raises(refused, match=f"Live treasury-fiscal is {digest}, not the expected prior {later_digest}"):
+    with pytest.raises(refused, match=f"Live {FAMILY} is {digest}, not the expected prior {later_digest}"):
         run(tmp_path, "later-receipt", later, later_evidence, "--expect-prior", later_digest)
     assert store.writes == written
     replaced = json.loads((run(tmp_path, "later-receipt", later, later_evidence, "--expect-prior", digest[:12])
@@ -281,7 +283,7 @@ def test_census_geocoder_uses_the_cli_with_the_existing_family_gates(tmp_path, c
     dry = ("--dry-run", "--scratch-raw", "--live-index", str(live))
     with pytest.raises(publication.PublicationError, match="source evidence it pins"):
         run(tmp_path, "accepted", directory, None, *dry, family=family)
-    with pytest.raises(publication.PublicationError, match="not the expected treasury-fiscal"):
+    with pytest.raises(publication.PublicationError, match=f"not the expected {FAMILY}"):
         run(tmp_path, "accepted", directory, evidence, *dry)
     with pytest.raises(publication.PublicationError, match="Live census-geocoder is absent"):
         run(tmp_path, "accepted", directory, evidence, *dry, "--expect-prior", "a" * 64, family=family)
@@ -300,7 +302,37 @@ def test_census_geocoder_uses_the_cli_with_the_existing_family_gates(tmp_path, c
 
 
 def test_open_payments_cli_refuses_a_generation_of_another_family(tmp_path):
-    directory, _, evidence = generation(tmp_path, "treasury", {"debt": ["a"]})
+    directory, _, evidence = generation(tmp_path, "local", {"debt": ["a"]})
     with pytest.raises(publication.PublicationError, match="not the expected cms-open-payments"):
         run(tmp_path, "refused", directory, evidence, "--dry-run", family="cms-open-payments")
     assert not (tmp_path / "refused").exists()
+
+
+def test_local_families_are_disjoint_from_hosted_rollup_workflows():
+    """Every family with a hosted rollup-*.yml workflow (scheduled or dispatch-only) is excluded from LOCAL_FAMILIES."""
+    workflows_dir = Path(__file__).resolve().parents[1] / ".github" / "workflows"
+    rollup_workflows = sorted(workflows_dir.glob("rollup-*.yml"))
+    assert rollup_workflows
+    hosted_families = set()
+    scheduled_hosted = set()
+    for workflow_path in rollup_workflows:
+        family = workflow_path.stem.removeprefix("rollup-")
+        hosted_families.add(family)
+        loaded = yaml.safe_load(workflow_path.read_text())
+        on = loaded.get("on", loaded.get(True, {}))
+        assert "workflow_dispatch" in on or "schedule" in on
+        if "schedule" in on:
+            scheduled_hosted.add(family)
+
+    assert {"executive-orders", "fec-financial-profiles", "treasury-fiscal"} <= scheduled_hosted
+    expected_removed = {
+        "administration-policy",
+        "executive-orders",
+        "fec-financial-profiles",
+        "grants-opportunities",
+        "house-disbursements",
+        "ofac-sanctions",
+        "treasury-fiscal",
+    }
+    assert expected_removed <= hosted_families
+    assert command.LOCAL_FAMILIES.isdisjoint(hosted_families)

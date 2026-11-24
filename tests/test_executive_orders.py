@@ -172,7 +172,7 @@ def test_hand_build_publishes_the_table_readers_query(tmp_path, monkeypatch):
         "text_cleanup_json", "body_result_json", "offered_renditions_json", "source_record_id",
         "source_release_logical_id", "source_release_digest", "metadata_locator_json", "raw_metadata_json",
         "source_sha256"]
-    assert module.TABLE in data_dictionary.expected_schemas() and "executive-orders" in LOCAL_FAMILIES
+    assert module.TABLE in data_dictionary.expected_schemas() and "executive-orders" not in LOCAL_FAMILIES
     monkeypatch.setattr(mcp_server, "DATA_DIR", tmp_path / "build" / "generation")
     with mcp_server._build_connection() as connection:
         assert connection.execute(

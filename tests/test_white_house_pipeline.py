@@ -233,8 +233,8 @@ def test_local_publication_cli_accepts_declared_cohort_and_keeps_guards(tmp_path
         str(output),
     ]
     wrong = list(args)
-    wrong[wrong.index(pipeline.FAMILY)] = "treasury-fiscal"
-    with pytest.raises(publication.PublicationError, match="not the expected treasury-fiscal"):
+    wrong[wrong.index(pipeline.FAMILY)] = "fara"
+    with pytest.raises(publication.PublicationError, match="not the expected fara"):
         local_publication.main(wrong)
     missing = list(args)
     del missing[missing.index("--evidence") : missing.index("--evidence") + 2]
