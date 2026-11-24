@@ -4,6 +4,7 @@ Upstream owns the interpretation rules; this suite pins the wiring.
 """
 
 import html
+import json
 import shutil
 from dataclasses import replace
 from pathlib import Path
@@ -14,6 +15,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from spicy_docs.sources.congress.bill_status import BillIdentity, parse_bill_status
+from spicy_docs.transport.captured import CapturedBodyResponse
 from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_regs.transforms.build_bill_family import build_bill_family
@@ -23,11 +25,19 @@ from tests.test_bill_family import (
     StubBodyAcquirer, StubBulkAcquirer, _Acquisition, _Archive, _Member, _capture, _no_prior,
 )
 from tests.test_committee_reports import (
-    CHRG_ID, CRPT_ID, CrptOnlyDiscovery, NoBodies, StubDiscovery, StubHearings, _package,
+    CHRG_ID, CRPT_ID, OBSERVED_AT, CrptOnlyDiscovery, NoBodies, StubDiscovery, StubHearings, _package,
 )
 from tests.test_congress_index import _run
 
 FIXTURES = Path(__file__).parent / "fixtures" / "adoption_0_24_0"
+
+
+def _hearing_page(url: str, record: dict) -> SimpleNamespace:
+    raw = json.dumps({"hearing": record}).encode()
+    return SimpleNamespace(
+        records=[record],
+        capture=CapturedBodyResponse(url, url, 200, "application/json", OBSERVED_AT, raw),
+    )
 
 
 def retain(paths):
@@ -58,7 +68,7 @@ def test_cover_links_use_mods_and_empty_covers_resume_without_body_requests(tmp_
     class Hearings:
         def records(self, route, url, *, max_pages=1):
             jacket = url.split("?")[0].rsplit("/", 1)[-1]
-            yield SimpleNamespace(records=[{"congress": 118 if jacket == "56198" else 119, "jacketNumber": jacket}])
+            yield _hearing_page(url, {"congress": 118 if jacket == "56198" else 119, "jacketNumber": jacket})
 
     bodies = Bodies()
     paths = build_committee_reports(tmp_path, reader=Discovery(), acquirer=bodies,
@@ -212,7 +222,7 @@ def test_hearing_correction_replaces_only_evaluated_parent_links(tmp_path, corre
 
     class Hearings:
         def records(self, route, url, *, max_pages=1):
-            yield SimpleNamespace(records=[{"congress": 118, "jacketNumber": "56198"}])
+            yield _hearing_page(url, {"congress": 118, "jacketNumber": "56198"})
 
     def run():
         return build_committee_reports(tmp_path, reader=Discovery(), acquirer=Bodies(),
