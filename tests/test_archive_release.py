@@ -12,24 +12,35 @@ import pytest
 from spicy_regs import archive_release
 from spicy_regs.archive_release import ArchiveReleaseError
 
-#: The live c94bfedc manifest's files[] (coverage dicts dropped; they are not part of the id).
-FIXTURE = Path(__file__).parent / "fixtures" / "archive_release" / "c94bfedc_manifest.json"
-LIVE = "c94bfedcfcf0287ce9868b4532766c7dcf4b3202187d48db07874a05fd703a78"
+FIXTURES = Path(__file__).parent / "fixtures" / "archive_release"
+#: Live 7d16a4d5 manifest's files[] (coverage dicts dropped; they are not part of the id).
+FIXTURE = FIXTURES / "7d16a4d5_manifest.json"
+LIVE = "7d16a4d5b93102beaf54c525dcadd9e446ed33187f6ae7a36786bc8303b4abf7"
+#: Prior pinned Oct 30 release kept in releases[] during reader rollout.
+PREVIOUS_FIXTURE = FIXTURES / "c94bfedc_manifest.json"
+PREVIOUS = "c94bfedcfcf0287ce9868b4532766c7dcf4b3202187d48db07874a05fd703a78"
 
 
-def _manifest() -> dict:
-    return json.loads(FIXTURE.read_text())
+def _manifest(path: Path = FIXTURE) -> dict:
+    return json.loads(path.read_text())
 
 
 def _pins(**changes) -> str:
-    document = {"version": 1, "updated_at": "2026-10-30T00:00:00Z", "bound": LIVE, "releases": [LIVE]}
+    document = {
+        "version": 1,
+        "updated_at": "2026-11-24T00:00:00Z",
+        "bound": LIVE,
+        "releases": [LIVE, PREVIOUS],
+    }
     return json.dumps({**document, **changes})
 
 
-def test_shipped_pins_are_valid_and_bind_a_pinned_release():
+def test_shipped_pins_are_valid_and_keep_both_transition_releases():
     pins = archive_release.load_pins()
+    assert pins["bound"] == LIVE
     assert pins["bound"] in pins["releases"]
     assert pins["releases"] == sorted(set(pins["releases"]))
+    assert set(pins["releases"]) >= {PREVIOUS, LIVE}
 
 
 @pytest.mark.parametrize("changes", [
@@ -46,10 +57,11 @@ def test_pins_outside_the_wire_contract_refuse(changes):
         archive_release.parse_pins(_pins(**changes))
 
 
-def test_release_id_is_recomputed_from_the_live_manifest_files():
-    manifest = _manifest()
-    assert archive_release.release_identity(manifest["schema_version"], manifest["files"]) == LIVE
-    assert archive_release.verify_manifest(LIVE, manifest) is manifest
+@pytest.mark.parametrize(("path", "release_id"), [(FIXTURE, LIVE), (PREVIOUS_FIXTURE, PREVIOUS)])
+def test_release_id_is_recomputed_from_the_live_manifest_files(path, release_id):
+    manifest = _manifest(path)
+    assert archive_release.release_identity(manifest["schema_version"], manifest["files"]) == release_id
+    assert archive_release.verify_manifest(release_id, manifest) is manifest
 
 
 @pytest.mark.parametrize("field", ["sha256", "size", "rows", "name"])
@@ -70,7 +82,15 @@ def test_bound_files_are_the_named_archive_files_only():
     found = archive_release.bound_files(_manifest())
     assert list(found) == list(archive_release.BOUND_FILES)
     assert {entry["producer"] for entry in found.values()} == {"archive"}
-    assert found["meetings"]["rows"] == 18687 and found["list"]["rows"] == 367008
+    assert found["meetings"]["rows"] == 18754 and found["list"]["rows"] == 328855
+    assert found["people"]["rows"] == 102438
+    assert found["person_aliases"]["rows"] == 57
+    assert found["witness_key_map"]["rows"] == 155878
+
+
+def test_bound_files_refuses_prior_release_without_people_tables():
+    with pytest.raises(ArchiveReleaseError, match="has no archive"):
+        archive_release.bound_files(_manifest(PREVIOUS_FIXTURE))
 
 
 def test_a_bound_file_republished_by_spicy_regs_or_sharded_refuses():

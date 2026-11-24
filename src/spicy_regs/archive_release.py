@@ -42,7 +42,20 @@ WIRE_KEYS = ("version", "updated_at", "releases")
 CONTROL_BYTES = 32 << 20
 #: The release files L2-A4 binds; url_state, url_variants and the capture_* controls stay unexposed,
 #: and producer ``spicy-regs`` entity files are spicy-regs' own tables republished.
-BOUND_FILES = ("list", "detail", "links", "urls", "sources", "recoveries", "meetings", "witnesses", "recordings")
+BOUND_FILES = (
+    "list",
+    "detail",
+    "links",
+    "urls",
+    "sources",
+    "recoveries",
+    "meetings",
+    "witnesses",
+    "witness_key_map",
+    "people",
+    "person_aliases",
+    "recordings",
+)
 _RELEASE_ID = re.compile(r"[0-9a-f]{64}")
 _URL = re.compile(r"([a-zA-Z][a-zA-Z0-9+.-]*)://([^/?#]*)([^?#]*)(\?[^#]*)?(?:#.*)?")
 

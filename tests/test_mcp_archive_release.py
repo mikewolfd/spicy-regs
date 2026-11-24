@@ -25,7 +25,10 @@ FIXTURE_ROWS = {
     "sources": "SELECT 0::BIGINT AS list_row, 0 AS ordinal, 'https://docs.house.gov/a.pdf' AS url",
     "recoveries": "SELECT 0::BIGINT AS list_row, 0 AS ordinal",
     "meetings": "SELECT * FROM (VALUES (112474::BIGINT, 'House', 'Hearing'), (999::BIGINT, NULL, 'Other')) t(event_id, chamber, title)",
-    "witnesses": "SELECT 'w1' AS witness_key, 112474::BIGINT AS event_id, 'A Witness' AS name, 'CHRG-1' AS package_id",
+    "witnesses": "SELECT 'w1' AS witness_key, 'p1' AS person_key, 112474::BIGINT AS event_id, 'A Witness' AS name, 'CHRG-1' AS package_id",
+    "witness_key_map": "SELECT 'w0' AS old_key, 'w1' AS witness_key, 'unambiguous' AS status",
+    "people": "SELECT 'p1' AS person_key, 'A Witness' AS name, ['w1'] AS witness_keys",
+    "person_aliases": "SELECT 'p0' AS old_person_key, 'p1' AS person_key, 'unambiguous' AS status",
     "recordings": "SELECT 'yt:x' AS video_key, [112474::BIGINT] AS event_ids",
 }
 RECIPES: list[dict[str, Any]] = [
@@ -272,5 +275,17 @@ def test_tools_describe_the_release_and_pin_query_replies(release, monkeypatch):
         assert reply["rows"] == [[1]]
         assert reply["publication"]["archive_witnesses"]["status"] == "archive_release"
         assert reply["publication"]["archive_witnesses"]["release_id"] == release[1]
+        people_join = call(
+            "query_sql",
+            {
+                "sql": "SELECT p.person_key, w.witness_key, m.old_key, a.old_person_key "
+                "FROM archive_people p "
+                "JOIN archive_witnesses w ON w.person_key = p.person_key "
+                "JOIN archive_witness_key_map m ON m.witness_key = w.witness_key "
+                "JOIN archive_person_aliases a ON a.person_key = p.person_key"
+            },
+        )
+        assert people_join["rows"] == [["p1", "w1", "w0", "p0"]]
+        assert call("describe_table", {"table": "archive_people"})["publication"]["rows"] == 1
     finally:
         con.close()

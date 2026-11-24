@@ -1,8 +1,9 @@
 {
   "version": 1,
-  "updated_at": "2026-10-30T23:30:00Z",
-  "bound": "c94bfedcfcf0287ce9868b4532766c7dcf4b3202187d48db07874a05fd703a78",
+  "updated_at": "2026-11-24T00:00:00Z",
+  "bound": "7d16a4d5b93102beaf54c525dcadd9e446ed33187f6ae7a36786bc8303b4abf7",
   "releases": [
+    "7d16a4d5b93102beaf54c525dcadd9e446ed33187f6ae7a36786bc8303b4abf7",
     "c94bfedcfcf0287ce9868b4532766c7dcf4b3202187d48db07874a05fd703a78"
   ]
 }
