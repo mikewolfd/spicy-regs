@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import sys
 from types import ModuleType
 
@@ -280,3 +281,21 @@ def test_freshness_alerts_when_daily_workflow_stale_and_closes_on_recovery(monke
     ci_alerts.main(["freshness"], env={"GH_REPO": "mikewolfd/spicy-regs"}, now=now)
     assert fake.issues[0]["state"] == "closed"
     assert "Fresh again." in fake.issues[0]["comments"][-1]
+
+
+def test_gh_disabled_issues_exits_zero_with_stderr_notice(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    def _disabled_run(*args, **kwargs):
+        raise subprocess.CalledProcessError(
+            1,
+            ["gh", "issue", "list"],
+            stderr="the 'mikewolfd/spicy-regs' repository has disabled issues\n",
+        )
+
+    monkeypatch.setattr(ci_alerts.subprocess, "run", _disabled_run)
+    ev = _workflow_event(tmp_path, name="Rollup — laws", run_id=301, conclusion="success")
+    ci_alerts.main(["recovered"], env={"GH_REPO": "mikewolfd/spicy-regs", "GITHUB_EVENT_PATH": str(ev)})
+    captured = capsys.readouterr()
+    assert "has disabled issues" in captured.err
+    assert "skipping ci_alerts issue update" in captured.err

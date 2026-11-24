@@ -19,6 +19,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 
 LABEL = "ci-failure"
 STALE_TITLE = "Nightly rollups are stale"
@@ -39,15 +40,27 @@ CORE_WORKFLOW_SCHEDULES: tuple[tuple[str, timedelta], ...] = (
 )
 
 
+class IssuesDisabledError(RuntimeError):
+    """Raised when the target repository has GitHub Issues disabled."""
+
+
 def gh(*args: str, stdin: str | None = None) -> str:
     """Run gh; its errors reach the job log and fail the job."""
-    return subprocess.run(
-        ["gh", *args],
-        input=stdin,
-        stdout=subprocess.PIPE,
-        text=True,
-        check=True,
-    ).stdout
+    try:
+        return subprocess.run(
+            ["gh", *args],
+            input=stdin,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        ).stdout
+    except subprocess.CalledProcessError as exc:
+        if exc.stderr:
+            sys.stderr.write(exc.stderr)
+            if "has disabled issues" in exc.stderr:
+                raise IssuesDisabledError(exc.stderr.strip()) from exc
+        raise
 
 
 def open_issue(title: str) -> int | None:
@@ -262,14 +275,17 @@ def main(
         help="Minimum consecutive failures before opening/updating an issue (default 1)",
     )
     args = parser.parse_args(argv)
-    if args.check == "freshness":
-        freshness(now or datetime.now(timezone.utc), disabled=env.get("CI_ALERTS_DISABLED", ""), env=env)
-        return
-    run = json.loads(Path(env["GITHUB_EVENT_PATH"]).read_text())["workflow_run"]
-    if args.check == "failure":
-        failure(run, min_consecutive=args.min_consecutive, env=env)
-    else:
-        recovered(run)
+    try:
+        if args.check == "freshness":
+            freshness(now or datetime.now(timezone.utc), disabled=env.get("CI_ALERTS_DISABLED", ""), env=env)
+            return
+        run = json.loads(Path(env["GITHUB_EVENT_PATH"]).read_text())["workflow_run"]
+        if args.check == "failure":
+            failure(run, min_consecutive=args.min_consecutive, env=env)
+        else:
+            recovered(run)
+    except IssuesDisabledError:
+        print("Repository has GitHub Issues disabled; skipping ci_alerts issue update.", file=sys.stderr)
 
 
 if __name__ == "__main__":
