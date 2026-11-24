@@ -2117,6 +2117,7 @@ def _lineage_meanings(lineage: Mapping[str, Sequence[str]], *, cursor: duckdb.Du
 
     dictionary = _table_metadata()
     processing = processing_declarations()
+    archive_views = (_pinned_record(cursor, "_spicy_archive") or {}).get("views", {}) if cursor is not None else {}
     meanings: dict[str, str] = {}
     for column, (table, source) in lineage.items():
         original = table.removeprefix("_spicy_fec_processing_").removeprefix("_spicy_fec_current_")
@@ -2124,8 +2125,18 @@ def _lineage_meanings(lineage: Mapping[str, Sequence[str]], *, cursor: duckdb.Du
             continue
         entry = dictionary.get(original, {})
         declared = {c["column_name"]: c.get("description") for c in entry.get("columns", [])}
+        archive_entry = archive_views.get(original, {})
+        archive_meanings = {
+            c["name"]: c.get("meaning")
+            for c in (*archive_entry.get("columns", ()), *archive_entry.get("virtual_columns", ()))
+        }
         legacy = _legacy_column_meanings(cursor, original, entry) if cursor is not None else {}
-        meaning = legacy.get(source) or declared.get(source) or processing.get(original, {}).get("descriptions", {}).get(source)
+        meaning = (
+            legacy.get(source)
+            or declared.get(source)
+            or processing.get(original, {}).get("descriptions", {}).get(source)
+            or archive_meanings.get(source)
+        )
         if meaning:
             meanings[column] = meaning
     return meanings

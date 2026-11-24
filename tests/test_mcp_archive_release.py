@@ -289,3 +289,186 @@ def test_tools_describe_the_release_and_pin_query_replies(release, monkeypatch):
         assert call("describe_table", {"table": "archive_people"})["publication"]["rows"] == 1
     finally:
         con.close()
+
+
+FULL_FIXTURE_ROWS = {
+    "list": """
+        SELECT * FROM (VALUES
+            ('S. Hrg. 117-45636.pdf', 'VA Benefits Hearing', 'S. Hrg. 117-456', ['transcript'], ['chrg'], ['ssva00'], ['senate'], 117::SMALLINT, 'pdf', DATE '2022-03-01', 'accepted', DATE '2022-03-02', 'meeting', 'original', false, ['321961'], []::VARCHAR[], []::VARCHAR[], ['w_sen', 'w_sen'], ['vk1']),
+            ('doc-house.pdf', 'House Statement', NULL, ['witness-statement'], ['wstate'], ['hsap00'], ['house'], 118::SMALLINT, 'pdf', DATE '2024-01-10', 'accepted', DATE '2024-01-11', 'meeting', 'original', false, ['112474'], []::VARCHAR[], []::VARCHAR[], ['w_house'], ['vk2']),
+            ('doc-page.pdf', 'Senate Page Statement', NULL, ['witness-statement'], ['other'], ['ssju00'], ['senate'], 118::SMALLINT, 'pdf', DATE '2024-02-01', 'accepted', DATE '2024-02-02', 'meeting', 'original', false, []::VARCHAR[], []::VARCHAR[], []::VARCHAR[], ['w_page'], ['vk3'])
+        ) t(filename, title, print_number, document_kind, document_family, committee_keys, chambers, congress, format, document_date, document_date_status, first_captured, date_kind, saved_kind, hidden, meeting_keys, measure_keys, bioguide_ids, witness_keys, version_keys)
+    """,
+    "detail": """
+        SELECT * FROM (VALUES
+            ('\\x01'::BLOB, 'pdf', 'application/pdf', 100::BIGINT, 'CHRG-117shrg45636'),
+            ('\\x02'::BLOB, 'pdf', 'application/pdf', 200::BIGINT, NULL),
+            ('\\x03'::BLOB, 'pdf', 'application/pdf', 300::BIGINT, NULL)
+        ) t(link_key, saved_suffix, saved_media_type, saved_bytes, package_id)
+    """,
+    "links": "SELECT '\\x01'::BLOB AS link_key, 0::INTEGER AS list_row",
+    "urls": "SELECT '\\x01'::BLOB AS lookup_key, 0::INTEGER AS list_row",
+    "sources": "SELECT 0::INTEGER AS list_row, 0::INTEGER AS ordinal, 'https://www.veterans.senate.gov/a.pdf' AS url",
+    "recoveries": "SELECT 0::INTEGER AS list_row, 0::INTEGER AS ordinal",
+    "meetings": """
+        SELECT * FROM (VALUES
+            (321961::BIGINT, 'senate', 'Senate Hearing', DATE '2022-03-01', 117::SMALLINT, 'held'),
+            (112474::BIGINT, 'house', 'House Hearing', DATE '2024-01-10', 118::SMALLINT, 'held')
+        ) t(event_id, chamber, title, meeting_date, congress, outcome)
+    """,
+    "witnesses": """
+        SELECT * FROM (VALUES
+            ('w_sen', 'meeting:321961', 'senate_page', 321961::BIGINT, 'CHRG-117shrg45636', 'https://www.veterans.senate.gov/h', 'Denis R. McDonough', NULL::VARCHAR, NULL::VARCHAR, 'Secretary', 'VA', NULL::VARCHAR, NULL::VARCHAR, 'Panel 1', 1::SMALLINT, 1::SMALLINT, 'witness', true, NULL::VARCHAR, NULL::VARCHAR, NULL::VARCHAR, NULL::VARCHAR, 'p_mcd', 'listed'),
+            ('w_sen_mods', 'meeting:321961', 'mods', 321961::BIGINT, 'CHRG-117shrg45636', NULL::VARCHAR, 'Denis McDonough', NULL::VARCHAR, NULL::VARCHAR, 'Secretary', 'VA', NULL::VARCHAR, NULL::VARCHAR, NULL::VARCHAR, NULL::SMALLINT, 1::SMALLINT, 'witness', true, NULL::VARCHAR, 'w_sen', NULL::VARCHAR, NULL::VARCHAR, 'p_mcd', 'listed'),
+            ('w_house', 'meeting:112474', 'house_xml', 112474::BIGINT, NULL::VARCHAR, NULL::VARCHAR, 'Jane Doe', 'Brig. Gen.', 'Ph.D.', 'Director', 'DOD', NULL::VARCHAR, 'VA', 'Panel 1', 1::SMALLINT, 1::SMALLINT, 'government_witness', true, NULL::VARCHAR, NULL::VARCHAR, NULL::VARCHAR, NULL::VARCHAR, 'p_doe', 'listed'),
+            ('w_page', 'page:abc', 'senate_page', NULL::BIGINT, NULL::VARCHAR, 'https://www.judiciary.senate.gov/h', 'Sen. Alex Example', NULL::VARCHAR, NULL::VARCHAR, 'Senator', NULL::VARCHAR, NULL::VARCHAR, NULL::VARCHAR, NULL::VARCHAR, NULL::SMALLINT, 1::SMALLINT, 'member_appearance', true, 'E000001', NULL::VARCHAR, 'E000001', 'publisher_id', 'E000001', 'listed')
+        ) t(witness_key, occasion, source, event_id, package_id, page_url, name, rank, credentials, position, organization, on_behalf_of, location, panel, panel_order, display_order, witness_type, testified, bioguide_id, superseded_by, matched_bioguide_id, match_basis, person_key, listing_status)
+    """,
+    "witness_key_map": """
+        SELECT 'w_old' AS old_key, 'w_sen' AS witness_key, 'unambiguous' AS status, 'occurrence' AS basis,
+               []::VARCHAR[] AS candidate_keys, 'meeting:321961' AS occasion, 'senate_page' AS source
+    """,
+    "people": """
+        SELECT * FROM (VALUES
+            ('p_mcd', NULL::VARCHAR, 'Denis R. McDonough', NULL::VARCHAR, NULL::VARCHAR, 'VA', 'name_organization', 1::INTEGER, 1::INTEGER, DATE '2022-03-01', DATE '2022-03-01'),
+            ('p_doe', NULL::VARCHAR, 'Jane Doe', 'Brig. Gen.', 'Ph.D.', 'DOD', 'name_organization', 1::INTEGER, 1::INTEGER, DATE '2024-01-10', DATE '2024-01-10'),
+            ('E000001', 'E000001', 'Alex Example', NULL::VARCHAR, NULL::VARCHAR, NULL::VARCHAR, 'bioguide', 1::INTEGER, 1::INTEGER, DATE '2024-02-01', DATE '2024-02-01')
+        ) t(person_key, bioguide_id, name, rank, credentials, organization, grouping_basis, appearance_count, hearing_count, first_seen_date, last_seen_date)
+    """,
+    "person_aliases": """
+        SELECT 'p_old' AS old_person_key, 'p_mcd' AS person_key, 'unambiguous' AS status, 'merged' AS kind,
+               NULL::VARCHAR AS decision_id, 'deadbeef' AS last_release_id, []::VARCHAR[] AS candidate_keys
+    """,
+    "recordings": "SELECT 'yt:x' AS video_key, [321961::BIGINT] AS event_ids",
+}
+
+
+def _write_custom_release(root: Path, rows_map: dict[str, str]) -> str:
+    staging = root / "staging"
+    staging.mkdir(parents=True)
+    entries, schema_files = [], []
+    with duckdb.connect() as con:
+        for stem, sql in rows_map.items():
+            path = staging / f"{stem}.parquet"
+            con.execute(f"COPY ({sql}) TO '{path}' (FORMAT PARQUET)")
+            columns = [row[0] for row in con.execute(f"DESCRIBE {sql}").fetchall()]
+            [(rows,)] = con.execute(f"SELECT count(*) FROM ({sql})").fetchall()
+            entry = {
+                "name": f"{stem}.parquet",
+                "columns": [{"name": name, "type": "x", "meaning": f"{stem} {name} meaning"} for name in columns],
+                "purpose": f"{stem} purpose",
+                "row_meaning": f"one {stem}",
+            }
+            if stem in ("list", "detail"):
+                entry["virtual_columns"] = [{"name": "list_row", "type": "int64", "meaning": "row position"}]
+            schema_files.append(entry)
+            entries.append((path, rows))
+    schema = {"schema_version": 1, "files": schema_files, "recipes": RECIPES, "relationships": []}
+    (staging / "schema.json").write_text(json.dumps(schema))
+    entries.append((staging / "schema.json", None))
+    files = [
+        {"name": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "size": path.stat().st_size,
+         "rows": rows, "row_range": None, "shard": None, "producer": "archive"}
+        for path, rows in entries
+    ]
+    release_id = archive_release.release_identity(1, files)
+    manifest = {"schema_version": 1, "release_id": release_id, "files": files}
+    (staging / "manifest.json").write_text(json.dumps(manifest))
+    target = root / "releases" / release_id
+    target.parent.mkdir(parents=True)
+    staging.rename(target)
+    return release_id
+
+
+def test_derived_archive_views_use_hash_joins_and_describe_every_column(tmp_path, monkeypatch):
+    origin = tmp_path / "full-archive"
+    release_id = _write_custom_release(origin, FULL_FIXTURE_ROWS)
+    monkeypatch.setattr(archive_release, "ORIGIN", str(origin))
+    monkeypatch.setattr(archive_release, "load_pins", lambda: {"version": 1, "updated_at": "x", "bound": release_id,
+                                                               "releases": [release_id]})
+    monkeypatch.setattr(server, "DATA_DIR", None)
+    monkeypatch.setattr(server, "TABLES", ())
+    monkeypatch.setattr(server, "R2_BASE_URL", str(tmp_path / "r2"))
+    monkeypatch.setattr(server, "_resolve_catalog_config", lambda: None)
+    monkeypatch.setattr(server, "load_public_http", lambda *args: None)
+
+    derived = (
+        "archive_meeting_documents",
+        "archive_witness_documents",
+        "archive_witness_people",
+        "archive_witness_key_resolutions",
+        "archive_person_resolutions",
+    )
+    con = build()
+    monkeypatch.setattr(server, "_get_connection", lambda: con)
+    tools: Any = server.build_server()
+
+    def call(name, arguments):
+        return asyncio.run(tools.call_tool(name, arguments)).structured_content
+
+    try:
+        rels = server._connection_relationships(con.cursor())
+        for name in derived:
+            assert rels[name]["status"] == "available"
+            plan = "\n".join(row[1] for row in con.execute(f"EXPLAIN SELECT * FROM {name}").fetchall())
+            assert not any(bad in plan for bad in ("BLOCKWISE_NL_JOIN", "DELIM_JOIN", "NESTED_LOOP")), plan
+            described = call("describe_table", {"table": name})
+            assert described["schema_matches_declared"] is True
+            assert [c["column_name"] for c in described["columns"] if not c["description"]] == []
+
+        senate_docs = call(
+            "query_sql",
+            {
+                "sql": "SELECT witness_key, witness_source, witness_name, person_key, person_name, event_id, "
+                       "meeting_chamber, filename FROM archive_witness_documents ORDER BY list_row, witness_key"
+            },
+        )
+        assert senate_docs["rows"] == [
+            ["w_sen", "senate_page", "Denis R. McDonough", "p_mcd", "Denis R. McDonough", 321961, "senate", "S. Hrg. 117-45636.pdf"],
+            ["w_house", "house_xml", "Jane Doe", "p_doe", "Jane Doe", 112474, "house", "doc-house.pdf"],
+            ["w_page", "senate_page", "Sen. Alex Example", "E000001", "Alex Example", None, None, "doc-page.pdf"],
+        ]
+        assert senate_docs["publication"]["archive_witness_documents"]["input_publications"]["archive_people"]["release_id"] == release_id
+
+        witness_people = call(
+            "query_sql",
+            {"sql": "SELECT count(*), count(*) FILTER (WHERE superseded_by IS NULL) FROM archive_witness_people"},
+        )
+        assert witness_people["rows"] == [[4, 3]]
+        resolutions = call(
+            "query_sql",
+            {
+                "sql": "SELECT wk.old_key, wk.witness_key, pa.old_person_key, pa.kind "
+                       "FROM archive_witness_key_resolutions wk "
+                       "JOIN archive_person_resolutions pa ON pa.person_key = wk.person_key"
+            },
+        )
+        assert resolutions["rows"] == [["w_old", "w_sen", "p_old", "merged"]]
+    finally:
+        con.close()
+
+
+def test_scoped_build_for_derived_archive_view_admits_only_required_archive_files(tmp_path, monkeypatch):
+    origin = tmp_path / "scoped-archive"
+    release_id = _write_custom_release(origin, FULL_FIXTURE_ROWS)
+    monkeypatch.setattr(archive_release, "ORIGIN", str(origin))
+    monkeypatch.setattr(archive_release, "load_pins", lambda: {"version": 1, "updated_at": "x", "bound": release_id,
+                                                               "releases": [release_id]})
+    monkeypatch.setattr(server, "DATA_DIR", None)
+    monkeypatch.setattr(server, "TABLES", ())
+    monkeypatch.setattr(server, "R2_BASE_URL", str(tmp_path / "r2"))
+    monkeypatch.setattr(server, "_resolve_catalog_config", lambda: None)
+    monkeypatch.setattr(server, "load_public_http", lambda *args: None)
+
+    con = build({"archive_witness_documents"})
+    try:
+        assert registered(con) & set(archive_release.VIEWS) == {
+            "archive_list",
+            "archive_detail",
+            "archive_witnesses",
+            "archive_people",
+            "archive_meetings",
+        }
+        assert con.execute("SELECT count(*) FROM archive_witness_documents WHERE meeting_chamber = 'senate'").fetchone() == (1,)
+    finally:
+        con.close()

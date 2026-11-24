@@ -29,7 +29,8 @@ from .identity_candidates import IDENTITY_VIEWS, NATIVE_IDENTITY_VIEWS
 from .sql_views import (annotate_views, compatible_sql_variant, install_sql_variants,
                         install_sql_views, view_columns)
 from .comments import install_comment_references
-from .congress import CONGRESS_RELATIONSHIPS, NATIVE_CONGRESS_RELATIONSHIPS, NATIVE_COMMUNICATION_RINS
+from .congress import (ARCHIVE_RELATIONSHIP_VIEWS, CONGRESS_RELATIONSHIPS, NATIVE_COMMUNICATION_RINS,
+                       NATIVE_CONGRESS_RELATIONSHIPS)
 from .core import ArrayRelationship, install_arrays
 from .regulatory import REGULATORY_RELATIONSHIPS
 from .reference import REFERENCE_VIEWS
@@ -76,7 +77,7 @@ def describe_relationship_views(
     results.update(install_comment_references(connection, (), publication))
     specs = (*SQL_RELATIONSHIP_VIEWS, *LEGACY_DIFF_VIEWS, *FEC_QUERY_VIEWS,
              *FEC_DOCUMENT_QUERY_VIEWS, *NATIVE_IDENTITY_VIEWS, *NATIVE_AFFILIATION_VIEWS,
-             *native_regulations_views(available))
+             *ARCHIVE_RELATIONSHIP_VIEWS, *native_regulations_views(available))
     # Alternative definitions are documentation, never a schema verdict.
     versions: dict[str, list[str]] = {}
     dependencies: dict[str, set[str]] = {}
@@ -169,6 +170,7 @@ def install_relationship_views(
     sql = tuple(spec for spec in sql if spec.name not in replaced) + native_sql
     sql += tuple(spec for spec in DIFF_VIEWS if set(spec.required) <= native)
     sql += tuple(spec for spec in LEGACY_DIFF_VIEWS if not set(spec.required) <= native)
+    sql += ARCHIVE_RELATIONSHIP_VIEWS
     results.update(install_sql_views(connection, available, filter(requested, sql), publication))
     legal_names = {"fec_legal_citations", "fec_legal_subjects"}
     results.update(install_sql_views(connection, available,
@@ -199,4 +201,5 @@ def install_relationship_views(
     return results
 
 
-__all__ = ["ArrayRelationship", "RELATIONSHIP_VIEWS", "install_relationship_views", "view_columns"]
+__all__ = ["ARCHIVE_RELATIONSHIP_VIEWS", "ArrayRelationship", "RELATIONSHIP_VIEWS", "install_relationship_views",
+           "view_columns"]
