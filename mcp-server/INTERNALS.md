@@ -330,11 +330,22 @@ second view path.
 
 ## The congressional-tech archive release (`_spicy_archive`, L2-A4)
 
-The archive's documents, meetings and witnesses are bound as nine flat views,
-`archive_list` … `archive_recordings`, read from the release
-`archive_release_pins.json` names as `bound` (see `archive_release.py` for the
-pin's lifetime rule; its wire keys are published to `pins/archive-releases.json`
-in the spicy-regs bucket, where the archive's pruner reads them).
+The archive's documents, meetings, witnesses, and resolved entities are bound as
+twelve flat views (`archive_list` … `archive_recordings`, plus
+`archive_witness_key_map`, `archive_people`, and `archive_person_aliases`), read
+from the release `archive_release_pins.json` names as `bound` (see
+`archive_release.py` for the pin's lifetime rule; its wire keys are published to
+`pins/archive-releases.json` in the spicy-regs bucket, where the archive's
+pruner reads them).
+
+The `c94bfedc -> 7d16a4d5` bound transition drops `list`/`detail` rows from
+`367,008 -> 328,855` (`-38,153`) through intentional cleanup and deduplication
+(`-34,827` GovInfo Content Details HTML wrapper pages folded into hearings, ZIP
+reunification and HTML fingerprint dedup, and `-192` HTML site-furniture
+removals), while expanding `meetings` (`18,687 -> 18,754`), `witnesses`
+(`147,048 -> 176,429`, adding honorific/rank/credentials splitting and
+`superseded_by`), `recordings` (`12,033 -> 17,440`), and introducing `people`
+(`102,438`), `person_aliases` (`57`), and `witness_key_map` (`155,878`).
 
 - **Same admission path.** Archive views are `_RemoteSourceView`s admitted by
   `_admit_remote_source_views`, so `_remote_query_scope` decides: a query that
@@ -368,12 +379,18 @@ in the spicy-regs bucket, where the archive's pruner reads them).
   and recipes unchanged, with `name_map` from release table names to views;
   those needing the producer=`spicy-regs` files (rosters, committees, members,
   bills, nominations) carry `available_here: false`, since spicy-regs serves
-  those facts from its own tables. The meeting and witness document recipes
+  those facts from its own tables. The `schema.json` relationships and recipes
   join with `list_contains`, which is fine for one meeting but superlinear as a
-  table-wide join; a maintained meetings-to-documents view must unnest
-  `meeting_keys`/`witness_keys` into `(key, list_row)` pairs once and hash-join,
-  as `scripts/compare_committee_meetings_archive.py` does. No such view exists
-  yet; it lands with the committee_meetings retirement (ss-ikn9 stage 3).
+  table-wide join; derived archive views in `relationship_views/congress.py`
+  (`ARCHIVE_RELATIONSHIP_VIEWS`: `archive_meeting_documents`,
+  `archive_witness_documents`, `archive_witness_people`,
+  `archive_witness_key_resolutions`, and `archive_person_resolutions`) instead
+  unnest `meeting_keys`/`witness_keys` into distinct pairs once and hash-join
+  against `archive_witnesses`, `archive_detail`, `archive_people`, and
+  `archive_meetings`. They stay outside `SQL_RELATIONSHIP_VIEWS` (because they
+  depend on archive tables rather than `descriptions.yaml`), while
+  `_lineage_meanings` resolves their inherited column descriptions from
+  `_spicy_archive`.
 
 ## Declared joins (`_table_joins`)
 

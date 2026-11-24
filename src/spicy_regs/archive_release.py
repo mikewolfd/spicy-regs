@@ -12,7 +12,17 @@ workflow runs it when the record changes on main, before any MCP deploy binds it
 
 Lifetime rule: when ``bound`` moves to a newer release, keep the superseded id
 in ``releases`` until the hosted MCP has redeployed onto its successor, so the
-archive cannot prune a release a running server still reads.
+archive cannot prune a release a running server still reads. For example, the
+``c94bfedc -> 7d16a4d5`` transition retains both ids while moving ``bound`` to
+``7d16a4d5``: ``list``/``detail`` drop ``367,008 -> 328,855`` rows (``-38,153``)
+from intentional cleanup and deduplication (``-34,827`` GovInfo Content Details
+HTML wrappers folded into hearings, ZIP member reunification and HTML
+fingerprint dedup/non-document filtering, and ``-192`` HTML site-furniture
+removals), while ``meetings`` grew (``18,687 -> 18,754``), ``witnesses`` grew
+(``147,048 -> 176,429``, extracting honorifics/ranks/credentials and adding
+``superseded_by``/``witness_type``), ``recordings`` grew (``12,033 -> 17,440``),
+and ``people`` (``102,438``), ``person_aliases`` (``57``), and
+``witness_key_map`` (``155,878``) joined ``BOUND_FILES``.
 
 Trust: ``read_manifest`` recomputes the release id from the manifest's
 ``files[]`` (DATA-MODEL §8.3) rather than trusting the id the manifest states.
