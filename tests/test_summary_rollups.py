@@ -108,6 +108,50 @@ def test_a_summary_publishes_over_a_prior_that_has_no_receipts(tmp_path, monkeyp
     }
 
 
+def test_remote_comments_input_resolves_through_publication_index(tmp_path, monkeypatch):
+    """ss-f1on: remote_inputs and comments_source resolve comments.parquet via publication.current_index."""
+    from spicy_regs.pipelines.rollups.agency_stats import AgencyStatsRollup
+    from spicy_regs.public_url import comments_source
+
+    digest = "a" * 64
+    comments_sha = "sha256:" + "b" * 64
+    member_path = f"generations/comments/{digest}/comments.parquet"
+    index = {
+        "version": 2,
+        "families": {
+            "comments": {
+                "artifactDigest": f"sha256:{digest}",
+                "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:" + "c" * 64,
+                "prefix": f"generations/comments/{digest}",
+                "publishedAt": "2026-11-24T00:00:00Z",
+                "tables": {
+                    "comments.parquet": {
+                        "sha256": comments_sha,
+                        "byteSize": 42,
+                        "rows": 1,
+                        "columns": [["comment_id", "VARCHAR"]],
+                    }
+                },
+            }
+        },
+    }
+    observed_urls = []
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://data.example.dev")
+    monkeypatch.setattr(pub, "load_index", lambda _: index)
+
+    def head(url):
+        observed_urls.append(url)
+        return {"etag": '"c1"', "bytes": 42}
+
+    monkeypatch.setattr(r2, "public_object_version", head)
+    with pub.snapshot("https://data.example.dev"):
+        parents = AgencyStatsRollup()._observe_remote_inputs(tmp_path, "https://data.example.dev")
+        resolved = comments_source(tmp_path)
+    assert observed_urls == [f"https://data.example.dev/{member_path}"]
+    assert resolved == f"https://data.example.dev/{member_path}"
+    assert parents == {"comments.parquet": pub.table_pin(index, "comments.parquet")}
+
+
 def test_the_summaries_are_the_four_named_and_none_has_an_installed_policy():
     assert PARENT_PINNED_SUMMARIES == {"agency_monthly_volume", "agency_stats", "discovery_signals", "feed_summary"}
     assert {rollup.output.removesuffix(".parquet") for rollup, _, _ in SUMMARIES} == PARENT_PINNED_SUMMARIES

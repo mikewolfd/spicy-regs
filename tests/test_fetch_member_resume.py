@@ -112,7 +112,7 @@ def test_changed_object_or_ignored_range_restarts_from_zero(tmp_path, host, answ
     lambda: Reply(206, DATA[3001:], {'etag': ETAG, 'content-range': f'bytes 3001-10239/{len(DATA)}'}),
     lambda: Reply(206, DATA[3000:9000], {'etag': ETAG, 'content-range': f'bytes 3000-8999/{len(DATA)}'}),
     lambda: partial(3000, etag='"v2"'),
-    lambda: Reply(500),
+    lambda: Reply(403),
 ])
 def test_wrong_resume_answer_refuses_and_leaves_nothing(tmp_path, host, reply):
     host.script += [Reply(200, DATA, {'etag': ETAG}, fail_after=3000), reply()]
@@ -240,3 +240,30 @@ def test_pin_holds_across_a_resumed_range(host):
     host.script += [Reply(200, DATA, {'etag': ETAG}, fail_after=3000), partial(3000, data=changed)]
     with pytest.raises(RuntimeError, match='differs from its pin'):
         publication.verify_member('https://fixture.invalid', pinned())
+
+
+def test_resumed_range_retries_transient_503_and_429_keeping_range_state(tmp_path, host):
+    """503/429 on a resumed Range request retries with the held byte range and strong ETag."""
+    host.script += [
+        Reply(200, DATA, {'etag': ETAG}, fail_after=3000),
+        Reply(503),
+        Reply(429),
+        partial(3000),
+    ]
+    target = tmp_path / 't.parquet'
+    result = publication.fetch_member('https://fixture.invalid', pinned(), target)
+    assert isinstance(result, publication.DownloadedMember)
+    assert target.read_bytes() == DATA
+    assert host.script == []
+    assert [call['headers'] for call in host.calls[1:]] == [
+        {'Range': 'bytes=3000-', 'If-Match': ETAG, 'Accept-Encoding': 'identity'},
+    ] * 3
+
+
+def test_resumed_range_stops_at_resume_stalls_on_persistent_503(tmp_path, host):
+    """Persistent 5xx on a resumed Range request fails after RESUME_STALLS attempts and leaves no temp file."""
+    host.script += [Reply(200, DATA, {'etag': ETAG}, fail_after=3000)]
+    host.script += [Reply(503) for _ in range(publication.RESUME_STALLS)]
+    with pytest.raises(RuntimeError, match='HTTP 503'):
+        publication.fetch_member('https://fixture.invalid', pinned(), tmp_path / 't.parquet')
+    assert len(host.calls) == 1 + publication.RESUME_STALLS and no_temp(tmp_path)

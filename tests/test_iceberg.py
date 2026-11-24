@@ -700,3 +700,85 @@ def test_a_receipt_table_commit_leaves_the_published_comments_rows_unchanged(mon
     monkeypatch.setattr(iceberg, '_table_metadata', lambda *_, **__: _metadata(
         (1, None, 'append'), (4, 1, operation), uuid='subjects'))
     assert iceberg.rows_unchanged_since(COMMENT, snapshot) is (operation == 'replace')
+
+
+# --- transient catalog errors (R2 5xx/429) are retried from a fresh connection ---
+
+
+@pytest.mark.parametrize(
+    ("message", "transient"),
+    [
+        ("HTTP Error: HTTP GET error on 'x/metadata/m0.avro' (HTTP 500)", True),
+        ("HTTP Error: Bad Gateway (HTTP code 502)", True),
+        ("HTTP Error: Too Many Requests (HTTP 429)", True),
+        ("HTTP Error: Forbidden (HTTP 403)", False),
+    ],
+)
+def test_is_transient_catalog_error(message, transient) -> None:
+    assert iceberg._is_transient_catalog_error(duckdb.HTTPException(message)) is transient
+
+
+def test_is_transient_catalog_error_ignores_non_http_errors() -> None:
+    assert not iceberg._is_transient_catalog_error(duckdb.CatalogException("HTTP 500 in a table name"))
+
+
+class _FailFirstCatalogMerges:
+    """Hand out local-catalog connections whose first ``n`` uses fail like R2's 500 mid-MERGE."""
+
+    def __init__(self, con, n: int, message: str = "HTTP Error: GET error on 'm0.avro' (HTTP 500)") -> None:
+        self._con, self._remaining, self._message = con, n, message
+        self.connects = 0
+
+    def connect(self):
+        self.connects += 1
+        outer = self
+
+        class _Con:
+            def execute(self, sql: str, *args):
+                if outer._remaining and "MERGE INTO" in sql:
+                    outer._remaining -= 1
+                    raise duckdb.HTTPException(outer._message)
+                return outer._con.execute(sql, *args)
+
+            def close(self) -> None:
+                pass
+
+        return _Con()
+
+
+def test_merge_comments_retries_transient_catalog_error(tmp_path, local_catalog, monkeypatch) -> None:
+    monkeypatch.setattr(iceberg.time, "sleep", lambda _s: None)
+    flaky = _FailFirstCatalogMerges(local_catalog, n=2)
+    monkeypatch.setattr(iceberg, "_connect", flaky.connect)
+    staging = tmp_path / "staging"
+    _write_comment_staging(staging, "EPA", [_comment("EPA-1-0001", "EPA-1", "EPA", "2025-01-01")])
+
+    changed = iceberg.merge_comments(staging, COMMENT)
+
+    assert changed == 1
+    assert flaky.connects == 3
+    assert local_catalog.execute(f"SELECT count(*) FROM {iceberg._qualified(COMMENT)}").fetchone()[0] == 1
+
+
+def test_merge_comments_gives_up_after_max_attempts(tmp_path, local_catalog, monkeypatch) -> None:
+    monkeypatch.setattr(iceberg.time, "sleep", lambda _s: None)
+    flaky = _FailFirstCatalogMerges(local_catalog, n=10**6)
+    monkeypatch.setattr(iceberg, "_connect", flaky.connect)
+    staging = tmp_path / "staging"
+    _write_comment_staging(staging, "EPA", [_comment("EPA-1-0001", "EPA-1", "EPA", "2025-01-01")])
+
+    with pytest.raises(duckdb.HTTPException, match="HTTP 500"):
+        iceberg.merge_comments(staging, COMMENT)
+    assert flaky.connects == iceberg._CATALOG_MAX_ATTEMPTS
+
+
+def test_merge_comments_does_not_retry_client_errors(tmp_path, local_catalog, monkeypatch) -> None:
+    monkeypatch.setattr(iceberg.time, "sleep", lambda _s: None)
+    flaky = _FailFirstCatalogMerges(local_catalog, n=1, message="HTTP Error: Forbidden (HTTP 403)")
+    monkeypatch.setattr(iceberg, "_connect", flaky.connect)
+    staging = tmp_path / "staging"
+    _write_comment_staging(staging, "EPA", [_comment("EPA-1-0001", "EPA-1", "EPA", "2025-01-01")])
+
+    with pytest.raises(duckdb.HTTPException, match="403"):
+        iceberg.merge_comments(staging, COMMENT)
+    assert flaky.connects == 1

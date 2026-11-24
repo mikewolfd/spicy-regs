@@ -409,7 +409,10 @@ class RollupPipeline(Pipeline):
 
     def _observe_remote_inputs(self, output_dir: Path, public_url: str | None) -> dict[str, dict]:
         """The storage version of each remote input, or the digest of a local copy that replaces it."""
+        from spicy_regs.sources import publication
+
         observed = {}
+        index: dict | None = None
         for remote_key in self.remote_inputs:
             local = output_dir / remote_key
             if local.exists():
@@ -421,10 +424,16 @@ class RollupPipeline(Pipeline):
                 continue
             if not public_url:
                 raise RuntimeError(f"Rollup {self.output!r}: {remote_key} needs R2_PUBLIC_URL or a local copy")
-            version = r2.public_object_version(f"{public_url.rstrip('/')}/{remote_key}")
+            if index is None:
+                index = publication.current_index(public_url)
+            member = publication.single_member(index, remote_key)
+            version = r2.public_object_version(f"{public_url.rstrip('/')}/{member.path}")
             if version is None:
                 raise RuntimeError(f"Rollup {self.output!r}: remote input {remote_key!r} is missing")
-            observed[remote_key] = {"etag": version["etag"], "byteSize": version["bytes"]}
+            if publication.table_owner(index, remote_key) is not None:
+                observed[remote_key] = publication.table_pin(index, remote_key)
+            else:
+                observed[remote_key] = {"etag": version["etag"], "byteSize": version["bytes"]}
         return observed
 
     @abstractmethod

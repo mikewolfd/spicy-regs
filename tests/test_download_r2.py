@@ -164,3 +164,122 @@ class TestDownloadFromR2:
         # No lingering .tmp file either
         tmp_files = list(tmp_path.glob("*.tmp"))
         assert tmp_files == []
+
+
+class TestDownloadAndBoundedGetRetries:
+    def test_download_from_r2_retries_5xx_and_429_then_succeeds(self, tmp_path, monkeypatch):
+        from spicy_regs.sources import publication
+
+        monkeypatch.setenv("R2_PUBLIC_URL", "https://fake.r2.dev")
+        codes = iter([503, 429, 200])
+
+        @contextmanager
+        def stream(method, url, follow_redirects=True, **kwargs):
+            resp = MagicMock()
+            resp.status_code = next(codes)
+            resp.iter_bytes = lambda: iter([b"ok"])
+            yield resp
+
+        monkeypatch.setattr(publication.httpx, "stream", stream)
+        target = tmp_path / "foo.parquet"
+        assert download_from_r2("foo.parquet", target) is True
+        assert target.read_bytes() == b"ok"
+
+    def test_download_from_r2_does_not_retry_client_errors(self, tmp_path, monkeypatch):
+        from spicy_regs.sources import publication
+
+        monkeypatch.setenv("R2_PUBLIC_URL", "https://fake.r2.dev")
+        calls = []
+
+        @contextmanager
+        def stream(method, url, follow_redirects=True, **kwargs):
+            calls.append(1)
+            resp = MagicMock()
+            resp.status_code = 403
+            yield resp
+
+        monkeypatch.setattr(publication.httpx, "stream", stream)
+        with pytest.raises(RuntimeError, match="403"):
+            download_from_r2("foo.parquet", tmp_path / "foo.parquet")
+        assert len(calls) == 1
+
+    def test_bounded_get_retries_transient_errors_and_closes_streams(self, monkeypatch):
+        from spicy_regs.sources import publication
+
+        closed = []
+        attempts = []
+
+        # Attempt 1: ConnectError before headers; 2: 503; 3: mid-stream ReadTimeout; 4: succeeds.
+        @contextmanager
+        def scripted_stream(method, url, **kwargs):
+            n = len(attempts) + 1
+            attempts.append(n)
+            resp = MagicMock()
+            resp.close.side_effect = lambda: closed.append(n)
+            if n == 1:
+                raise httpx.ConnectError("refused")
+            if n == 2:
+                resp.status_code = 503
+                yield resp
+                return
+            if n == 3:
+                resp.status_code = 200
+                resp.raise_for_status = MagicMock()
+
+                def broken():
+                    raise httpx.ReadTimeout("mid-stream timeout")
+
+                resp.iter_bytes = broken
+                yield resp
+                return
+            resp.status_code = 200
+            resp.raise_for_status = MagicMock()
+            resp.iter_bytes = lambda: iter([b"payload"])
+            yield resp
+
+        monkeypatch.setattr(publication.httpx, "stream", scripted_stream)
+        assert publication._bounded_get("https://fake.r2.dev/publication.v2.json", allow_missing=True) == b"payload"
+        assert attempts == [1, 2, 3, 4]
+        assert closed == [2, 3, 4]
+
+    def test_bounded_get_gives_up_and_does_not_retry_403_or_404(self, monkeypatch):
+        from spicy_regs.sources import publication
+
+        calls = []
+        closed = []
+
+        @contextmanager
+        def fail_403(method, url, **kwargs):
+            calls.append(1)
+            resp = MagicMock()
+            resp.status_code = 403
+            resp.close.side_effect = lambda: closed.append(len(calls))
+            resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+                "403", request=MagicMock(), response=resp
+            )
+            yield resp
+
+        monkeypatch.setattr(publication.httpx, "stream", fail_403)
+        with pytest.raises(httpx.HTTPStatusError):
+            publication._bounded_get("https://fake.r2.dev/secret", allow_missing=True)
+        assert len(calls) == 1 and closed == [1]
+
+        calls.clear()
+        closed.clear()
+
+        @contextmanager
+        def fail_503(method, url, **kwargs):
+            calls.append(1)
+            resp = MagicMock()
+            resp.status_code = 503
+            resp.close.side_effect = lambda: closed.append(len(calls))
+            resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+                "503", request=MagicMock(), response=resp
+            )
+            yield resp
+
+        monkeypatch.setattr(publication.httpx, "stream", fail_503)
+        with pytest.raises(httpx.HTTPStatusError):
+            publication._bounded_get("https://fake.r2.dev/down", allow_missing=False)
+        assert len(calls) == publication._BOUNDED_GET_MAX_ATTEMPTS
+        assert len(closed) == publication._BOUNDED_GET_MAX_ATTEMPTS

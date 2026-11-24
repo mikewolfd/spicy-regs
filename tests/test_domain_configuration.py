@@ -21,6 +21,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.mark.parametrize("domain", [None, "", "spicygov.ai", "  SpicyGov.AI  "])
 def test_domain_reaches_readers_pages_and_deployment(monkeypatch, tmp_path, domain):
+    from spicy_regs.sources import publication
+
+    monkeypatch.setattr(publication, "load_index", lambda _: publication.empty_index())
     if domain is not None:
         monkeypatch.setenv("SPICYREGS_DOMAIN", domain)
     expected = "spicygov.ai" if domain else "spicy-regs.dev"

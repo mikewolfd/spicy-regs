@@ -41,13 +41,19 @@ def resolve_r2_base_url(value: str | None = None) -> str:
 def comments_source(output_dir: Path) -> str:
     """The ``read_parquet`` target for the comments export: a local ``comments.parquet``, else the public one.
 
-    A rollup that reads a few columns of the multi-GB export declares it in ``remote_inputs`` and reads it here, so
-    projection pushdown fetches only those columns.
+    Resolves through ``publication.current_index`` when ``comments.parquet`` is published by a family, falling back
+    to the bare ``comments.parquet`` URL only when absent from the index. A rollup that reads a few columns of the
+    multi-GB export declares it in ``remote_inputs`` and reads it here, so projection pushdown fetches only those
+    columns.
     """
     local = output_dir / "comments.parquet"
     if local.exists():
         return str(local)
-    return f"{resolve_r2_base_url(os.environ.get('R2_PUBLIC_URL'))}/comments.parquet"
+    base_url = resolve_r2_base_url(os.environ.get("R2_PUBLIC_URL"))
+    from spicy_regs.sources import publication
+
+    member = publication.single_member(publication.current_index(base_url), "comments.parquet")
+    return f"{base_url}/{member.path}"
 
 
 if __name__ == "__main__":

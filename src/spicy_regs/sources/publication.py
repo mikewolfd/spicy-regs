@@ -342,22 +342,59 @@ def parse_index(raw: bytes) -> dict:
     return value
 
 
+_BOUNDED_GET_MAX_ATTEMPTS = 4
+_TRANSIENT_MAX_BACKOFF_S = 60
+
+
+def _is_transient_status(status_code: int) -> bool:
+    """True for retryable HTTP rate-limit and server errors."""
+    return status_code == 429 or status_code >= 500
+
+
 def _bounded_get(
     url: str, *, allow_missing: bool, headers: Mapping[str, str] | None = None, limit: int = INDEX_LIMIT
 ) -> bytes | None:
-    """GET at most ``limit`` bytes; a 404 is ``None`` only when ``allow_missing``."""
-    with httpx.stream("GET", url, headers={"User-Agent": "spicy-regs", **(headers or {})},
-                      follow_redirects=True, timeout=remaining_timeout(60)) as response:
-        if allow_missing and response.status_code == 404:
-            return None
-        response.raise_for_status()
-        raw = bytearray()
-        for chunk in response.iter_bytes():
-            checkpoint()
-            raw.extend(chunk)
-            if len(raw) > limit:
-                raise PublicationError(f"{url} exceeds its byte limit")
-    return bytes(raw)
+    """GET at most ``limit`` bytes; a 404 is ``None`` only when ``allow_missing``.
+
+    Retries bounded transient transport failures and 429/5xx statuses after closing each response stream.
+    """
+    request_headers = {"User-Agent": "spicy-regs", **(headers or {})}
+    for attempt in range(1, _BOUNDED_GET_MAX_ATTEMPTS + 1):
+        checkpoint()
+        retry_reason: str | None = None
+        try:
+            with httpx.stream(
+                "GET", url, headers=request_headers, follow_redirects=True, timeout=remaining_timeout(60)
+            ) as response:
+                try:
+                    if allow_missing and response.status_code == 404:
+                        return None
+                    if _is_transient_status(response.status_code) and attempt < _BOUNDED_GET_MAX_ATTEMPTS:
+                        retry_reason = f"HTTP {response.status_code}"
+                    else:
+                        response.raise_for_status()
+                        raw = bytearray()
+                        for chunk in response.iter_bytes():
+                            checkpoint()
+                            raw.extend(chunk)
+                            if len(raw) > limit:
+                                raise PublicationError(f"{url} exceeds its byte limit")
+                        return bytes(raw)
+                finally:
+                    close = getattr(response, "close", None)
+                    if callable(close):
+                        close()
+        except httpx.TransportError as exc:
+            if attempt == _BOUNDED_GET_MAX_ATTEMPTS:
+                raise
+            retry_reason = f"{type(exc).__name__}: {exc}"
+        backoff = min(2**attempt, _TRANSIENT_MAX_BACKOFF_S)
+        logger.warning(
+            "Bounded GET {} failed ({}), attempt {}/{}; retrying in {}s",
+            url, retry_reason, attempt, _BOUNDED_GET_MAX_ATTEMPTS, backoff,
+        )
+        time.sleep(remaining_timeout(backoff))
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def load_index_bytes(base_url: str) -> bytes | None:
@@ -586,10 +623,10 @@ class DownloadedMember:
     state: tuple[int, int, int, int, int, int]
 
 
-RESUME_STALLS = 5  # consecutive reconnects that add no byte before a member fetch gives up
+RESUME_STALLS = 12  # consecutive reconnects that add no byte before a member fetch gives up
 #: Each member request's timeout when the caller sets none. httpx's own default is 5 seconds, and the public host
 #: took longer than that to answer one 95 MB member's headers: run 42875578221 (2026-11-10) died on that ReadTimeout.
-MEMBER_REQUEST_TIMEOUT = 60.0
+MEMBER_REQUEST_TIMEOUT = 120.0
 _STRONG_ETAG = re.compile(r'"[\x21\x23-\x7e\x80-\xff]*"')
 
 
@@ -635,10 +672,16 @@ def _resumable_body(url: str, label: str, headers: Mapping[str, str] | None,
         request: dict = {name: value for name, value in (("headers", sent or None), ("timeout", limit))
                          if value is not None}
         start = held
+        retry_status = None
         try:
             with httpx.stream("GET", url, follow_redirects=True, **request) as response:
                 status = response.status_code
-                if resuming and status in (200, 412):
+                if _is_transient_status(status):
+                    stalls += 1
+                    if stalls >= RESUME_STALLS:
+                        raise RuntimeError(f"Failed to download {label} from R2: HTTP {status}")
+                    retry_status = status
+                elif resuming and status in (200, 412):
                     logger.warning("{} changed or ignored the range at byte {}; restarting", label, held)
                     yield None
                     etag, source, held, start, resuming = None, None, 0, 0, False
@@ -657,15 +700,16 @@ def _resumable_body(url: str, label: str, headers: Mapping[str, str] | None,
                     raise _MemberAbsent(label)
                 elif status != 200:
                     raise RuntimeError(f"Failed to download {label} from R2: HTTP {status}")
-                if status == 200:
-                    source = response
-                if not started:
-                    started = True
-                    yield b""
-                for chunk in response.iter_bytes():
-                    yield chunk
-                    held += len(chunk)
-            return
+                if retry_status is None:
+                    if status == 200:
+                        source = response
+                    if not started:
+                        started = True
+                        yield b""
+                    for chunk in response.iter_bytes():
+                        yield chunk
+                        held += len(chunk)
+                    return
         except httpx.TransportError as error:
             etag = etag or (_resume_etag(source) if source is not None else None)
             stalls = 0 if held > start else stalls + 1
@@ -683,8 +727,14 @@ def _resumable_body(url: str, label: str, headers: Mapping[str, str] | None,
             else:
                 logger.warning("{} reset at byte {} ({}); {}", label, held, type(error).__name__,
                                "resuming" if etag else "asking again")
-            time.sleep(remaining_timeout(min(30, 2 ** stalls)))
+            time.sleep(remaining_timeout(min(60, 2 ** stalls)))
             resuming = etag is not None
+            continue
+        if retry_status is not None:
+            backoff = min(60, 2 ** stalls)
+            logger.warning("{} failed (HTTP {}), attempt {}/{}; retrying in {}s",
+                           label, retry_status, stalls, RESUME_STALLS, backoff)
+            time.sleep(remaining_timeout(backoff))
 
 
 class _PinnedBody:

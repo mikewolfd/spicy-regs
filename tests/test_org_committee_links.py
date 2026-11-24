@@ -456,8 +456,39 @@ def test_comments_source_prefers_a_local_file(tmp_path: Path) -> None:
 
 
 def test_comments_source_falls_back_to_the_public_bucket(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from spicy_regs.sources import publication
+
+    monkeypatch.setattr(publication, "load_index", lambda _: publication.empty_index())
     monkeypatch.setenv("R2_PUBLIC_URL", "https://data.example.dev/")
     assert comments_source(tmp_path) == "https://data.example.dev/comments.parquet"
+
+
+def test_comments_source_resolves_through_publication_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from spicy_regs.sources import publication
+
+    digest = "a" * 64
+    index = {
+        "version": 2,
+        "families": {
+            "comments": {
+                "artifactDigest": f"sha256:{digest}",
+                "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:" + "b" * 64,
+                "prefix": f"generations/comments/{digest}",
+                "publishedAt": "2026-11-24T00:00:00Z",
+                "tables": {
+                    "comments.parquet": {
+                        "sha256": "sha256:" + "c" * 64,
+                        "byteSize": 123,
+                        "rows": 1,
+                        "columns": [["comment_id", "VARCHAR"]],
+                    }
+                },
+            }
+        },
+    }
+    monkeypatch.setattr(publication, "load_index", lambda _: index)
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://data.example.dev/")
+    assert comments_source(tmp_path) == f"https://data.example.dev/generations/comments/{digest}/comments.parquet"
 
 
 @pytest.mark.parametrize("bad", ["http://data.example.dev", "https://data.example.dev/'; DROP TABLE x --"])

@@ -1384,49 +1384,111 @@ def selected_dictionary_definitions(index: dict, names: Iterable[str], descripti
     return descriptions, schemas
 
 
+def _is_struct_extension(earlier_type, current_type) -> bool:
+    """True when ``current_type`` only extends struct fields inside ``earlier_type`` (or its list elements)."""
+    import pyarrow as pa
+
+    if pa.types.is_list(earlier_type) and pa.types.is_list(current_type):
+        return _is_struct_extension(earlier_type.value_type, current_type.value_type)
+    if pa.types.is_large_list(earlier_type) and pa.types.is_large_list(current_type):
+        return _is_struct_extension(earlier_type.value_type, current_type.value_type)
+    if pa.types.is_struct(earlier_type) and pa.types.is_struct(current_type):
+        earlier_fields = {field.name: field.type for field in earlier_type}
+        current_fields = {field.name: field.type for field in current_type}
+        if not set(earlier_fields) <= set(current_fields):
+            return False
+        extended = len(current_fields) > len(earlier_fields)
+        for name, old_sub in earlier_fields.items():
+            new_sub = current_fields[name]
+            if old_sub == new_sub:
+                continue
+            if _is_struct_extension(old_sub, new_sub):
+                extended = True
+            else:
+                return False
+        return extended
+    return False
+
+
 def accept_pending_policy_columns(index: dict, base_url: str, descriptions: dict, expected: dict, live: dict, *,
                                   load_root=None) -> tuple[dict, dict, list[str]]:
     """Leave out of a live check the columns a table's installed policy declares and its selected generation predates.
 
     A column promotion merges before the nightly that publishes it, so until then the live file lacks columns the
-    dictionary describes (six for the two Register tables on 2026-11-10; the same on 2026-11-09 for bills). Such a
-    column is declared, not yet published: reported as a notice, not a failure. It is recognised from the
-    generation itself, never from a list: the family root states the policy the table was written under, and only
-    when that is a declared earlier policy of the installed one (``receipt_policies``) are the columns the
-    installed policy adds to it set aside. Every other difference stays an error: a column both policies hold that
-    the file lacks, a type, a table without receipts, a root stating a policy that is not a declared earlier one.
-    Roots are read only for tables that lack an expected column, one read per family.
+    dictionary describes (six for the two Register tables on 2026-11-10; the same on 2026-11-09 for bills), or holds
+    an earlier nested struct before its newer fields publish (``comments.attachments``). Such a column is declared,
+    not yet published: reported as a notice, not a failure. It is recognised from the generation itself, never from a
+    list: the family root states the policy the table was written under (or, for a ``receipts_retired`` generation with
+    only nested struct additions, its root table columns match a declared earlier policy in ``receipt_policies``).
+    Every other difference stays an error: a column both policies hold that the file lacks, an unrelated type drift,
+    a missing top-level column without receipts, or a root stating a policy that is not a declared earlier one.
     """
     from spicy_regs.etl_policy_registry import installed_policies
     from spicy_regs.etl_receipts import receipt_policies
+    from spicy_regs.native_types import described_schema
     from spicy_regs.sources import publication
+    from spicy_regs.subject_catalog import retired_receipt_datasets
 
     load_root = load_root or publication.load_family_root
-    installed, roots, notices = installed_policies(), {}, []
+    installed, retired, roots, notices = installed_policies(), retired_receipt_datasets(), {}, []
     descriptions, expected = dict(descriptions), dict(expected)
     for table in sorted(set(expected) & set(live)):
-        missing = {name for name, _ in expected[table]} - {name for name, _ in live[table]}
+        exp_map, live_map = dict(expected[table]), dict(live[table])
+        missing = set(exp_map) - set(live_map)
+        type_mismatches = {name for name in set(exp_map) & set(live_map) if exp_map[name] != live_map[name]}
         owner = publication.table_owner(index, table + ".parquet")
-        if not missing or table not in installed or owner is None or "etlReceipts" not in owner[1]:
+        if (not missing and not type_mismatches) or table not in installed or owner is None:
+            continue
+        has_receipts = "etlReceipts" in owner[1]
+        if not has_receipts and (table not in retired or missing or not type_mismatches):
             continue
         family, entry = owner
         if family not in roots:
             roots[family] = load_root(base_url, entry)[1]
-        stated = roots[family].get("spec", {}).get("etlReceipts", {}).get("policies", [])
-        written = next((p for p in receipt_policies(installed[table])[1:]
-                        if any(p.descriptor() == declared for declared in stated)), None)
+        root_spec = roots[family].get("spec", {})
+        if has_receipts:
+            stated = root_spec.get("etlReceipts", {}).get("policies", [])
+            written = next((p for p in receipt_policies(installed[table])[1:]
+                            if any(p.descriptor() == declared for declared in stated)), None)
+        else:
+            root_cols = root_spec.get("tables", {}).get(table + ".parquet", {}).get("columns")
+            if "etlReceipts" in root_spec or root_cols != [list(pair) for pair in live[table]]:
+                written = None
+            else:
+                written = next((p for p in receipt_policies(installed[table])[1:]
+                                if described_schema(p.subject_schema) == live[table]), None)
         if written is None:
             continue
-        pending = sorted(missing - set(written.subject_schema.names))
-        if not pending:
+        written_map = dict(described_schema(written.subject_schema))
+        pending = sorted(missing - set(written_map))
+        pending_nested = sorted(
+            col for col in type_mismatches
+            if col in written_map
+            and live_map[col] == written_map[col]
+            and _is_struct_extension(
+                written.subject_schema.field(col).type, installed[table].subject_schema.field(col).type
+            )
+        )
+        if not pending and not pending_nested:
             continue
-        notices.append(f"[{table}] declared, not yet published: {', '.join(pending)} (the selected generation "
-                       f"states {written.policy_version}; installed is {installed[table].policy_version})")
-        expected[table] = [pair for pair in expected[table] if pair[0] not in pending]
-        if table in descriptions:
-            columns = descriptions[table].get("columns") or {}
-            descriptions[table] = {**descriptions[table],
-                                   "columns": {name: text for name, text in columns.items() if name not in pending}}
+        if pending:
+            notices.append(f"[{table}] declared, not yet published: {', '.join(pending)} (the selected generation "
+                           f"states {written.policy_version}; installed is {installed[table].policy_version})")
+            expected[table] = [pair for pair in expected[table] if pair[0] not in pending]
+            if table in descriptions:
+                columns = descriptions[table].get("columns") or {}
+                descriptions[table] = {**descriptions[table],
+                                       "columns": {name: text for name, text in columns.items() if name not in pending}}
+        if pending_nested:
+            notices.append(
+                f"[{table}] nested struct fields declared, not yet published: {', '.join(pending_nested)} "
+                f"(the selected generation states {written.policy_version}; installed is "
+                f"{installed[table].policy_version})"
+            )
+            expected[table] = [
+                (name, written_map[name] if name in pending_nested else kind)
+                for name, kind in expected[table]
+            ]
     return descriptions, expected, notices
 
 

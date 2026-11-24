@@ -26,13 +26,15 @@ Credentials are read from the environment, alongside the existing ``R2_*`` vars:
 """
 
 import json
-from collections.abc import Iterator, Mapping, Sequence
+import re
+import time
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from os import getenv
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, TypeVar
 from urllib.parse import urlparse
 
 from loguru import logger
@@ -153,6 +155,48 @@ def _ensure_table(con, record_type: RecordType) -> None:
 
 def _column_types(con, record_type: RecordType) -> dict[str, str]:
     return {row[0]: row[1] for row in con.execute(f"DESCRIBE {_qualified(record_type)}").fetchall()}
+
+
+_T = TypeVar("_T")
+
+# A catalog operation that hits a transient R2 error is retried from a fresh
+# connection, sized to ride out a short outage (7e3b417a5 / #238).
+_CATALOG_MAX_ATTEMPTS = 12
+_CATALOG_MAX_BACKOFF_S = 60
+_TRANSIENT_HTTP_STATUS = re.compile(r"\bHTTP (?:code )?(?:5\d\d|429)\b")
+
+
+def _is_transient_catalog_error(exc: BaseException) -> bool:
+    """True for a DuckDB HTTP error carrying a 5xx/429 status."""
+    import duckdb
+
+    return isinstance(exc, duckdb.HTTPException) and bool(_TRANSIENT_HTTP_STATUS.search(str(exc)))
+
+
+def _with_catalog_retry(what: str, work: Callable[[Any], _T], *, connect: Callable[[], Any] = _connect) -> _T:
+    """Run ``work(con)`` on a fresh catalog connection, retrying transient errors."""
+    for attempt in range(1, _CATALOG_MAX_ATTEMPTS + 1):
+        con = None
+        try:
+            con = connect()
+            return work(con)
+        except Exception as exc:
+            if attempt == _CATALOG_MAX_ATTEMPTS or not _is_transient_catalog_error(exc):
+                raise
+            backoff = min(2**attempt, _CATALOG_MAX_BACKOFF_S)
+            logger.warning(
+                "iceberg: {} failed ({}), attempt {}/{}; retrying in {}s",
+                what,
+                exc,
+                attempt,
+                _CATALOG_MAX_ATTEMPTS,
+                backoff,
+            )
+        finally:
+            if con is not None:
+                con.close()
+        time.sleep(backoff)
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def _connect_for_table(record_type: RecordType):
@@ -482,13 +526,15 @@ def merge_comments(staging_dir: Path, record_type: RecordType) -> int:
     from spicy_regs.transforms.comment_partitions import validate_staged_comments
 
     validate_staged_comments(staging_dir)
-    con = _connect_for_table(record_type)
-    try:
+
+    def work(con) -> int:
         changed = _merge(con, staging_files, record_type)
         logger.info("iceberg: merged {:,} winning {} rows", changed, record_type.name)
         return changed
-    finally:
-        con.close()
+
+    return _with_catalog_retry(
+        f"merge {record_type.name}", work, connect=lambda: _connect_for_table(record_type)
+    )
 
 
 @dataclass(frozen=True)

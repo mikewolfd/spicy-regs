@@ -976,3 +976,51 @@ def test_fresh_disclosure_and_white_house_tables_are_native_without_receipt_reti
         assert name in mcp_server.TABLES
         broken = {name: {**prose[name], "columns": {}}}
         assert dd.check_descriptions({name: expected[name]}, broken)
+
+
+@pytest.mark.parametrize("with_receipts", [True, False])
+def test_accept_pending_policy_columns_allows_predated_nested_comments_attachments_and_keeps_drift_strict(with_receipts):
+    """Earlier comments.attachments (5-field STRUCT) passes as a notice while unrelated drift still fails."""
+    from spicy_regs.etl_policy_registry import installed_policies
+    from spicy_regs.etl_receipts import receipt_policies
+    from spicy_regs.native_types import described_schema
+
+    v2_policy = next(p for p in receipt_policies(installed_policies()["comments"])[1:]
+                     if p.policy_version == "regulations-native-v2")
+    v2_cols = described_schema(v2_policy.subject_schema)
+    entry = {
+        "prefix": "generations/comments/x",
+        "tables": {"comments.parquet": {"columns": [list(pair) for pair in v2_cols]}},
+        **({"etlReceipts": {"datasets": ["comments"]}} if with_receipts else {}),
+    }
+    index = {"families": {"comments": entry}}
+    live = {"comments": v2_cols}
+    root_spec = {
+        "tables": {"comments.parquet": {"columns": [list(pair) for pair in v2_cols]}},
+        **({"etlReceipts": {"policies": [v2_policy.descriptor()]}} if with_receipts else {}),
+    }
+
+    descriptions = {"comments": dd.load_descriptions(dd.DEFAULT_DESCRIPTIONS)["comments"]}
+    expected = {"comments": dd.expected_schemas()["comments"]}
+    adj_desc, adj_exp, notices = dd.accept_pending_policy_columns(
+        index, "https://example.invalid", descriptions, expected, live,
+        load_root=lambda *_: (b"", {"spec": root_spec}),
+    )
+    assert dd.check_descriptions(live, adj_desc) + dd.check_schema_drift(adj_exp, live) == []
+    assert len(notices) == 1 and "attachments" in notices[0] and "regulations-native-v2" in notices[0]
+
+    # Unrelated scalar type drift MUST still fail.
+    drifted = {"comments": [(name, "BIGINT" if name == "comment_text" else kind) for name, kind in v2_cols]}
+    _, drifted_exp, _ = dd.accept_pending_policy_columns(
+        index, "https://example.invalid", descriptions, expected, drifted,
+        load_root=lambda *_: (b"", {"spec": root_spec}),
+    )
+    assert any("comment_text" in err for err in dd.check_schema_drift(drifted_exp, drifted))
+
+    # Corrupted attachments type that does not match the earlier policy MUST still fail.
+    bad_struct = {"comments": [(name, "VARCHAR" if name == "attachments" else kind) for name, kind in v2_cols]}
+    _, bad_exp, _ = dd.accept_pending_policy_columns(
+        index, "https://example.invalid", descriptions, expected, bad_struct,
+        load_root=lambda *_: (b"", {"spec": root_spec}),
+    )
+    assert any("comments.attachments" in err for err in dd.check_schema_drift(bad_exp, bad_struct))
