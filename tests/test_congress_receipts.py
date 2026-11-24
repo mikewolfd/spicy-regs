@@ -523,3 +523,106 @@ def test_earlier_policies_reads_only_for_the_exact_roll_call_votes_descriptor():
     # A changed descriptor under the current label is not the recorded policy, so it reads nothing earlier.
     tampered = replace(current, subject_schema=current.subject_schema.remove(current.subject_schema.get_field_index("question")))
     assert earlier_policies(tampered) == ()
+
+
+def test_cbo_estimate_cards_empty_and_populated_restore_under_require_bulk(tmp_path, monkeypatch):
+    """Non-text typed priors (0-row valid-empty and populated cbo_estimate_cards) restore under require_bulk=True."""
+    from spicy_docs.schemas.cbo_estimate_cards import CBO_ESTIMATE_CARDS
+    from spicy_regs import congress_bulk, etl_bulk
+    from spicy_regs.contract_types import arrow_schema
+    from spicy_regs.etl_receipts import exact_json
+    from spicy_regs.transforms.cbo_archive_selection import merge_card_rows, read_selected_cards
+    from tests.test_cbo_archive_selection import selection
+
+    schema = arrow_schema(CBO_ESTIMATE_CARDS).with_metadata({b"scope": b"119"})
+    empty_source = tmp_path / "empty_cbo.parquet"
+    pq.write_table(schema.empty_table(), empty_source)
+
+    with etl_bulk.bulk_limits(threads=2, memory_limit="1GB", require_bulk=True):
+        empty_subject, empty_receipts = write_congress_dataset(
+            empty_source, tmp_path / "bundle-empty", dataset="cbo_estimate_cards", generation_id="g0", bulk=True
+        )
+        assert pq.read_table(empty_receipts)["outcome"].to_pylist() == ["observed"]
+        restored_empty = restore_processing_input(
+            empty_subject, empty_receipts, tmp_path / "restored-empty.parquet",
+            dataset="cbo_estimate_cards", generation_id="g0", bulk=True,
+        )
+        assert pq.read_table(restored_empty).equals(pq.read_table(empty_source), check_metadata=True)
+        assert pq.read_metadata(restored_empty).num_rows == 0
+
+        manifest, raw = selection(tmp_path / "cbo-data")
+        build_out = tmp_path / "cbo-out"
+        build_out.mkdir()
+        cards = read_selected_cards(manifest, archive_root=raw, congresses=[119], output_dir=build_out)
+        pop_source = merge_card_rows(build_out, cards, download_prior=lambda *_: False)
+        original = pq.read_table(pop_source)
+        assert original.num_rows >= 1
+
+        pop_subject, pop_receipts = write_congress_dataset(
+            pop_source, tmp_path / "bundle-pop", dataset="cbo_estimate_cards", generation_id="g1", bulk=True
+        )
+        restored_pop = restore_processing_input(
+            pop_subject, pop_receipts, tmp_path / "restored-pop.parquet",
+            dataset="cbo_estimate_cards", generation_id="g1", bulk=True,
+        )
+        assert pq.read_table(restored_pop).equals(original, check_metadata=True)
+
+        # Multi-batch boundary, mixed dataset filtering, conversion_refused skip, extra-field refusal, and count check.
+        row_dict = original.to_pylist()[0]
+        second_dict = {**row_dict, "publication_id": "99999", "congress": 118}
+        retained_schema = original.schema.with_metadata({b"scope": b"119"})
+        synthetic = tmp_path / "synthetic.parquet"
+        proc = [
+            exact_json({"entry_kind": "table_metadata", "source_schema": retained_schema.serialize().to_pybytes()}),
+            exact_json({"entry_kind": "row", "source_fields": row_dict}),
+            exact_json({"entry_kind": "row", "source_fields": second_dict}),
+            exact_json({"entry_kind": "row", "source_fields": {"other": "ignored"}}),
+            exact_json({"entry_kind": "row", "source_fields": row_dict}),
+        ]
+        diag = [exact_json({}), exact_json({}), exact_json({}), exact_json({}), exact_json({"reason": "conversion_refused"})]
+        pq.write_table(
+            pa.table({
+                "dataset": ["cbo_estimate_cards", "cbo_estimate_cards", "cbo_estimate_cards", "other", "cbo_estimate_cards"],
+                "processing_json": proc,
+                "diagnostic_json": diag,
+            }),
+            synthetic,
+        )
+
+        def decode_row(p_text, d_text):
+            p, d = decode_exact_json(p_text), decode_exact_json(d_text)
+            return p["source_fields"] if p.get("entry_kind") == "row" and d.get("reason") != "conversion_refused" else None
+
+        monkeypatch.setattr(congress_bulk, "_BATCH", 1)
+        batched_out = tmp_path / "batched.parquet"
+        assert congress_bulk.restore_input(
+            synthetic, batched_out, dataset="cbo_estimate_cards", schema=retained_schema, row_fields=decode_row
+        ) == 4
+        assert pq.read_table(batched_out).equals(
+            pa.Table.from_pylist([row_dict, second_dict], schema=retained_schema), check_metadata=True
+        )
+
+        bad_row = {**row_dict, "flags": {**row_dict["flags"], "undeclared": True}}
+        bad_receipts = tmp_path / "bad.parquet"
+        pq.write_table(
+            pa.table({
+                "dataset": ["cbo_estimate_cards"],
+                "processing_json": [exact_json({"entry_kind": "row", "source_fields": bad_row})],
+                "diagnostic_json": [exact_json({})],
+            }),
+            bad_receipts,
+        )
+        prior_bytes = batched_out.read_bytes()
+        with pytest.raises(ValueError, match=r"row\.flags: unclassified fields \['undeclared'\]"):
+            congress_bulk.restore_input(
+                bad_receipts, batched_out, dataset="cbo_estimate_cards", schema=retained_schema, row_fields=decode_row
+            )
+        assert batched_out.read_bytes() == prior_bytes
+
+        real_rows_in = congress_bulk._rows_in
+        monkeypatch.setattr(congress_bulk, "_rows_in", lambda *a: real_rows_in(*a) + 1)
+        with pytest.raises(RuntimeError, match="read 4 of the file's 5 receipts"):
+            congress_bulk.restore_input(
+                synthetic, tmp_path / "short.parquet", dataset="cbo_estimate_cards", schema=retained_schema, row_fields=decode_row
+            )
+        assert not (tmp_path / "short.parquet").exists()

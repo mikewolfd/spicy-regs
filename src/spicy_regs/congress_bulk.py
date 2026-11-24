@@ -357,6 +357,59 @@ def source_fields_sql(schema: pa.Schema, *, values: str | None = None) -> tuple[
     return columns, plain
 
 
+def _restore_non_text_input(
+    receipts: Path,
+    destination: Path,
+    *,
+    dataset: str,
+    schema: pa.Schema,
+    row_fields: Callable[[str, str], Mapping[str, Any] | None],
+    check_fields: Callable[[Mapping[str, Any]], None],
+) -> int:
+    """Restore a non-text retained source schema in bounded Arrow batches.
+
+    Preserves ``etl_bulk.checkpoint()``, file-order monotonicity, ``expected`` row
+    count verification, extra-field validation, and atomic destination replacement
+    for both valid-empty (0 row attempts) and populated typed priors.
+    """
+    expected, seen, last, left = _rows_in(receipts, dataset), 0, -1, 0
+    batch_size = min(_BATCH, 2000)
+    with TemporaryDirectory(dir=destination.parent) as scratch:
+        temporary = Path(scratch) / "rows.parquet"
+        with pq.ParquetFile(receipts) as source, pq.ParquetWriter(temporary, schema, compression="zstd") as writer:
+            position = 0
+            for source_batch in source.iter_batches(
+                batch_size=batch_size, columns=["dataset", "processing_json", "diagnostic_json"]
+            ):
+                etl_bulk.checkpoint()
+                source_batch.validate(full=True)
+                datasets = source_batch.column("dataset").to_pylist()
+                processings = source_batch.column("processing_json").to_pylist()
+                diagnostics = source_batch.column("diagnostic_json").to_pylist()
+                positions, batch_rows = [], []
+                for offset, (row_dataset, processing, diagnostic) in enumerate(
+                    zip(datasets, processings, diagnostics, strict=True)
+                ):
+                    if row_dataset != dataset:
+                        continue
+                    positions.append(position + offset)
+                    left += 1
+                    fields = row_fields(processing, diagnostic)
+                    if fields is not None:
+                        check_fields(fields)
+                        batch_rows.append(dict(fields))
+                position += source_batch.num_rows
+                if positions != sorted(set(positions)) or (positions and positions[0] <= last):
+                    raise RuntimeError(f"{dataset}: receipts did not arrive in file order")
+                seen, last = seen + len(positions), positions[-1] if positions else last
+                if batch_rows:
+                    writer.write_table(pa.Table.from_pylist(batch_rows, schema=schema))
+        if seen != expected:
+            raise RuntimeError(f"{dataset}: read {seen} of the file's {expected} receipts")
+        temporary.replace(destination)
+    return left
+
+
 def restore_input(
     receipts: Path,
     destination: Path,
@@ -375,9 +428,11 @@ def restore_input(
     """
     from spicy_regs.native_types import extra_field_checker
 
-    if not all(pa.types.is_string(field.type) for field in schema):
-        raise NotImplementedError("Only text source columns are decoded here")
     check_fields = extra_field_checker(schema)
+    if not all(pa.types.is_string(field.type) for field in schema):
+        return _restore_non_text_input(
+            receipts, destination, dataset=dataset, schema=schema, row_fields=row_fields, check_fields=check_fields
+        )
     columns, plain = source_fields_sql(schema, values="_source_values")
     query = f"""
     WITH extracted AS MATERIALIZED (

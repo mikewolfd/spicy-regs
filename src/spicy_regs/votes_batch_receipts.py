@@ -192,9 +192,10 @@ def restore_processing_input(
 ) -> Path:
     """Restore a Congress input once, preserving its retained footer and row order.
 
-    All-text source columns can use the shared SQL decoder even when their
-    subject mapping requires Python. Complete admission precedes all output;
-    ``validate=False`` is for a caller that already admitted this exact pair.
+    All-text source columns use the shared SQL decoder even when their subject
+    mapping requires Python; non-text retained schemas decode in bounded Arrow
+    batches. Complete admission precedes all output; ``validate=False`` is for
+    a caller that already admitted this exact pair.
     """
     from spicy_regs.congress_receipts import input_policy, retained_source_rows
 
@@ -216,16 +217,15 @@ def restore_processing_input(
             kept = data.get("entry_kind") == "row" and notes.get("reason") != "conversion_refused"
             return data["source_fields"] if kept else None
 
-        if bulk and all(pa.types.is_string(field.type) for field in schema):
+        if bulk:
             try:
                 congress_bulk.restore_input(chosen, destination, dataset=dataset, schema=schema, row_fields=source_fields)
+            except etl_bulk.NotBulkEligible as reason:
+                etl_bulk.log_row_fallback("congress-restore", reason, dataset=dataset)
+                etl_bulk.reference_fallback(reason)
             except etl_bulk.duckdb.Error as error:
                 raise etl_bulk.bulk_failure("Congress input restoration failed", error) from error
             return destination
-        if bulk:
-            reason = etl_bulk.NotBulkEligible("Congress retained source schema has non-text columns")
-            etl_bulk.log_row_fallback("congress-restore", reason, dataset=dataset)
-            etl_bulk.reference_fallback(reason)
 
         def admitted_attempts():
             # Admission above (or the selecting caller) checked every receipt.
