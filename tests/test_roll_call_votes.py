@@ -1485,6 +1485,124 @@ def test_a_held_senate_nomination_vote_backfills_document_nomination_id_without_
     assert [d["nomination_id"] for d in docs] == ["119-pn-11-1", "118-pn-123", "118-pn-123-2", "119-pn-730-2"]
 
 
+def test_backfill_document_nomination_id_updates_native_arrow_documents_in_place(tmp_path):
+    """Native Arrow list<struct<...>> ``documents`` backfills nomination_id in place, preserving exact Arrow type."""
+    from spicy_regs.congress_subjects import subject_schema
+    from spicy_regs.transforms.build_roll_call_votes import _backfill_document_nomination_id, _repair_held_votes
+
+    native_schema = subject_schema("roll_call_votes")
+    base = dict.fromkeys(native_schema.names)
+    held_pn_docs = [
+        {
+            "congress": 118,
+            "type": "PN",
+            "number": "PN0123-00",
+            "nomination_id": None,
+            "name": "PN0123-00",
+            "title": "Unpartitioned zero-padded 118th PN",
+            "short_title": None,
+        },
+        {
+            "congress": None,
+            "type": "PN",
+            "number": "PN456-02",
+            "nomination_id": None,
+            "name": "PN456-02",
+            "title": "Partitioned PN inheriting vote congress 118",
+            "short_title": None,
+        },
+        {
+            "congress": 118,
+            "type": "S.Res.",
+            "number": "30",
+            "nomination_id": None,
+            "name": "S.Res. 30",
+            "title": "Non-nomination bill document",
+            "short_title": None,
+        },
+    ]
+    unheld_pn_docs = [
+        {
+            "congress": 118,
+            "type": "PN",
+            "number": "PN999-00",
+            "nomination_id": None,
+            "name": "PN999-00",
+            "title": "Unheld row stays untouched",
+            "short_title": None,
+        }
+    ]
+    rows = [
+        {
+            **base,
+            "vote_id": "118-senate-1-10",
+            "congress": "118",
+            "chamber": "senate",
+            "session": "1",
+            "roll_number": "10",
+            "vote_day": "2023-05-01",
+            "vote_date": "May 1, 2023,  01:00 PM",
+            "documents": held_pn_docs,
+        },
+        {
+            **base,
+            "vote_id": "118-senate-1-11",
+            "congress": "118",
+            "chamber": "senate",
+            "session": "1",
+            "roll_number": "11",
+            "vote_day": "2023-05-02",
+            "vote_date": "May 2, 2023,  01:00 PM",
+            "documents": unheld_pn_docs,
+        },
+        {
+            **base,
+            "vote_id": "118-house-1-1",
+            "congress": "118",
+            "chamber": "house",
+            "session": "1",
+            "roll_number": "1",
+            "vote_day": "2023-01-09",
+            "vote_date": "9-Jan-2023",
+            "documents": None,
+        },
+    ]
+    table = pa.Table.from_pylist(rows, schema=native_schema)
+    held: set[tuple[str, ...]] = {("118", "senate", "1", "10"), ("118", "house", "1", "1")}
+
+    updated, filled = _backfill_document_nomination_id(table, held)
+    assert filled == 1
+    assert updated.schema.field("documents").type == native_schema.field("documents").type
+    assert updated.schema.equals(native_schema, check_metadata=True)
+    updated_rows = {r["vote_id"]: r for r in updated.to_pylist()}
+    assert [d["nomination_id"] for d in updated_rows["118-senate-1-10"]["documents"]] == [
+        "118-pn-123",
+        "118-pn-456-2",
+        None,
+    ]
+    assert [d["nomination_id"] for d in updated_rows["118-senate-1-11"]["documents"]] == [None]
+    assert updated_rows["118-house-1-1"]["documents"] is None
+
+    # Idempotent when re-run on already backfilled native rows.
+    again, filled_again = _backfill_document_nomination_id(updated, held)
+    assert filled_again == 0
+    assert again.equals(updated, check_metadata=True)
+
+    # Parquet round-trip (element list item naming) also repairs cleanly in _repair_held_votes.
+    prior_file = tmp_path / "roll_call_votes.parquet"
+    pq.write_table(table, prior_file)
+    parquet_type = pq.read_schema(prior_file).field("documents").type
+    _repair_held_votes(prior_file, held, {}, None, [118])
+    repaired = pq.read_table(prior_file)
+    assert repaired.schema.field("documents").type == parquet_type
+    repaired_rows = {r["vote_id"]: r for r in repaired.to_pylist()}
+    assert [d["nomination_id"] for d in repaired_rows["118-senate-1-10"]["documents"]] == [
+        "118-pn-123",
+        "118-pn-456-2",
+        None,
+    ]
+
+
 def test_a_dispatch_names_its_chambers_and_cap_and_refuses_anything_else(monkeypatch):
     from spicy_regs.pipelines.rollups import roll_call_votes as rollup
     from spicy_regs.transforms.build_roll_call_votes import (

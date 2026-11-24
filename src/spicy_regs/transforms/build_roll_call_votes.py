@@ -501,56 +501,103 @@ def _backfill_vote_day(table: pa.Table, held: set[tuple[str, ...]]) -> tuple[pa.
     return table.append_column("vote_day", column), filled
 
 
+def _backfill_doc_items(items: Sequence[Any], vote_congress: object) -> tuple[list[Any], bool]:
+    """Return updated document dicts with canonical ``nomination_id`` and whether any item changed."""
+    updated = []
+    changed = False
+    for item in items:
+        if not isinstance(item, dict):
+            updated.append(item)
+            continue
+        expected = document_nomination_id(
+            item.get("type"), item.get("number"), item.get("congress"), vote_congress=vote_congress
+        )
+        if "nomination_id" not in item or item.get("nomination_id") != expected:
+            changed = True
+        updated.append(
+            {
+                **item,
+                "congress": item.get("congress"),
+                "type": item.get("type"),
+                "number": item.get("number"),
+                "nomination_id": expected,
+                "name": item.get("name"),
+                "title": item.get("title"),
+                "short_title": item.get("short_title"),
+            }
+        )
+    return updated, changed
+
+
 def _backfill_document_nomination_id(table: pa.Table, held: set[tuple[str, ...]]) -> tuple[pa.Table, int]:
-    """Backfill ``nomination_id`` inside ``documents_json`` on held prior Senate roll calls."""
+    """Backfill ``nomination_id`` inside native ``documents`` and legacy ``documents_json`` on held Senate roll calls."""
     import pyarrow as pa
     from spicy_docs.schemas.tables import json_column
 
     names = table.column_names
-    if "documents_json" not in names:
+    has_native = "documents" in names
+    has_legacy = "documents_json" in names
+    if not has_native and not has_legacy:
         return table, 0
-    documents = table.column("documents_json").to_pylist()
-    identities = zip(*(table.column(c).to_pylist() for c in IDENTITY_COLUMNS))
-    filled = 0
-    for row, (identity, raw_documents) in enumerate(zip(identities, documents)):
-        if raw_documents is None or tuple(str(part) for part in identity) not in held:
-            continue
-        try:
-            items = json.loads(raw_documents)
-        except (TypeError, ValueError):
-            continue
-        if not isinstance(items, list) or not items:
-            continue
-        updated = []
-        changed = False
-        for item in items:
-            if not isinstance(item, dict):
-                updated.append(item)
+
+    identities = [
+        tuple(str(part) for part in identity)
+        for identity in zip(*(table.column(c).to_pylist() for c in IDENTITY_COLUMNS))
+    ]
+    filled_rows: set[int] = set()
+
+    if has_native:
+        doc_field = table.schema.field("documents")
+        doc_type = doc_field.type
+        if pa.types.is_list(doc_type) and pa.types.is_struct(doc_type.value_type):
+            native_docs = table.column("documents").to_pylist()
+            native_changed = False
+            for row, (identity, items) in enumerate(zip(identities, native_docs)):
+                if not isinstance(items, list) or not items or identity not in held:
+                    continue
+                updated, changed = _backfill_doc_items(items, identity[0])
+                if changed:
+                    native_docs[row] = updated
+                    native_changed = True
+                    filled_rows.add(row)
+            if native_changed:
+                target_type = doc_type
+                if doc_type.value_type.get_field_index("nomination_id") < 0:
+                    target_type = pa.list_(
+                        pa.field(
+                            doc_type.value_field.name,
+                            pa.struct([*doc_type.value_type, pa.field("nomination_id", pa.string())]),
+                            nullable=doc_type.value_field.nullable,
+                        )
+                    )
+                table = table.set_column(names.index("documents"), "documents", pa.array(native_docs, type=target_type))
+
+    if has_legacy:
+        legacy_docs = table.column("documents_json").to_pylist()
+        legacy_changed = False
+        for row, (identity, raw_documents) in enumerate(zip(identities, legacy_docs)):
+            if raw_documents is None or identity not in held:
                 continue
-            expected = document_nomination_id(
-                item.get("type"), item.get("number"), item.get("congress"), vote_congress=identity[0]
+            try:
+                items = json.loads(raw_documents)
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(items, list) or not items:
+                continue
+            updated, changed = _backfill_doc_items(items, identity[0])
+            if changed:
+                legacy_docs[row] = json_column(updated)
+                legacy_changed = True
+                filled_rows.add(row)
+        if legacy_changed:
+            table = table.set_column(
+                names.index("documents_json"), "documents_json", pa.array(legacy_docs, type=pa.string())
             )
-            if "nomination_id" not in item or item.get("nomination_id") != expected:
-                changed = True
-            updated.append(
-                {
-                    "congress": item.get("congress"),
-                    "type": item.get("type"),
-                    "number": item.get("number"),
-                    "nomination_id": expected,
-                    "name": item.get("name"),
-                    "title": item.get("title"),
-                    "short_title": item.get("short_title"),
-                }
-            )
-        if changed:
-            documents[row] = json_column(updated)
-            filled += 1
-    if not filled:
+
+    if not filled_rows:
         return table, 0
-    logger.info("Roll-call votes: document nomination_id backfilled on {:,} prior roll call(s)", filled)
-    column = pa.array(documents, type=pa.string())
-    return table.set_column(names.index("documents_json"), "documents_json", column), filled
+    logger.info("Roll-call votes: document nomination_id backfilled on {:,} prior roll call(s)", len(filled_rows))
+    return table, len(filled_rows)
 
 
 def _relink_held_votes(
