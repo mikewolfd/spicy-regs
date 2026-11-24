@@ -140,7 +140,7 @@ def test_drifted_counts_point_at_their_query_instead():
     assert "1 of the 158" not in _prose("document_citations")
     assert "count distinct `document_key` by `document_kind`" in _prose("document_citations")
     assert "all 164 NULL rows" not in _prose("hearing_transcripts")
-    assert "`committee_report_reads` says which" in _prose("hearing_transcripts")
+    assert "detail_state and detail_relationship distinguish missing" in _prose("hearing_transcripts")
 
 
 def test_table3_names_the_law_the_publisher_left_out():

@@ -246,7 +246,9 @@ def prepare_crs_report_files(
             continue
         selection, digest = collector._qualified_report(row)
         qualified.append(row)
-        renditions = [("pdf", crs_file_locator(selection.pdf), str(selection.pdf.version))]
+        renditions: list[tuple[str, str, str | None]] = [
+            ("pdf", crs_file_locator(selection.pdf), str(selection.pdf.version))
+        ]
         if selection.html is not None:
             renditions.append(("html", crs_html_locator(selection.html), None))
         for rendition, url, publisher_version in renditions:

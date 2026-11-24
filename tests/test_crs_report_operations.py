@@ -229,7 +229,9 @@ def test_inherited_pair_is_admitted_before_receipt_selection_and_restore(prior, 
         selected_build(prior, tmp_path / "candidate", **options)
 
 
-def test_failed_explicit_retry_preserves_qualified_values_clocks_and_unselected_revisions(prior, tmp_path):
+def test_failed_explicit_retry_preserves_qualified_values_clocks_and_unselected_revisions(
+    prior, tmp_path, monkeypatch
+):
     body = json.dumps({"CRSReport": DETAIL}).encode()
     original = tmp_path / "detail.json"
     original.write_bytes(body)
@@ -247,7 +249,7 @@ def test_failed_explicit_retry_preserves_qualified_values_clocks_and_unselected_
 
     evidence = CaptureEvidence(output, "crs-reports")
     cursor = "2026-11-05T13:00:00+00:00"
-    evidence.inherited_event = lambda *args, **kwargs: {"cursor": cursor}
+    monkeypatch.setattr(evidence, "inherited_event", lambda *args, **kwargs: {"cursor": cursor})
     path = build_crs_reports(
         output,
         prior_subject=qualified,
