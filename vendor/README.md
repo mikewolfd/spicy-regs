@@ -38,7 +38,15 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
-- **Selected hearing provider** `spicy_docs-0.85.0+readers.20261114.2` is built from
+- **Selected T06 OLRC link reader provider** `spicy_docs-0.85.0+readers.20261124.1` is built from
+  `32c095212ad507d34bf2e466ad75a62432d423c5` on `fork/main` (`462bcb11`). It updates OLRC
+  classification `_STAT_LINK` regex matching for `target="_blank"` and `.html?`/`.htm?` links
+  without hiding Table III `table3-xml-bulk.zip` 404 refusals (`ss-uzaf`).
+  See [the receipt](spicy_docs-0.85.0+readers.20261124.1.json) for source, wheel and RECORD identity.
+  The superseded `.20261114.2` wheel is recoverable from this adoption commit's parent;
+  its receipt remains.
+
+- **Prior hearing provider** `spicy_docs-0.85.0+readers.20261114.2` is built from
   `bbdbe15b8648f7ec304dd336b87f9403d0c689e9`. It appends exact-rendition transcript text,
   independently dated Congress.gov detail evidence and all native MODS event IDs.
   A dated meeting join requires corroboration in that hearing's retained MODS.
