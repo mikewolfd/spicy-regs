@@ -23,6 +23,7 @@ from spicy_docs.storage.raw_archive import CentralRawArchiveStore, default_raw_a
 from spicy_docs.transport.captured import CapturedBodyResponse
 
 from spicy_regs.govinfo_revisions import revision_instant
+from spicy_regs.sources.hearing_detail import hearing_detail_facts
 
 _METADATA_LIMIT = 4 * 1024**2
 _FILE_LIMIT = 16 * 1024**2
@@ -380,6 +381,12 @@ def main() -> None:
             summary_sha256=selection["historical_summary_sha256"],
             mods_sha256=selection["historical_mods_sha256"],
         )
+    if (detail := capture("hearing_detail")) is not None:
+        raw_detail = load_decimal_json(detail.body, source="Congress hearing detail", error_type=ValueError)
+        record = cast(dict[str, Any], raw_detail).get("hearing") if isinstance(raw_detail, dict) else None
+        if not isinstance(record, dict):
+            raise ValueError("Congress hearing detail response does not name a hearing record")
+        result["hearing_detail_observation"] = hearing_detail_facts(observation.identity, [record], detail)
     result["capture_receipts"] = selection
     print(json.dumps(result, indent=2, default=str))
 

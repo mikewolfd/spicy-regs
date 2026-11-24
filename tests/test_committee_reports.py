@@ -148,6 +148,8 @@ def _parts(package_id: str, *, bodies: dict[str, bytes] | None = None, **kwargs)
 
 
 class _Page:
+    capture: CapturedBodyResponse
+
     def __init__(self, records):
         self.records = records
 
@@ -224,8 +226,11 @@ class StubHearings:
             from spicy_docs.reading.paged_json import PagedJsonSourceError
 
             raise PagedJsonSourceError("stub: list source answered HTTP 404 for the requested page")
-        record = json.loads((HEARINGS / self.details[jacket]).read_text())["hearing"]
-        yield _Page((record,))
+        raw = (HEARINGS / self.details[jacket]).read_bytes()
+        record = json.loads(raw)["hearing"]
+        page = _Page((record,))
+        page.capture = CapturedBodyResponse(url, url, 200, "application/json", OBSERVED_AT, raw)
+        yield page
 
 
 def _no_prior(remote_key: str, local_path: Path) -> bool:
@@ -438,7 +443,8 @@ def _hearing_mods(package_id: str) -> bytes:
     return (
         '<mods xmlns="http://www.loc.gov/mods/v3"><extension>'
         f"<accessId>{package_id}</accessId><collectionCode>CHRG</collectionCode>"
-        "</extension></mods>"
+        + ("<eventId>119003</eventId><eventId>119003</eventId>" if package_id == JACKET_64431 else "")
+        + "</extension></mods>"
     ).encode()
 
 
@@ -481,13 +487,45 @@ def test_event_id_is_the_meeting_the_hearing_detail_names_and_null_when_it_names
     monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
     rows, messages, hearings = _hearing_rows(tmp_path, StubHearings())
     assert rows[JACKET_64431]["event_id"] == "119003"
+    assert rows[JACKET_64431]["body_text"]
+    assert json.loads(rows[JACKET_64431]["mods_event_ids_json"]) == ["119003", "119003"]
+    assert json.loads(rows[JACKET_64431]["hearing_detail_json"])["relationship"] == "mods-corroborated"
     assert rows[CHRG_ID]["event_id"] is None
+    assert json.loads(rows[CHRG_ID]["hearing_detail_json"])["state"] == "missing"
     # One keyed request per CHRG package, addressed by the package id's own chamber and jacket.
     assert [url.split("/v3/", 1)[1].split("?", 1)[0] for url in hearings.requested] == [
         "hearing/119/house/63127",
         "hearing/119/house/64431",
     ]
     assert any("hearing details by outcome — {'no_meeting': 1, 'meeting': 1}" in m for m in messages)
+
+
+def test_refused_detail_retry_preserves_qualified_dated_row(tmp_path):
+    import shutil
+
+    first = tmp_path / "first"
+    first.mkdir()
+    prior = build_committee_reports(
+        first, reader=TwoHearingsDiscovery(), acquirer=HearingBodyAcquirer(),
+        hearings=StubHearings(), download_prior=_no_prior,
+    )
+
+    def download(key, target):
+        held = next((p for p in prior if p.name == key), None)
+        if held is None or key == "committee_report_reads.parquet":
+            return False
+        shutil.copyfile(held, target)
+        return True
+
+    retry = tmp_path / "retry"
+    retry.mkdir()
+    outputs = build_committee_reports(
+        retry, reader=TwoHearingsDiscovery(), acquirer=HearingBodyAcquirer(),
+        hearings=StubHearings(details={}), download_prior=download,
+    )
+    assert pq.read_table(outputs[2]).to_pylist() == pq.read_table(prior[2]).to_pylist()
+    assert pq.read_table(outputs[3]).to_pylist() == pq.read_table(prior[3]).to_pylist()
+    assert all(row["outcome"] == "detail_refused" for row in pq.read_table(outputs[-1]).to_pylist())
 
 
 def test_a_refused_hearing_detail_leaves_event_id_null_and_is_counted(tmp_path, monkeypatch):
@@ -641,7 +679,7 @@ def test_a_joint_hearing_detail_is_asked_under_each_chamber_before_it_is_unavail
 
     from spicy_docs.reading.paged_json import PagedJsonUnavailableError
 
-    from spicy_regs.transforms.build_committee_reports import _event_id
+    from spicy_regs.transforms.build_committee_reports import _hearing_detail
 
     class ByChamber:
         def __init__(self):
@@ -652,12 +690,18 @@ def test_a_joint_hearing_detail_is_asked_under_each_chamber_before_it_is_unavail
             self.chambers.append(chamber)
             if chamber != served:
                 raise PagedJsonUnavailableError(cast(Any, SimpleNamespace(status_code=404)))
-            yield _Page(({"jacketNumber": 61392, "congress": 119, "associatedMeeting": {"eventId": "118000"}},))
+            record = {"jacketNumber": 61392, "congress": 119, "chamber": chamber,
+                      "associatedMeeting": {"eventId": "118000"}}
+            page = _Page((record,))
+            page.capture = CapturedBodyResponse(url, url, 200, "application/json", OBSERVED_AT,
+                                                json.dumps({"hearing": record}).encode())
+            yield page
 
     package = SimpleNamespace(identity=SimpleNamespace(package_id="CHRG-119jhrg61392", document_type="jhrg",
-                                                       congress=119, number="61392"))
+                                                       congress=119, number="61392"),
+                              mods=SimpleNamespace(event_ids=("118000",)))
     hearings = ByChamber()
-    event_id, outcome = _event_id(cast(Any, hearings), package)
+    event_id, outcome, detail = _hearing_detail(cast(Any, hearings), package)
     assert outcome == expected and event_id == ("118000" if served else None)
     assert hearings.chambers == (["joint", "senate"] if served else ["joint", "senate", "house"])
 

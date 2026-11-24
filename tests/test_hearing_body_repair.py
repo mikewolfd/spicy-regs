@@ -81,8 +81,9 @@ def test_placeholder_reads_offered_pdf_and_journals_digests_not_text(tmp_path):
     evidence = CaptureEvidence(tmp_path, "committee-reports")
     [read] = _read_bodies(source, CHRG_ID, "CHRG", evidence)
     assert source.requests == [(), ("pdf",)]
-    assert read.body.format == "pdf" and read.derived.pages is not None and len(read.derived.pages) == 2
-    assert "Actual hearing testimony" in read.derived.text and read.completeness == "pdf_extracted"
+    assert read.extracted is not None
+    assert read.body.format == "pdf" and read.extracted.pages is not None and len(read.extracted.pages) == 2
+    assert "Actual hearing testimony" in read.text and read.completeness == "pdf_extracted"
     events = _journal(evidence)
     captures = [e for e in events if e["event"] == "capture"]
     assert any(e["stage"].endswith(":pdf-fallback") for e in captures)
@@ -98,8 +99,8 @@ def test_placeholder_reads_offered_pdf_and_journals_digests_not_text(tmp_path):
     assert placeholder["source_sha256"] == original and placeholder["offered_formats"] == ["htm", "pdf"]
     [text] = [e for e in events if e["event"] == "body-text"]
     assert text["source_sha256"] == read.body.body_capture.sha256 and text["replaces_sha256"] == original
-    assert text["text_sha256"] == read.text_sha256 == "sha256:" + hashlib.sha256(read.derived.text.encode()).hexdigest()
-    assert text["text_chars"] == len(read.derived.text) and text["page_count"] == 2
+    assert text["text_sha256"] == read.text_sha256 == "sha256:" + hashlib.sha256(read.text.encode()).hexdigest()
+    assert text["text_chars"] == len(read.text) and text["page_count"] == 2
     assert text["derivation"] == "pdf-extraction-gpo-normalized" and text["body_completeness"] == "pdf_extracted"
     assert set(text["extraction_versions"]) == {"spicy-docs", "pymupdf"} and text["cleanup"]["pages"]
     # Digests and counts only: the bytes are retained, so the text is re-derivable and never journaled.

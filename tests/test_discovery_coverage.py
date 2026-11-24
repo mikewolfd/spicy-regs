@@ -1,21 +1,30 @@
 """Native membership, selected-generation cursors and persistent retry work."""
-from contextlib import contextmanager
-from datetime import UTC, date, datetime
 import importlib
 import json
+from contextlib import contextmanager
+from datetime import UTC, date, datetime
 
 import httpx
 import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs.pipelines.rollups.crs_reports import CrsReportsRollup
-from spicy_regs.sources import publication as pub, r2
 from spicy_regs.source_evidence import CaptureEvidence
+from spicy_regs.sources import publication as pub
+from spicy_regs.sources import r2
 from tests.generation_fakes import Store
 from tests.test_crs_reports import _RAW_REPORT
 from tests.test_print_citations import (
-    _Reader, _Acquirer, _build, _listing, _package, _publish_as_prior,
-    REPORT_PAGES, CRPT_ID, CHECKPOINT_NAMESPACE, read_checkpoints,
+    CHECKPOINT_NAMESPACE,
+    CRPT_ID,
+    REPORT_PAGES,
+    _Acquirer,
+    _build,
+    _listing,
+    _package,
+    _publish_as_prior,
+    _Reader,
+    read_checkpoints,
 )
 
 
@@ -41,7 +50,7 @@ def test_crs_cursor_ignores_historical_rows_and_explicit_imports(tmp_path, monke
     windows = []
 
     class Reader:
-        def __init__(self, *, since, evidence):
+        def __init__(self, *, since, evidence, transport):
             windows.append(since)
 
         def iter_records(self):
@@ -133,7 +142,7 @@ def test_maintained_crs_entrypoint_uses_only_selected_evidence_after_conversion_
     original = generations.build_generation
 
     class Reader:
-        def __init__(self, *, since, evidence):
+        def __init__(self, *, since, evidence, transport):
             windows.append(since)
 
         def iter_records(self):

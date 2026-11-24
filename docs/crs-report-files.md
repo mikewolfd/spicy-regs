@@ -94,3 +94,86 @@ separate facts. The archive index or copy is a discovery or custody witness;
 it does not supply the CRS API `update_date`. These holdings add queryable file
 editions without manufacturing a `crs_reports` revision or a `crs_report_files`
 association to the current revision.
+
+## Prepare selections and inspect coverage offline
+
+`python -m spicy_regs.crs_file_preparation` creates the collector's existing
+`reports`/`retained_files` JSON input and a separate coverage report. Start with
+an explicitly selected native `crs_reports.parquet` and its matching
+`etl_receipts.parquet`. Supply their expected SHA256 digests and receipt
+generation. Preparation checks both members' stored bytes, row counts and
+Parquet uncompressed sizes before restoring any literal metadata rows through
+the shared receipt reader. It then selects only the requested revisions. The
+input pair retains its complete history and remains unchanged.
+
+A bare `--report IN12418` requires `--latest`; latest means the newest revision
+**in this admitted table**. Use `--report IN12418@2026-09-19T16:37:49Z` to select
+an exact revision, and repeat `--report` for a bounded cohort. Exact comparisons
+use timezone-aware instants. Unknown, duplicate and undated selections refuse.
+Preparation never fetches missing details or files.
+
+```sh
+python -m spicy_regs.crs_file_preparation \
+  --subject metadata/crs_reports.parquet --receipts metadata/etl_receipts.parquet \
+  --generation-id "$metadata_generation" \
+  --subject-sha256 "$subject_sha256" --receipt-sha256 "$receipt_sha256" \
+  --report IN12418 --latest \
+  --catalog-selection selected-catalog-rows.json \
+  --catalog-selection-sha256 "$catalog_rows_sha256" \
+  --max-input-bytes 1048576 --max-input-rows 100 \
+  --max-reports 1 --max-file-bytes 8388608 --max-total-bytes 16777216 \
+  --selection-output selection.json --coverage-output coverage.json
+
+python -m spicy_regs.transforms.build_crs_report_files \
+  --selection selection.json --output candidate \
+  --max-reports 1 --max-requests 1 --max-file-bytes 8388608 \
+  --max-total-bytes 16777216 --max-prior-bytes 1048576 --max-prior-rows 100
+```
+
+`--catalog-selection` is optional. Its input is a SHA256-pinned JSON array of
+exact source-catalog occurrence rows, as returned by the catalog's existing
+`query` command. Select by exact witness digest or immutable acquisition receipt;
+check the row's `data.mapping.receipt_evidence_ref` before freezing the selection.
+Keep only the intended occurrences when a source URL has several observations.
+Preparation uses the existing `retained_file_pin` adapter, checks each selected
+receipt entry and hashes its retained original. A conflicting body identity for
+one URL refuses. The adapter preserves unknown capture times and final URLs.
+The export and generated collector selection each have a 2 MiB byte ceiling.
+This small export avoids a whole-catalog rebuild or hash. A missing CRS native-ID
+match does not establish absence: catalog recognition can be incomplete. Exact
+metadata-witness matches appear as `matched-by-witness`; an unmatched supplied
+selection appears as `unmapped`; no supplied catalog evidence appears as
+`unknown`.
+
+For completed file evidence, supply `--prior-bundle` and both
+`--prior-subject-sha256` and `--prior-receipt-sha256`. Preparation admits the pair
+before using its outcomes, verifies relevant originals and refusal receipts, and
+keeps earlier refusal outcomes visible beside later completions. Pass the same
+`--prior-bundle` to the collector to retain its complete association history and
+reuse completed extraction. Preparation does not extract text itself.
+
+Coverage is limited to the requested metadata revisions and supplied evidence:
+
+| Evidence | Reported meaning |
+| --- | --- |
+| List metadata without qualified detail | `metadata-only`; body and text coverage remain `unknown` |
+| Unrequested detail | `detail-not-requested` |
+| Detail answered for a different revision | `historical-detail-not-retained`; no source-unavailability claim |
+| Failed detail attempt | `detail-attempt-failed`; the metadata outcome alone does not prove HTTP unavailability |
+| Verified detail without an offered PDF | `qualified-detail`, with `no-pdf-offered` or unknown formats |
+| A stated format URL without supplied original evidence | `format-offered`; body coverage remains `unknown` |
+| Receipt-verified original bytes | `body-held` |
+| Admitted completed file text | `completed-text` or `empty-text` |
+| Exact retained collector refusal receipt | `source-unavailable` or `source-refused`, with the prior outcome preserved |
+
+`empty-text` preserves a successful empty extraction. Image-only documents may
+need optical character recognition (OCR); this path does not perform OCR. HTML
+appears separately with a NULL `publisher_version`. Use `--include-html` in both
+commands to select its offered mutable observation. Coverage lists an offered
+HTML rendition even when it is not selected for collection.
+
+A selection can contain no qualified reports while coverage still provides a
+useful metadata-only result. The collector requires a nonempty report cohort;
+qualify the intended detail revisions through the existing detail operation
+before collecting their files. Neither command publishes, activates schedules,
+or changes the selected source catalog.

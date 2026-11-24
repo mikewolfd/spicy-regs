@@ -15,24 +15,25 @@ import hashlib
 import json
 import os
 from collections import Counter
-from collections.abc import Callable, Collection, Iterator
-from dataclasses import asdict
+from collections.abc import Callable, Collection, Iterator, Mapping
+from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime, timedelta
-from functools import cache
+from functools import cache, partial
 from importlib.metadata import version
 from pathlib import Path
-from typing import Any, NamedTuple, Protocol
+from typing import Any, Protocol
 
+import duckdb
 import httpx
 from loguru import logger
 from spicy_docs.extraction.body_text import BodyText, body_text
+from spicy_docs.extraction.derivation import BODY_TEXT_DERIVATION_VERSION, DERIVATION_READS_AS
 from spicy_docs.extraction.model import PageContent, PageResult, TextBlock
 from spicy_docs.interpretation.cbo_estimates import read_cbo_estimate, recital_bill_id
 from spicy_docs.interpretation.hearing_bill_links import cover_links
 from spicy_docs.schemas.hearing_bill_link_tables import shape_hearing_bill_link
 from spicy_docs.reading.paged_json import PagedJsonBudget
 from spicy_docs.schemas.committee_report_tables import (
-    CHAMBER_BY_DOCUMENT_TYPE,
     shape_committee_report,
     shape_committee_report_cbo_letter,
     shape_hearing_transcript,
@@ -56,12 +57,13 @@ from spicy_docs.sources.govinfo.body_acquisition import (
 from spicy_docs.reading.refusals import RefusedResponse
 from spicy_docs.reading.paged_json import PagedJsonSourceError, PagedJsonUnavailableError
 from spicy_docs.schemas.tables import text
-from spicy_docs.sources.congress.listing import LIST_ROUTES, hearing_detail_event_id, list_route_url
+from spicy_docs.sources.congress.listing import LIST_ROUTES
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, collection_url
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
 from spicy_regs.govinfo_revisions import latest_read, revision_instant
 from spicy_regs.sources import r2
+from spicy_regs.sources.hearing_detail import hearing_detail_facts, hearing_detail_urls
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key, listing_reader
 from spicy_regs.phase_log import annotate
 from spicy_regs.transforms.table_merge import (
@@ -197,17 +199,17 @@ def _package_ids(reader: PackageDiscoverySource, collection: str, since: str,
 PLACEHOLDER = "publisher_placeholder"
 
 
-class ReadBody(NamedTuple):
-    """One fetched body, its one text derivation, and what that text states.
-
-    ``completeness`` (``publisher_body_status``) and ``text_sha256`` each scan
-    the whole text, so they are taken once here, not by every consumer.
-    """
+@dataclass(frozen=True, slots=True)
+class ReadBody:
+    """One body with extracted text and optional newly computed page details."""
 
     body: Any
-    derived: BodyText
+    text: str
     completeness: str
     text_sha256: str
+    derivation: str
+    page_count: int | None
+    extracted: BodyText | None = None
 
 
 def _read(body: Any) -> ReadBody:
@@ -218,8 +220,11 @@ def _read(body: Any) -> ReadBody:
     # adjacency, not pypdf's (measured
     # ``docs/research/gpo-normalizer-vs-upstream-2026-09-19.md`` in spicy-docs).
     derived = body_text(body)
-    return ReadBody(body, derived, publisher_body_status(derived.text, rendition=derived.rendition),
-                    "sha256:" + hashlib.sha256(derived.text.encode("utf-8")).hexdigest())
+    return ReadBody(
+        body, derived.text, publisher_body_status(derived.text, rendition=derived.rendition),
+        "sha256:" + hashlib.sha256(derived.text.encode("utf-8")).hexdigest(),
+        derived.derivation, None if derived.pages is None else len(derived.pages), derived,
+    )
 
 
 def _part_key(body: Any, package_id: str) -> str:
@@ -240,8 +245,72 @@ def _extraction_versions() -> dict[str, str]:
     return {name: version(name) for name in ("spicy-docs", "pymupdf")}
 
 
+def _prior_hearing_rows(path: Path | None, packages: Collection[str]) -> dict[tuple[str, str], dict]:
+    """Read only selected prior hearings once, including their retained text and join witness."""
+    if path is None or not packages:
+        return {}
+    with duckdb.connect(config={"threads": 1, "memory_limit": "512MiB"}) as db:
+        available = {row[0] for row in db.execute("DESCRIBE SELECT * FROM read_parquet(?)", [str(path)]).fetchall()}
+        columns = [name for name in ("package_id", "last_modified", "event_id", "body_text", "body_completeness",
+                                     "text_sha256", "text_derivation", "page_count", "sha256", "format", "hearing_detail_json", "mods_event_ids_json")
+                   if name in available]
+        cursor = db.execute("SELECT " + ", ".join(columns) + " FROM read_parquet(?) WHERE package_id IN (SELECT unnest(?))",
+                            [str(path), sorted(packages)])
+        rows = [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
+    lookup = {}
+    for row in rows:
+        key = (row["package_id"], row["last_modified"])
+        if key in lookup:
+            raise ValueError("Prior hearing rows repeat a dated key")
+        lookup[key] = row
+    return lookup
+
+
+def _qualified_prior_event(row: Mapping[str, Any], body: Any) -> bool:
+    event = row.get("event_id")
+    if event is None:
+        return False
+    if set(body.mods.event_ids) == {event}:
+        return True
+    detail = json.loads(row.get("hearing_detail_json") or "null")
+    return (isinstance(detail, dict) and detail.get("relationship") == "mods-corroborated"
+            and detail.get("event_id") == event
+            and set(json.loads(row.get("mods_event_ids_json") or "[]")) == {event})
+
+
+def _reuse_hearing_text(body: Any, prior: Mapping[tuple[str, str], dict], prior_read: Mapping[str, Any]) -> ReadBody | None:
+    tokens: dict[str, str] = {}
+    for part in (prior_read.get("rule_version") or "").split(";"):
+        if "=" in part:
+            key, value = part.split("=", 1)
+            tokens[key] = value
+    old_version = tokens.get("text")
+    current = BODY_TEXT_DERIVATION_VERSION
+    while current != old_version and current in DERIVATION_READS_AS:
+        earlier, renditions = DERIVATION_READS_AS[current]
+        if body.format not in renditions:
+            break
+        current = earlier
+    if current != old_version or (body.format == "pdf" and tokens.get("pymupdf") != version("pymupdf")):
+        return None
+    stamp = prior_read.get("last_modified")
+    if not isinstance(stamp, str):
+        return None
+    row = prior.get((body.identity.package_id, stamp))
+    if (row is None or row.get("body_text") is None or row.get("sha256") != body.body_capture.sha256
+            or row.get("format") != body.format):
+        return None
+    text = row["body_text"]
+    if "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest() != row["text_sha256"]:
+        raise ValueError("Retained hearing text differs from its digest")
+    pages = row.get("page_count")
+    return ReadBody(body, text, row["body_completeness"], row["text_sha256"], row["text_derivation"],
+                    None if pages is None else int(pages))
+
+
 def _read_bodies(acquirer: PackageBodySource, package_id: str, collection: str,
-                 evidence: CaptureEvidence | None = None) -> list[ReadBody]:
+                 evidence: CaptureEvidence | None = None, *,
+                 reuse: Callable[[Any], ReadBody | None] | None = None) -> list[ReadBody]:
     """Each fetched body of one package with the one text derivation for its rendition.
 
     A report is every part its record states, read by ``acquire_parts``: one
@@ -269,7 +338,16 @@ def _read_bodies(acquirer: PackageBodySource, package_id: str, collection: str,
     if len(stamps) != 1:
         raise ValueError(f"{package_id}: report parts disagree on publisher last_modified")
     revision_instant(next(iter(stamps)))
-    reads = [_read(body) for body in bodies]
+    def read_or_reuse(body: Any) -> ReadBody:
+        reused = reuse(body) if reuse is not None else None
+        if reused is not None:
+            if evidence:
+                evidence.event("body-text-reused", package_id=package_id,
+                               source_sha256=body.body_capture.sha256, text_sha256=reused.text_sha256)
+            return reused
+        return _read(body)
+
+    reads = [read_or_reuse(body) for body in bodies]
     keys = [_part_key(read.body, package_id) for read in reads]
     placeholders = {key: read for key, read in zip(keys, reads, strict=True) if read.completeness == PLACEHOLDER}
     offered = [key for key, read in placeholders.items()
@@ -278,7 +356,7 @@ def _read_bodies(acquirer: PackageBodySource, package_id: str, collection: str,
         for key, read in placeholders.items():
             evidence.event("body-placeholder", package_id=package_id, part_id=key,
                            source_sha256=read.body.body_capture.sha256, text_sha256=read.text_sha256,
-                           text_chars=len(read.derived.text), offered_formats=list(read.body.offered_formats))
+                           text_chars=len(read.text), offered_formats=list(read.body.offered_formats))
     if offered:
         # A report's parts are read all or none, so every part is asked for as
         # PDF and only the placeholder parts take theirs. A failure refuses the
@@ -298,18 +376,18 @@ def _read_bodies(acquirer: PackageBodySource, package_id: str, collection: str,
             raise ValueError(f"PDF acquisition did not return placeholder parts {missing}")
         if evidence:
             _retain(evidence, [by_part[key] for key in offered], package_id + ":pdf-fallback")
-        reads = [_read(by_part[key]) if key in offered else read for key, read in zip(keys, reads, strict=True)]
-        if any(read.body.summary.last_modified not in stamps for read in reads):
+        reads = [read_or_reuse(by_part[key]) if key in offered else prior for key, prior in zip(keys, reads, strict=True)]
+        if any(item.body.summary.last_modified not in stamps for item in reads):
             raise ValueError(f"{package_id}: publisher revision changed during PDF fallback")
     if evidence:
         for key, read in zip(keys, reads, strict=True):
-            if read.derived.pages is not None:
+            if read.extracted is not None and read.extracted.pages is not None:
                 replaced = placeholders[key].body.body_capture.sha256 if key in offered else None
                 evidence.event("body-text", package_id=package_id, part_id=key,
                                source_sha256=read.body.body_capture.sha256, replaces_sha256=replaced,
-                               text_sha256=read.text_sha256, text_chars=len(read.derived.text),
-                               page_count=len(read.derived.pages), derivation=read.derived.derivation,
-                               extraction_versions=_extraction_versions(), cleanup=asdict(read.derived.record),
+                               text_sha256=read.text_sha256, text_chars=len(read.text),
+                               page_count=read.page_count, derivation=read.derivation,
+                               extraction_versions=_extraction_versions(), cleanup=asdict(read.extracted.record),
                                body_completeness=read.completeness)
     return reads
 
@@ -401,56 +479,44 @@ def _bill_key(package_id: str, bill: ModsBill) -> str | None:
 _HEARING_REFUSALS = (PagedJsonSourceError, httpx.HTTPError, ConnectionError, ValueError, TypeError, KeyError)
 
 
-#: The chambers a hearing-detail request tries, in order, by GovInfo document
-#: type. Congress.gov files some joint hearings under a chamber: GovInfo's
-#: CHRG-119jhrg61392 (Joint Economic Committee) answers 404 under ``joint`` and
-#: 200 under ``senate`` (probed 2026-11-09), while CHRG-119jhrg60491 answers
-#: under ``joint``. Any other type asks its own chamber only.
-_DETAIL_CHAMBERS = {"jhrg": ("joint", "senate", "house")}
-
-
-def _event_id(hearings: HearingDetailSource, package: Any,
-              evidence: CaptureEvidence | None = None) -> tuple[str | None, str]:
-    """``(event_id, outcome)`` for one CHRG package from its Congress.gov hearing detail.
-
-    ``outcome`` is ``meeting``, ``no_meeting``, ``unavailable`` or ``refused``,
-    so the run log can count them apart. ``unavailable`` is Congress.gov's
-    404/410 for the exact jacket on every chamber route the document type
-    names (:data:`_DETAIL_CHAMBERS`); the caller decides from the package's age
-    whether that is final (:func:`_unavailable_rule`). ``refused`` is anything
-    else. The detail must name the jacket and Congress the package id spells,
-    or it is refused rather than read.
-    """
+def _hearing_detail(hearings: HearingDetailSource, package: Any,
+                    evidence: CaptureEvidence | None = None) -> tuple[str | None, str, dict]:
+    """Keep a detail observation separate; qualify a dated meeting only with its MODS witness."""
     identity = package.identity
-    # The hearing detail route wants the chamber's word; spicy-docs maps each document type to it.
-    chamber = CHAMBER_BY_DOCUMENT_TYPE.get(str(identity.document_type))
-    route = LIST_ROUTES["hearing-detail"]
-    chambers = _DETAIL_CHAMBERS.get(str(identity.document_type), (chamber,))
+    stage = identity.package_id + ":hearing-detail"
     try:
-        if chamber is None:
-            raise ValueError(f"document type {identity.document_type!r} names no chamber")
-        for index, each in enumerate(chambers):
-            url = list_route_url(route, congress=identity.congress, chamber=each, number=int(identity.number), limit=1)
+        urls = hearing_detail_urls(identity)
+        for index, url in enumerate(urls):
             try:
-                page = next(iter(hearings.records(route, url, max_pages=1)))
+                page = next(iter(hearings.records(LIST_ROUTES["hearing-detail"], url, max_pages=1)))
                 break
             except PagedJsonUnavailableError:
-                if index == len(chambers) - 1:
+                if index == len(urls) - 1:
                     raise
         if evidence:
-            evidence.capture(page.capture, stage=identity.package_id + ":hearing-detail")
-        # spicy-docs reads the answer as the hearing asked for (one record, its jacket and Congress) (X5).
-        event_id = hearing_detail_event_id(page.records, congress=identity.congress, jacket=identity.number)
+            evidence.capture(page.capture, stage=stage)
+        detail = hearing_detail_facts(identity, page.records, page.capture)
     except CredentialRefusedError:
         raise
     except _HEARING_REFUSALS as error:
         if evidence:
-            evidence.refusal(error, stage=identity.package_id + ":hearing-detail")
+            evidence.refusal(error, stage=stage)
         outcome = "unavailable" if isinstance(error, PagedJsonUnavailableError) else "refused"
         logger.warning("CHRG: {} hearing detail {}: {}", identity.package_id, outcome,
                        scrub_credential(str(error), evidence.credential if evidence else ""))
-        return None, outcome
-    return event_id, "meeting" if event_id is not None else "no_meeting"
+        return None, outcome, {"state": outcome, "relationship": "unproved"}
+
+    event_id = detail["event_id"]
+    native_ids = set(package.mods.event_ids)
+    relation = "not-stated"
+    if event_id is not None:
+        relation = ("mods-corroborated" if native_ids == {event_id}
+                    else "conflicting-or-multiple-mods-ids" if native_ids else "detail-only")
+    detail["relationship"] = relation
+    if evidence:
+        evidence.event("hearing-detail-observation", **detail)
+    return (event_id if relation == "mods-corroborated" else None,
+            "meeting" if event_id is not None else "no_meeting", detail)
 
 
 #: Which detail answer a checkpoint keeps when a package's bodies disagree (higher wins).
@@ -575,6 +641,7 @@ def build_committee_reports(
     }
     checkpoint = published_table(output_dir, READS_TABLE, download_prior)
     reads = prior_reads(checkpoint, prior_files)
+    prior_hearings = prior_files["hearing_transcripts"]
     previous_reads = dict(reads)
     if reread:
         _refuse_unsafe_reread(reread, set(prior_reads(checkpoint, {})), reads)
@@ -591,6 +658,7 @@ def build_committee_reports(
                        agenda_cap=0, checkpoint_observed_at=observed_at)
     link_rows: list[dict] = []
     evaluated_hearings: set[tuple[str, str]] = set()
+    protected_hearings: set[str] = set()
     evaluated_reports: set[tuple[str, str]] = set()
     report_rows: list[dict] = []
     letter_rows: list[dict] = []
@@ -635,10 +703,14 @@ def build_committee_reports(
                                  "observed_at": observed_at}
         logger.info("{}: {} pending; {} deferred by package cap", collection, len(pending), max(0, len(pending) - max_packages))
         attempted[collection] = list(pending)[:max_packages]
+        prior_hearing_rows = _prior_hearing_rows(prior_hearings, attempted[collection]) if collection == "CHRG" else {}
         for package_id in attempted[collection]:
             state = reads[package_id]
             try:
-                bodies = _read_bodies(acquirer, package_id, collection, evidence)
+                prior_read = previous_reads.get(package_id, {})
+                reuse = (partial(_reuse_hearing_text, prior=prior_hearing_rows, prior_read=prior_read)
+                         if collection == "CHRG" else None)
+                bodies = _read_bodies(acquirer, package_id, collection, evidence, reuse=reuse)
             except (CredentialRefusedError, SourceEvidenceError):
                 raise
             except Exception as error:  # noqa: BLE001 — retained for the next run
@@ -659,8 +731,10 @@ def build_committee_reports(
             # A placeholder whose part offers no PDF is complete: nothing more
             # is published, its row says so, and a new stamp or rule re-reads it.
             state.update(last_modified=modified, outcome="complete")
-            for body, derived, status, text_sha256 in bodies:
-                renditions[derived.rendition] += 1
+            for reading in bodies:
+                body = reading.body
+                status = reading.completeness
+                renditions[body.format] += 1
                 completeness[status] += 1
                 # A report part states its own bills; a multi-part package's
                 # root states none (CRPT-119hrpt455, -119hrpt494). A hearing
@@ -670,11 +744,11 @@ def build_committee_reports(
                 bill = None if primary is None else _bill_key(package_id, primary)
                 linked += bill is not None
                 mentions.update(entry.context for entry in stated.bills if entry.context != PRIMARY_BILL_CONTEXT)
-                common = {"page_count": None if derived.pages is None else len(derived.pages),
-                          "text_sha256": text_sha256, "body_completeness": status,
-                          "text_derivation": derived.derivation}
+                common = {"page_count": reading.page_count,
+                          "text_sha256": reading.text_sha256, "body_completeness": status,
+                          "text_derivation": reading.derivation}
                 if collection == "CHRG":
-                    event_id, outcome = _event_id(hearings, body, evidence)
+                    event_id, outcome, detail = _hearing_detail(hearings, body, evidence)
                     meetings[outcome] += 1
                     # A package's bodies may answer differently: a retried refusal
                     # outranks a detail still awaited, which outranks a settled one.
@@ -683,21 +757,34 @@ def build_committee_reports(
                     held = _DETAIL_RANK[state["rule_version"]] if state["outcome"] == DETAIL_REFUSED else -1
                     if rule is not None and _DETAIL_RANK[rule] > held:
                         state.update(outcome=DETAIL_REFUSED, rule_version=rule)
-                    hearing_rows.append(shape_hearing_transcript(body, event_id=event_id, **common))
+                    held_row = prior_hearing_rows.get((package_id, modified))
+                    if (event_id is None and held_row is not None
+                            and (_qualified_prior_event(held_row, body) or outcome in {"refused", "unavailable"})):
+                        # The current observation remains in source evidence; do not replace its dated parent/links.
+                        if state["outcome"] == "complete":
+                            protected_hearings.add(package_id)
+                        continue
+                    hearing_rows.append(shape_hearing_transcript(
+                        body, event_id=event_id, hearing_detail=detail,
+                        body_text=reading.text if status != PLACEHOLDER else None, **common
+                    ))
                     link_rows.extend(shape_hearing_bill_link(link, last_modified=modified)
                                      for link in cover_links(body.mods, event_id=event_id))
+                    evaluated_hearings.add((package_id, modified))
                 else:
-                    estimate = read_cbo_estimate(derived.text)
+                    estimate = read_cbo_estimate(reading.text)
                     report_rows.append(shape_committee_report(
                         body, bill_id=bill, estimate=estimate,
                         recital_bill_id=recital_bill_id(estimate, body.identity.congress), **common))
                     letter_rows.extend(shape_committee_report_cbo_letter(
                         letter, package_id=package_id, part_id=body.part.part_id, seq=seq, last_modified=modified
                     ) for seq, letter in enumerate(estimate.letters))
+                    assert reading.extracted is not None
                     section_rows.extend(shape_report_section(
                         block, package_id=package_id, part_id=body.part.part_id, seq=seq, last_modified=modified
-                    ) for seq, block in enumerate(parse_agency_blocks(_section_input(derived))))
-            (evaluated_hearings if collection == "CHRG" else evaluated_reports).add((package_id, modified))
+                    ) for seq, block in enumerate(parse_agency_blocks(_section_input(reading.extracted))))
+            if collection == "CRPT":
+                evaluated_reports.add((package_id, modified))
             if evidence:
                 evidence.event("package-outcome", **state)
 
@@ -711,7 +798,7 @@ def build_committee_reports(
         considered = [reads[key] for key in keys if reads[key]["outcome"] != REFUSED_FINAL]
         if considered and not any(_read_this_run(row, collection) for row in considered):
             nothing_read.append(collection)
-    completed_hearings = {key for key, _modified in evaluated_hearings}
+    completed_hearings = {key for key, _modified in evaluated_hearings} | protected_hearings
     if unfinished := sorted(key for key in reread if key not in completed_hearings or reads[key]["outcome"] != "complete"):
         # A refused named read would publish a checkpoint every later run
         # retries, and a refused hearing detail would drop the prior event_id.

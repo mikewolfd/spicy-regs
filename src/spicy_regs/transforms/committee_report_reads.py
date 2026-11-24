@@ -8,6 +8,9 @@ collection, ``complete`` is the completeness test over a checkpoint row, and
 from pathlib import Path
 
 import pyarrow.parquet as pq
+from spicy_docs.extraction.derivation import BODY_TEXT_DERIVATION_VERSION
+from importlib.metadata import version
+
 from spicy_docs.interpretation.cbo_estimates import CBO_ESTIMATE_RULE_VERSION
 from spicy_docs.interpretation.hearing_bill_links import HEARING_BILL_LINK_RULE_VERSION
 from spicy_docs.schemas.committee_report_tables import REPORT_SECTION_READER_VERSION
@@ -45,17 +48,18 @@ READ_COLUMNS = ("package_id", "last_modified", "outcome", "rule_version", "obser
 #: appended columns, so each of the 185 held hearings is read once more.
 #: ``mods=hearing-mods-002``: the round-6 build also reads the committee codes
 #: the MODS states (``committee_system_codes_json``), so each is read again.
-#: spicy-docs 0.84.0 (body-text derivation ``004``, which changed ``htm`` alone)
-#: needs no CHRG token: each of the 617 ``htm`` bodies the held transcripts were
-#: read from derives the same text under 0.83.0 and 0.84.0, equal to its
-#: published ``text_sha256`` (``vendor/spicy_docs-0.84.0.json``). The rest are
-#: ``txt`` and ``pdf``, which ``004`` reads as ``003`` by construction.
+#: Hearing text follows the maintained body-text derivation and actual PDF decoder,
+#: independently of unrelated SpicyDocs releases. Equivalent earlier derivations
+#: remain reusable per rendition through ``DERIVATION_READS_AS``.
 RULE_VERSIONS = {
     "CRPT": (
         f"code={spicy_docs_code()[:12]};cbo={CBO_ESTIMATE_RULE_VERSION};sections={REPORT_SECTION_READER_VERSION}"
         ";parts=per-part-001;body=placeholder-pdf-002"
     ),
-    "CHRG": f"{HEARING_BILL_LINK_RULE_VERSION};body=placeholder-pdf-002;mods=hearing-mods-002",
+    "CHRG": (
+        f"{HEARING_BILL_LINK_RULE_VERSION};body=placeholder-pdf-002;mods=hearing-mods-003;detail=hearing-detail-001"
+        f";text={BODY_TEXT_DERIVATION_VERSION};pymupdf={version('pymupdf')}"
+    ),
 }
 
 

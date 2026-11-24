@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import duckdb
 import pyarrow as pa
@@ -72,7 +72,7 @@ def test_build_retains_revisions_and_repeated_imports_deduplicate(tmp_path, monk
     incoming, windows = [], []
 
     class Reader:
-        def __init__(self, *, since, evidence):
+        def __init__(self, *, since, evidence, transport):
             windows.append(since)
 
         def iter_records(self):
@@ -104,7 +104,7 @@ def test_build_retains_revisions_and_repeated_imports_deduplicate(tmp_path, monk
     with duckdb.connect() as con:
         assert con.execute(
             "SELECT report_id, min(published_date), count(*) FROM read_parquet(?) GROUP BY report_id", [str(output)],
-        ).fetchall() == [(original["id"], datetime(2026, 7, 16, 4, tzinfo=timezone.utc), 3)]
+        ).fetchall() == [(original["id"], datetime(2026, 7, 16, 4, tzinfo=UTC), 3)]
     assert windows[0] is None
     assert windows[-1] is None  # imported rows alone do not establish a live discovery cursor
 
@@ -113,7 +113,11 @@ def test_build_retains_revisions_and_repeated_imports_deduplicate(tmp_path, monk
 def test_existing_report_key_migrates_without_losing_its_row(tmp_path, monkeypatch, bulk):
     from spicy_regs import etl_bulk, government_bulk
     from spicy_regs.etl_receipts import (
-        decode_exact_json, receipt_policies, resolve_receipt_witness, subject_identity, validate_receipt_bundle,
+        decode_exact_json,
+        receipt_policies,
+        resolve_receipt_witness,
+        subject_identity,
+        validate_receipt_bundle,
     )
     from spicy_regs.transforms import government_receipts as gr
 
@@ -191,9 +195,9 @@ def test_undated_prior_is_preserved_and_refused_before_fetch(tmp_path, monkeypat
 
 def test_new_undated_report_is_refused_without_inventing_an_identity(tmp_path):
     from spicy_regs.etl_receipts import read_attempts
+    from spicy_regs.transforms.build_crs_reports import _SCHEMA
     from spicy_regs.transforms.government_receipts import POLICIES, migrate_outputs
     from spicy_regs.transforms.government_source_shapes import GovernmentShapeError
-    from spicy_regs.transforms.build_crs_reports import _SCHEMA
 
     path = tmp_path / "crs_reports.parquet"
     raw = {**_shape(_RAW_REPORT), "update_date": None}

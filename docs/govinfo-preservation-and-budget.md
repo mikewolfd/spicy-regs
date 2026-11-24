@@ -51,3 +51,30 @@ Workbook cells keep their positions, values, formulas, number formats and
 merged ranges. Printed units and footnotes remain in their original cells.
 CSV rows keep their original width and repeated values. The existing
 `budget_volumes` table stays at the volume grain.
+
+## Read hearing text and dated meeting evidence
+
+The committee-report builder appends `body_text` to newly qualified hearing
+rows and retains all MODS event IDs, including repeated values. Placeholders
+keep null text. Native subjects expose `mods_event_ids`, `detail_state`,
+`detail_event_id`, `detail_relationship`, `detail_sha256`, `detail_source_url`,
+`detail_observed_at` and `detail_locator`. The matching receipt retains the
+complete `hearing_detail_json` and original acquisition values.
+
+A dated hearing's `event_id` uses the Congress.gov associated meeting only
+when that hearing revision's MODS corroborates it. Detail-only and conflicting
+IDs stay visible as independent observations. A later missing, null, empty or
+refused detail answer cannot remove a held qualified dated join. A successful
+current observation remains in its own source evidence and can be queried by
+adding `hearing_detail` to the receipt selection above. Its capture time does
+not become a GovInfo revision date. Joint hearing detail tries the publisher's
+joint, Senate and House routes; exact 404/410 outcomes keep the existing grace
+and retry rules.
+
+An unchanged body reuses completed text only when its exact source digest,
+rendition and compatible maintained extraction rules agree. PDF reuse also
+requires the same decoder version. Unrelated provider releases do not force
+text extraction. A named retry that fails preserves the selected previous
+output and cannot merge an incomplete replacement. Earlier `/3` subjects and
+receipts retain their original shape and meaning; they do not gain a new
+qualification claim merely by remaining readable under `/4`.

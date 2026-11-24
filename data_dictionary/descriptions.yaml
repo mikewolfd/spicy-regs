@@ -3084,10 +3084,13 @@ tables:
       current-document joins (see govinfo-revisions.md). Same-date rereads replace
       that revision explicitly; retained receipts and original captures keep prior evidence.
       Cover bills come from the package's MODS and cost no extra requests.
-      BODY mentions do not become hearing links. event_id is the meeting the
-      Congress.gov hearing record names (its associatedMeeting), carried as the
-      publisher pairs them. NULL means that record names no meeting, or was
-      refused, and `committee_report_reads` says which (its `outcome`). It
+      BODY mentions do not become hearing links. On policy /4 rows, event_id
+      requires agreement between the independently dated Congress.gov detail
+      and this revision's retained MODS. Earlier rows retain their original
+      receipt policy. detail_state and detail_relationship distinguish missing,
+      refused and uncorroborated detail; detail_observed_at keeps its separate
+      capture time. A later response cannot retract a retained qualified join.
+      NULL event_id means the available evidence does not qualify a join. It
       does not mean no meeting exists: a meeting can list the
       transcript's jacket in `committee_meetings.hearing_jackets` without
       the hearing record naming it. That jacket route is the publisher's
@@ -3104,7 +3107,11 @@ tables:
       only in the PDF. When the package offers that PDF it is read instead
       (pdf_extracted, with text_derivation naming the extraction); when it
       offers none, the notice is published as it stands. NULL on rows not
-      re-read since the column was added.
+      re-read since the column was added. body_text contains the exact rendition's
+      extracted text, with text_sha256 and text_derivation identifying that read;
+      it is NULL for legacy rows and publisher placeholders. mods_event_ids keeps
+      every native ID, including repeated or conflicting statements. Agreement
+      between publisher records does not establish that the pairing is correct.
     columns_from: spicy_docs
 
   bill_family_archives:

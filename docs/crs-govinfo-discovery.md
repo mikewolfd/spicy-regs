@@ -56,6 +56,25 @@ are mutually exclusive. A native inventory captures currently advertised
 metadata; it does not reconstruct historical editions. Retained completed detail
 and witnesses remain attached at unchanged revision coordinates.
 
+For a bounded local preparation, use the same builder through
+`python -m spicy_regs.crs_report_operations`. `--operation refresh` requires an
+explicit `--since YYYY-MM-DD`; `--operation reconcile` refuses a date window and
+walks the unfiltered native inventory. Both require the selected local subject,
+receipt and generation arguments, `--max-prior-bytes`, `--max-prior-rows`,
+`--max-requests`, `--max-list-bytes` and `--max-list-rows`. Request bounds include
+retries; byte bounds include all list response bodies consumed during the walk.
+A limit failure refuses the candidate rather than treating a partial list as
+complete. Inventory omissions do not delete retained historical revisions.
+Detail selection is a separate operation; see [the local detail command](crs-detail-enrichment.md).
+
+This command prepares local tables, receipts and source evidence. It does not
+upload or select a hosted release, and it does not activate the proposed review
+cadences. A naked local subject/receipt pair establishes no inherited live cursor;
+the release caller must retain the selected generation's verified evidence for
+subsequent automatic refreshes. Explicit local dated imports carry no new live
+progress, and successful reconciliation records an observed inventory without
+claiming an atomic snapshot or complete history.
+
 Committee discovery reopens 24 hours before its completed crawl cutoff. Without
 qualified discovery state it declares the existing 30-day cold scope, regardless
 of historical row dates. Set `COMMITTEE_REPORTS_SINCE` and
