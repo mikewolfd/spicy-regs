@@ -1,0 +1,70 @@
+name: Check appropriations deadlines
+
+# Weekly tracker over House and Senate Appropriations guidance, subcommittee
+# OWT/Member-Day notices, ColdFusion /download/* PDFs, and Senate /hearings.
+# Emits deterministic JSON/CSV deadline snapshots as workflow artifacts without
+# bypassing CAPTCHAs or modifying published catalog state.
+on:
+  schedule:
+    - cron: '15 13 * * 1'
+  workflow_dispatch:
+    inputs:
+      as_of:
+        description: 'Reference date YYYY-MM-DD (defaults to UTC run date)'
+        required: false
+        default: ''
+        type: string
+      fiscal_year:
+        description: 'Target appropriations fiscal year'
+        required: false
+        default: '2027'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run appropriations deadlines probe
+        env:
+          AS_OF: ${{ inputs.as_of }}
+          FISCAL_YEAR: ${{ inputs.fiscal_year || '2027' }}
+        run: |
+          ARGS=(
+            --fiscal-year "$FISCAL_YEAR"
+            --json-out appropriations-deadlines.json
+            --csv-out appropriations-deadlines.csv
+          )
+          if [ -n "$AS_OF" ]; then
+            ARGS+=(--as-of "$AS_OF")
+          fi
+          uv run --frozen python -m spicy_regs.pipelines.appropriations_deadlines "${ARGS[@]}"
+
+      - name: Upload appropriations deadline artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appropriations-deadlines
+          path: |
+            appropriations-deadlines.json
+            appropriations-deadlines.csv
+          if-no-files-found: error
+          retention-days: 30
