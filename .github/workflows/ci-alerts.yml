@@ -1,0 +1,111 @@
+name: CI alerts
+
+# Unattended rollup and freshness workflows report here instead of each holding
+# issue permissions: one open ci-failure issue per workflow that fails on main,
+# updated with the consecutive-failure streak while it keeps failing and closed
+# when it succeeds again, plus a daily staleness check across scheduled rollups.
+# Logic and offline tests: .github/scripts/ci_alerts.py and tests/test_ci_alerts.py.
+on:
+  workflow_run:
+    workflows:
+      - Check published table freshness
+      - Plan generation retention
+      - Publish explorer metadata
+      - Refresh congressional votes and terms
+      - Rollup — agency_monthly_volume
+      - Rollup — agency_stats
+      - Rollup — amendments
+      - Rollup — bill family
+      - Rollup — bill_subjects
+      - Rollup — cfr_sections
+      - Rollup — committee_meetings
+      - Rollup — committee_reports
+      - Rollup — committee_rosters
+      - Rollup — congressional scorecards
+      - Rollup — court_citations, court_citation_map, court_parentheticals
+      - Rollup — court_dockets
+      - Rollup — court_opinion_clusters
+      - Rollup — crs_reports
+      - Rollup — executive_order_observations
+      - Rollup — fcc_filings
+      - Rollup — fcc_proceedings
+      - Rollup — fec_candidate_history
+      - Rollup — fec_committee_history
+      - Rollup — fec_committees
+      - Rollup — fec_financial_profiles
+      - Rollup — federal_register
+      - Rollup — gao_recommendations
+      - Rollup — gao_reports
+      - Rollup — house_communications
+      - Rollup — laws
+      - Rollup — lobbying_filings
+      - Rollup — nominations
+      - Rollup — press_releases
+      - Rollup — print_citations
+      - Rollup — record_issues
+      - Rollup — roll_call_votes
+      - Rollup — sam_entities
+      - Rollup — senate_expenditures
+      - Rollup — treasury_fiscal
+      - Rollup — treaties
+      - Rollup — unified_agenda
+      - Rollup — usaspending_recipients
+    types: [completed]
+    branches: [main]
+  # Runs after the morning UTC rollups and the 23:50 UTC freshness check.
+  schedule:
+    - cron: '37 14 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+# A failure and the recovery after it update the same workflow's issue in order.
+concurrency:
+  group: ci-alerts-${{ github.event.workflow_run.name || 'freshness' }}
+  cancel-in-progress: false
+  queue: max
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+
+jobs:
+  failure:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'timed_out')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - run: python3 -I .github/scripts/ci_alerts.py failure
+
+  recovered:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - run: python3 -I .github/scripts/ci_alerts.py recovered
+
+  freshness:
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - env:
+          CI_ALERTS_DISABLED: ${{ vars.CI_ALERTS_DISABLED }}
+        run: python3 -I .github/scripts/ci_alerts.py freshness
