@@ -1371,3 +1371,53 @@ def test_dated_print_builder_refresh_replay_and_metadata_only_correction(
     current = _held_packages(corrected[table_index])[package_id]
     assert current.last_modified == new and current.text_sha256 != original_digest
     assert {row["text_sha256"] for row in _rows(corrected[3])} == {original_digest, current.text_sha256}
+
+
+def test_default_per_run_package_cap_allows_100_packages():
+    from spicy_regs.transforms.build_print_citations import MAX_PACKAGES_PER_RUN
+
+    assert MAX_PACKAGES_PER_RUN == 100
+
+
+@pytest.mark.parametrize(
+    ("coverage", "fails"),
+    [
+        ({"refused": 0, "deferred": 42, "fetched": 100, "unchanged": 0}, False),
+        ({"refused": 0, "deferred": 10, "fetched": 0, "unchanged": 40}, False),
+        ({"refused": 0, "deferred": 5, "fetched": 0, "unchanged": 0}, True),
+        ({"refused": 1, "deferred": 0, "fetched": 10, "unchanged": 0}, True),
+        ({"refused": 1, "deferred": 10, "fetched": 0, "unchanged": 0}, True),
+        ({"refused": 0, "deferred": 0, "fetched": 0, "unchanged": 0}, False),
+    ],
+)
+def test_print_citations_rollup_defers_failure_only_on_refusals_or_zero_progress_deferral(
+    tmp_path, monkeypatch, coverage, fails
+):
+    from spicy_regs.pipelines.rollups import print_citations as rollup_mod
+
+    def fake_build_print_citations(work, *, coverage=None, **_kwargs):
+        if coverage is not None:
+            coverage.update(
+                {
+                    "discovery": "complete",
+                    "scope": "issue-date-window",
+                    "since": "2023-01-01",
+                    **coverage_payload,
+                }
+            )
+        return tuple(work / f"{name}.parquet" for name in (ACTIVITY_REPORTS, BUDGET_VOLUMES, BILL_ACTIONS, CITATIONS))
+
+    coverage_payload = coverage
+    monkeypatch.setattr(rollup_mod, "build_print_citations", fake_build_print_citations)
+    monkeypatch.setattr(rollup_mod, "write_citation_reads", lambda work, _cit: work / "document_citation_reads.parquet")
+    monkeypatch.setattr(
+        rollup_mod.PrintCitationsRollup,
+        "build_receipts",
+        lambda self, output_dir, builder, **_kwargs: builder(output_dir),
+    )
+
+    rollup = rollup_mod.PrintCitationsRollup(output_dir=tmp_path)
+    rollup.build(tmp_path)
+    assert (rollup.deferred_failure is not None) is fails
+    if fails:
+        assert "pending acquisition" in str(rollup.deferred_failure)
