@@ -30,7 +30,8 @@ from spicy_docs.sources.govinfo.uslm import (
     validate_public_law_xml,
 )
 from spicy_docs.sources.govinfo.uslm_acquisition import UslmSourceUnavailableError
-from spicy_docs.sources.uscode import UsCodeSourceError, parse_table3_page, read_table3_bulk_archive
+from spicy_docs.sources.uscode import UsCodeSourceError, parse_table3_lookup, parse_table3_page, read_table3_bulk_archive
+from spicy_docs.sources.uscode.acquisition import UsCodeSourceUnavailableError
 from spicy_docs.sources.uscode.classification import (
     CLASSIFICATION_INDEX_URL,
     parse_classification_index,
@@ -43,6 +44,7 @@ from spicy_docs.schemas.law_tables import USLM_READER_VERSION, shape_table3_reco
 from spicy_regs.transforms.read_checkpoints import read_checkpoints
 
 from spicy_regs.transforms.build_laws import (
+    ACCESS_REFUSED,
     OLRC_BUDGET,
     TABLE3_MAX_RETIRED_PER_RELEASE,
     _bulk_rows,
@@ -996,3 +998,143 @@ def test_held_classification_rows_take_the_bare_key_and_place_from_their_stored_
         ("119-60", "1199"): ("2538a", "note"), ("119-37", "34"): ("5701", "note_preceding"),
         ("119-60", "7"): (None, None),  # a list names no single section
     }
+
+
+def _lookup_bytes(*citations: str) -> bytes:
+    import gzip
+
+    payload = [{"citation": key, "filename": key.replace("-", "_") + ".html"} for key in citations]
+    return gzip.compress(json.dumps(payload).encode("utf-8"), mtime=0)
+
+
+def _static_act_bytes(key: str, *, volume: str = "139") -> bytes:
+    return (
+        f"<!DOCTYPE html><html><head><title>Table III — {key}</title></head><body>"
+        f"<div class='table3-page'><div class='documentlevel'><table class='table3act'>"
+        f"<caption class='documentcontext'>"
+        f"<span class='congress'>119th Cong.</span>"
+        f"<span class='statutesatlargevolume'>{volume} Stat.</span>"
+        f"<span class='textdate'>Nov. 15, 2026</span>"
+        f"<span class='act'>{key.replace('-', '&ndash;')}</span>"
+        f"</caption>"
+        f"<tr class='table3row_odd'>"
+        f"<td class='actsection'>1</td>"
+        f"<td class='statutesatlargepage'><a href='/statviewer.html?volume={volume}&page=901'>901</a></td>"
+        f"<td class='unitedstatescodetitle'>42</td>"
+        f"<td class='unitedstatescodesection'>1983 nt</td>"
+        f"<td class='unitedstatescodestatus'></td>"
+        f"</tr></table></div></div></body></html>"
+    ).encode("utf-8")
+
+
+def test_table3_bulk_404_falls_back_to_static_lookup_without_refusal_when_held_acts_match(tmp_path, scoped):
+    """When bulk zip answers 404 and table3_lookup ends at held acts (119-53 / 119-37 / 119-30), no act pages are
+    fetched and zero table3-bulk-refused events are journaled."""
+    _, _, first, _ = _build(tmp_path, olrc=StubOlrc(release_point="119-53"))
+    published, checkpoints = _rows(first), read_checkpoints(first, "laws-table3")
+    _again(tmp_path)
+
+    lookup_body = _lookup_bytes("118-2", "119-30", "119-37", "119-53")
+
+    class StaticLookupFallbackOlrc(StubOlrc):
+        def __init__(self):
+            super().__init__(
+                bulk=UsCodeSourceUnavailableError(_not_found("https://uscode.house.gov/table3/table3-xml-bulk.zip")),
+            )
+            self.lookup_reads = 0
+            self.act_reads: list[tuple[str, bool]] = []
+
+        def acquire_table3_lookup(self, *, max_bytes=None):
+            self.lookup_reads += 1
+            return SimpleNamespace(result=parse_table3_lookup(lookup_body), capture=_Capture(lookup_body))
+
+        def acquire_table3_act(self, key, *, static=False, max_bytes=None):
+            self.act_reads.append((key, static))
+            raise AssertionError("held acts must not trigger static act fetches")
+
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    evidence = CaptureEvidence(tmp_path, "laws")
+    olrc = StaticLookupFallbackOlrc()
+    _, _, table3, _ = _build(tmp_path, olrc=olrc, evidence=evidence)
+    journal = _journal(evidence)
+
+    assert olrc.lookup_reads == 1 and olrc.act_reads == []
+    assert _rows(table3) == published
+    assert read_checkpoints(table3, "laws-table3") == checkpoints
+    assert not any(e["event"] == "table3-bulk-refused" for e in journal)
+    assert any(e["event"] == "table3-bulk-unavailable" for e in journal)
+    (static_ev,) = (e for e in journal if e["event"] == "table3-static-lookup")
+    assert (static_ev["lookup_release_point"], static_ev["derived"], static_ev["fetched"]) == ("119-53", False, [])
+
+
+def test_table3_bulk_404_fetches_only_new_static_act_and_preserves_prior_rows(tmp_path, scoped):
+    _, _, first, _ = _build(tmp_path)
+    published_count = len(_rows(first))
+    _again(tmp_path)
+
+    lookup_body = _lookup_bytes("118-2", "119-30", "119-37", "119-53", "119-74")
+    act_body = _static_act_bytes("119-74")
+
+    class NewActStaticOlrc(StubOlrc):
+        def __init__(self):
+            super().__init__(
+                bulk=UsCodeSourceUnavailableError(_not_found("https://uscode.house.gov/table3/table3-xml-bulk.zip")),
+                observed_at="2026-11-24T01:00:00Z",
+            )
+            self.act_reads: list[tuple[str, bool]] = []
+
+        def acquire_table3_lookup(self, *, max_bytes=None):
+            return SimpleNamespace(result=parse_table3_lookup(lookup_body), capture=_Capture(lookup_body, self.observed_at))
+
+        def acquire_table3_act(self, key, *, static=False, max_bytes=None):
+            self.act_reads.append((key, static))
+            assert key == "119-74" and static is True
+            return SimpleNamespace(
+                result=parse_table3_page(act_body, key=key),
+                capture=_Capture(act_body, self.observed_at),
+            )
+
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    evidence = CaptureEvidence(tmp_path, "laws")
+    olrc = NewActStaticOlrc()
+    _, _, table3, _ = _build(tmp_path, olrc=olrc, evidence=evidence)
+    rows = _rows(table3)
+    journal = _journal(evidence)
+
+    assert olrc.act_reads == [("119-74", True)]
+    assert len(rows) == published_count + 1
+    (added,) = (r for r in rows if r["act_key"] == "119-74")
+    assert (added["release_point"], added["record_volume"], added["record_page"]) == ("119-74", "139", "901")
+    assert (added["usc_title"], added["usc_section_key"], added["usc_place"]) == ("42", "1983", "note")
+    assert not any(e["event"] == "table3-bulk-refused" for e in journal)
+    (static_ev,) = (e for e in journal if e["event"] == "table3-static-lookup")
+    assert (static_ev["derived"], static_ev["fetched"], static_ev["rows"]) == (True, ["119-74"], 1)
+
+
+def test_table3_static_lookup_failure_and_non_404_bulk_error_still_journal_refusal(tmp_path, scoped):
+    _build(tmp_path)
+    _again(tmp_path)
+
+    class FailingLookupOlrc(StubOlrc):
+        def __init__(self, *, bulk_err: bytes | Exception, lookup_err: BaseException):
+            super().__init__(bulk=bulk_err)
+            self.lookup_err = lookup_err
+
+        def acquire_table3_lookup(self, *, max_bytes=None):
+            raise self.lookup_err
+
+    _, _, journal_non404 = _rerun(tmp_path, FailingLookupOlrc(bulk_err=UsCodeSourceError("stub: bad zip"), lookup_err=AssertionError("must not fall back")))
+    (ref_non404,) = (e for e in journal_non404 if e["event"] == "table3-bulk-refused")
+    assert ref_non404["reason"] == "file-refused"
+
+    _, _, journal_lookup_403 = _rerun(
+        tmp_path,
+        FailingLookupOlrc(
+            bulk_err=UsCodeSourceUnavailableError(_not_found("https://uscode.house.gov/table3/table3-xml-bulk.zip")),
+            lookup_err=CredentialRefusedError(ACCESS_REFUSAL),
+        ),
+    )
+    (ref_403,) = (e for e in journal_lookup_403 if e["event"] == "table3-bulk-refused")
+    assert ref_403["reason"] == ACCESS_REFUSED
