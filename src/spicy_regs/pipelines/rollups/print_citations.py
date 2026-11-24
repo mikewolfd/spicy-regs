@@ -42,7 +42,12 @@ class PrintCitationsRollup(LegislativeReceiptRollup):
             return (*paths, write_citation_reads(work, paths[3]))
 
         result = self.build_receipts(output_dir, builder, evidence=self.source_evidence)
-        if self.acquisition_status.get("refused") or self.acquisition_status.get("deferred"):
+        has_progress = bool(self.acquisition_status.get("fetched")) or bool(
+            self.acquisition_status.get("unchanged")
+        )
+        if self.acquisition_status.get("refused") or (
+            self.acquisition_status.get("deferred") and not has_progress
+        ):
             self.deferred_failure = RuntimeError("Print tables generated with pending acquisition; see acquisition-coverage")
         return result
 

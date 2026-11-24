@@ -133,13 +133,13 @@ _OUTPUTS: dict[str, tuple[str, ...]] = {
 DEFAULT_ISSUE_FLOOR = "2023-01-01"
 
 #: Packages fetched per run, across both collections. Two keyed requests each
-#: (summary and MODS; the body is keyless), so 40 packages is ~80 keyed plus a
-#: handful of list pages — comfortably inside the share of the 4,000-per-hour
-#: GovInfo ceiling left by the 3,680 worst hour D1 measured across the existing
-#: rollups, and this rollup's cron shares an hour with none of them. It is a
+#: (summary and MODS; the body is keyless), so 100 packages is ~200 keyed
+#: requests (and ~82 packages is ~164 keyed requests) plus a handful of list
+#: pages — comfortably inside the 4,000-per-hour GovInfo ceiling because this
+#: rollup's 07:00 UTC cron shares no hour with any other rollup. It is a
 #: catch-up bound, not a steady-state one: both families together publish
 #: fewer than 30 packages a Congress.
-MAX_PACKAGES_PER_RUN = 40
+MAX_PACKAGES_PER_RUN = 100
 
 #: List pages per collection walk. At 1,000 rows a page this clears every
 #: window either collection can produce (291 CDOC rows and 71 CRPT rows in the

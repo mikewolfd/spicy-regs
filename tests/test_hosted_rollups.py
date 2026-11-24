@@ -638,3 +638,18 @@ def test_votes_disk_probe_is_enabled_and_retained_before_audit_upload():
     assert report < audit and "always()" in steps[report]["if"]
     assert "output/disk-watch.log" in steps[audit]["with"]["path"]
     assert "lowest sampled free disk" in steps[report]["run"]
+
+
+def test_shared_rollup_output_artifact_excludes_audit_directories():
+    steps = yaml.safe_load((WORKFLOWS / "_rollup.yml").read_text())["jobs"]["rollup"]["steps"]
+    audit = next(step for step in steps if step.get("name") == "Retain invocation and transferred-input audit")
+    outputs = next(step for step in steps if step.get("name") == "Retain build-only outputs and failures")
+    assert audit["if"] == "always()"
+    audit_paths = audit["with"]["path"].splitlines()
+    assert "output/source-evidence/" in audit_paths
+    assert "output/raw-source-originals/" in audit_paths
+    assert outputs["with"]["path"].splitlines() == [
+        "output/",
+        "!output/source-evidence/**",
+        "!output/raw-source-originals/**",
+    ]
