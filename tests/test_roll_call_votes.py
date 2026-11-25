@@ -1528,7 +1528,7 @@ def test_backfill_document_nomination_id_updates_native_arrow_documents_in_place
             "number": "PN999-00",
             "nomination_id": None,
             "name": "PN999-00",
-            "title": "Unheld row stays untouched",
+            "title": "Unheld row also gets nomination_id backfilled",
             "short_title": None,
         }
     ]
@@ -1571,7 +1571,7 @@ def test_backfill_document_nomination_id_updates_native_arrow_documents_in_place
     held: set[tuple[str, ...]] = {("118", "senate", "1", "10"), ("118", "house", "1", "1")}
 
     updated, filled = _backfill_document_nomination_id(table, held)
-    assert filled == 1
+    assert filled == 2
     assert updated.schema.field("documents").type == native_schema.field("documents").type
     assert updated.schema.equals(native_schema, check_metadata=True)
     updated_rows = {r["vote_id"]: r for r in updated.to_pylist()}
@@ -1580,7 +1580,7 @@ def test_backfill_document_nomination_id_updates_native_arrow_documents_in_place
         "118-pn-456-2",
         None,
     ]
-    assert [d["nomination_id"] for d in updated_rows["118-senate-1-11"]["documents"]] == [None]
+    assert [d["nomination_id"] for d in updated_rows["118-senate-1-11"]["documents"]] == ["118-pn-999"]
     assert updated_rows["118-house-1-1"]["documents"] is None
 
     # Idempotent when re-run on already backfilled native rows.
@@ -1601,6 +1601,49 @@ def test_backfill_document_nomination_id_updates_native_arrow_documents_in_place
         "118-pn-456-2",
         None,
     ]
+    assert [d["nomination_id"] for d in repaired_rows["118-senate-1-11"]["documents"]] == ["118-pn-999"]
+
+
+def test_repair_held_votes_backfills_117th_senate_row_missing_read_columns(tmp_path):
+    """A 117th Senate row missing _READ_COLUMNS (absent from held) still gets documents[].nomination_id backfilled."""
+    from spicy_regs.congress_subjects import subject_schema
+    from spicy_regs.transforms.build_roll_call_votes import _held_votes, _repair_held_votes
+
+    native_schema = subject_schema("roll_call_votes")
+    base = dict.fromkeys(native_schema.names)
+    row = {
+        **base,
+        "vote_id": "117-senate-2-100",
+        "congress": "117",
+        "chamber": "senate",
+        "session": "2",
+        "roll_number": "100",
+        "yea": 50,
+        "nay": 49,
+        "vote_day": "2022-03-23",
+        "vote_date": "March 23, 2022,  05:00 PM",
+        # Omit Senate _READ_COLUMNS (vote_question_text, vote_title, majority_requirement, modify_date) -> unheld.
+        "documents": [
+            {
+                "congress": 117,
+                "type": "PN",
+                "number": "1502",
+                "nomination_id": None,
+                "name": "PN1502",
+                "title": "Ketanji Brown Jackson",
+                "short_title": None,
+            }
+        ],
+    }
+    prior_file = tmp_path / "roll_call_votes.parquet"
+    pq.write_table(pa.Table.from_pylist([row], schema=native_schema), prior_file)
+
+    held = _held_votes(prior_file)
+    assert ("117", "senate", "2", "100") not in held
+
+    _repair_held_votes(prior_file, held, {}, None, [117, 118, 119])
+    repaired = pq.read_table(prior_file).to_pylist()[0]
+    assert repaired["documents"][0]["nomination_id"] == "117-pn-1502"
 
 
 def test_a_dispatch_names_its_chambers_and_cap_and_refuses_anything_else(monkeypatch):

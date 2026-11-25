@@ -529,21 +529,21 @@ def _backfill_doc_items(items: Sequence[Any], vote_congress: object) -> tuple[li
     return updated, changed
 
 
-def _backfill_document_nomination_id(table: pa.Table, held: set[tuple[str, ...]]) -> tuple[pa.Table, int]:
-    """Backfill ``nomination_id`` inside native ``documents`` and legacy ``documents_json`` on held Senate roll calls."""
+def _backfill_document_nomination_id(
+    table: pa.Table, held: set[tuple[str, ...]] | None = None
+) -> tuple[pa.Table, int]:
+    """Backfill ``nomination_id`` inside native ``documents`` and legacy ``documents_json`` on all prior roll calls."""
     import pyarrow as pa
     from spicy_docs.schemas.tables import json_column
 
+    del held  # Backfill applies to every prior row, including unheld rows missing _READ_COLUMNS.
     names = table.column_names
     has_native = "documents" in names
     has_legacy = "documents_json" in names
     if not has_native and not has_legacy:
         return table, 0
 
-    identities = [
-        tuple(str(part) for part in identity)
-        for identity in zip(*(table.column(c).to_pylist() for c in IDENTITY_COLUMNS))
-    ]
+    congresses = [None if c is None else str(c) for c in table.column("congress").to_pylist()]
     filled_rows: set[int] = set()
 
     if has_native:
@@ -552,10 +552,10 @@ def _backfill_document_nomination_id(table: pa.Table, held: set[tuple[str, ...]]
         if pa.types.is_list(doc_type) and pa.types.is_struct(doc_type.value_type):
             native_docs = table.column("documents").to_pylist()
             native_changed = False
-            for row, (identity, items) in enumerate(zip(identities, native_docs)):
-                if not isinstance(items, list) or not items or identity not in held:
+            for row, (vote_congress, items) in enumerate(zip(congresses, native_docs)):
+                if not isinstance(items, list) or not items:
                     continue
-                updated, changed = _backfill_doc_items(items, identity[0])
+                updated, changed = _backfill_doc_items(items, vote_congress)
                 if changed:
                     native_docs[row] = updated
                     native_changed = True
@@ -575,8 +575,8 @@ def _backfill_document_nomination_id(table: pa.Table, held: set[tuple[str, ...]]
     if has_legacy:
         legacy_docs = table.column("documents_json").to_pylist()
         legacy_changed = False
-        for row, (identity, raw_documents) in enumerate(zip(identities, legacy_docs)):
-            if raw_documents is None or identity not in held:
+        for row, (vote_congress, raw_documents) in enumerate(zip(congresses, legacy_docs)):
+            if raw_documents is None:
                 continue
             try:
                 items = json.loads(raw_documents)
@@ -584,7 +584,7 @@ def _backfill_document_nomination_id(table: pa.Table, held: set[tuple[str, ...]]
                 continue
             if not isinstance(items, list) or not items:
                 continue
-            updated, changed = _backfill_doc_items(items, identity[0])
+            updated, changed = _backfill_doc_items(items, vote_congress)
             if changed:
                 legacy_docs[row] = json_column(updated)
                 legacy_changed = True
