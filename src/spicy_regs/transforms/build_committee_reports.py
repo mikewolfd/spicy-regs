@@ -428,11 +428,9 @@ def _settled(row: dict, collection: str, modified: str | None = None) -> bool:
 
 
 def _read_this_run(row: dict, collection: str) -> bool:
-    """A package this run read: complete, or a hearing whose body read and whose Congress.gov detail is
-    awaited or unavailable (a 404 under its refusal rule), as opposed to refused transiently."""
-    return row.get("outcome") == "complete" or (
-        row.get("outcome") == DETAIL_REFUSED and row.get("rule_version") in
-        (refusal_rule(collection, DETAIL_AWAITED), refusal_rule(collection, DETAIL_UNAVAILABLE)))
+    """A package this run read: complete, or a hearing whose body read even if its optional Congress.gov detail
+    is awaited, unavailable, or transiently refused."""
+    return row.get("outcome") in {"complete", DETAIL_REFUSED}
 
 
 def _section_input(derived: BodyText) -> str | tuple[PageResult, ...]:
@@ -791,8 +789,9 @@ def build_committee_reports(
     # The one state that fails the run (through the rollup's deferred failure, after publishing): a collection
     # that attempted packages this run and read none of them, the signature of a reader or source refusing
     # everything. Decided from this run's rows, before any prior checkpoint is merged back in. A final refusal
-    # (size or parts bound) is left out: it is settled and needs no one; a transient detail refusal, which a
-    # later run may clear, is not a read.
+    # (size or parts bound) is left out: it is settled and needs no one; a hearing whose body read and only
+    # its optional Congress.gov detail refused counts as read because its transcript published and ``detail_refused``
+    # retries next run.
     nothing_read = []
     for collection, keys in attempted.items():
         considered = [reads[key] for key in keys if reads[key]["outcome"] != REFUSED_FINAL]

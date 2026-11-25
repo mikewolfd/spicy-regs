@@ -911,3 +911,38 @@ def test_the_rollup_fails_after_publishing_only_when_a_collection_read_nothing(t
     assert (rollup.deferred_failure is not None) is fails
     if fails:
         assert "read none of the packages attempted in CRPT" in str(rollup.deferred_failure)
+
+
+def test_chrg_transient_detail_refusal_after_body_read_does_not_fail_nothing_read(tmp_path, monkeypatch):
+    """Run 45107769828: 1 pending CHRG read its transcript body and hit HTTP 500 on Congress.gov hearing-detail.
+
+    The transcript publishes and detail_refused stays pending for retry, without firing nothing_read.
+    """
+    from spicy_docs.reading.paged_json import PagedJsonSourceError
+
+    from spicy_regs.transforms.committee_report_reads import DETAIL_REFUSED, READS_TABLE
+
+    class ChrgOnlyDiscovery(StubDiscovery):
+        IDS = {"CRPT": [], "CHRG": [CHRG_ID]}
+
+    class Detail500(StubHearings):
+        def records(self, route, url: str, *, max_pages: int = 1):
+            raise PagedJsonSourceError("stub: Body source answered retryable HTTP 500")
+            yield  # pragma: no cover
+
+    monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
+    coverage: dict = {}
+    tables = _tables(
+        build_committee_reports(
+            tmp_path,
+            reader=ChrgOnlyDiscovery(),
+            acquirer=StubBodyAcquirer(),
+            hearings=Detail500(),
+            download_prior=_no_prior,
+            coverage=coverage,
+        )
+    )
+    assert [row["package_id"] for row in tables["hearing_transcripts"]] == [CHRG_ID]
+    assert [row["outcome"] for row in tables[READS_TABLE]] == [DETAIL_REFUSED]
+    assert coverage["pending"] == 1
+    assert coverage["nothing_read"] == []
