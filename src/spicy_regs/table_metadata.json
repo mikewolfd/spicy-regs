@@ -24179,7 +24179,7 @@
       {
         "column_name": "outcome",
         "column_type": "VARCHAR",
-        "description": "observed, concept_not_reported, or no_observations_in_period for this acquired source selection. Refusal produces no generation."
+        "description": "observed, concept_not_reported, no_observations_in_period, or no_companyfacts for this acquired source selection. Refusal produces no generation."
       },
       {
         "column_name": "observation_count",
@@ -25395,6 +25395,1226 @@
     "identity_columns": [
       "filing_id",
       "entry_ordinal"
+    ]
+  },
+  "irs527_transmissions": {
+    "table": "irs527_transmissions",
+    "label": "IRS Section 527 bulk archive transmission metadata",
+    "summary": "Header and footer transmission metadata from the IRS PolOrgsFullData.zip Section 527 bulk export, comparing footer counts with observed data records.",
+    "coverage": "Not a range. Complete single-snapshot header and footer summary for the captured IRS Section 527 PolOrgsFullData.zip archive.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-25",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "transmission_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal H-record transmission date string before parsing."
+      },
+      {
+        "column_name": "transmission_time_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal H-record transmission time string."
+      },
+      {
+        "column_name": "file_id_modifier",
+        "column_type": "VARCHAR",
+        "description": "Literal H-record file identifier modifier (such as A, B, C, D, or F)."
+      },
+      {
+        "column_name": "transmission_date",
+        "column_type": "DATE",
+        "description": "Parsed H-record transmission date; null when blank or unparsed."
+      },
+      {
+        "column_name": "transmission_date_status",
+        "column_type": "VARCHAR",
+        "description": "Parsed, blank, or unparsed status for transmission_date."
+      },
+      {
+        "column_name": "footer_transmission_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal F-record footer transmission date string."
+      },
+      {
+        "column_name": "footer_transmission_time_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal F-record footer transmission time string."
+      },
+      {
+        "column_name": "footer_record_count",
+        "column_type": "BIGINT",
+        "description": "Data record count stated in the F footer record."
+      },
+      {
+        "column_name": "observed_data_records",
+        "column_type": "BIGINT",
+        "description": "Actual count of data records observed in the archive stream."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained PolOrgsFullData.zip archive."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Official IRS Section 527 fullData download URL."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC timestamp when PolOrgsFullData.zip was captured."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One captured PolOrgsFullData.zip transmission.",
+    "identity_columns": [
+      "source_sha256"
+    ]
+  },
+  "irs527_form8871": {
+    "table": "irs527_form8871",
+    "label": "IRS Form 8871 Section 527 notices",
+    "summary": "IRS Form 8871 political organization notice of Section 527 status records (record type 1) from PolOrgsFullData.zip, retaining literal dates and ISO-8859-1 text.",
+    "coverage": "Not a range. All record-type-1 political organization notices (Form 8871) present in the captured IRS Section 527 PolOrgsFullData.zip archive.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-25",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "form_type",
+        "column_type": "VARCHAR",
+        "description": "IRS form type code (8871)."
+      },
+      {
+        "column_name": "form_id_number",
+        "column_type": "VARCHAR",
+        "description": "IRS form filing identifier linking to directors, related entities, and EAIN records."
+      },
+      {
+        "column_name": "initial_report_indicator",
+        "column_type": "VARCHAR",
+        "description": "Indicator flag (Y/N) for initial Form 8871 notice."
+      },
+      {
+        "column_name": "amended_report_indicator",
+        "column_type": "VARCHAR",
+        "description": "Indicator flag (Y/N) for amended Form 8871 notice."
+      },
+      {
+        "column_name": "final_report_indicator",
+        "column_type": "VARCHAR",
+        "description": "Indicator flag (Y/N) for final Form 8871 notice."
+      },
+      {
+        "column_name": "ein",
+        "column_type": "VARCHAR",
+        "description": "Employer Identification Number reported on the notice."
+      },
+      {
+        "column_name": "organization_name",
+        "column_type": "VARCHAR",
+        "description": "Political organization name preserving source ISO-8859-1 characters."
+      },
+      {
+        "column_name": "mailing_address_1",
+        "column_type": "VARCHAR",
+        "description": "Mailing street address line 1."
+      },
+      {
+        "column_name": "mailing_address_2",
+        "column_type": "VARCHAR",
+        "description": "Mailing street address line 2."
+      },
+      {
+        "column_name": "mailing_address_city",
+        "column_type": "VARCHAR",
+        "description": "Mailing address city."
+      },
+      {
+        "column_name": "mailing_address_state",
+        "column_type": "VARCHAR",
+        "description": "Mailing address state code."
+      },
+      {
+        "column_name": "mailing_address_zip_code",
+        "column_type": "VARCHAR",
+        "description": "Mailing address ZIP code."
+      },
+      {
+        "column_name": "mailing_address_zip_ext",
+        "column_type": "VARCHAR",
+        "description": "Mailing address ZIP+4 extension."
+      },
+      {
+        "column_name": "email_address",
+        "column_type": "VARCHAR",
+        "description": "Organization email address."
+      },
+      {
+        "column_name": "established_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal established date string before parsing."
+      },
+      {
+        "column_name": "established_date",
+        "column_type": "DATE",
+        "description": "Parsed organization established date; null when blank or unparsed."
+      },
+      {
+        "column_name": "established_date_status",
+        "column_type": "VARCHAR",
+        "description": "Parsed, blank, or unparsed status for established_date."
+      },
+      {
+        "column_name": "custodian_name",
+        "column_type": "VARCHAR",
+        "description": "Records custodian name."
+      },
+      {
+        "column_name": "custodian_address_1",
+        "column_type": "VARCHAR",
+        "description": "Custodian street address line 1."
+      },
+      {
+        "column_name": "custodian_address_2",
+        "column_type": "VARCHAR",
+        "description": "Custodian street address line 2."
+      },
+      {
+        "column_name": "custodian_address_city",
+        "column_type": "VARCHAR",
+        "description": "Custodian address city."
+      },
+      {
+        "column_name": "custodian_address_state",
+        "column_type": "VARCHAR",
+        "description": "Custodian address state code."
+      },
+      {
+        "column_name": "custodian_address_zip_code",
+        "column_type": "VARCHAR",
+        "description": "Custodian address ZIP code."
+      },
+      {
+        "column_name": "custodian_address_zip_ext",
+        "column_type": "VARCHAR",
+        "description": "Custodian address ZIP+4 extension."
+      },
+      {
+        "column_name": "contact_person_name",
+        "column_type": "VARCHAR",
+        "description": "Contact person name."
+      },
+      {
+        "column_name": "contact_address_1",
+        "column_type": "VARCHAR",
+        "description": "Contact person street address line 1."
+      },
+      {
+        "column_name": "contact_address_2",
+        "column_type": "VARCHAR",
+        "description": "Contact person street address line 2."
+      },
+      {
+        "column_name": "contact_address_city",
+        "column_type": "VARCHAR",
+        "description": "Contact person city."
+      },
+      {
+        "column_name": "contact_address_state",
+        "column_type": "VARCHAR",
+        "description": "Contact person state code."
+      },
+      {
+        "column_name": "contact_address_zip_code",
+        "column_type": "VARCHAR",
+        "description": "Contact person ZIP code."
+      },
+      {
+        "column_name": "contact_address_zip_ext",
+        "column_type": "VARCHAR",
+        "description": "Contact person ZIP+4 extension."
+      },
+      {
+        "column_name": "business_address_1",
+        "column_type": "VARCHAR",
+        "description": "Business street address line 1."
+      },
+      {
+        "column_name": "business_address_2",
+        "column_type": "VARCHAR",
+        "description": "Business street address line 2."
+      },
+      {
+        "column_name": "business_address_city",
+        "column_type": "VARCHAR",
+        "description": "Business address city."
+      },
+      {
+        "column_name": "business_address_state",
+        "column_type": "VARCHAR",
+        "description": "Business address state code."
+      },
+      {
+        "column_name": "business_address_zip_code",
+        "column_type": "VARCHAR",
+        "description": "Business address ZIP code."
+      },
+      {
+        "column_name": "business_address_zip_ext",
+        "column_type": "VARCHAR",
+        "description": "Business address ZIP+4 extension."
+      },
+      {
+        "column_name": "exempt_8872_indicator",
+        "column_type": "VARCHAR",
+        "description": "Indicator flag (Y/N) for claiming exemption from filing Form 8872."
+      },
+      {
+        "column_name": "exempt_state",
+        "column_type": "VARCHAR",
+        "description": "State in which the organization claims a qualified state/local political organization exemption."
+      },
+      {
+        "column_name": "exempt_990_indicator",
+        "column_type": "VARCHAR",
+        "description": "Indicator flag (Y/N) for claiming exemption from filing Form 990."
+      },
+      {
+        "column_name": "purpose",
+        "column_type": "VARCHAR",
+        "description": "Stated purpose of the political organization."
+      },
+      {
+        "column_name": "material_change_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal material change date string before parsing."
+      },
+      {
+        "column_name": "material_change_date",
+        "column_type": "DATE",
+        "description": "Parsed material change date; null when blank or unparsed."
+      },
+      {
+        "column_name": "material_change_date_status",
+        "column_type": "VARCHAR",
+        "description": "Parsed, blank, or unparsed status for material_change_date."
+      },
+      {
+        "column_name": "insert_datetime_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal IRS database insert timestamp string."
+      },
+      {
+        "column_name": "related_entity_bypass",
+        "column_type": "VARCHAR",
+        "description": "Bypass indicator for related entity disclosures."
+      },
+      {
+        "column_name": "eain_bypass",
+        "column_type": "VARCHAR",
+        "description": "Bypass indicator for EAIN disclosures."
+      },
+      {
+        "column_name": "line_number",
+        "column_type": "BIGINT",
+        "description": "One-based physical line number within FullDataFile.txt."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained PolOrgsFullData.zip archive."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Official IRS Section 527 fullData download URL."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC timestamp when PolOrgsFullData.zip was captured."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One Form 8871 record line in the captured IRS 527 archive.",
+    "identity_columns": [
+      "source_sha256",
+      "line_number"
+    ]
+  },
+  "irs527_form8872": {
+    "table": "irs527_form8872",
+    "label": "IRS Form 8872 Section 527 periodic reports",
+    "summary": "IRS Form 8872 political organization report of contributions and expenditures (record type 2) from PolOrgsFullData.zip, with exact decimal totals and literal source fields.",
+    "coverage": "Not a range. All record-type-2 periodic reports (Form 8872) present in the captured IRS Section 527 PolOrgsFullData.zip archive.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-25",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "form_type",
+        "column_type": "VARCHAR",
+        "description": "IRS form type code (8872)."
+      },
+      {
+        "column_name": "form_id_number",
+        "column_type": "VARCHAR",
+        "description": "IRS form filing identifier linking to Schedule A contributions and Schedule B expenditures."
+      },
+      {
+        "column_name": "period_begin_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal reporting period start date string before parsing."
+      },
+      {
+        "column_name": "period_begin_date",
+        "column_type": "DATE",
+        "description": "Parsed reporting period start date; null when blank or unparsed."
+      },
+      {
+        "column_name": "period_begin_date_status",
+        "column_type": "VARCHAR",
+        "description": "Parsed, blank, or unparsed status for period_begin_date."
+      },
+      {
+        "column_name": "period_end_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal reporting period end date string before parsing."
+      },
+      {
+        "column_name": "period_end_date",
+        "column_type": "DATE",
+        "description": "Parsed reporting period end date; null when blank or unparsed."
+      },
+      {
+        "column_name": "period_end_date_status",
+        "column_type": "VARCHAR",
+        "description": "Parsed, blank, or unparsed status for period_end_date."
+      },
+      {
+        "column_name": "initial_report_indicator",
+        "column_type": "VARCHAR",
+        "description": "Indicator flag (Y/N) for initial report."
+      },
+      {
+        "column_name": "amended_report_indicator",
+        "column_type": "VARCHAR",
+        "description": "Indicator flag (Y/N) for amended report."
+      },
+      {
+        "column_name": "final_report_indicator",
+        "column_type": "VARCHAR",
+        "description": "Indicator flag (Y/N) for final report."
+      },
+      {
+        "column_name": "change_of_address_indicator",
+        "column_type": "VARCHAR",
+        "description": "Indicator flag (Y/N) for address change."
+      },
+      {
+        "column_name": "organization_name",
+        "column_type": "VARCHAR",
+        "description": "Political organization name preserving source ISO-8859-1 characters."
+      },
+      {
+        "column_name": "ein",
+        "column_type": "VARCHAR",
+        "description": "Employer Identification Number reported on the filing."
+      },
+      {
+        "column_name": "mailing_address_1",
+        "column_type": "VARCHAR",
+        "description": "Mailing street address line 1."
+      },
+      {
+        "column_name": "mailing_address_2",
+        "column_type": "VARCHAR",
+        "description": "Mailing street address line 2."
+      },
+      {
+        "column_name": "mailing_address_city",
+        "column_type": "VARCHAR",
+        "description": "Mailing address city."
+      },
+      {
+        "column_name": "mailing_address_state",
+        "column_type": "VARCHAR",
+        "description": "Mailing address state code."
+      },
+      {
+        "column_name": "mailing_address_zip_code",
+        "column_type": "VARCHAR",
+        "description": "Mailing address ZIP code."
+      },
+      {
+        "column_name": "mailing_address_zip_ext",
+        "column_type": "VARCHAR",
+        "description": "Mailing address ZIP+4 extension."
+      },
+      {
+        "column_name": "email_address",
+        "column_type": "VARCHAR",
+        "description": "Organization email address."
+      },
+      {
+        "column_name": "org_formation_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal organization formation date string before parsing."
+      },
+      {
+        "column_name": "org_formation_date",
+        "column_type": "DATE",
+        "description": "Parsed organization formation date; null when blank or unparsed."
+      },
+      {
+        "column_name": "org_formation_date_status",
+        "column_type": "VARCHAR",
+        "description": "Parsed, blank, or unparsed status for org_formation_date."
+      },
+      {
+        "column_name": "custodian_name",
+        "column_type": "VARCHAR",
+        "description": "Records custodian name."
+      },
+      {
+        "column_name": "custodian_address_1",
+        "column_type": "VARCHAR",
+        "description": "Custodian street address line 1."
+      },
+      {
+        "column_name": "custodian_address_2",
+        "column_type": "VARCHAR",
+        "description": "Custodian street address line 2."
+      },
+      {
+        "column_name": "custodian_address_city",
+        "column_type": "VARCHAR",
+        "description": "Custodian address city."
+      },
+      {
+        "column_name": "custodian_address_state",
+        "column_type": "VARCHAR",
+        "description": "Custodian address state code."
+      },
+      {
+        "column_name": "custodian_address_zip_code",
+        "column_type": "VARCHAR",
+        "description": "Custodian address ZIP code."
+      },
+      {
+        "column_name": "custodian_address_zip_ext",
+        "column_type": "VARCHAR",
+        "description": "Custodian address ZIP+4 extension."
+      },
+      {
+        "column_name": "contact_person_name",
+        "column_type": "VARCHAR",
+        "description": "Contact person name."
+      },
+      {
+        "column_name": "contact_address_1",
+        "column_type": "VARCHAR",
+        "description": "Contact person street address line 1."
+      },
+      {
+        "column_name": "contact_address_2",
+        "column_type": "VARCHAR",
+        "description": "Contact person street address line 2."
+      },
+      {
+        "column_name": "contact_address_city",
+        "column_type": "VARCHAR",
+        "description": "Contact person city."
+      },
+      {
+        "column_name": "contact_address_state",
+        "column_type": "VARCHAR",
+        "description": "Contact person state code."
+      },
+      {
+        "column_name": "contact_address_zip_code",
+        "column_type": "VARCHAR",
+        "description": "Contact person ZIP code."
+      },
+      {
+        "column_name": "contact_address_zip_ext",
+        "column_type": "VARCHAR",
+        "description": "Contact person ZIP+4 extension."
+      },
+      {
+        "column_name": "business_address_1",
+        "column_type": "VARCHAR",
+        "description": "Business street address line 1."
+      },
+      {
+        "column_name": "business_address_2",
+        "column_type": "VARCHAR",
+        "description": "Business street address line 2."
+      },
+      {
+        "column_name": "business_address_city",
+        "column_type": "VARCHAR",
+        "description": "Business address city."
+      },
+      {
+        "column_name": "business_address_state",
+        "column_type": "VARCHAR",
+        "description": "Business address state code."
+      },
+      {
+        "column_name": "business_address_zip_code",
+        "column_type": "VARCHAR",
+        "description": "Business address ZIP code."
+      },
+      {
+        "column_name": "business_address_zip_ext",
+        "column_type": "VARCHAR",
+        "description": "Business address ZIP+4 extension."
+      },
+      {
+        "column_name": "qtr_indicator",
+        "column_type": "VARCHAR",
+        "description": "Quarterly filing period indicator."
+      },
+      {
+        "column_name": "monthly_rpt_month",
+        "column_type": "VARCHAR",
+        "description": "Monthly filing period month code."
+      },
+      {
+        "column_name": "pre_elect_type",
+        "column_type": "VARCHAR",
+        "description": "Pre-election or post-election filing type code."
+      },
+      {
+        "column_name": "pre_or_post_elect_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal election date string before parsing."
+      },
+      {
+        "column_name": "pre_or_post_elect_date",
+        "column_type": "DATE",
+        "description": "Parsed election date; null when blank or unparsed."
+      },
+      {
+        "column_name": "pre_or_post_elect_date_status",
+        "column_type": "VARCHAR",
+        "description": "Parsed, blank, or unparsed status for pre_or_post_elect_date."
+      },
+      {
+        "column_name": "pre_or_post_elect_state",
+        "column_type": "VARCHAR",
+        "description": "Election state code for pre/post-election filings."
+      },
+      {
+        "column_name": "sched_a_ind",
+        "column_type": "VARCHAR",
+        "description": "Indicator flag (Y/N) whether Schedule A contributions are attached."
+      },
+      {
+        "column_name": "total_sched_a_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal reported Schedule A total string before parsing."
+      },
+      {
+        "column_name": "total_sched_a",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Exact decimal Schedule A total reported on the form; null when blank, unparsed, or out of bounds."
+      },
+      {
+        "column_name": "total_sched_a_status",
+        "column_type": "VARCHAR",
+        "description": "Parsed, blank, unparsed, exceeds_scale, or exceeds_precision status for total_sched_a."
+      },
+      {
+        "column_name": "sched_b_ind",
+        "column_type": "VARCHAR",
+        "description": "Indicator flag (Y/N) whether Schedule B expenditures are attached."
+      },
+      {
+        "column_name": "total_sched_b_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal reported Schedule B total string before parsing."
+      },
+      {
+        "column_name": "total_sched_b",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Exact decimal Schedule B total reported on the form; null when blank, unparsed, or out of bounds."
+      },
+      {
+        "column_name": "total_sched_b_status",
+        "column_type": "VARCHAR",
+        "description": "Parsed, blank, unparsed, exceeds_scale, or exceeds_precision status for total_sched_b."
+      },
+      {
+        "column_name": "insert_datetime_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal IRS database insert timestamp string."
+      },
+      {
+        "column_name": "line_number",
+        "column_type": "BIGINT",
+        "description": "One-based physical line number within FullDataFile.txt."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained PolOrgsFullData.zip archive."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Official IRS Section 527 fullData download URL."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC timestamp when PolOrgsFullData.zip was captured."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One Form 8872 record line in the captured IRS 527 archive.",
+    "identity_columns": [
+      "source_sha256",
+      "line_number"
+    ]
+  },
+  "irs527_directors": {
+    "table": "irs527_directors",
+    "label": "IRS Form 8871 directors and officers",
+    "summary": "Directors, officers, and highly compensated employees (record type D) listed on IRS Form 8871 notices in PolOrgsFullData.zip.",
+    "coverage": "Not a range. All director and officer records present in the captured IRS Section 527 PolOrgsFullData.zip archive.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-25",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "form_id_number",
+        "column_type": "VARCHAR",
+        "description": "IRS Form 8871 filing identifier."
+      },
+      {
+        "column_name": "director_id",
+        "column_type": "VARCHAR",
+        "description": "IRS sequence identifier for the director or officer entry within the filing."
+      },
+      {
+        "column_name": "org_name",
+        "column_type": "VARCHAR",
+        "description": "Political organization name."
+      },
+      {
+        "column_name": "ein",
+        "column_type": "VARCHAR",
+        "description": "Political organization Employer Identification Number."
+      },
+      {
+        "column_name": "entity_name",
+        "column_type": "VARCHAR",
+        "description": "Director or officer name."
+      },
+      {
+        "column_name": "entity_title",
+        "column_type": "VARCHAR",
+        "description": "Director or officer title."
+      },
+      {
+        "column_name": "entity_address_1",
+        "column_type": "VARCHAR",
+        "description": "Street address line 1."
+      },
+      {
+        "column_name": "entity_address_2",
+        "column_type": "VARCHAR",
+        "description": "Street address line 2."
+      },
+      {
+        "column_name": "entity_address_city",
+        "column_type": "VARCHAR",
+        "description": "Address city."
+      },
+      {
+        "column_name": "entity_address_state",
+        "column_type": "VARCHAR",
+        "description": "Address state code."
+      },
+      {
+        "column_name": "entity_address_zip_code",
+        "column_type": "VARCHAR",
+        "description": "Address ZIP code."
+      },
+      {
+        "column_name": "entity_address_zip_code_ext",
+        "column_type": "VARCHAR",
+        "description": "Address ZIP+4 extension."
+      },
+      {
+        "column_name": "line_number",
+        "column_type": "BIGINT",
+        "description": "One-based physical line number within FullDataFile.txt."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained PolOrgsFullData.zip archive."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Official IRS Section 527 fullData download URL."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC timestamp when PolOrgsFullData.zip was captured."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One director/officer record line in the captured IRS 527 archive.",
+    "identity_columns": [
+      "source_sha256",
+      "line_number"
+    ]
+  },
+  "irs527_related_entities": {
+    "table": "irs527_related_entities",
+    "label": "IRS Form 8871 related entities",
+    "summary": "Connected organizations and related entities (record type R) disclosed on IRS Form 8871 notices in PolOrgsFullData.zip.",
+    "coverage": "Not a range. All related-entity records present in the captured IRS Section 527 PolOrgsFullData.zip archive.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-25",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "form_id_number",
+        "column_type": "VARCHAR",
+        "description": "IRS Form 8871 filing identifier."
+      },
+      {
+        "column_name": "entity_id",
+        "column_type": "VARCHAR",
+        "description": "IRS sequence identifier for the related entity within the filing."
+      },
+      {
+        "column_name": "org_name",
+        "column_type": "VARCHAR",
+        "description": "Political organization name."
+      },
+      {
+        "column_name": "ein",
+        "column_type": "VARCHAR",
+        "description": "Political organization Employer Identification Number."
+      },
+      {
+        "column_name": "entity_name",
+        "column_type": "VARCHAR",
+        "description": "Related entity name."
+      },
+      {
+        "column_name": "entity_relationship",
+        "column_type": "VARCHAR",
+        "description": "Stated relationship to the political organization."
+      },
+      {
+        "column_name": "entity_address_1",
+        "column_type": "VARCHAR",
+        "description": "Street address line 1."
+      },
+      {
+        "column_name": "entity_address_2",
+        "column_type": "VARCHAR",
+        "description": "Street address line 2."
+      },
+      {
+        "column_name": "entity_address_city",
+        "column_type": "VARCHAR",
+        "description": "Address city."
+      },
+      {
+        "column_name": "entity_address_state",
+        "column_type": "VARCHAR",
+        "description": "Address state code."
+      },
+      {
+        "column_name": "entity_address_zip_code",
+        "column_type": "VARCHAR",
+        "description": "Address ZIP code."
+      },
+      {
+        "column_name": "entity_address_zip_ext",
+        "column_type": "VARCHAR",
+        "description": "Address ZIP+4 extension."
+      },
+      {
+        "column_name": "line_number",
+        "column_type": "BIGINT",
+        "description": "One-based physical line number within FullDataFile.txt."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained PolOrgsFullData.zip archive."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Official IRS Section 527 fullData download URL."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC timestamp when PolOrgsFullData.zip was captured."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One related-entity record line in the captured IRS 527 archive.",
+    "identity_columns": [
+      "source_sha256",
+      "line_number"
+    ]
+  },
+  "irs527_eains": {
+    "table": "irs527_eains",
+    "label": "IRS Form 8871 election authority ID numbers",
+    "summary": "State or local election authority identification numbers (record type E) reported on IRS Form 8871 notices in PolOrgsFullData.zip.",
+    "coverage": "Not a range. All EAIN records present in the captured IRS Section 527 PolOrgsFullData.zip archive.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-25",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "form_id_number",
+        "column_type": "VARCHAR",
+        "description": "IRS Form 8871 filing identifier."
+      },
+      {
+        "column_name": "eain_id",
+        "column_type": "VARCHAR",
+        "description": "IRS sequence identifier for the EAIN entry within the filing."
+      },
+      {
+        "column_name": "election_authority_id_number",
+        "column_type": "VARCHAR",
+        "description": "Election authority identification number issued to the organization."
+      },
+      {
+        "column_name": "state_issued",
+        "column_type": "VARCHAR",
+        "description": "Two-letter state code issuing the election authority ID."
+      },
+      {
+        "column_name": "line_number",
+        "column_type": "BIGINT",
+        "description": "One-based physical line number within FullDataFile.txt."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained PolOrgsFullData.zip archive."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Official IRS Section 527 fullData download URL."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC timestamp when PolOrgsFullData.zip was captured."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One EAIN record line in the captured IRS 527 archive.",
+    "identity_columns": [
+      "source_sha256",
+      "line_number"
+    ]
+  },
+  "irs527_contributions": {
+    "table": "irs527_contributions",
+    "label": "IRS Form 8872 Schedule A contributions",
+    "summary": "Itemized contributions (record type A) reported on IRS Form 8872 Schedule A in PolOrgsFullData.zip, retaining literal amounts, dates, and ISO-8859-1 text.",
+    "coverage": "Not a range. All Schedule A contribution records present in the captured IRS Section 527 PolOrgsFullData.zip archive.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-25",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "form_id_number",
+        "column_type": "VARCHAR",
+        "description": "IRS Form 8872 filing identifier."
+      },
+      {
+        "column_name": "sched_a_id",
+        "column_type": "VARCHAR",
+        "description": "IRS Schedule A line item identifier."
+      },
+      {
+        "column_name": "org_name",
+        "column_type": "VARCHAR",
+        "description": "Political organization name."
+      },
+      {
+        "column_name": "ein",
+        "column_type": "VARCHAR",
+        "description": "Political organization Employer Identification Number."
+      },
+      {
+        "column_name": "contributor_name",
+        "column_type": "VARCHAR",
+        "description": "Contributor name."
+      },
+      {
+        "column_name": "contributor_address_1",
+        "column_type": "VARCHAR",
+        "description": "Contributor street address line 1."
+      },
+      {
+        "column_name": "contributor_address_2",
+        "column_type": "VARCHAR",
+        "description": "Contributor street address line 2."
+      },
+      {
+        "column_name": "contributor_address_city",
+        "column_type": "VARCHAR",
+        "description": "Contributor city."
+      },
+      {
+        "column_name": "contributor_address_state",
+        "column_type": "VARCHAR",
+        "description": "Contributor state code."
+      },
+      {
+        "column_name": "contributor_address_zip_code",
+        "column_type": "VARCHAR",
+        "description": "Contributor ZIP code."
+      },
+      {
+        "column_name": "contributor_address_zip_ext",
+        "column_type": "VARCHAR",
+        "description": "Contributor ZIP+4 extension."
+      },
+      {
+        "column_name": "contributor_employer",
+        "column_type": "VARCHAR",
+        "description": "Contributor employer name."
+      },
+      {
+        "column_name": "contribution_amount_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal contribution amount string before parsing."
+      },
+      {
+        "column_name": "contribution_amount",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Exact decimal contribution amount; null when blank, unparsed, or out of bounds."
+      },
+      {
+        "column_name": "contribution_amount_status",
+        "column_type": "VARCHAR",
+        "description": "Parsed, blank, unparsed, exceeds_scale, or exceeds_precision status for contribution_amount."
+      },
+      {
+        "column_name": "contributor_occupation",
+        "column_type": "VARCHAR",
+        "description": "Contributor occupation."
+      },
+      {
+        "column_name": "agg_contribution_ytd_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal year-to-date aggregate contribution amount string before parsing."
+      },
+      {
+        "column_name": "agg_contribution_ytd",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Exact decimal year-to-date aggregate contribution amount; null when blank, unparsed, or out of bounds."
+      },
+      {
+        "column_name": "agg_contribution_ytd_status",
+        "column_type": "VARCHAR",
+        "description": "Parsed, blank, unparsed, exceeds_scale, or exceeds_precision status for agg_contribution_ytd."
+      },
+      {
+        "column_name": "contribution_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal contribution date string before parsing."
+      },
+      {
+        "column_name": "contribution_date",
+        "column_type": "DATE",
+        "description": "Parsed contribution date; null when blank or unparsed."
+      },
+      {
+        "column_name": "contribution_date_status",
+        "column_type": "VARCHAR",
+        "description": "Parsed, blank, or unparsed status for contribution_date."
+      },
+      {
+        "column_name": "line_number",
+        "column_type": "BIGINT",
+        "description": "One-based physical line number within FullDataFile.txt."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained PolOrgsFullData.zip archive."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Official IRS Section 527 fullData download URL."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC timestamp when PolOrgsFullData.zip was captured."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One Schedule A contribution record line in the captured IRS 527 archive.",
+    "identity_columns": [
+      "source_sha256",
+      "line_number"
+    ]
+  },
+  "irs527_expenditures": {
+    "table": "irs527_expenditures",
+    "label": "IRS Form 8872 Schedule B expenditures",
+    "summary": "Itemized expenditures (record type B) reported on IRS Form 8872 Schedule B in PolOrgsFullData.zip, retaining literal amounts, dates, and ISO-8859-1 text.",
+    "coverage": "Not a range. All Schedule B expenditure records present in the captured IRS Section 527 PolOrgsFullData.zip archive.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-25",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "form_id_number",
+        "column_type": "VARCHAR",
+        "description": "IRS Form 8872 filing identifier."
+      },
+      {
+        "column_name": "sched_b_id",
+        "column_type": "VARCHAR",
+        "description": "IRS Schedule B line item identifier."
+      },
+      {
+        "column_name": "org_name",
+        "column_type": "VARCHAR",
+        "description": "Political organization name."
+      },
+      {
+        "column_name": "ein",
+        "column_type": "VARCHAR",
+        "description": "Political organization Employer Identification Number."
+      },
+      {
+        "column_name": "recipient_name",
+        "column_type": "VARCHAR",
+        "description": "Expenditure recipient name."
+      },
+      {
+        "column_name": "recipient_address_1",
+        "column_type": "VARCHAR",
+        "description": "Recipient street address line 1."
+      },
+      {
+        "column_name": "recipient_address_2",
+        "column_type": "VARCHAR",
+        "description": "Recipient street address line 2."
+      },
+      {
+        "column_name": "recipient_address_city",
+        "column_type": "VARCHAR",
+        "description": "Recipient city."
+      },
+      {
+        "column_name": "recipient_address_state",
+        "column_type": "VARCHAR",
+        "description": "Recipient state code."
+      },
+      {
+        "column_name": "recipient_address_zip_code",
+        "column_type": "VARCHAR",
+        "description": "Recipient ZIP code."
+      },
+      {
+        "column_name": "recipient_address_zip_ext",
+        "column_type": "VARCHAR",
+        "description": "Recipient ZIP+4 extension."
+      },
+      {
+        "column_name": "recipient_employer",
+        "column_type": "VARCHAR",
+        "description": "Recipient employer name."
+      },
+      {
+        "column_name": "expenditure_amount_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal expenditure amount string before parsing."
+      },
+      {
+        "column_name": "expenditure_amount",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Exact decimal expenditure amount; null when blank, unparsed, or out of bounds."
+      },
+      {
+        "column_name": "expenditure_amount_status",
+        "column_type": "VARCHAR",
+        "description": "Parsed, blank, unparsed, exceeds_scale, or exceeds_precision status for expenditure_amount."
+      },
+      {
+        "column_name": "recipient_occupation",
+        "column_type": "VARCHAR",
+        "description": "Recipient occupation."
+      },
+      {
+        "column_name": "expenditure_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal expenditure date string before parsing."
+      },
+      {
+        "column_name": "expenditure_date",
+        "column_type": "DATE",
+        "description": "Parsed expenditure date; null when blank or unparsed."
+      },
+      {
+        "column_name": "expenditure_date_status",
+        "column_type": "VARCHAR",
+        "description": "Parsed, blank, or unparsed status for expenditure_date."
+      },
+      {
+        "column_name": "expenditure_purpose",
+        "column_type": "VARCHAR",
+        "description": "Stated purpose of the expenditure."
+      },
+      {
+        "column_name": "line_number",
+        "column_type": "BIGINT",
+        "description": "One-based physical line number within FullDataFile.txt."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained PolOrgsFullData.zip archive."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Official IRS Section 527 fullData download URL."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC timestamp when PolOrgsFullData.zip was captured."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One Schedule B expenditure record line in the captured IRS 527 archive.",
+    "identity_columns": [
+      "source_sha256",
+      "line_number"
     ]
   },
   "fjc_judges": {
@@ -33844,6 +35064,369 @@
     "subject": "reference",
     "grain": "One selected vintage, county and measure.",
     "identity_columns": []
+  },
+  "census_acs_congressional_district_observations": {
+    "table": "census_acs_congressional_district_observations",
+    "label": "ACS congressional district population and household income",
+    "summary": "One row per selected congressional district and measure in an American Community Survey five-year vintage, with estimates, margins of error and exact source cells.",
+    "coverage": "Sampled. Explicit vintage, state and congressional district scope only, with population and median household income. Comparisons describe estimates, not statistically significant differences or individual households.",
+    "kind": "sampled",
+    "measured_on": "2026-11-25",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "dataset",
+        "column_type": "VARCHAR",
+        "description": "Census API dataset path, currently acs/acs5."
+      },
+      {
+        "column_name": "vintage",
+        "column_type": "INTEGER",
+        "description": "Final year of the selected ACS five-year period; not acquisition time."
+      },
+      {
+        "column_name": "geography",
+        "column_type": "VARCHAR",
+        "description": "Selected geography level, congressional district."
+      },
+      {
+        "column_name": "state_code",
+        "column_type": "VARCHAR",
+        "description": "Literal two-digit Census state code, including leading zeros."
+      },
+      {
+        "column_name": "congressional_district",
+        "column_type": "VARCHAR",
+        "description": "Literal two-character Census congressional district code, including 00 for at-large, 98 for non-voting delegate, and ZZ for undefined areas."
+      },
+      {
+        "column_name": "district_geoid",
+        "column_type": "VARCHAR",
+        "description": "State code plus congressional district code preserving leading zeros and ZZ."
+      },
+      {
+        "column_name": "source_geo_prefix",
+        "column_type": "VARCHAR",
+        "description": "Census GEO_ID summary-level and Congress-session prefix (500<session>00US)."
+      },
+      {
+        "column_name": "congress_session_code",
+        "column_type": "VARCHAR",
+        "description": "Two-digit Congress session code embedded in the Census GEO_ID prefix."
+      },
+      {
+        "column_name": "name",
+        "column_type": "VARCHAR",
+        "description": "Publisher-stated congressional district name."
+      },
+      {
+        "column_name": "source_geo_id",
+        "column_type": "VARCHAR",
+        "description": "Exact publisher GEO_ID, including the summary-level and session prefix."
+      },
+      {
+        "column_name": "measure",
+        "column_type": "VARCHAR",
+        "description": "Population or median household income; each estimate keeps its own margin of error."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "Persons for population, or US dollars adjusted to the selected vintage for median household income."
+      },
+      {
+        "column_name": "estimate",
+        "column_type": "DECIMAL(38,6)",
+        "description": "Exact decimal estimate; null for a missing or sentinel value. Read estimate_status and the original cell."
+      },
+      {
+        "column_name": "margin_of_error",
+        "column_type": "DECIMAL(38,6)",
+        "description": "Exact decimal margin of error at the ACS 90% confidence level, in the estimate's units; null for missing or sentinel values. Read margin_status and the original cell."
+      },
+      {
+        "column_name": "estimate_status",
+        "column_type": "VARCHAR",
+        "description": "Numeric, annotated, lower_bound or upper_bound for an open-ended median, null, blank, or the retained Census sentinel meaning."
+      },
+      {
+        "column_name": "margin_status",
+        "column_type": "VARCHAR",
+        "description": "Numeric, annotated, null, blank, or the retained Census sentinel meaning; controlled estimates remain explicit rather than becoming a reported zero."
+      },
+      {
+        "column_name": "estimate_raw",
+        "column_type": "VARCHAR",
+        "description": "Exact estimate cell before numeric interpretation; null and empty string stay distinct."
+      },
+      {
+        "column_name": "margin_raw",
+        "column_type": "VARCHAR",
+        "description": "Exact margin-of-error cell before numeric interpretation; null and empty string stay distinct."
+      },
+      {
+        "column_name": "estimate_annotation",
+        "column_type": "VARCHAR",
+        "description": "Exact estimate annotation, including suppression codes and bound suffixes."
+      },
+      {
+        "column_name": "margin_annotation",
+        "column_type": "VARCHAR",
+        "description": "Exact margin-of-error annotation."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Congressional district record identity in the retained SpicyDocs source release."
+      },
+      {
+        "column_name": "source_release_logical_id",
+        "column_type": "VARCHAR",
+        "description": "Logical identity of the admitted SpicyDocs source release."
+      },
+      {
+        "column_name": "source_release_digest",
+        "column_type": "VARCHAR",
+        "description": "Exact artifact digest of that source release."
+      },
+      {
+        "column_name": "variable_metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Full source variable metadata for this measure's estimate, margin and annotations."
+      },
+      {
+        "column_name": "value_sources_json",
+        "column_type": "VARCHAR",
+        "description": "Per-variable request URL, response digest, observation time and row/column locator."
+      },
+      {
+        "column_name": "metadata_sources_json",
+        "column_type": "VARCHAR",
+        "description": "Per-variable metadata URL, response digest, observation time and JSON pointer."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One selected vintage, congressional district and measure.",
+    "identity_columns": [
+      "vintage",
+      "district_geoid",
+      "measure"
+    ]
+  },
+  "congress_sessions": {
+    "table": "congress_sessions",
+    "label": "Congressional session dates reconciled across House and Senate",
+    "summary": "Official Congress session beginning and adjournment dates reconciled between the House Historian session-dates page and the Senate Historical Office party-division page.",
+    "coverage": "Window. Reconciled House Historian and Senate Historical Office session tables from the 1st Congress through the current Congress as of the captured pages.",
+    "kind": "window",
+    "measured_on": "2026-11-25",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "congress",
+        "column_type": "INTEGER",
+        "description": "Congress number (1st Congress onward)."
+      },
+      {
+        "column_name": "session",
+        "column_type": "VARCHAR",
+        "description": "Reconciled session label (such as 1, 2, special, or 1 (senate-special))."
+      },
+      {
+        "column_name": "begins",
+        "column_type": "DATE",
+        "description": "Reconciled session start date."
+      },
+      {
+        "column_name": "adjourned",
+        "column_type": "DATE",
+        "description": "Reconciled session adjournment date; null when open or unstated by the source."
+      },
+      {
+        "column_name": "adjournment_status",
+        "column_type": "VARCHAR",
+        "description": "Adjourned, open for an active session, or unstated when a historical source prints no end date."
+      },
+      {
+        "column_name": "house_session",
+        "column_type": "VARCHAR",
+        "description": "Session label as listed on the House Historian page; null when Senate-only."
+      },
+      {
+        "column_name": "house_begins",
+        "column_type": "DATE",
+        "description": "Session start date printed by the House Historian; null when Senate-only."
+      },
+      {
+        "column_name": "house_adjourned",
+        "column_type": "DATE",
+        "description": "Session adjournment date printed by the House Historian; null when open, unstated, or Senate-only."
+      },
+      {
+        "column_name": "senate_session",
+        "column_type": "VARCHAR",
+        "description": "Normalized session label from the Senate Historical Office page; null when House-only."
+      },
+      {
+        "column_name": "senate_begins",
+        "column_type": "DATE",
+        "description": "Session start date printed by the Senate Historical Office; null when House-only."
+      },
+      {
+        "column_name": "senate_adjourned",
+        "column_type": "DATE",
+        "description": "Session adjournment date printed by the Senate Historical Office; null when open, unstated, or House-only."
+      },
+      {
+        "column_name": "disagreement_kind",
+        "column_type": "VARCHAR",
+        "description": "Explicit reconciliation category when House and Senate pages differ, otherwise null."
+      },
+      {
+        "column_name": "correction_reason",
+        "column_type": "VARCHAR",
+        "description": "Explanation for an applied source correction or disagreement resolution, otherwise null."
+      },
+      {
+        "column_name": "house_source_url",
+        "column_type": "VARCHAR",
+        "description": "Official House Historian session-dates URL."
+      },
+      {
+        "column_name": "house_source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained House Historian session-dates HTML page."
+      },
+      {
+        "column_name": "house_observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC timestamp when the House Historian session-dates page was captured."
+      },
+      {
+        "column_name": "senate_source_url",
+        "column_type": "VARCHAR",
+        "description": "Official Senate Historical Office party-division URL."
+      },
+      {
+        "column_name": "senate_source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained Senate Historical Office party-division HTML page."
+      },
+      {
+        "column_name": "senate_observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC timestamp when the Senate Historical Office party-division page was captured."
+      }
+    ],
+    "subject": "congress",
+    "grain": "One Congress and reconciled session label.",
+    "identity_columns": [
+      "congress",
+      "session"
+    ]
+  },
+  "congress_party_control": {
+    "table": "congress_party_control",
+    "label": "Chamber party control and seat divisions by Congress",
+    "summary": "House and Senate chamber party seat divisions and majority control intervals from official House Historian and Senate Historical Office history pages.",
+    "coverage": "Window. House initial-election divisions per Congress and Senate session/mid-session division changes from the 1st Congress through the current Congress as of the captured pages.",
+    "kind": "window",
+    "measured_on": "2026-11-25",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "chamber",
+        "column_type": "VARCHAR",
+        "description": "Legislative chamber (house or senate)."
+      },
+      {
+        "column_name": "congress",
+        "column_type": "INTEGER",
+        "description": "Congress number."
+      },
+      {
+        "column_name": "effective_from",
+        "column_type": "DATE",
+        "description": "First date on which this chamber division interval applies."
+      },
+      {
+        "column_name": "effective_to",
+        "column_type": "DATE",
+        "description": "Inclusive end date of this division interval; null for an open current Congress."
+      },
+      {
+        "column_name": "majority_party",
+        "column_type": "VARCHAR",
+        "description": "Named organizing majority party; null when House plurality leaves no stated organizing caucus."
+      },
+      {
+        "column_name": "majority_seats",
+        "column_type": "INTEGER",
+        "description": "Seat count of the majority or leading party."
+      },
+      {
+        "column_name": "minority_party",
+        "column_type": "VARCHAR",
+        "description": "Named primary minority party."
+      },
+      {
+        "column_name": "minority_seats",
+        "column_type": "INTEGER",
+        "description": "Seat count of the minority party."
+      },
+      {
+        "column_name": "other",
+        "column_type": "VARCHAR",
+        "description": "Literal source text for minor-party or independent seats."
+      },
+      {
+        "column_name": "vacancies",
+        "column_type": "INTEGER",
+        "description": "Vacancy count where printed by the source; null when left blank."
+      },
+      {
+        "column_name": "total_seats",
+        "column_type": "INTEGER",
+        "description": "Total chamber seats reported for the interval."
+      },
+      {
+        "column_name": "majority_basis",
+        "column_type": "VARCHAR",
+        "description": "Rule used to determine majority control (such as house-seats-plurality, house-footnote, or senate-table-order)."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Official House or Senate history page URL supplying this row."
+      },
+      {
+        "column_name": "printed_effective_from",
+        "column_type": "DATE",
+        "description": "Raw effective start date printed on the source page before any documented mistyped-year correction."
+      },
+      {
+        "column_name": "correction_reason",
+        "column_type": "VARCHAR",
+        "description": "Reason for an applied printed-date correction, otherwise null."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained source HTML page."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC timestamp when the source HTML page was captured."
+      }
+    ],
+    "subject": "congress",
+    "grain": "One chamber, Congress, and effective start date interval.",
+    "identity_columns": [
+      "chamber",
+      "congress",
+      "effective_from"
+    ]
   },
   "census_geocoder_lookups": {
     "table": "census_geocoder_lookups",

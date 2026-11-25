@@ -167,10 +167,17 @@ def issue_views(profiles, activities, *, source_generation):
     Whole-filing reported money is not allocated by issue. Filtered issue sets
     overlap and cannot be added together. Industry assignments are not consulted.
     """
+    selected_filings = {
+        row["selected_filing_uuid"]
+        for row in profiles
+        if row.get("selection_status") == "selected" and row.get("selected_filing_uuid")
+    }
     by_filing = defaultdict(set)
     for activity in activities:
-        if activity.get("general_issue_code"):
-            by_filing[activity["filing_uuid"]].add(activity["general_issue_code"])
+        filing_uuid = activity.get("filing_uuid")
+        code = activity.get("general_issue_code")
+        if code and filing_uuid in selected_filings:
+            by_filing[filing_uuid].add(code)
     result = []
     for row in profiles:
         if row.get("selection_status") != "selected":

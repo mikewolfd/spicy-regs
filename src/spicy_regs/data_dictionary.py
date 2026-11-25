@@ -609,6 +609,14 @@ TABLES: tuple[str, ...] = (
     "irs990_filings",
     "irs990_officers",
     "irs990_grants",
+    "irs527_transmissions",
+    "irs527_form8871",
+    "irs527_form8872",
+    "irs527_directors",
+    "irs527_related_entities",
+    "irs527_eains",
+    "irs527_contributions",
+    "irs527_expenditures",
     "fjc_judges",
     "fjc_appointments",
     "fjc_service_terms",
@@ -644,6 +652,9 @@ TABLES: tuple[str, ...] = (
     "treasury_statement_periods",
     "treasury_statement_classification_cells",
     "census_acs_county_observations",
+    "census_acs_congressional_district_observations",
+    "congress_sessions",
+    "congress_party_control",
     "census_geocoder_lookups",
     "census_geocoder_geographies",
     "foreign_assistance_observations",
@@ -745,6 +756,14 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "irs990_filings",
         "irs990_officers",
         "irs990_grants",
+        "irs527_transmissions",
+        "irs527_form8871",
+        "irs527_form8872",
+        "irs527_directors",
+        "irs527_related_entities",
+        "irs527_eains",
+        "irs527_contributions",
+        "irs527_expenditures",
         "fjc_judges",
         "fjc_appointments",
         "fjc_service_terms",
@@ -780,6 +799,12 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "treasury_statement_periods",
         "treasury_statement_classification_cells",
         "census_acs_county_observations",
+        "census_acs_congressional_district_observations",
+        "congress_sessions",
+        "congress_party_control",
+    "census_acs_congressional_district_observations",
+    "congress_sessions",
+    "congress_party_control",
         "census_geocoder_lookups",
         "census_geocoder_geographies",
         "foreign_assistance_observations",
@@ -1007,6 +1032,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.build_ofac import SCHEMAS as OFAC_SCHEMAS
     from spicy_regs.transforms.build_historical_vetoes import SCHEMAS as HISTORICAL_VETO_SCHEMAS
     from spicy_regs.transforms.build_irs_form990 import SCHEMAS as IRS990_SCHEMAS
+    from spicy_regs.transforms.build_irs_527 import SCHEMAS as IRS527_SCHEMAS
     from spicy_regs.transforms.build_fjc import SCHEMAS as FJC_SCHEMAS
     from spicy_regs.pipelines.house_disclosures import SCHEMAS as HOUSE_DISCLOSURE_SCHEMAS
     from spicy_regs.pipelines.white_house import TABLE as WHITE_HOUSE_TABLE, SCHEMA as WHITE_HOUSE_SCHEMA
@@ -1023,7 +1049,8 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.pipelines.fec_research_profiles import SCHEMAS as FEC_RESEARCH_SCHEMAS
     from spicy_regs.transforms.fec_election_results import SCHEMAS as FEC_ELECTION_SCHEMAS
     from spicy_regs.transforms.sector_comparisons import SCHEMAS as SECTOR_SCHEMAS
-    from spicy_regs.transforms.build_census_acs import SCHEMA as CENSUS_ACS_SCHEMA
+    from spicy_regs.transforms.build_census_acs import SCHEMAS as CENSUS_ACS_SCHEMAS
+    from spicy_regs.transforms.build_congress_sessions import SCHEMAS as CONGRESS_SESSIONS_SCHEMAS
     from spicy_regs.transforms.build_census_geocoder import SCHEMAS as CENSUS_GEOCODER_SCHEMAS
     from spicy_regs.transforms.build_foreign_assistance import SCHEMAS as FOREIGN_ASSISTANCE_SCHEMAS
     from spicy_regs.transforms.build_agency_lifecycle_stats import SCHEMA as AGENCY_LIFECYCLE_STATS_SCHEMA
@@ -1137,6 +1164,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         **OFAC_SCHEMAS,
         **HISTORICAL_VETO_SCHEMAS,
         **IRS990_SCHEMAS,
+        **IRS527_SCHEMAS,
         **SEC_SCHEMAS,
         **FJC_SCHEMAS,
         **HOUSE_DISCLOSURE_SCHEMAS,
@@ -1154,7 +1182,8 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         **FEC_RESEARCH_SCHEMAS,
         **FEC_ELECTION_SCHEMAS,
         **SECTOR_SCHEMAS,
-        "census_acs_county_observations": CENSUS_ACS_SCHEMA,
+        **CENSUS_ACS_SCHEMAS,
+        **CONGRESS_SESSIONS_SCHEMAS,
         **CENSUS_GEOCODER_SCHEMAS,
         **FOREIGN_ASSISTANCE_SCHEMAS,
         "fec_collections": COLLECTION_SCHEMA,

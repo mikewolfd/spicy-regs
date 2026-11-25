@@ -330,6 +330,20 @@
       "url": "https://www.whitehouse.gov/presidential-actions/nominations-appointments/",
       "kind": "government",
       "note": "Selected retained source versions; related official facts can overlap."
+    },
+    "congress-sessions": {
+      "id": "congress-sessions",
+      "name": "U.S. House Historian and U.S. Senate Historical Office",
+      "url": "https://history.house.gov/Institution/Session-Dates/All/",
+      "kind": "government",
+      "note": "Official House Historian session dates and party divisions and Senate Historical Office party divisions."
+    },
+    "irs-527": {
+      "id": "irs-527",
+      "name": "IRS Political Organization Filing and Disclosure (Section 527)",
+      "url": "https://forms.irs.gov/app/pod/dataDownload/fullData",
+      "kind": "government",
+      "note": "Official Section 527 bulk archive (PolOrgsFullData.zip) with Form 8871, Form 8872, schedules, and transmission metadata."
     }
   },
   "families": {
@@ -790,6 +804,16 @@
       ],
       "transformation": "Keeps selected FEC period flows, LDA quarterly income and expenses separate. Industry assignments require business evidence; unresolved identities never join money. Issue views retain unallocated whole-filing amounts.",
       "evidence": "src/spicy_regs/pipelines/sector_comparisons.py"
+    },
+    "congress-sessions": {
+      "sources": [
+        "congress-sessions"
+      ]
+    },
+    "irs-527": {
+      "sources": [
+        "irs-527"
+      ]
     }
   },
   "tables": {
@@ -1352,6 +1376,85 @@
     },
     "lobbying_quarterly_profiles": {
       "family": "lobbying-quarterly-profiles"
+    },
+    "sector_financial_comparisons": {
+      "sources": [
+        "fec",
+        "lobbying"
+      ],
+      "inputs": [
+        "fec_financial_profiles",
+        "lobbying_quarterly_profiles"
+      ]
+    },
+    "sector_classification_evidence": {
+      "sources": [
+        "fec",
+        "lobbying"
+      ],
+      "inputs": [
+        "fec_financial_profiles",
+        "lobbying_quarterly_profiles"
+      ]
+    },
+    "lobbying_issue_financial_observations": {
+      "sources": [
+        "lobbying"
+      ],
+      "inputs": [
+        "lobbying_quarterly_profiles",
+        "lobbying_activities"
+      ]
+    },
+    "congress_sessions": {
+      "sources": [
+        "congress-sessions"
+      ]
+    },
+    "congress_party_control": {
+      "sources": [
+        "congress-sessions"
+      ]
+    },
+    "irs527_transmissions": {
+      "sources": [
+        "irs-527"
+      ]
+    },
+    "irs527_form8871": {
+      "sources": [
+        "irs-527"
+      ]
+    },
+    "irs527_form8872": {
+      "sources": [
+        "irs-527"
+      ]
+    },
+    "irs527_directors": {
+      "sources": [
+        "irs-527"
+      ]
+    },
+    "irs527_related_entities": {
+      "sources": [
+        "irs-527"
+      ]
+    },
+    "irs527_eains": {
+      "sources": [
+        "irs-527"
+      ]
+    },
+    "irs527_contributions": {
+      "sources": [
+        "irs-527"
+      ]
+    },
+    "irs527_expenditures": {
+      "sources": [
+        "irs-527"
+      ]
     }
   }
 }

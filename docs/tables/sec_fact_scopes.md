@@ -20,7 +20,7 @@ Explicit acquired-source outcomes for selected CIKs, concepts and fact-end dates
 | `concept` | `VARCHAR` | Native XBRL concept tag; interpreted only within taxonomy and unit. |
 | `end_from` | `VARCHAR` | Inclusive selected lower bound for fact end dates. |
 | `end_through` | `VARCHAR` | Inclusive selected upper bound for fact end dates. |
-| `outcome` | `VARCHAR` | observed, concept_not_reported, or no_observations_in_period for this acquired source selection. Refusal produces no generation. |
+| `outcome` | `VARCHAR` | observed, concept_not_reported, no_observations_in_period, or no_companyfacts for this acquired source selection. Refusal produces no generation. |
 | `observation_count` | `BIGINT` | Selected native observation count, including comparatives and amendments; not a count of distinct economic periods. |
 | `source_sha256` | `VARCHAR` | SHA-256 of the retained original response. A capture identity, not a publisher release date. |
 | `source_url` | `VARCHAR` | Exact official SEC JSON locator. |
