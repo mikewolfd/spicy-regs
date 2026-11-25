@@ -56,11 +56,26 @@ def test_tampered_act_parquet_refuses_loudly(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="pinned act artifact drifted: usc-source-credits.parquet"):
         SourceCreditIndex.from_directory(tmp_path / "act")
 
-    pop_file = tmp_path / "act" / "usc-popular-names.parquet"
-    pop_file.chmod(0o644)
-    pop_file.write_bytes(b"tampered")
-    with pytest.raises(ValueError, match="pinned act artifact drifted: usc-popular-names.parquet"):
-        ActIndex.from_directory(tmp_path / "act")
+    for filename in ("usc-act-sections.parquet", "quarantine.parquet", "usc-popular-names.parquet"):
+        target = tmp_path / "act" / filename
+        orig = target.read_bytes()
+        target.chmod(0o644)
+        target.write_bytes(bytes([orig[0] ^ 0x01]) + orig[1:])
+        with pytest.raises(ValueError, match=f"pinned act artifact drifted: {filename}"):
+            ActIndex.from_directory(tmp_path / "act")
+        target.write_bytes(orig)
+
+
+def test_vendored_act_index_reads_classifications_lazily() -> None:
+    fresh = ActIndex.from_vendored()
+    assert len(getattr(fresh.classifications, "_cache", ())) == 0
+    res = resolve_act_relative_citation(
+        ActRelativeCitation("CERCLA", "cercla", "107(a)"),
+        index=fresh,
+        source_credits=load_source_credit_index(),
+    )
+    assert res.iri == "urn:rkaf:us:usc:42:9607"
+    assert 1 <= len(getattr(fresh.classifications, "_cache", ())) <= 4
 
 
 def test_small_business_act_enclosing_section_negative_control_and_alignment() -> None:

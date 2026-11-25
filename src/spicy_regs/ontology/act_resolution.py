@@ -16,7 +16,8 @@ import hashlib
 import json
 import re
 from bisect import bisect_left, bisect_right
-from collections.abc import Container, Mapping
+from collections import OrderedDict
+from collections.abc import Container, Iterable, Iterator, Mapping
 from dataclasses import asdict, dataclass, field, replace
 from functools import cached_property, lru_cache
 from importlib.resources import files
@@ -300,16 +301,32 @@ def _verify_pinned_bytes(path: Path) -> tuple[frozenset[str], bytes]:
     return matched, data
 
 
-def _read_pinned_parquet(directory: Path, name: str) -> tuple[frozenset[str], list[dict[str, Any]]]:
-    """Verify SHA-256 and read Parquet rows through DuckDB without importing pyarrow."""
-    matched, data = _verify_pinned_bytes(directory / name)
+def _query_parquet_bytes(
+    data: bytes, name: str, sql_template: str, params: list[Any] | None = None
+) -> tuple[list[str], list[tuple[Any, ...]]]:
+    """Execute a DuckDB query against SHA-256-verified Parquet bytes without importing pyarrow."""
     with TemporaryDirectory(prefix="spicy-regs-act-") as tmp_dir:
         admitted = Path(tmp_dir) / name
         admitted.write_bytes(data)
         with duckdb.connect() as con:
-            cursor = con.execute("SELECT * FROM read_parquet(?)", [str(admitted)])
+            cursor = con.execute(sql_template.format(path=str(admitted).replace("'", "''")), params or [])
             columns = [col[0] for col in cursor.description]
-            return matched, [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
+            return columns, cursor.fetchall()
+
+
+def _read_pinned_parquet_rows(
+    directory: Path, name: str, sql_template: str = "SELECT * FROM read_parquet('{path}')", params: list[Any] | None = None
+) -> tuple[frozenset[str], list[str], list[tuple[Any, ...]]]:
+    """Verify SHA-256 and read Parquet tuple rows through DuckDB without importing pyarrow."""
+    matched, data = _verify_pinned_bytes(directory / name)
+    columns, rows = _query_parquet_bytes(data, name, sql_template, params)
+    return matched, columns, rows
+
+
+def _read_pinned_parquet(directory: Path, name: str) -> tuple[frozenset[str], list[dict[str, Any]]]:
+    """Verify SHA-256 and read Parquet rows through DuckDB without importing pyarrow."""
+    matched, columns, rows = _read_pinned_parquet_rows(directory, name)
+    return matched, [dict(zip(columns, row, strict=True)) for row in rows]
 
 
 def act_resolution_pins() -> dict[str, str]:
@@ -434,6 +451,112 @@ class ActResolution:
             raise ValueError("name candidates require an ambiguity refusal and unnested lookups of the same citation")
 
 
+def _extract_enclosing_sections(sections: Iterable[str]) -> frozenset[str]:
+    """Return enclosing sections hosting an enacted Act inside a law's section set."""
+    section_set = sections if isinstance(sections, (set, frozenset, Mapping)) else set(sections)
+    by_enc: dict[str, set[str]] = {}
+    for sec in section_set:
+        match = _ENCLOSING_ACT_SECTION.fullmatch(sec)
+        if match is not None:
+            by_enc.setdefault(match.group("enclosing"), set()).add(match.group("inner"))
+    return frozenset(
+        enc
+        for enc, inners in by_enc.items()
+        if len(inners) >= 2 or any(inner in section_set for inner in inners)
+    )
+
+
+class _LazyActSections(Mapping[str, Mapping[str, tuple[Classification, ...]]]):
+    """Lazy, bounded-memory Table III classification lookup backed by SHA-256-verified Parquet bytes."""
+
+    def __init__(self, name: str, parquet_bytes: bytes, *, max_cached_laws: int = 512) -> None:
+        self._name = name
+        self._parquet_bytes = parquet_bytes
+        self._max_cached_laws = max_cached_laws
+        self._cache: OrderedDict[str, dict[str, tuple[Classification, ...]]] = OrderedDict()
+        self._enclosing_cache: dict[str, frozenset[str]] | None = None
+
+    def _load_law(self, table3_key: str) -> dict[str, tuple[Classification, ...]]:
+        cached = self._cache.get(table3_key)
+        if cached is not None:
+            self._cache.move_to_end(table3_key)
+            return cached
+        _, rows = _query_parquet_bytes(
+            self._parquet_bytes,
+            self._name,
+            "SELECT act_section, usc_title, usc_section, status, statutes_at_large_page "
+            "FROM read_parquet('{path}') WHERE table3_key = ?",
+            [table3_key],
+        )
+        if not rows:
+            raise KeyError(table3_key)
+        by_section: dict[str, tuple[Classification, ...]] = {}
+        for act_section, usc_title, usc_section, status, page_val in rows:
+            by_section[act_section] = (
+                *by_section.get(act_section, ()),
+                Classification(usc_title, usc_section, status, int(page_val) if page_val else None),
+            )
+        self._cache[table3_key] = by_section
+        if len(self._cache) > self._max_cached_laws:
+            self._cache.popitem(last=False)
+        return by_section
+
+    def __getitem__(self, table3_key: str) -> Mapping[str, tuple[Classification, ...]]:
+        return self._load_law(table3_key)
+
+    def __contains__(self, table3_key: object) -> bool:
+        if not isinstance(table3_key, str):
+            return False
+        if table3_key in self._cache:
+            return True
+        try:
+            self._load_law(table3_key)
+            return True
+        except KeyError:
+            return False
+
+    def __iter__(self) -> Iterator[str]:
+        _, rows = _query_parquet_bytes(
+            self._parquet_bytes,
+            self._name,
+            "SELECT DISTINCT table3_key FROM read_parquet('{path}') ORDER BY table3_key",
+        )
+        for (law,) in rows:
+            yield law
+
+    def __len__(self) -> int:
+        _, rows = _query_parquet_bytes(
+            self._parquet_bytes,
+            self._name,
+            "SELECT count(DISTINCT table3_key) FROM read_parquet('{path}')",
+        )
+        return int(rows[0][0])
+
+    def enclosing_sections_by_law(self) -> Mapping[str, frozenset[str]]:
+        if self._enclosing_cache is not None:
+            return self._enclosing_cache
+        _, rows = _query_parquet_bytes(
+            self._parquet_bytes,
+            self._name,
+            "WITH bracket_laws AS ("
+            "SELECT DISTINCT table3_key FROM read_parquet('{path}') WHERE strpos(act_section, '[') > 0"
+            ") "
+            "SELECT DISTINCT s.table3_key, s.act_section "
+            "FROM read_parquet('{path}') s "
+            "JOIN bracket_laws b ON s.table3_key = b.table3_key",
+        )
+        by_law: dict[str, set[str]] = {}
+        for law, sec in rows:
+            by_law.setdefault(law, set()).add(sec)
+        found: dict[str, frozenset[str]] = {}
+        for law, sections in by_law.items():
+            enclosing = _extract_enclosing_sections(sections)
+            if enclosing:
+                found[law] = enclosing
+        self._enclosing_cache = found
+        return found
+
+
 @dataclass(frozen=True)
 class ActIndex:
     """The Popular Names and Table III joins, loaded from pinned Parquets or built for tests."""
@@ -461,18 +584,11 @@ class ActIndex:
     @cached_property
     def enclosing_sections_by_law(self) -> Mapping[str, frozenset[str]]:
         """Table III key -> enclosing sections hosting an enacted Act inside that law."""
+        if isinstance(self.classifications, _LazyActSections):
+            return self.classifications.enclosing_sections_by_law()
         found: dict[str, frozenset[str]] = {}
         for law, sections in self.classifications.items():
-            by_enc: dict[str, set[str]] = {}
-            for sec in sections:
-                match = _ENCLOSING_ACT_SECTION.fullmatch(sec)
-                if match is not None:
-                    by_enc.setdefault(match.group("enclosing"), set()).add(match.group("inner"))
-            enclosing = frozenset(
-                enc
-                for enc, inners in by_enc.items()
-                if len(inners) >= 2 or any(inner in sections for inner in inners)
-            )
+            enclosing = _extract_enclosing_sections(sections)
             if enclosing:
                 found[law] = enclosing
         return found
@@ -521,52 +637,71 @@ class ActIndex:
             receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
             incomplete_sources = frozenset(hole["table3_key"] for hole in receipt.get("source_incomplete", ()))
 
-        sec_artifacts, section_rows = _read_pinned_parquet(directory, "usc-act-sections.parquet")
+        sec_artifacts, sec_bytes = _verify_pinned_bytes(directory / "usc-act-sections.parquet")
         quarantine_path = directory / "quarantine.parquet"
         narrowed: frozenset[tuple[str, str]] = frozenset()
         if quarantine_path.is_file() or require_quarantine:
-            q_artifacts, q_rows = _read_pinned_parquet(directory, "quarantine.parquet")
+            q_artifacts, _, q_rows = _read_pinned_parquet_rows(
+                directory,
+                "quarantine.parquet",
+                "SELECT table3_key, raw_value FROM read_parquet('{path}') "
+                "WHERE reason = 'statutes_at_large_page_span_narrowed'",
+            )
             if not (sec_artifacts & q_artifacts):
                 raise ValueError("classifications and quarantine must belong to the same act artifact")
-            narrowed = frozenset(
-                (row["table3_key"], row["raw_value"].partition(" -> ")[0])
-                for row in q_rows
-                if row["reason"] == "statutes_at_large_page_span_narrowed"
-            )
+            narrowed = frozenset((table3_key, raw_value.partition(" -> ")[0]) for table3_key, raw_value in q_rows)
 
-        _, pop_rows = _read_pinned_parquet(directory, "usc-popular-names.parquet")
+        _, pop_cols, pop_rows = _read_pinned_parquet_rows(directory, "usc-popular-names.parquet")
+        col_idx = {col: idx for idx, col in enumerate(pop_cols)}
+        idx_name = col_idx["name"]
+        idx_name_key = col_idx["name_key"]
+        idx_content_type = col_idx["content_type"]
+        idx_table3_key = col_idx["table3_key"]
+        idx_usc_title = col_idx.get("usc_title")
+        idx_usc_section = col_idx.get("usc_section")
+        idx_see_also = col_idx.get("see_also")
+        idx_see_also_key = col_idx["see_also_key"]
+        idx_release_point = col_idx.get("release_point")
+        idx_division = col_idx.get("division")
+        idx_sal_vol = col_idx.get("statutes_at_large_volume")
+        idx_sal_page = col_idx.get("statutes_at_large_page")
+        idx_enclosing = col_idx.get("enclosing_section")
+
         records_by_name: dict[str, set[PopularNameRecord]] = {}
         alias_by_name: dict[str, str] = {}
         cited_names: set[str] = set()
         starts: dict[str, dict[str, int]] = {}
         for row in pop_rows:
-            name = normalize_popular_name(row["name_key"])
-            if row["see_also_key"]:
-                alias_by_name.setdefault(name, normalize_popular_name(row["see_also_key"]))
-            if row["content_type"] != "cite":
+            name = normalize_popular_name(row[idx_name_key])
+            if row[idx_see_also_key]:
+                alias_by_name.setdefault(name, normalize_popular_name(row[idx_see_also_key]))
+            if row[idx_content_type] != "cite":
                 continue
             cited_names.add(name)
-            if row["table3_key"]:
+            t3_key = row[idx_table3_key]
+            division_val = row[idx_division] if idx_division is not None else None
+            sal_page_val = row[idx_sal_page] if idx_sal_page is not None else None
+            if t3_key:
                 record = PopularNameRecord(
-                    name=row["name"],
-                    content_type=row["content_type"],
-                    table3_key=row["table3_key"],
-                    usc_title=row.get("usc_title"),
-                    usc_section=row.get("usc_section"),
-                    see_also=row.get("see_also"),
-                    release_point=row.get("release_point"),
-                    division=row.get("division"),
-                    statutes_at_large_volume=row.get("statutes_at_large_volume"),
-                    statutes_at_large_page=row.get("statutes_at_large_page"),
-                    enclosing_section=row.get("enclosing_section"),
+                    name=row[idx_name],
+                    content_type=row[idx_content_type],
+                    table3_key=t3_key,
+                    usc_title=row[idx_usc_title] if idx_usc_title is not None else None,
+                    usc_section=row[idx_usc_section] if idx_usc_section is not None else None,
+                    see_also=row[idx_see_also] if idx_see_also is not None else None,
+                    release_point=row[idx_release_point] if idx_release_point is not None else None,
+                    division=division_val,
+                    statutes_at_large_volume=row[idx_sal_vol] if idx_sal_vol is not None else None,
+                    statutes_at_large_page=sal_page_val,
+                    enclosing_section=row[idx_enclosing] if idx_enclosing is not None else None,
                 )
                 records_by_name.setdefault(name, set()).add(record)
-            if not (row.get("division") and row.get("statutes_at_large_page")):
+            if not (division_val and sal_page_val):
                 continue
-            page = int(row["statutes_at_large_page"])
-            if row["table3_key"]:
-                by_division = starts.setdefault(row["table3_key"], {})
-                by_division[row["division"]] = min(by_division.get(row["division"], page), page)
+            page = int(sal_page_val)
+            if t3_key:
+                by_division = starts.setdefault(t3_key, {})
+                by_division[division_val] = min(by_division.get(division_val, page), page)
 
         table3_key_by_name: dict[str, str | None] = {}
         division_by_name: dict[str, tuple[str, int | None]] = {}
@@ -590,20 +725,11 @@ class ActIndex:
                 if enclosing:
                     enclosing_section_by_name[name] = enclosing
 
-        classifications: dict[str, dict[str, tuple[Classification, ...]]] = {}
-        for row in section_rows:
-            by_section = classifications.setdefault(row["table3_key"], {})
-            page_val = row["statutes_at_large_page"]
-            by_section[row["act_section"]] = (
-                *by_section.get(row["act_section"], ()),
-                Classification(row["usc_title"], row["usc_section"], row["status"], int(page_val) if page_val else None),
-            )
-
         return cls(
             table3_key_by_name=table3_key_by_name,
             name_candidates=name_candidates,
             alias_by_name=alias_by_name,
-            classifications=classifications,
+            classifications=_LazyActSections("usc-act-sections.parquet", sec_bytes),
             incomplete_sources=incomplete_sources,
             cited_names=frozenset(cited_names),
             division_by_name=division_by_name,
@@ -658,17 +784,26 @@ class SourceCreditIndex:
     @classmethod
     def from_directory(cls, artifact_dir: Path | str) -> SourceCreditIndex:
         """Load from a pinned directory carrying ``usc-source-credits.parquet``."""
-        _, rows = _read_pinned_parquet(Path(artifact_dir), "usc-source-credits.parquet")
+        _, cols, rows = _read_pinned_parquet_rows(Path(artifact_dir), "usc-source-credits.parquet")
+        col_idx = {col: idx for idx, col in enumerate(cols)}
+        i_law = col_idx["public_law"]
+        i_div = col_idx["division"]
+        i_enc = col_idx.get("enclosing_section")
+        i_sec = col_idx["act_section"]
+        i_title = col_idx["usc_title"]
+        i_usec = col_idx["usc_section"]
+        i_vol = col_idx["statutes_at_large_volume"]
+        i_page = col_idx["statutes_at_large_page"]
         return cls.from_rows(
             (
-                row["public_law"],
-                row["division"],
-                row.get("enclosing_section"),
-                row["act_section"],
-                row["usc_title"],
-                row["usc_section"],
-                row["statutes_at_large_volume"],
-                row["statutes_at_large_page"],
+                row[i_law],
+                row[i_div],
+                row[i_enc] if i_enc is not None else None,
+                row[i_sec],
+                row[i_title],
+                row[i_usec],
+                row[i_vol],
+                row[i_page],
             )
             for row in rows
         )
