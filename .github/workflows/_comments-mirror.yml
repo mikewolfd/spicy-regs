@@ -68,6 +68,8 @@ jobs:
           python-version: '3.12'
       - uses: astral-sh/setup-uv@v4
       - run: uv sync --frozen --extra operational-runner
+      - name: Install GDB for diagnostic mode
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gdb
       - name: Qualify installed debugger only
         env:
           TMPDIR: ${{ runner.temp }}
@@ -139,6 +141,10 @@ jobs:
           COMMENTS_ONLY: ${{ inputs.comments_only }}
           DIAGNOSTIC_NATIVE_SNAPSHOT: ${{ inputs.diagnostic_native_snapshot }}
         run: uv run --no-sync python scripts/comments_native_debugger.py check-mode
+
+      - name: Install GDB for diagnostic mode
+        if: ${{ inputs.debugger_mode == 'gdb' }}
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gdb
 
       - name: Repeat reviewed debugger qualification without credentials
         if: ${{ inputs.debugger_mode == 'gdb' }}
