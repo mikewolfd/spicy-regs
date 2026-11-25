@@ -6,7 +6,7 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import duckdb
 import pyarrow as pa
@@ -14,8 +14,9 @@ import pyarrow.parquet as pq
 import pytest
 import yaml
 
-from pyiceberg.manifest import DataFile, DataFileContent, FileFormat
-from pyiceberg.table import FileScanTask
+if TYPE_CHECKING:
+    from pyiceberg.manifest import DataFile
+    from pyiceberg.table import FileScanTask
 
 from scripts import publish_comments_mirror_guarded as guard
 from spicy_regs.duckdb_settings import ExportResources
@@ -58,7 +59,17 @@ def _v0_row(comment_id: str, agency: str, docket_id: str, posted_date: str, atta
     return {name: row[name] for name in _v0_schema().names}
 
 
-def _make_data_file(file_path: str, record_count: int, content: DataFileContent = DataFileContent.DATA) -> DataFile:
+def _make_data_file(file_path: str, record_count: int, *, delete: bool = False, equality_delete: bool = False) -> DataFile:
+    pytest.importorskip("pyiceberg")
+    from pyiceberg.manifest import DataFile, DataFileContent, FileFormat
+
+    content = (
+        DataFileContent.EQUALITY_DELETES
+        if equality_delete
+        else DataFileContent.POSITION_DELETES
+        if delete
+        else DataFileContent.DATA
+    )
     return DataFile.from_args(
         content=content,
         file_path=file_path,
@@ -66,6 +77,13 @@ def _make_data_file(file_path: str, record_count: int, content: DataFileContent 
         record_count=record_count,
         file_size_in_bytes=1024,
     )
+
+
+def _make_task(data_file: DataFile, delete_files: set[DataFile] | None = None) -> FileScanTask:
+    pytest.importorskip("pyiceberg")
+    from pyiceberg.table import FileScanTask
+
+    return FileScanTask(data_file, delete_files=delete_files)
 
 
 class _FakeR2Client:
@@ -198,11 +216,11 @@ def test_export_public_comments_mixed_schema_v0_v1_and_position_deletes(
     )
     monkeypatch.setattr(r2, "get_r2_client", lambda: fake_r2)
 
-    del_df = _make_data_file(del_uri, 3, content=DataFileContent.POSITION_DELETES)
+    del_df = _make_data_file(del_uri, 3, delete=True)
     # Intentionally attach the shared delete file to both tasks and put v1 before v0 to check deterministic sort.
     tasks = [
-        FileScanTask(_make_data_file(v1_uri, len(v1_rows)), delete_files={del_df}),
-        FileScanTask(_make_data_file(v0_uri, len(v0_rows)), delete_files={del_df}),
+        _make_task(_make_data_file(v1_uri, len(v1_rows)), delete_files={del_df}),
+        _make_task(_make_data_file(v0_uri, len(v0_rows)), delete_files={del_df}),
     ]
     pinned = iceberg.CatalogPairSnapshot(
         "uuid-comments",
@@ -319,9 +337,9 @@ def test_copy_pinned_iceberg_snapshot_refuses_equality_deletes(
     monkeypatch.setattr(r2, "get_r2_client", lambda: pytest.fail("Must not download any file on equality deletes"))
     pinned = iceberg.CatalogSnapshot("uuid-comments", 99, 1)
     eq_del = _make_data_file(
-        "s3://spicy-regs/warehouse/comments/data/eq_del.parquet", 1, content=DataFileContent.EQUALITY_DELETES
+        "s3://spicy-regs/warehouse/comments/data/eq_del.parquet", 1, equality_delete=True
     )
-    tasks = [FileScanTask(_make_data_file("s3://spicy-regs/warehouse/comments/data/v1.parquet", 1), delete_files={eq_del})]
+    tasks = [_make_task(_make_data_file("s3://spicy-regs/warehouse/comments/data/v1.parquet", 1), delete_files={eq_del})]
     fake_table = _FakeTable(pinned.table_uuid, pinned.snapshot_id, pinned.schema_id, tasks)
     monkeypatch.setattr("pyiceberg.catalog.rest.RestCatalog", lambda *a, **kw: SimpleNamespace(load_table=lambda _: fake_table))
 
@@ -352,7 +370,7 @@ def test_copy_pinned_iceberg_snapshot_refuses_bad_s3_paths(
     _configure_r2_env(monkeypatch)
     monkeypatch.setattr(r2, "get_r2_client", lambda: pytest.fail("Must not download bad S3 path"))
     pinned = iceberg.CatalogSnapshot("uuid-comments", 99, 1)
-    tasks = [FileScanTask(_make_data_file(bad_uri, 1))]
+    tasks = [_make_task(_make_data_file(bad_uri, 1))]
     fake_table = _FakeTable(pinned.table_uuid, pinned.snapshot_id, pinned.schema_id, tasks)
     monkeypatch.setattr("pyiceberg.catalog.rest.RestCatalog", lambda *a, **kw: SimpleNamespace(load_table=lambda _: fake_table))
 
@@ -374,6 +392,7 @@ def test_copy_pinned_iceberg_snapshot_refuses_bad_s3_paths(
 def test_copy_pinned_iceberg_snapshot_refuses_drift(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, table_uuid: str, snapshot_id: int, schema_id: int
 ) -> None:
+    pytest.importorskip("pyiceberg")
     _configure_r2_env(monkeypatch)
     pinned = iceberg.CatalogSnapshot("uuid-comments", 99, 1)
     fake_table = _FakeTable(table_uuid, snapshot_id, schema_id, [])
@@ -393,6 +412,7 @@ def test_copy_pinned_iceberg_snapshot_refuses_drift(
 def test_copy_pinned_iceberg_snapshot_refuses_empty_task_plan(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    pytest.importorskip("pyiceberg")
     _configure_r2_env(monkeypatch)
     pinned = iceberg.CatalogSnapshot("uuid-comments", 99, 1)
     fake_table = _FakeTable(pinned.table_uuid, pinned.snapshot_id, pinned.schema_id, [])
