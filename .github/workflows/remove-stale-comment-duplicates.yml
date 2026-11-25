@@ -1,0 +1,85 @@
+name: Remove stale comment duplicates
+
+on:
+  workflow_dispatch:
+    inputs:
+      request:
+        description: 'Pinned stale-duplicate removal JSON (format remove-stale-comment-duplicates/1)'
+        required: true
+        type: string
+      execute:
+        description: 'Execute transactional deletes (false = dry-run verification only)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: comments-catalog-write
+  cancel-in-progress: false
+  queue: max
+
+env:
+  SPICY_REGS_CATALOG_LOCK: comments-catalog-write
+
+jobs:
+  remove-stale-duplicates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Validate and stage request
+        env:
+          REQUEST: ${{ inputs.request }}
+        run: |
+          mkdir -p output
+          uv run --no-sync python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          raw = os.environ["REQUEST"].encode("utf-8")
+          assert len(raw) <= 16384, "Request exceeds 16 KiB bound"
+          json.loads(raw)
+          Path("output/request.json").write_bytes(raw)
+          PY
+
+      - name: Run guarded stale-duplicate removal
+        env:
+          EXECUTE: ${{ inputs.execute }}
+          R2_CATALOG_URI: ${{ secrets.R2_CATALOG_URI }}
+          R2_CATALOG_WAREHOUSE: ${{ secrets.R2_CATALOG_WAREHOUSE }}
+          R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
+          R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
+        run: |
+          ARGS=(
+            --request output/request.json
+            --output output/remove-stale-comment-duplicates.json
+          )
+          if [ "$EXECUTE" = "true" ]; then
+            ARGS+=(--execute)
+          fi
+          uv run --no-sync python scripts/remove_stale_comment_duplicates.py "${ARGS[@]}"
+
+      - name: Upload receipt artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: remove-stale-comment-duplicates-${{ github.run_id }}
+          path: output/remove-stale-comment-duplicates.json
+          if-no-files-found: warn
+          retention-days: 30
