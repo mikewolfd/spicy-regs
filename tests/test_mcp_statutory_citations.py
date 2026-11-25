@@ -92,3 +92,31 @@ def test_mcp_statutory_helpers_resolve_and_refuse() -> None:
     assert mcp_server.resolve_act_citation("section 107(a) of CERCLA")["target_key"] == "42-9607"
     assert mcp_server.resolve_act_citation("section 706 of the Civil Rights Act of 1964")["target_key"] == "42-2000e-5"
     assert mcp_server.resolve_act_citation("Civil Rights Act section 706")["unresolved_reason"] == "act_not_in_index"
+
+
+def test_mcp_server_exposes_and_runs_statutory_citation_tools() -> None:
+    server = mcp_server.build_server()
+    registered = [tool.name for tool in server._tool_manager.list_tools()]
+    assert "resolve_usc_disposition" in registered
+    assert "resolve_act_citation" in registered
+
+    disp = _tool_data(server, "resolve_usc_disposition", {"former_title": 42, "former_section": "3711"})
+    assert disp["recodification"] == "title-34-2017"
+    assert {s["target_key"] for s in disp["successors"]} == {"34-10101"}
+
+    disp_app = _tool_data(server, "resolve_usc_disposition", {"former_title": "49A", "former_section": "1432"})
+    assert disp_app["verdict"] == "exists-as-recodified"
+    assert disp_app["appendix"] is True
+
+    ambiguous = _tool_data(server, "resolve_act_citation", {"text": "section 3 of the Small Business Act"})
+    assert ambiguous["unresolved_reason"] == "act_section_ambiguous"
+
+    structured = _tool_data(
+        server,
+        "resolve_act_citation",
+        {"act_name": "Small Business Act", "section": "3", "enclosing_section": "2"},
+    )
+    assert structured["target_key"] == "15-632"
+
+    cercla = _tool_data(server, "resolve_act_citation", {"text": "section 107(a) of CERCLA"})
+    assert cercla["target_key"] == "42-9607"

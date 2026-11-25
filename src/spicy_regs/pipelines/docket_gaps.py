@@ -80,12 +80,25 @@ def missing_dockets(documents: Path, comments_index: Path, dockets: Path) -> lis
     return [row[0] for row in rows]
 
 
-def due(missing: Iterable[str], outcomes: pl.DataFrame, now: datetime) -> list[str]:
-    """Missing ids not answered absent or invalid within ``RETRY_AFTER``."""
+def due(
+    missing: Iterable[str],
+    outcomes: pl.DataFrame,
+    now: datetime,
+    *,
+    known_dockets: Iterable[str] = (),
+) -> list[str]:
+    """Missing ids not answered absent, invalid, or resolved via a held canonical alias."""
+    known = set(known_dockets)
     recent = {
         row["docket_id"]
         for row in outcomes.iter_rows(named=True)
-        if row["outcome"] in {"absent", "invalid"} and now - datetime.fromisoformat(row["observed_at"]) < RETRY_AFTER
+        if (
+            (row["outcome"] == "alias" and row.get("canonical_id") in known)
+            or (
+                row["outcome"] in {"absent", "invalid", "alias"}
+                and now - datetime.fromisoformat(row["observed_at"]) < RETRY_AFTER
+            )
+        )
     }
     return [docket for docket in missing if docket not in recent]
 
@@ -129,12 +142,16 @@ def fill(
     selected = SelectedInputs(output_dir, unique_build_directory(output_dir)) if not skip_upload else None
     local = {key: output_dir / key for key in ("documents.parquet", "comments_index.parquet", "dockets.parquet")}
     for key, path in local.items():
-        if not path.exists() and not r2.download_working_copy(key, path):
-            raise RuntimeError(f"docket gaps: working copy {key} is missing")
+        if path.exists():
+            continue
+        ok = r2.download_working_copy(key, path) if key == "comments_index.parquet" else r2.download(key, path)
+        if not ok:
+            raise RuntimeError(f"docket gaps: {key} is missing")
     outcome_file, prior = load_outcomes(output_dir, OUTCOMES, OUTCOME_SCHEMA)
 
     missing = missing_dockets(local["documents.parquet"], local["comments_index.parquet"], local["dockets.parquet"])
-    asked = due(missing, prior, now())[:max_dockets]
+    known_dockets = pl.read_parquet(local["dockets.parquet"], columns=["docket_id"])["docket_id"].drop_nulls().to_list()
+    asked = due(missing, prior, now(), known_dockets=known_dockets)[:max_dockets]
     answers, failures = [], 0
     for docket_id in asked:
         answer = ask(reader, docket_id)

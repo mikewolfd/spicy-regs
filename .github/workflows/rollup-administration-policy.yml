@@ -1,8 +1,9 @@
 name: Rollup — administration_policy
-# Dispatch only until one hosted rehearsal with skip_upload has passed; the schedule to add then is in
-# docs/local-family-refresh.md. A run that finds nothing new publishes nothing and ends green.
+# Daily at 23:13 UTC. A run that finds nothing new publishes nothing and ends green.
 # Built here: the statements archive is read at its current commit.
 on:
+  schedule:
+    - cron: '13 23 * * *'
   workflow_dispatch:
     inputs:
       skip_upload:

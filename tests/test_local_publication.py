@@ -481,3 +481,33 @@ def test_local_families_are_disjoint_from_hosted_rollup_workflows():
     }
     assert expected_removed <= hosted_families
     assert command.LOCAL_FAMILIES.isdisjoint(hosted_families)
+
+
+@pytest.mark.parametrize(
+    ("family", "table"),
+    [
+        ("cms-part-d", "cms_part_d_drug_spending"),
+        ("cms-medicaid", "cms_medicaid_drug_spending"),
+        ("cms-part-b", "cms_part_b_drug_spending"),
+    ],
+)
+def test_cms_drug_spending_families_are_registered_and_dry_run_accepted(tmp_path, family, table):
+    assert family in command.LOCAL_FAMILIES
+    assert command._family_schemas(family) is not None
+    directory, digest, evidence = generation(tmp_path, family, {table: ["obs-1"]}, family=family)
+    live = tmp_path / "publication.v2.json"
+    live.write_text(json.dumps(publication.empty_index()))
+    output = run(
+        tmp_path,
+        f"accepted-{family}",
+        directory,
+        evidence,
+        "--dry-run",
+        "--scratch-raw",
+        "--live-index",
+        str(live),
+        family=family,
+    )
+    receipt = json.loads((output / "dry-run.json").read_text())
+    assert receipt["status"] == "dry_run_accepted" and receipt["family"] == family
+    assert receipt["artifactDigest"] == "sha256:" + digest

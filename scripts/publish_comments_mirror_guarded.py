@@ -114,6 +114,21 @@ def diagnostic_subject(args):
     return None
 
 
+def qualified_debugger(args):
+    path = getattr(args, "debugger_qualification", None)
+    expected = getattr(args, "expected_gdb_sha256", "")
+    if path is None:
+        require(not expected, "Debugger pin requires a qualification receipt")
+        return None
+    require(diagnostic_subject(args) is not None, "Debugger requires exact no-upload diagnostic subject")
+    from scripts import comments_native_debugger as debugger
+    debugger.verified_module(runner, debugger.SUPERVISOR_PATH, "supervisor")
+    debugger.verified_module(owner, debugger.OWNER_PATH, "owner")
+    debugger.verified_module(sys.modules[__name__], debugger.PUBLISHER_PATH, "publisher")
+    invocation = os.getenv("GITHUB_RUN_ID", "") + "." + os.getenv("GITHUB_RUN_ATTEMPT", "")
+    return debugger.verified_qualification(path, args.expected_source_sha, expected, invocation)
+
+
 @contextmanager
 def copy_diagnostics(args, receipt):
     """Observe the unchanged copy on its actual connection; never replace its query or sink."""
@@ -121,6 +136,7 @@ def copy_diagnostics(args, receipt):
     from spicy_regs.sources import regulatory_catalog as native
 
     original = native._copy
+    original_pyiceberg = iceberg._copy_pinned_iceberg_snapshot
     target_sql = f"SELECT * FROM {iceberg._qualified(COMMENT)}"
     report: dict[str, Any] = {"source_commit": args.expected_source_sha, "admitted_subject": receipt["snapshot"],
               "expected_subject": diagnostic_subject(args), "skip_upload": True, "native_copy_calls": 0,
@@ -128,6 +144,10 @@ def copy_diagnostics(args, receipt):
               "core_dump_limit_bytes": resource.getrlimit(resource.RLIMIT_CORE)[0],
               "debugger": {"status": "unavailable", "reason": "No credential-free hosted debugger qualification; not invoked"},
               "native_backtrace": False}
+    debugger = qualified_debugger(args)
+    if debugger is not None:
+        report["debugger"] = {"status": "qualified", "qualification": debugger["receipt"],
+                              "binary": debugger["binding"]["gdb"]}
 
     def retain(phase):
         report["phase"] = phase
@@ -139,6 +159,7 @@ def copy_diagnostics(args, receipt):
             return original(con, sql, path, **kwargs)
         report["native_copy_calls"] += 1
         require(report["native_copy_calls"] == 1, "Unexpected repeated native COPY in diagnostic")
+        report["copy_backend"] = "duckdb"
         report["query"] = sql
         report["output"] = str(Path(path).resolve().relative_to(args.workdir.resolve()))
         report["resources"] = asdict(kwargs["resources"])
@@ -156,8 +177,36 @@ def copy_diagnostics(args, receipt):
         retain("native_copy_complete")
         return result
 
+    def observed_pyiceberg_copy(record_type, current, namespace, path, *, work_dir, resources):
+        if record_type is not COMMENT:
+            return original_pyiceberg(record_type, current, namespace, path, work_dir=work_dir, resources=resources)
+        report["native_copy_calls"] += 1
+        require(report["native_copy_calls"] == 1, "Unexpected repeated native COPY in diagnostic")
+        report["copy_backend"] = "pyiceberg"
+        report["query"] = target_sql
+        report["output"] = str(Path(path).resolve().relative_to(args.workdir.resolve()))
+        report["resources"] = asdict(resources)
+        report["parameters_present"] = False
+        retain("native_copy_snapshot")
+        report["copy_transaction_pair"] = asdict(current)
+        retain("native_copy_snapshot")
+        actual_subject = asdict(current.subject()) if isinstance(current, iceberg.CatalogPairSnapshot) else asdict(current)
+        require(actual_subject == report["expected_subject"] == report["admitted_subject"],
+                "Native COPY transaction subject differs from diagnostic admission")
+        retain("native_runtime_identity")
+        diag_con = iceberg._connect()
+        try:
+            report["runtime"] = runtime_identity(diag_con)
+        finally:
+            diag_con.close()
+        retain("native_copy")
+        result = original_pyiceberg(record_type, current, namespace, path, work_dir=work_dir, resources=resources)
+        retain("native_copy_complete")
+        return result
+
     retain("publisher_starting")
     setattr(native, "_copy", observed_copy)
+    setattr(iceberg, "_copy_pinned_iceberg_snapshot", observed_pyiceberg_copy)
     try:
         yield
         require(report["native_copy_calls"] == 1, "Diagnostic publisher did not execute its native COPY")
@@ -170,6 +219,7 @@ def copy_diagnostics(args, receipt):
         raise
     finally:
         native._copy = original
+        iceberg._copy_pinned_iceberg_snapshot = original_pyiceberg
 
 
 def worker(args):
@@ -195,10 +245,12 @@ def worker(args):
 
 def run(args):
     expected_snapshot = diagnostic_subject(args)
+    debugger = qualified_debugger(args)
     require(os.getenv(iceberg.CATALOG_LOCK_ENV) == "comments-catalog-write", "Hold the shared comments-catalog-write lock")
     args.workdir.mkdir(parents=True, exist_ok=True)
     require(not any((args.workdir / name).exists() for name in
-                    ("comments-admission.json", "comments.parquet", "comments", ".comments-generations")),
+                    ("comments-admission.json", "comments.parquet", "comments", ".comments-generations",
+                     "comments-publish-debugger-native")),
             "Use a fresh publication directory; preserve previous refusal evidence")
     start = time.monotonic()
     command = [sys.executable, "-B", str(Path(__file__).resolve()), "--expected-source-sha", args.expected_source_sha,
@@ -209,10 +261,18 @@ def run(args):
         command.append("--force")
     if expected_snapshot is not None:
         command.extend(["--diagnostic-native-snapshot", json.dumps(expected_snapshot, sort_keys=True)])
+    if debugger is not None:
+        command.extend(["--debugger-qualification", str(args.debugger_qualification),
+                        "--expected-gdb-sha256", args.expected_gdb_sha256])
 
     def watched(phase, limits):
+        child_command = [*command, "--phase", phase]
+        if phase == "publish" and debugger is not None:
+            from scripts.comments_native_debugger import launch_command
+            child_command = launch_command(args.workdir / "comments-publish-debugger-native", debugger["binding"],
+                                           child_command, credential_free=False)
         try:
-            runner.supervise(args, command=[*command, "--phase", phase], limits=limits)
+            runner.supervise(args, command=child_command, limits=limits)
         finally:
             for name in ("execution.json", "process-closure.json", "execution.log"):
                 path = args.workdir / name
@@ -221,7 +281,8 @@ def run(args):
 
     watched("admit", PRELIMITS)
     receipt = json.loads((args.workdir / "comments-admission.json").read_text())
-    limits = {**PRELIMITS, "wall_seconds": ACTIVE_SECONDS - (time.monotonic() - start),
+    qualification_seconds = debugger["elapsed_seconds"] if debugger is not None else 0
+    limits = {**PRELIMITS, "wall_seconds": ACTIVE_SECONDS - qualification_seconds - (time.monotonic() - start),
               "rss_bytes": receipt["tree_rss_cap_bytes"], "output_bytes": receipt["output_cap_bytes"]}
     watched("publish", limits)
 
@@ -234,6 +295,8 @@ def main():
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--diagnostic-native-snapshot", default="",
                         help="Exact UUID/snapshot/schema JSON for no-upload native COPY diagnostics")
+    parser.add_argument("--debugger-qualification", type=Path, help="Fresh hosted installed-GDB qualification receipt")
+    parser.add_argument("--expected-gdb-sha256", default="", help="Independently reviewed installed-GDB SHA-256")
     parser.add_argument("--phase", choices=("admit", "publish"), help=argparse.SUPPRESS)
     args = parser.parse_args()
     args.diagnostic_native_snapshot = json.loads(args.diagnostic_native_snapshot) if args.diagnostic_native_snapshot else None

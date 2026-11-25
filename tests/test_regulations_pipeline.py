@@ -1091,3 +1091,83 @@ def test_skip_upload_keeps_configured_remote_input_authority(tmp_output, monkeyp
     pipeline.run()
     assert observed == [publication.parse_index(before)]
     assert native_publication.objects[publication.INDEX_V2_KEY] == before
+
+
+def test_etl_documents_publish_carries_reconcile_outcomes_and_skips_documents_family_rebuild(
+    tmp_output, monkeypatch, native_publication
+):
+    """ETL joins docket_reconcile_outcomes once so the subsequent DocumentsFamily step sees Unchanged."""
+    from spicy_regs.pipelines.docket_reconcile import OUTCOME_SCHEMA, OUTCOMES, RECONCILE_SOURCE_ID
+    from spicy_regs.pipelines.rollups.regulatory_base import DocumentsFamily
+
+    monkeypatch.setenv("AGENCIES", "EPA")
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://test.invalid")
+    docket = "EPA-2026-0001"
+    document = f"{docket}-0001"
+    store = {
+        _docket_key(docket): dumps(_docket_payload(docket, "2026-11-09")).encode(),
+        _document_key(document, docket): dumps(_document_payload(document, docket, "2026-11-09T00:00:00Z")).encode(),
+    }
+    monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource(store))
+    monkeypatch.setattr(regulations.r2, "preflight_uploads", lambda out, files: None)
+    monkeypatch.setattr(regulations.r2, "upload_file", lambda path, remote_key=None: None)
+
+    outcomes_bytes = None
+    outcomes_path = tmp_output / "remote-outcomes.parquet"
+    pl.DataFrame(
+        [
+            {
+                "document_id": document,
+                "docket_id": docket,
+                "publisher_status": "removed",
+                "observed_at": "2026-11-09T12:00:00+00:00",
+                "removed_observed_at": "2026-11-09T12:00:00+00:00",
+                "http_status": 404,
+                "body_sha256": None,
+            }
+        ],
+        schema=OUTCOME_SCHEMA,
+    ).write_parquet(outcomes_path)
+    outcomes_bytes = outcomes_path.read_bytes()
+
+    def fake_working(remote_key, local_path):
+        if remote_key != OUTCOMES:
+            return False
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        local_path.write_bytes(outcomes_bytes)
+        return True
+
+    monkeypatch.setattr(regulations.r2, "download_working_copy", fake_working)
+
+    RegulationsPipeline(
+        allow_fresh_start=True,
+        agency=AGENCY,
+        output_dir=tmp_output,
+        skip_comments=True,
+        enrich_text=False,
+        skip_upload=False,
+    ).run()
+
+    from spicy_regs.sources import publication as pub
+
+    index = pub.parse_index(native_publication.objects[pub.INDEX_V2_KEY])
+    location = pub.single_member(index, "documents.parquet").path
+    published = pl.read_parquet(io.BytesIO(native_publication.objects[location]))
+    assert published["publisher_status"].to_list() == ["removed"]
+    receipts_key = index["families"]["documents"]["prefix"] + "/etl_receipts.parquet"
+    receipts = pl.read_parquet(io.BytesIO(native_publication.objects[receipts_key]))
+    observed = receipts.filter((pl.col("dataset") == "documents") & (pl.col("outcome") == "observed"))
+    assert any(
+        w["source_id"] == RECONCILE_SOURCE_ID
+        for row in observed["witnesses"].to_list()
+        for w in row
+    )
+
+    before_index = native_publication.objects[pub.INDEX_V2_KEY]
+    monkeypatch.setattr(
+        DocumentsFamily,
+        "annotate",
+        lambda *args, **kwargs: pytest.fail("DocumentsFamily rebuilt after ETL already reconciled"),
+    )
+    DocumentsFamily(output_dir=tmp_output / "refresh", skip_upload=False).run()
+    assert native_publication.objects[pub.INDEX_V2_KEY] == before_index

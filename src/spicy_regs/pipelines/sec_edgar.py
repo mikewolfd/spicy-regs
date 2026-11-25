@@ -52,16 +52,46 @@ def acquire(issuers, start, end, output_dir, *, contact_email, transport=None, r
 
             def get(issuer, kind, continuation=None):
                 from spicy_docs.sources.sec_edgar import (
+                    EdgarError,
                     companyfacts_url,
                     read_companyfacts,
                     read_submissions,
                     submissions_url,
                 )
+                from spicy_docs.transport.captured import attached_capture
                 from spicy_regs.pipelines.raw_releases import open_raw, raw_original
 
                 source = reusable.get((issuer, kind, continuation))
                 if source is None:
-                    parsed, capture = reader.acquire(issuer, kind=kind, continuation=continuation)
+                    try:
+                        parsed, capture = reader.acquire(issuer, kind=kind, continuation=continuation)
+                    except EdgarError as error:
+                        capture = attached_capture(error)
+                        if kind == "companyfacts" and capture is not None and capture.status_code == 404:
+                            source = {
+                                "cik": issuer,
+                                "kind": kind,
+                                "continuation": None,
+                                "url": capture.requested_url,
+                                "sha256": capture.sha256,
+                                "bytes": capture.byte_size,
+                                "observed_at": capture.observed_at,
+                                "status": "no-companyfacts",
+                            }
+                            sources.append(source)
+                            owner.event(
+                                "sec-edgar-identity",
+                                dataset_id="sec-edgar-" + kind,
+                                native_id=issuer,
+                                covered_period=f"{start}/{end}",
+                                source_version=source["sha256"],
+                                source_url=source["url"],
+                                sha256=source["sha256"],
+                                status="no-companyfacts",
+                                http_status=404,
+                            )
+                            return None
+                        raise
                     source = {
                         "cik": issuer,
                         "kind": kind,
@@ -73,12 +103,20 @@ def acquire(issuers, start, end, output_dir, *, contact_email, transport=None, r
                     }
                 else:
                     url = submissions_url(issuer, continuation) if kind == "submissions" else companyfacts_url(issuer)
-                    if source["url"] != url or not 0 < source["bytes"] <= MAX_BYTES:
+                    status = source.get("status")
+                    if status not in {None, "no-companyfacts"} or (
+                        status == "no-companyfacts" and (kind != "companyfacts" or continuation is not None)
+                    ):
+                        raise ValueError("Reused SEC source has unsupported status")
+                    min_bytes = 0 if status == "no-companyfacts" else 1
+                    if source["url"] != url or not min_bytes <= source["bytes"] <= MAX_BYTES:
                         raise ValueError("Reused SEC source differs from its selected identity")
                     path = raw_original(open_raw(), source["sha256"], source["bytes"])
                     body = path.read_bytes()
                     parsed = (
-                        read_submissions(body, issuer, continuation=continuation)
+                        None
+                        if status == "no-companyfacts"
+                        else read_submissions(body, issuer, continuation=continuation)
                         if kind == "submissions"
                         else read_companyfacts(body, issuer)
                     )
@@ -88,6 +126,7 @@ def acquire(issuers, start, end, output_dir, *, contact_email, transport=None, r
                         raw_source=True,
                         original_location=url,
                         observed_at=source["observed_at"],
+                        **({"source_validation": "no-companyfacts"} if status == "no-companyfacts" else {}),
                     )
                 sources.append(source)
                 owner.event(
@@ -98,6 +137,7 @@ def acquire(issuers, start, end, output_dir, *, contact_email, transport=None, r
                     source_version=source["sha256"],
                     source_url=source["url"],
                     sha256=source["sha256"],
+                    **({"status": source["status"]} if source.get("status") else {}),
                 )
                 return parsed
 

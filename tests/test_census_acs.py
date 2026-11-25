@@ -315,3 +315,77 @@ def test_build_reads_evidence_from_real_source_native_release_reader(tmp_path):
         "1198": (Decimal("91000.000000"), "numeric"),
         "06ZZ": (None, "unavailable"),
     }
+
+
+def test_atomic_multi_table_county_and_congressional_district_generation(tmp_path, monkeypatch):
+    from spicy_regs import local_publication
+    from spicy_regs.explorer_metadata import build_bundle
+
+    county_reader = Reader([record("001", "80000"), record("003", "90000")])
+    cd_reader = Reader([cd_record("10", "00", income="82000")])
+
+    # A late failure in congressional_district_reader preserves pre-existing county and CD tables.
+    existing_dir = tmp_path / "atomic"
+    county_path, cd_path = module.build_census_acs_tables(
+        county_reader=county_reader,
+        congressional_district_reader=cd_reader,
+        output_dir=existing_dir,
+        vintage=2024,
+        state="10",
+        counties=("001", "003"),
+        districts=("00",),
+    )
+    county_before, cd_before = county_path.read_bytes(), cd_path.read_bytes()
+    broken_cd_reader = Reader([cd_record("10", "00", session="18"), cd_record("10", "01", session="19")])
+    with pytest.raises(ValueError, match="mixes Congress session GEO_ID prefixes"):
+        module.build_census_acs_tables(
+            county_reader=Reader([record("001", "99999"), record("003", "99999")]),
+            congressional_district_reader=broken_cd_reader,
+            output_dir=existing_dir,
+            vintage=2024,
+            state="10",
+            counties=("001", "003"),
+            districts=("00", "01"),
+        )
+    assert county_path.read_bytes() == county_before
+    assert cd_path.read_bytes() == cd_before
+
+    # Pipeline builds one atomic multi-table generation covering both county and congressional_district.
+    out = tmp_path / "combined-build"
+    artifact, evidence = build(
+        county_reader,
+        out,
+        vintage=2024,
+        state="10",
+        counties=("001", "003"),
+        congressional_district_reader=cd_reader,
+        districts=("00",),
+    )
+    assert pq.read_schema(out / "generation" / module.OUTPUT).equals(module.SCHEMA)
+    assert pq.read_schema(out / "generation" / module.CD_OUTPUT).equals(module.CD_SCHEMA)
+
+    live = tmp_path / "live.json"
+    live.write_text(json.dumps(publication.empty_index()))
+    dry_out = tmp_path / "dry"
+    local_publication.main([
+        "--generation", str(out / "generation"),
+        "--family", "census-acs",
+        "--evidence", str(evidence),
+        "--dry-run", "--scratch-raw",
+        "--live-index", str(live),
+        "--output", str(dry_out),
+    ])
+    receipt = json.loads((dry_out / "dry-run.json").read_text())
+    assert receipt["status"] == "dry_run_accepted"
+    assert set(receipt["tables"]) == {module.OUTPUT, module.CD_OUTPUT}
+
+    from rulespec_artifacts import LocalMemberSource, iter_member_descriptors
+
+    index = publication.empty_index()
+    index["version"] = 2
+    index["families"]["census-acs"] = publication.generation_entry(
+        artifact, iter_member_descriptors(artifact, LocalMemberSource(out / "generation"))
+    )
+    bundle = build_bundle(index)
+    for name in (module.TABLE, module.CD_TABLE):
+        assert bundle["tables"][name]["metadataStatus"] == bundle["tables"][name]["sourceStatus"] == "documented"

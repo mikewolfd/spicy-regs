@@ -40,6 +40,7 @@ including direct answers; legacy capture stages and archive events remain intact
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
@@ -67,6 +68,7 @@ from spicy_docs.transport.source_acquirer import named_challenge
 
 from spicy_regs.sources.senate_evidence import record_serving_rung
 from spicy_regs.sources.senate_roster_ladder import is_senate_xml
+from spicy_regs.transforms.congress_scope import default_congresses
 
 if TYPE_CHECKING:
     from spicy_docs.transport.captured import CapturedBodyResponse
@@ -76,7 +78,19 @@ if TYPE_CHECKING:
 #: The route an archive answer is recorded under, beside the ladder's own transports.
 ARCHIVE: Final = "internet_archive"
 #: The ``ProxyFetchers`` field of each proxy rung.
-_PROXY_FIELDS: Final = {Transport.ZYTE_HTTP: "zyte", Transport.FIRECRAWL_RAW: "firecrawl"}
+_PROXY_FIELDS: Final = {
+    Transport.ZYTE_HTTP: "zyte",
+    Transport.ZYTE_SESSION: "zyte",
+    Transport.FIRECRAWL_RAW: "firecrawl",
+}
+#: Sitting-Congress Wayback vote menus older than this trigger an explicit stale-menu warning.
+SITTING_MENU_MAX_AGE_DAYS: Final = 7
+_MENU_URL_PATTERN = re.compile(r"/vote_menu_(\d+)_\d+\.xml\Z")
+
+
+def _menu_congress(url: str) -> int | None:
+    match = _MENU_URL_PATTERN.search(url)
+    return int(match[1]) if match is not None else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +145,7 @@ class LadderVoteAcquirer(VoteAcquirer):
                 context={"operation": operation, "chamber": "senate", "url": url},
                 publisher_page=is_senate_xml,
                 refusal=VoteRefusedError,
+                session_rung=True,
             )
         except VoteSourceError as error:
             outcomes = error.__dict__.get("rung_outcomes", ())
@@ -153,6 +168,9 @@ class LadderVoteAcquirer(VoteAcquirer):
         if answer.transport is Transport.FIRECRAWL_RAW:
             # Zyte, the rung before it, failed this file.
             self._skip_proxies((Transport.ZYTE_HTTP,))
+        elif answer.transport is Transport.ZYTE_SESSION:
+            # Firecrawl, the rung before Zyte's session rung, failed this file; keep Zyte for the session rung.
+            self._skip_proxies((Transport.FIRECRAWL_RAW,))
         rung = answer.transport.value
         self.rungs[rung] += 1
         if self.evidence is not None and answer.transport is not Transport.DIRECT:
@@ -191,8 +209,20 @@ class LadderVoteAcquirer(VoteAcquirer):
             return None
         result, capture, archived, index_sha256 = replay
         self.rungs[ARCHIVE] += 1
-        age_seconds = int((self._clock() - archived.captured_at).total_seconds())
+        now = self._clock()
+        age_seconds = int((now - archived.captured_at).total_seconds())
         self.archived.append(ArchiveServe(url, archived.captured_at, age_seconds))
+        age_days = age_seconds // 86400
+        menu_congress = _menu_congress(url)
+        if menu and menu_congress in default_congresses(now.date()) and age_days >= SITTING_MENU_MAX_AGE_DAYS:
+            logger.warning(
+                "Roll-call votes: sitting-Congress Senate vote menu {} from Internet Archive is stale "
+                "({} day(s) old >= {} day threshold; captured {:%Y-%m-%d %H:%M} UTC)",
+                url,
+                age_days,
+                SITTING_MENU_MAX_AGE_DAYS,
+                archived.captured_at,
+            )
         if self.evidence is not None:
             self.evidence.event(
                 "senate-archive-capture", route=ARCHIVE, original_url=url, archive_url=archived.replay_url,
@@ -206,19 +236,35 @@ class LadderVoteAcquirer(VoteAcquirer):
         return result, capture
 
 
-def senate_warnings(archived: Iterable[ArchiveServe], refused_files: int) -> list[str]:
+def senate_warnings(
+    archived: Iterable[ArchiveServe],
+    refused_files: int,
+    *,
+    sitting_congresses: Iterable[int] | None = None,
+    max_menu_age_days: int = SITTING_MENU_MAX_AGE_DAYS,
+) -> list[str]:
     """What a run must say aloud about its Senate half: Archive copies (with their age) and refused files.
 
     Either passes the run green -- an Archive copy of any age is the file, and a refused file keeps its held row --
-    so each is a CI warning, read where the run is read; the published freshness check budgets the Senate's
-    newest ``vote_day`` (``scripts/check_rollup_freshness.py``).
+    so each is a CI warning, read where the run is read; stale sitting-Congress menu captures are called out
+    explicitly against ``max_menu_age_days``, and the published freshness check budgets the Senate's newest
+    ``vote_day`` (``scripts/check_rollup_freshness.py``).
     """
+    sitting = set(default_congresses() if sitting_congresses is None else sitting_congresses)
     messages: list[str] = []
     files: list[ArchiveServe] = []
     for serve in archived:
         if serve.menu:
-            messages.append(f"Senate vote menu {serve.url} read from an Internet Archive capture of "
-                            f"{serve.archived_at:%Y-%m-%d %H:%M} UTC, {serve.age_seconds // 86400} day(s) old")  # fmt: skip
+            age_days = serve.age_seconds // 86400
+            menu_congress = _menu_congress(serve.url)
+            if menu_congress in sitting and age_days >= max_menu_age_days:
+                messages.append(
+                    f"STALE sitting-Congress Senate vote menu {serve.url} read from an Internet Archive capture of "
+                    f"{serve.archived_at:%Y-%m-%d %H:%M} UTC, {age_days} day(s) old (threshold {max_menu_age_days} day(s))"
+                )
+            else:
+                messages.append(f"Senate vote menu {serve.url} read from an Internet Archive capture of "
+                                f"{serve.archived_at:%Y-%m-%d %H:%M} UTC, {age_days} day(s) old")  # fmt: skip
         else:
             files.append(serve)
     if files:
@@ -235,5 +281,6 @@ __all__ = [
     "ARCHIVE_INTERVAL_SECONDS",
     "ArchiveServe",
     "LadderVoteAcquirer",
+    "SITTING_MENU_MAX_AGE_DAYS",
     "senate_warnings",
 ]

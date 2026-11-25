@@ -127,6 +127,23 @@ def _members(path: Path) -> list[Path]:
     return sorted(path.rglob("*.parquet")) if path.is_dir() else [path]
 
 
+def _partition_value(relative: Path, column: str) -> str:
+    """Return ``<value>`` from a partitioned member's ``<column>=<value>/...`` path."""
+    head = relative.parts[0] if len(relative.parts) > 1 else ""
+    name, separator, value = head.partition("=")
+    if not separator or name != column or not value:
+        raise ValueError(f"Partitioned member path does not begin with {column}=<value>: {relative}")
+    return value
+
+
+def _carried_bill_id_regex(partitions: Collection[str]) -> str:
+    """Match ``exact_json`` ``identity_json`` whose first identity field ``bill_id`` starts with one of ``partitions``."""
+    import re
+
+    escaped = "|".join(re.escape(value) for value in sorted(partitions))
+    return rf'^\["list",\[\["list",\[\["str","bill_id"\],\["str","(?:{escaped})-'
+
+
 def write_legislative_outputs(
     outputs: Sequence[Path],
     destination: Path,
@@ -136,6 +153,7 @@ def write_legislative_outputs(
     prior_receipts: Sequence[Path] = (),
     replayed: Collection[str] = (),
     file_outcomes_table: str | None = None,
+    carried_partitions: Mapping[str, Mapping[str, Any]] | None = None,
     validate: bool = True,
     bulk: bool = True,
 ) -> dict:
@@ -148,6 +166,7 @@ def write_legislative_outputs(
     if destination.exists():
         raise FileExistsError(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
+    carried_map = dict(carried_partitions or {})
     manifest: dict[str, Any] = {
         "generation_id": generation_id,
         "subjects": {},
@@ -161,7 +180,8 @@ def write_legislative_outputs(
     with TemporaryDirectory(prefix=".legislative-", dir=destination.parent) as temporary:
         stage = Path(temporary) / "bundle"
         stage.mkdir()
-        receipt_shards, states = [], []
+        receipt_shards, carried_receipt_shards, states = [], [], []
+        excluded_carried: dict[str, tuple[str, int]] = {}
         for output in outputs:
             output = Path(output)
             dataset = output.name if output.is_dir() else output.stem
@@ -170,13 +190,17 @@ def write_legislative_outputs(
                 continue
             if dataset in manifest["datasets"]:
                 raise ValueError(f"Repeated dataset output: {dataset}")
+            carried = carried_map.get(dataset)
+            if carried is not None and dataset in replayed:
+                raise ValueError(f"{dataset}: cannot carry partitions of a replayed dataset")
             manifest["datasets"].append(dataset)
             dataset_started = monotonic()
             manifest["subjects"][dataset] = []
             manifest["source_outputs"][dataset] = str(output.resolve())
             manifest["refused_rows"][dataset] = 0
             members = _members(output)
-            if output.is_dir() and not members:
+            carried_subjects = tuple(carried["subjects"]) if carried is not None else ()
+            if output.is_dir() and not members and not carried_subjects:
                 # An empty partitioned table has no physical member. Its receipt
                 # records successful emptiness, without inventing a partition key.
                 from spicy_regs.etl_receipts import exact_json
@@ -196,13 +220,70 @@ def write_legislative_outputs(
                     )
                 )
                 (stage / dataset).mkdir()
-            for member_index, member in enumerate(members):
-                digest = _sha(member)
-                relative = (
-                    str(member.relative_to(output))
-                    if output.is_dir() and member.is_relative_to(output)
-                    else member.name
+            if carried is not None:
+                if not output.is_dir():
+                    raise ValueError(f"{dataset}: carried partitions require a partitioned directory output")
+                partition_column = carried["partition_column"]
+                carried_values = frozenset(carried["partitions"])
+                for member in members:
+                    relative_path = member.relative_to(output)
+                    if _partition_value(relative_path, partition_column) in carried_values:
+                        raise ValueError(
+                            f"{dataset}: rebuilt output overlaps carried partition {_partition_value(relative_path, partition_column)}"
+                        )
+                entries: list[tuple[str, str, Path, Mapping[str, Any] | None]] = [
+                    ("rebuilt", member.relative_to(output).as_posix(), member, None) for member in members
+                ]
+                for subject_path, info in zip(carried_subjects, carried["file_states"], strict=True):
+                    entries.append(("carried", info["relative_path"], Path(subject_path), info))
+                entries.sort(key=lambda item: item[1])
+                seen_relatives = [item[1] for item in entries]
+                if len(set(seen_relatives)) != len(seen_relatives):
+                    raise ValueError(f"{dataset}: duplicate member path across carried and rebuilt partitions")
+                carried_receipt_path = Path(carried["receipts"])
+                carried_receipt_shards.append(carried_receipt_path)
+                excluded_carried[dataset] = (
+                    _carried_bill_id_regex(carried_values),
+                    pq.read_metadata(carried_receipt_path).num_rows,
                 )
+            else:
+                entries = [
+                    (
+                        "rebuilt",
+                        member.relative_to(output).as_posix() if output.is_dir() and member.is_relative_to(output) else member.name,
+                        member,
+                        None,
+                    )
+                    for member in members
+                ]
+            for member_index, (kind, relative, member, carried_info) in enumerate(entries):
+                if kind == "carried":
+                    assert carried_info is not None
+                    expected_schema = policy(dataset).subject_schema
+                    if not pq.read_schema(member).equals(expected_schema):
+                        raise ValueError(f"{dataset}: carried partition schema differs from current policy")
+                    if pq.read_metadata(member).num_rows != carried_info["state"]["rows"]:
+                        raise ValueError(f"{dataset}: carried partition row count differs from retained file state")
+                    final_relative = f"{dataset}/{relative}"
+                    target = stage / final_relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(member, target)
+                    manifest["subjects"][dataset].append(final_relative)
+                    from spicy_regs.etl_receipts import public_witnesses
+
+                    states.append(
+                        (
+                            {"file_state": carried_info["state"]},
+                            ReceiptContext(
+                                generation_id,
+                                f"{dataset}/member/{member_index}",
+                                carried_info["processor"],
+                                public_witnesses(carried_info["witnesses"]),
+                            ),
+                        )
+                    )
+                    continue
+                digest = _sha(member)
                 retained_member = destination / member.relative_to(stage) if member.is_relative_to(stage) else member
                 witness = {
                     "source_id": dataset,
@@ -304,7 +385,7 @@ def write_legislative_outputs(
                 receipt_shards.append(receipts)
                 manifest["outcome_subjects"][name] = [f"{name}.parquet"]
             logger.info("receipt-phase write-legislative-dataset dataset={} members={} seconds={:.1f} status=ok",
-                        dataset, len(members), monotonic() - dataset_started)
+                        dataset, len(entries), monotonic() - dataset_started)
         if not manifest["datasets"]:
             raise ValueError("No owned legislative producer outputs selected")
         with phase_log("write-file-states", files=len(states)):
@@ -325,10 +406,14 @@ def write_legislative_outputs(
         with phase_log("combine-legislative-receipts", shards=len(receipt_shards)):
             combine_receipts(receipt_shards, stage / manifest["receipt_file"])
         manifest["fresh_refused_rows"] = dict(manifest["refused_rows"])
+        if excluded_carried and not prior_receipts:
+            raise ValueError("Carried partitions require prior_receipts")
         if prior_receipts:
             # Carry once over the complete dataset, including all partitions. A
             # shard cannot decide whether another shard resolved a prior refusal.
+            import pyarrow.compute as pc
             import pyarrow.dataset as ds
+            compute: Any = pc
             from spicy_regs.receipt_history import (
                 RefusalIdentity, carry_receipt_history, crs_revision_identity_migrations,
             )
@@ -337,19 +422,52 @@ def write_legislative_outputs(
             # originals, so its receipts are not carried and no new receipt cites them as a predecessor.
             active = [name for name in (*manifest["datasets"], *manifest["outcome_subjects"], FILE_STATES)
                       if name not in replayed]
+            excluded_counts = dict.fromkeys(excluded_carried, 0)
             with phase_log("scope-legislative-prior", priors=len(prior_receipts)):
                 scoped = stage / ".shards" / "selected-prior.parquet"
                 with open_receipt_writer(scoped) as writer:
                     for path in prior_receipts:
                         with pq.ParquetFile(path) as previous:
-                            for batch in previous.iter_batches(batch_size=2000):
+                            for batch in previous.iter_batches(batch_size=50_000):
                                 scoped_rows = pa.Table.from_batches([batch]).filter(ds.field("dataset").isin(active))
                                 if scoped_rows.filter(
                                     (ds.field("dataset") == "bill_publisher_summaries") &
                                     (ds.field("policy_version") != policy("bill_publisher_summaries").policy_version)
                                 ).num_rows:
                                     raise ValueError("CRS summary prior uses an incompatible clock policy; replay retained originals")
-                                writer.write_table(scoped_rows)
+                                for carried_dataset, (pattern, _) in excluded_carried.items():
+                                    mask = (
+                                        (ds.field("dataset") == carried_dataset)
+                                        & (ds.field("outcome") == "accepted")
+                                    )
+                                    candidates = scoped_rows.filter(mask)
+                                    if candidates.num_rows:
+                                        in_carried = compute.fill_null(
+                                            compute.match_substring_regex(candidates["identity_json"], pattern), False
+                                        )
+                                        matched = candidates.filter(in_carried).num_rows
+                                        if matched:
+                                            excluded_counts[carried_dataset] += matched
+                                            keep_mask = compute.invert(
+                                                compute.and_kleene(
+                                                    compute.and_kleene(
+                                                        compute.equal(scoped_rows["dataset"], carried_dataset),
+                                                        compute.equal(scoped_rows["outcome"], "accepted"),
+                                                    ),
+                                                    compute.fill_null(
+                                                        compute.match_substring_regex(scoped_rows["identity_json"], pattern),
+                                                        False,
+                                                    ),
+                                                )
+                                            )
+                                            scoped_rows = scoped_rows.filter(keep_mask)
+                                if scoped_rows.num_rows:
+                                    writer.write_table(scoped_rows)
+            for carried_dataset, (_, expected_count) in excluded_carried.items():
+                if excluded_counts[carried_dataset] != expected_count:
+                    raise ValueError(
+                        f"{carried_dataset}: carried receipt count {expected_count} differs from prior rows {excluded_counts[carried_dataset]}"
+                    )
             identities, migrations = {}, {}
             for name in manifest["datasets"]:
                 current_policy = policy(name)
@@ -362,6 +480,11 @@ def write_legislative_outputs(
             receipt_path = stage / manifest["receipt_file"]
             carry_receipt_history(receipt_path, [scoped], receipt_path, refusal_identities=identities,
                                   identity_migrations=migrations)
+            if carried_receipt_shards:
+                with phase_log("append-carried-receipts", shards=len(carried_receipt_shards)):
+                    combined_carried = stage / ".shards" / "combined-with-carried.parquet"
+                    combine_receipts([receipt_path, *carried_receipt_shards], combined_carried)
+                    combined_carried.replace(receipt_path)
             with phase_log("count-legislative-refusals", datasets=len(manifest["datasets"])):
                 held = ds.dataset(receipt_path, format="parquet")
                 for name in manifest["datasets"]:

@@ -1778,8 +1778,12 @@ def _stage_verified_generation(
                 "/".join(f"{c}={dict(p)[c]}" for c in prior["partitionColumns"]) for p in missing)))
         if key not in exempt:
             old_size = prior["byteSize"] if prior else _get_remote_size(client, bucket, key)
-            kept = prior is not None and _keeps_rows_and_columns(table, prior)
-            _assert_upload_safe(table["byteSize"], old_size, key, floor=_KEPT_ROWS_MIN_RATIO if kept else None)
+            if _is_legitimately_empty_discovery_signals(key, table, artifact, index):
+                floor = 0.0
+            else:
+                kept = prior is not None and _keeps_rows_and_columns(table, prior)
+                floor = _KEPT_ROWS_MIN_RATIO if kept else None
+            _assert_upload_safe(table["byteSize"], old_size, key, floor=floor)
     old_family = index["families"].get(family)
     # The table set may change only by an explicit migration: exactly the declared added tables join, none leave.
     # A union, so the declaration is inert once those tables are published.
@@ -2210,6 +2214,25 @@ def _partition_rows(table: Mapping) -> dict[tuple[tuple[str, str], ...], int]:
         partition = _partition(member)
         rows[partition] = rows.get(partition, 0) + member["rows"]
     return rows
+
+
+def _is_legitimately_empty_discovery_signals(
+    key: str, table: Mapping, artifact, index: Mapping,
+) -> bool:
+    """Whether ``discovery_signals.parquet`` has 0 rows with non-empty ``documents.parquet`` evidence.
+
+    Quiet periods legitimately produce zero spike rows (~520 B Parquet) after a populated prior (~1,225 B);
+    every non-zero shrink and every other table keeps the ordinary guard.
+    """
+    if key != "discovery_signals.parquet" or table.get("rows") != 0:
+        return False
+    parents = artifact.root["spec"].get("parents", {})
+    if "documents.parquet" in parents and not parents["documents.parquet"].get("byteSize"):
+        return False
+    docs = table_descriptor(index, "documents.parquet")
+    if docs is not None and not docs.get("rows"):
+        return False
+    return True
 
 
 def _keeps_rows_and_columns(table: Mapping, prior: Mapping) -> bool:

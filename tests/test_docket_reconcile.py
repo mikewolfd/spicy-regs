@@ -255,3 +255,25 @@ def test_the_daily_step_paces_one_attempt_per_request_and_runs_clear_of_the_swee
     assert "DATA_GOV_API_KEY" in step["env"] and "R2_CATALOG_TOKEN" not in step["env"]
     timeout = workflow["jobs"]["reconcile"]["timeout-minutes"]
     assert timeout * 60 > reconcile.DEFAULT_MAX_REQUESTS * reconcile.REQUEST_INTERVAL_SECONDS
+
+
+def test_reconcile_downloads_documents_via_managed_generation(tmp_path, monkeypatch):
+    downloaded: list[tuple[str, str]] = []
+
+    def fake_download(key, path):
+        downloaded.append(("managed", key))
+        pl.DataFrame(HELD, schema=["document_id", "docket_id", "posted_date", "modify_date"], orient="row").write_parquet(
+            path
+        )
+        return True
+
+    def fake_working_copy(key, path):
+        downloaded.append(("working", key))
+        return False
+
+    monkeypatch.setattr(r2, "download", fake_download)
+    monkeypatch.setattr(r2, "download_working_copy", fake_working_copy)
+    counts = _run(tmp_path, Publisher())
+    assert counts["removed"] == 1
+    assert ("managed", "documents.parquet") in downloaded
+    assert ("working", "documents.parquet") not in downloaded

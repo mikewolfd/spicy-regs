@@ -2065,7 +2065,7 @@ def build_bill_family(
     summary_acquirer: BillSumSource | None = None,
     max_version_fetches: int = MAX_VERSION_FETCHES,
     download_prior: Callable[[str, Path], bool] = r2.download,
-    download_members: Callable[[str, Path], Sequence[Path]] = download_prior_members,
+    download_members: Callable[..., Sequence[Path]] = download_prior_members,
     evidence: CaptureEvidence | None = None,
     receipt_build=None,
     publication_package_ids: tuple[str, ...] = (),
@@ -2192,7 +2192,22 @@ def build_bill_family(
         _require_replay_scope(required, {}, bulk_congresses, bill_types)
     prior_paths, replay = _download_prior(output_dir, download_prior)
     _require_spelled_digests(prior_paths)
-    split_priors = {name: published_members(output_dir, name, download_members) for name in PARTITIONED}
+    import inspect
+
+    active_congresses = frozenset(str(c) for c in congresses) | frozenset(
+        str(identity.congress) for identity in selected_children
+    )
+    accepts_partitions = "partitions" in inspect.signature(download_members).parameters
+
+    def _members_for(name: str, key: str, target: Path) -> Sequence[Path]:
+        if name == "bill_sections" and accepts_partitions:
+            return download_members(key, target, partitions=active_congresses)
+        return download_members(key, target)
+
+    split_priors = {
+        name: published_members(output_dir, name, lambda key, target, name=name: _members_for(name, key, target))
+        for name in PARTITIONED
+    }
     index = _prior_index(
         prior_paths, split_priors["bill_sections"], in_scope=lambda bill: _in_scope(bill, congresses, bill_types)
     )
@@ -2616,7 +2631,8 @@ def build_bill_family(
     from spicy_regs.transforms.cbo_archive_selection import read_selected_cards
 
     cards = read_selected_cards(
-        cbo_archive_manifest or (Path(raw) if (raw := os.environ.get("BILL_FAMILY_CBO_ARCHIVE_MANIFEST")) else None),
+        cbo_archive_manifest
+        or (Path(raw) if (raw := os.environ.get("BILL_FAMILY_CBO_ARCHIVE_MANIFEST", "").strip()) else None),
         archive_root=cbo_archive_root, congresses=bulk_congresses, output_dir=output_dir, evidence=evidence,
     )
     folded = replace(folded, cbo_cost_estimates=tuple(estimates), cbo_feed_items=feed.items,

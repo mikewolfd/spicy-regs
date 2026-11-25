@@ -406,3 +406,144 @@ def test_bulk_zip_streaming_build_and_completeness_guards(tmp_path, monkeypatch)
             archive_root=raw,
         )
     assert not (tmp_path / "orphan-cont" / "generation").exists()
+
+
+def test_non_xbrl_filer_404_companyfacts_empty_facts_and_bulk_no_companyfacts(tmp_path, monkeypatch):
+    import httpx
+    from zipfile import ZIP_DEFLATED, ZipFile
+
+    from spicy_docs.sources.sec_edgar import EdgarError
+    from spicy_docs.transport.http import RetryableHTTPStatusError
+    from spicy_regs.pipelines.sec_edgar import build_bulk
+
+    raw = tmp_path / "raw"
+    monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(raw))
+
+    sub_bytes = (FIXTURES / "submissions.json").read_bytes()
+    not_found_body = b"<Error><Code>NoSuchKey</Code></Error>"
+
+    def handler(request):
+        if "/api/xbrl/companyfacts/" in str(request.url):
+            return httpx.Response(404, content=not_found_body, headers={"content-type": "application/xml"})
+        return httpx.Response(200, content=sub_bytes, headers={"content-type": "application/json"})
+
+    selection = acquire(
+        ["320193"],
+        "2023-01-01",
+        "2024-12-31",
+        tmp_path / "acq-404",
+        contact_email="ops@example.org",
+        transport=httpx.MockTransport(handler),
+    )
+    facts_src = next(s for s in selection["sources"] if s["kind"] == "companyfacts")
+    assert facts_src["status"] == "no-companyfacts"
+    assert facts_src["bytes"] == len(not_found_body)
+
+    reused = acquire(
+        ["320193"],
+        "2023-01-01",
+        "2024-12-31",
+        tmp_path / "acq-reuse",
+        contact_email="ops@example.org",
+        transport=httpx.MockTransport(lambda req: pytest.fail("Reused no-companyfacts should not hit network")),
+        reuse=selection["sources"],
+    )
+    assert reused == selection
+
+    out_404 = tmp_path / "build-404"
+    build(selection, CONCEPTS, out_404, fact_start="2023-01-01", fact_end="2024-12-31", archive_root=raw)
+    with connection(out_404 / "generation") as con:
+        assert con.execute("select count(*) from sec_filings").fetchone()[0] == 2
+        assert con.execute("select count(*) from sec_reported_facts").fetchone()[0] == 0
+        src_meta = json.loads(
+            con.execute("select metadata_json from sec_issuer_sources where kind='companyfacts'").fetchone()[0]
+        )
+        assert src_meta["status"] == "no-companyfacts"
+        res = select_fact(con, cik="320193", taxonomy="us-gaap", concept="Assets", unit="USD", end="2024-09-28")
+        assert res == {"outcome": "no_companyfacts", "observations": []}
+
+    # HTTP 500 on companyfacts or HTTP 404 on submissions must still fail loudly.
+    with pytest.raises(RetryableHTTPStatusError):
+        acquire(
+            ["320193"],
+            "2023-01-01",
+            "2024-12-31",
+            tmp_path / "acq-500",
+            contact_email="ops@example.org",
+            transport=httpx.MockTransport(
+                lambda req: httpx.Response(500, content=b"err")
+                if "/api/xbrl/companyfacts/" in str(req.url)
+                else httpx.Response(200, content=sub_bytes, headers={"content-type": "application/json"})
+            ),
+        )
+    with pytest.raises(EdgarError):
+        acquire(
+            ["320193"],
+            "2023-01-01",
+            "2024-12-31",
+            tmp_path / "acq-sub-404",
+            contact_email="ops@example.org",
+            transport=httpx.MockTransport(lambda req: httpx.Response(404, content=b"missing")),
+        )
+
+    # Empty facts object (`{}`) succeeds and records explicit facts_status + concept_not_reported.
+    raw_empty, sel_empty = sources(
+        tmp_path / "empty-case",
+        monkeypatch,
+        mutate=lambda kind, value: value.update(facts={}) if kind == "companyfacts" else None,
+    )
+    out_empty = tmp_path / "build-empty"
+    build(sel_empty, CONCEPTS, out_empty, fact_start="2023-01-01", fact_end="2024-12-31", archive_root=raw_empty)
+    with connection(out_empty / "generation") as con:
+        meta_empty = json.loads(
+            con.execute("select metadata_json from sec_issuer_sources where kind='companyfacts'").fetchone()[0]
+        )
+        assert meta_empty["facts_status"] == "empty_facts"
+        assert (
+            select_fact(con, cik="320193", taxonomy="us-gaap", concept="Assets", unit="USD", end="2024-09-28")["outcome"]
+            == "concept_not_reported"
+        )
+
+    # Bulk build tolerates legitimate non-XBRL filers present in submissions.zip and absent from companyfacts.zip.
+    sub_root = json.loads(sub_bytes)
+    non_xbrl_sub = deepcopy(sub_root)
+    non_xbrl_sub["cik"] = "0000789019"
+    non_xbrl_sub["name"] = "NON XBRL FILER"
+    sub_zip = tmp_path / "bulk-sub.zip"
+    with ZipFile(sub_zip, "w", compression=ZIP_DEFLATED) as zf:
+        zf.writestr("CIK0000320193.json", sub_bytes)
+        zf.writestr("CIK0000789019.json", json.dumps(non_xbrl_sub))
+    facts_zip = tmp_path / "bulk-facts.zip"
+    with ZipFile(facts_zip, "w", compression=ZIP_DEFLATED) as zf:
+        zf.writestr("CIK0000320193.json", (FIXTURES / "companyfacts.json").read_bytes())
+
+    bulk_out = tmp_path / "bulk-no-facts"
+    build_bulk(
+        sub_zip,
+        facts_zip,
+        CONCEPTS,
+        bulk_out,
+        filing_start="2023-01-01",
+        filing_end="2024-12-31",
+        fact_start="2023-01-01",
+        fact_end="2024-12-31",
+        observed_at="2026-11-25T12:00:00Z",
+        archive_root=raw,
+    )
+    with connection(bulk_out / "generation") as con:
+        assert (
+            select_fact(con, cik="789019", taxonomy="us-gaap", concept="Assets", unit="USD", end="2024-09-28")["outcome"]
+            == "no_companyfacts"
+        )
+        assert (
+            select_fact(
+                con,
+                cik="320193",
+                taxonomy="us-gaap",
+                concept="Assets",
+                unit="USD",
+                end="2024-09-28",
+                accession="0000320193-24-000123",
+            )["outcome"]
+            == "selected"
+        )

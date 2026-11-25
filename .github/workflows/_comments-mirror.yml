@@ -15,6 +15,12 @@ on:
       diagnostic_native_snapshot:
         type: string
         default: ''
+      debugger_mode:
+        type: string
+        default: 'off'
+      expected_gdb_sha256:
+        type: string
+        default: ''
       # The 2026-10-10 v1 promotion's inputs. That route published ETL receipts, which
       # comments no longer do (ss-juz8); the first step refuses any of them. They stay
       # declared only because _regulations-refresh.yml, shared with the ETL, still
@@ -45,7 +51,49 @@ env:
   SPICY_REGS_CATALOG_LOCK: comments-catalog-write
 
 jobs:
+  qualify-debugger:
+    if: ${{ inputs.debugger_mode == 'qualify' }}
+    runs-on: ${{ inputs.comments_runner }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    # No R2/catalog secrets or production calls in this job. The helper replaces
+    # its ambient environment before starting any supervised qualification child.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --frozen --extra operational-runner
+      - name: Install GDB for diagnostic mode
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gdb
+      - name: Qualify installed debugger only
+        env:
+          TMPDIR: ${{ runner.temp }}
+          DEBUGGER_MODE: ${{ inputs.debugger_mode }}
+          EXPECTED_GDB_SHA256: ${{ inputs.expected_gdb_sha256 }}
+          SKIP_UPLOAD: ${{ inputs.skip_upload }}
+          COMMENTS_ONLY: ${{ inputs.comments_only }}
+          DIAGNOSTIC_NATIVE_SNAPSHOT: ${{ inputs.diagnostic_native_snapshot }}
+        run: |
+          uv run --no-sync python scripts/comments_native_debugger.py check-mode
+          uv run --no-sync python scripts/comments_native_debugger.py qualify \
+            --workdir "$PWD/output/comments-publish-debugger" \
+            --expected-source-sha "$GITHUB_SHA" --invocation "$GITHUB_RUN_ID.$GITHUB_RUN_ATTEMPT"
+      - name: Retain debugger qualification even on refusal
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comments-debugger-qualification-${{ github.run_id }}
+          path: |
+            output/comments-publish-debugger/**/*.json
+            output/comments-publish-debugger/**/*.log
+          retention-days: 30
   publish:
+    if: ${{ inputs.debugger_mode != 'qualify' }}
     runs-on: ${{ inputs.comments_runner }}
     # Unchanged snapshots verify object versions only. A changed snapshot copies
     # the comments table (no receipts since ss-juz8), stages by agency, sorts,
@@ -83,7 +131,31 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: uv sync --frozen --extra operational-runner
+        run: uv sync --frozen --extra operational-runner --extra comments-reader
+
+      - name: Validate debugger mode before credentialed steps
+        env:
+          DEBUGGER_MODE: ${{ inputs.debugger_mode }}
+          EXPECTED_GDB_SHA256: ${{ inputs.expected_gdb_sha256 }}
+          SKIP_UPLOAD: ${{ inputs.skip_upload }}
+          COMMENTS_ONLY: ${{ inputs.comments_only }}
+          DIAGNOSTIC_NATIVE_SNAPSHOT: ${{ inputs.diagnostic_native_snapshot }}
+        run: uv run --no-sync python scripts/comments_native_debugger.py check-mode
+
+      - name: Install GDB for diagnostic mode
+        if: ${{ inputs.debugger_mode == 'gdb' }}
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gdb
+
+      - name: Repeat reviewed debugger qualification without credentials
+        if: ${{ inputs.debugger_mode == 'gdb' }}
+        env:
+          TMPDIR: ${{ runner.temp }}
+          EXPECTED_GDB_SHA256: ${{ inputs.expected_gdb_sha256 }}
+        run: |
+          uv run --no-sync python scripts/comments_native_debugger.py qualify \
+            --workdir "$PWD/output/comments-publish-debugger" \
+            --expected-source-sha "$GITHUB_SHA" --invocation "$GITHUB_RUN_ID.$GITHUB_RUN_ATTEMPT" \
+            --expected-gdb-sha256 "$EXPECTED_GDB_SHA256"
 
       - name: Record actual export placement
         env:
@@ -112,6 +184,8 @@ jobs:
         env:
           TMPDIR: ${{ runner.temp }}
           DIAGNOSTIC_NATIVE_SNAPSHOT: ${{ inputs.diagnostic_native_snapshot }}
+          DEBUGGER_MODE: ${{ inputs.debugger_mode }}
+          EXPECTED_GDB_SHA256: ${{ inputs.expected_gdb_sha256 }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
@@ -145,6 +219,10 @@ jobs:
           if [ -n "$DIAGNOSTIC_NATIVE_SNAPSHOT" ]; then
             ARGS+=(--diagnostic-native-snapshot "$DIAGNOSTIC_NATIVE_SNAPSHOT")
           fi
+          if [ "$DEBUGGER_MODE" = "gdb" ]; then
+            ARGS+=(--debugger-qualification "$PWD/output/comments-publish-debugger/qualification.json")
+            ARGS+=(--expected-gdb-sha256 "$EXPECTED_GDB_SHA256")
+          fi
           echo "Running admitted comments publication at $GITHUB_SHA"
           measure \
             uv run --no-sync python scripts/publish_comments_mirror_guarded.py \
@@ -166,6 +244,8 @@ jobs:
             output/comments-admit-*.log
             output/comments-publish-*.json
             output/comments-publish-*.log
+            output/comments-publish-debugger*/**/*.json
+            output/comments-publish-debugger*/**/*.log
           retention-days: 30
 
       - name: Capture published base versions for dependent jobs

@@ -35,7 +35,10 @@ LOCAL_FAMILIES = frozenset({
     "gsa-iolp",
     "census-acs",
     "census-geocoder",
+    "cms-medicaid",
     "cms-open-payments",
+    "cms-part-b",
+    "cms-part-d",
     "congress-sessions",
     "court-opinions",
     "cms-medicare-provider",
@@ -74,11 +77,20 @@ def _family_schemas(family: str) -> dict | None:
     if family == "census-geocoder":
         from spicy_regs.transforms.build_census_geocoder import SCHEMAS
         return SCHEMAS
+    if family == "cms-medicaid":
+        from spicy_regs.transforms.build_cms_medicaid import SCHEMA, TABLE
+        return {TABLE: SCHEMA}
     if family == "cms-medicare-provider":
         from spicy_regs.transforms.build_cms_provider import SCHEMA, TABLE
         return {TABLE: SCHEMA}
     if family == "cms-open-payments":
         from spicy_regs.transforms.build_cms_open_payments import SCHEMA, TABLE
+        return {TABLE: SCHEMA}
+    if family == "cms-part-b":
+        from spicy_regs.transforms.build_cms_part_b import SCHEMA, TABLE
+        return {TABLE: SCHEMA}
+    if family == "cms-part-d":
+        from spicy_regs.transforms.build_cms_part_d import SCHEMA, TABLE
         return {TABLE: SCHEMA}
     if family == "congress-sessions":
         from spicy_regs.transforms.build_congress_sessions import SCHEMAS

@@ -21,6 +21,15 @@ on:
         description: 'Optional exact UUID/snapshot/schema JSON; requires skip_upload and retains native COPY diagnostics'
         type: string
         default: ''
+      debugger_mode:
+        description: 'Installed GDB: qualify is credential-free only; gdb requires a separately reviewed binary hash'
+        type: choice
+        options: ['off', qualify, gdb]
+        default: 'off'
+      expected_gdb_sha256:
+        description: 'Required only for gdb: SHA-256 from the reviewed hosted qualification'
+        type: string
+        default: ''
 concurrency:
   group: comments-catalog-write
   cancel-in-progress: false
@@ -39,3 +48,5 @@ jobs:
       comments_only: ${{ inputs.comments_only }}
       comments_runner: ${{ inputs.comments_runner }}
       diagnostic_native_snapshot: ${{ inputs.diagnostic_native_snapshot }}
+      debugger_mode: ${{ inputs.debugger_mode }}
+      expected_gdb_sha256: ${{ inputs.expected_gdb_sha256 }}

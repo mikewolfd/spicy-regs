@@ -12,7 +12,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs.conversion_reads import _FamilyReader
-from tests.test_court_prepared_conversion import clusters
+from tests.test_court_prepared_conversion import clusters, unretire_clusters
 from tests.test_native_conversion import DOCKET, bucket as _bucket, convert, publish_old
 
 bucket = _bucket
@@ -70,6 +70,8 @@ def verdicts(reader, dataset, original, monkeypatch, compare):
     ('courtlistener', 'court_dockets', [DOCKET, DOCKET | {'cl_docket_id': '9', 'parties_json': None}], 'case_name'),
 ])
 def test_bulk_and_row_comparisons_reach_the_same_verdict(tmp_path, monkeypatch, bucket, family, dataset, rows, column):
+    if family == 'court-opinion-clusters':
+        unretire_clusters(monkeypatch)
     publish_old(bucket, monkeypatch, tmp_path, family, {dataset: rows})
     compare, seen = _FamilyReader.compare_original, []
 

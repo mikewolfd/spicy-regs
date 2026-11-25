@@ -17,6 +17,32 @@ from tests.test_native_conversion import (
 bucket = _bucket
 
 
+def unretire_clusters(monkeypatch):
+    """Run court-opinion-clusters under its earlier courts/1 receipt policy for conversion tests."""
+    from spicy_regs import court_receipts, court_subjects, data_dictionary, etl_policy_registry, subject_catalog
+    from spicy_regs.policy_migrations import earlier_policy
+
+    earlier = earlier_policy('court_opinion_clusters', 'courts/1')
+    retired = subject_catalog.retired_receipt_datasets()
+    orig_policies = subject_catalog.policies()
+    patched_policies = {**orig_policies, 'court_opinion_clusters': earlier}
+    monkeypatch.setattr(subject_catalog, 'retired_receipt_datasets', lambda: retired - {'court_opinion_clusters'})
+    monkeypatch.setitem(court_subjects.SUBJECT_SCHEMAS, 'court_opinion_clusters', earlier.subject_schema)
+    monkeypatch.setitem(court_subjects.POLICY_VERSIONS, 'court_opinion_clusters', earlier.policy_version)
+    monkeypatch.setitem(court_subjects.RECEIPT_FIELDS, 'court_opinion_clusters', tuple(earlier.receipt_fields))
+    monkeypatch.setitem(court_receipts.POLICIES, 'court_opinion_clusters', earlier)
+    monkeypatch.setattr(etl_policy_registry, 'installed_policies', lambda: patched_policies)
+    monkeypatch.setattr(subject_catalog, 'policies', lambda: patched_policies)
+    monkeypatch.setattr(data_dictionary, 'subject_policies', lambda: patched_policies)
+
+
+@pytest.fixture(autouse=True)
+def clusters_on_its_receipt_route(request, monkeypatch):
+    if request.node.originalname == 'test_a_retired_court_table_never_converts_into_receipts':
+        return
+    unretire_clusters(monkeypatch)
+
+
 def observed_processing(monkeypatch):
     """Observe exact literals and schema consumed by the real comparison stream."""
     from spicy_regs import court_receipts
@@ -278,16 +304,20 @@ def test_conversion_keeps_complete_prior_on_conditional_pointer_retry(tmp_path, 
     assert publication.current_index(BASE)['families']['court-opinion-clusters'] == changed
 
 
-def test_a_retired_court_table_never_converts_into_receipts(tmp_path, monkeypatch, bucket):
-    """court_opinions publishes no receipts (ss-vse3); converting a receiptless family would state them again."""
+@pytest.mark.parametrize('dataset,family,identity', [
+    ('court_opinions', 'court-opinions', {'opinion_id': '7', 'cluster_id': '4'}),
+    ('court_opinion_clusters', 'court-opinion-clusters', {'cluster_id': '7', 'cl_docket_id': '4'}),
+])
+def test_a_retired_court_table_never_converts_into_receipts(tmp_path, monkeypatch, bucket, dataset, family, identity):
+    """Retired court tables publish no receipts (ss-vse3); converting a receiptless family would state them again."""
     from spicy_regs.court_subjects import LEGACY_COLUMNS
     from spicy_regs.subject_catalog import retired_receipt_datasets
 
-    assert 'court_opinions' in retired_receipt_datasets()
-    row = dict.fromkeys(LEGACY_COLUMNS['court_opinions']) | {'opinion_id': '7', 'cluster_id': '4'}
-    old = publish_old(bucket, monkeypatch, tmp_path, 'court-opinions', {'court_opinions': [row]})
+    assert dataset in retired_receipt_datasets()
+    row = dict.fromkeys(LEGACY_COLUMNS[dataset]) | identity
+    old = publish_old(bucket, monkeypatch, tmp_path, family, {dataset: [row]})
     before = list(bucket.writes)
-    with pytest.raises(conversion.ConversionRefused, match=r"Receipts are retired for \['court_opinions'\]"):
-        convert('court-opinions', tmp_path / 'work', publish=True)
+    with pytest.raises(conversion.ConversionRefused, match=rf"Receipts are retired for \['{dataset}'\]"):
+        convert(family, tmp_path / 'work', publish=True)
     assert bucket.writes == before
-    assert publication.current_index(BASE)['families']['court-opinions'] == old
+    assert publication.current_index(BASE)['families'][family] == old

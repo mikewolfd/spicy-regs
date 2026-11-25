@@ -215,3 +215,43 @@ def test_a_base_family_states_its_installed_policy_when_it_builds(tmp_path, monk
     owner.validate_native_output(tmp_path / cls.output)
     [stated] = owner.receipt_policies
     assert stated.descriptor() == installed_policies()[BASE_FAMILIES[family]].descriptor()
+
+
+def test_discovery_signals_rollup_publishes_zero_rows_over_larger_prior(tmp_path, monkeypatch):
+    """ss-lza7 end-to-end: DiscoverySignalsRollup publishes a 0-row result (~520 B) over a larger prior (~1,225 B)."""
+    source, store = tmp_path / "published", Store()
+    _parents(source, DiscoverySignalsRollup, status=False)
+    _setup_env(monkeypatch)
+    monkeypatch.delenv("R2_ALLOW_SHRINK", raising=False)
+    monkeypatch.setattr(r2, "get_r2_client", lambda: store)
+    monkeypatch.setattr(r2, "download", lambda key, path: bool(shutil.copyfile(source / key, path)))
+    monkeypatch.setattr(pub, "load_index", lambda url: pub.parse_index(store.objects[pub.INDEX_V2_KEY])
+                        if pub.INDEX_V2_KEY in store.objects else pub.empty_index())
+
+    # Prior generation has 40 agencies so its Parquet byteSize is well over 2x the empty 0-row file.
+    prior_table = pa.table({
+        "agency_code": [f"AG{i:02d}" for i in range(40)],
+        "recent_30d": list(range(10, 50)),
+        "baseline": [float(i + 1) for i in range(40)],
+        "ratio": [2.5 + i * 0.1 for i in range(40)],
+    })
+    prior_src = tmp_path / "prior-src"
+    prior_src.mkdir()
+    pq.write_table(prior_table, prior_src / "discovery_signals.parquet", store_schema=False)
+    from spicy_regs.generations import build_generation
+    prior_gen = tmp_path / "prior-gen"
+    build_generation(prior_gen, family="discovery-signals", files=[prior_src / "discovery_signals.parquet"],
+                     expected_keys=("discovery_signals.parquet",))
+    prior_index = pub.publish_generation(prior_gen, client=store, bucket="spicy-regs", prior_index=pub.empty_index())
+    prior_bytes = prior_index["families"]["discovery-signals"]["tables"]["discovery_signals.parquet"]["byteSize"]
+
+    # Replace documents.parquet with a non-empty documents table whose dates yield 0 spike rows.
+    pq.write_table(
+        pa.table({"document_id": ["D1"], "agency_code": ["EPA"], "posted_date": ["2020-01-01T12:00:00Z"]}),
+        source / "documents.parquet",
+        store_schema=False,
+    )
+    DiscoverySignalsRollup(output_dir=tmp_path / "empty-run", skip_upload=False).run()
+    current = pub.parse_index(store.objects[pub.INDEX_V2_KEY])["families"]["discovery-signals"]["tables"]["discovery_signals.parquet"]
+    assert current["rows"] == 0
+    assert current["byteSize"] < prior_bytes * 0.5

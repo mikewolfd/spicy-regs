@@ -1,8 +1,10 @@
 name: Rollup — grants_opportunities
-# Dispatch only until one hosted rehearsal with skip_upload has passed; the schedule to add then is in
-# docs/local-family-refresh.md. A run that finds nothing new publishes nothing and ends green.
+# Daily at 11:47 UTC, about two hours after the 09:41 UTC daily export write time. A run that finds nothing new publishes
+# nothing and ends green.
 # Built here: the newest daily export; its admission takes most of the time.
 on:
+  schedule:
+    - cron: '47 11 * * *'
   workflow_dispatch:
     inputs:
       skip_upload:

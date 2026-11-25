@@ -19,12 +19,25 @@ class SenateExpendituresRollup(LegislativeReceiptRollup):
     """The Secretary of the Senate's ruled expenditure tables, from GovInfo granule PDFs (api.data.gov key)."""
 
     name: ClassVar[str] = "senate-expenditures"
+    retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
     receipt_policies = family_policies('senate_expenditures')
     output: ClassVar[str] = "senate_expenditures.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return self.build_receipts(output_dir, build_senate_expenditures)
+        self.acquisition_status: dict = {}
+        result = self.build_receipts(
+            output_dir,
+            build_senate_expenditures,
+            evidence=self.source_evidence,
+            coverage=self.acquisition_status,
+        )
+        if self.acquisition_status.get("refused"):
+            self.deferred_failure = RuntimeError(
+                f"Senate expenditures published with {self.acquisition_status['refused']} refused item(s); "
+                "see source evidence refusals"
+            )
+        return result
 
 
 app = make_rollup_app(SenateExpendituresRollup)

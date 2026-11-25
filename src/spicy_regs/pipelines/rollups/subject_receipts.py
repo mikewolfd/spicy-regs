@@ -95,6 +95,8 @@ class SelectedPriors:
         self.selections = {}
         self.scoped = {}
         self.processing_members = {}
+        #: dataset -> metadata for untouched historical partitions carried directly in native form.
+        self.carried_partitions = {}
         #: dataset -> (subjects, scoped receipts, generation, policy version, reason) of a replay-required prior.
         self.replaced = {}
 
@@ -103,6 +105,8 @@ class SelectedPriors:
         return self.selected.select(dataset, ranged=dataset in self.ranged, last_receipts=dataset in self.last_receipts)
 
     def get(self, dataset):
+        if dataset in self.carried_partitions:
+            raise ValueError(f"{dataset}: partial partition restore already selected; cannot serve full dataset")
         if dataset in self.restored:
             return self._get(dataset)
         with phase_log("prior-restore", dataset=dataset):
@@ -259,6 +263,181 @@ class SelectedPriors:
             raise PriorReplayRequired(dataset, version, reason)
         return source
 
+    def _partition_carry_spec(self, dataset, subjects, receipt_path):
+        """Return ``(partition_column, by_subject)`` when untouched partitions may be carried forward directly."""
+        if receipt_path is None or dataset not in field_registry():
+            return None
+        current_policy = legislative_policy(dataset)
+        if current_policy.identity_fields[:1] != ("bill_id",):
+            return None
+        selected_policy = selected_subject_policy(legislative_input_policy(dataset, subjects), subjects)
+        if replay_reason(selected_policy) is not None or selected_policy != current_policy:
+            return None
+        columns, by_subject = set(), []
+        for subject in subjects:
+            column, separator, value = subject.parent.name.partition("=")
+            if subject.parent.parent.name != dataset or not separator or column != "congress" or not value:
+                return None
+            if not pq.read_schema(subject).equals(current_policy.subject_schema):
+                return None
+            columns.add(column)
+            by_subject.append((subject, value))
+        return ("congress", by_subject) if len(columns) == 1 and by_subject else None
+
+    def _get_partitions(self, dataset, partitions):
+        """Restore only ``partitions`` of ``dataset``, leaving untouched partitions in native form."""
+        partitions = frozenset(str(value) for value in partitions)
+        if dataset in self.restored:
+            carried = self.carried_partitions.get(dataset)
+            if carried is None or carried["restore_partitions"] != partitions:
+                raise ValueError(f"{dataset}: inconsistent restored partition selection")
+            if self.restored[dataset] is not None:
+                self.select(dataset)
+                self._check_processing(dataset)
+            return self.restored[dataset]
+        with phase_log("prior-restore", dataset=dataset, partitions=len(partitions)):
+            with phase_log("prior-select", dataset=dataset):
+                selection = self.select(dataset)
+            if selection is None:
+                self.restored[dataset] = None
+                return None
+            subjects, receipt_path, generation = list(selection.subjects), selection.receipts, selection.generation_id
+            spec = self._partition_carry_spec(dataset, subjects, receipt_path)
+            if spec is None:
+                return self._get(dataset)
+            partition_column, by_subject = spec
+            restore_subjects = [subject for subject, value in by_subject if value in partitions]
+            carried_pairs = [(subject, value) for subject, value in by_subject if value not in partitions]
+            if not carried_pairs:
+                return self._get(dataset)
+            import pyarrow as pa
+            import pyarrow.compute as pc
+            from typing import Any
+            from spicy_regs.etl_receipts import decode_exact_json, open_receipt_writer
+            from spicy_regs.legislative_receipts import _carried_bill_id_regex
+
+            compute: Any = pc
+
+            directory = self.directory / dataset
+            directory.mkdir()
+            with phase_log("prior-scope", dataset=dataset, ranged=dataset in self.selected.ranged):
+                scoped = (receipt_path if dataset in self.selected.ranged
+                          else select_pinned_receipts(receipt_path, directory / "scoped.parquet", dataset=dataset))
+            with phase_log("prior-scope", dataset=FILE_STATES, owner=dataset):
+                files = select_pinned_receipts(receipt_path, directory / "file-receipts.parquet", dataset=FILE_STATES)
+
+            carried_values = frozenset(value for _, value in carried_pairs)
+            carried_pattern = _carried_bill_id_regex(carried_values)
+            restore_scoped = directory / "restore-scoped.parquet"
+            carried_receipts = directory / "carried-receipts.parquet"
+            carried_receipt_count = 0
+            with (
+                pq.ParquetFile(scoped) as source,
+                open_receipt_writer(restore_scoped) as restore_writer,
+                open_receipt_writer(carried_receipts) as carried_writer,
+            ):
+                for batch in source.iter_batches(batch_size=50_000):
+                    table = pa.Table.from_batches([batch])
+                    accepted = compute.equal(table["outcome"], "accepted")
+                    matched = compute.fill_null(
+                        compute.match_substring_regex(table["identity_json"], carried_pattern), False
+                    )
+                    in_carried = compute.and_kleene(accepted, matched)
+                    carried_rows = table.filter(in_carried)
+                    restore_rows = table.filter(compute.invert(in_carried))
+                    if carried_rows.num_rows:
+                        carried_receipt_count += carried_rows.num_rows
+                        carried_writer.write_table(carried_rows)
+                    if restore_rows.num_rows:
+                        restore_writer.write_table(restore_rows)
+
+            expected_carried_rows = sum(pq.read_metadata(subject).num_rows for subject, _ in carried_pairs)
+            if carried_receipt_count != expected_carried_rows:
+                raise ValueError(
+                    f"{dataset}: carried partition rows ({expected_carried_rows}) differ from receipts ({carried_receipt_count})"
+                )
+
+            restore_files = directory / "restore-file-receipts.parquet"
+            carried_file_states: dict[str, dict] = {}
+            with pq.ParquetFile(files) as source, open_receipt_writer(restore_files) as restore_file_writer:
+                for batch in source.iter_batches(batch_size=2000):
+                    keep_indices = []
+                    rows_list = batch.to_pylist()
+                    for index, receipt in enumerate(rows_list):
+                        state = decode_exact_json(receipt["processing_json"])["file_state"]
+                        if state["dataset"] != dataset:
+                            continue
+                        relative = state["relative_path"]
+                        if relative is None:
+                            raise ValueError(f"{dataset}: cannot carry partitions over an empty-state file receipt")
+                        part_col, sep, part_val = Path(relative).parts[0].partition("=")
+                        if not sep or part_col != partition_column:
+                            raise ValueError(f"{dataset}: unexpected retained file state path {relative!r}")
+                        if part_val in carried_values:
+                            if relative in carried_file_states:
+                                raise ValueError(f"{dataset}: duplicate carried file state {relative!r}")
+                            carried_file_states[relative] = {
+                                "relative_path": relative,
+                                "state": state,
+                                "processor": receipt["processor"],
+                                "witnesses": receipt["witnesses"],
+                            }
+                        else:
+                            keep_indices.append(index)
+                    if keep_indices:
+                        restore_file_writer.write_table(pa.Table.from_batches([batch]).take(keep_indices))
+
+            carried_subjects = [subject for subject, _ in carried_pairs]
+            expected_carried_files = {
+                f"{subject.parent.name}/{subject.name}": pq.read_metadata(subject).num_rows
+                for subject in carried_subjects
+            }
+            actual_carried_files = {rel: info["state"]["rows"] for rel, info in carried_file_states.items()}
+            if actual_carried_files != expected_carried_files:
+                raise ValueError(f"{dataset}: carried file states differ from carried native partition members")
+
+            self.selections[dataset] = (subjects, receipt_path, generation)
+            self.scoped[dataset] = scoped
+            output = directory / "processing" / dataset
+            if restore_subjects:
+                bundle = directory / "legislative"
+                bundle.mkdir()
+                combine_receipts([restore_scoped, restore_files], bundle / "etl_receipts.parquet")
+                relative = []
+                for i, subject in enumerate(restore_subjects):
+                    target = bundle / f"subject-{i}.parquet"
+                    shutil.copyfile(subject, target)
+                    relative.append(target.name)
+                manifest = dict(
+                    generation_id=generation,
+                    datasets=[dataset],
+                    subjects={dataset: relative},
+                    receipt_file="etl_receipts.parquet",
+                    unowned_outputs=[],
+                    refused_rows={},
+                )
+                (bundle / "legislative-bundle.json").write_text(json.dumps(manifest))
+                with phase_log("prior-restore-input", dataset=dataset):
+                    output = restore_prior(bundle, directory / "processing")[dataset]
+            else:
+                if pq.read_metadata(restore_scoped).num_rows or pq.read_metadata(restore_files).num_rows:
+                    raise ValueError(f"{dataset}: prior has active-partition receipts without subject members")
+                output.mkdir(parents=True, exist_ok=True)
+            self.restored[dataset] = output
+            self.processing_members[dataset] = tuple(sorted(output.rglob("*.parquet")))
+            self.carried_partitions[dataset] = {
+                "subjects": tuple(carried_subjects),
+                "receipts": carried_receipts,
+                "file_states": [
+                    carried_file_states[f"{subject.parent.name}/{subject.name}"] for subject in carried_subjects
+                ],
+                "partitions": carried_values,
+                "restore_partitions": partitions,
+                "partition_column": partition_column,
+            }
+            self._check_processing(dataset)
+            return output
+
     def download(self, key, target):
         source = self._required(key.removesuffix(".parquet"))
         if source is None:
@@ -308,8 +487,15 @@ class SelectedPriors:
             r2.note_pinned_read(f"{dataset}/etl_receipts.parquet", binding["receipts"])
         return binding
 
-    def download_members(self, key, target):
-        source = self._required(key.removesuffix(".parquet"))
+    def download_members(self, key, target, *, partitions=None):
+        dataset = key.removesuffix(".parquet")
+        if partitions is not None:
+            source = self._get_partitions(dataset, partitions)
+            if dataset in self.replaced:
+                _, _, _, version, reason = self.replaced[dataset]
+                raise PriorReplayRequired(dataset, version, reason)
+        else:
+            source = self._required(dataset)
         if source is None:
             return ()
         members = sorted(source.rglob("*.parquet")) if source.is_dir() else [source]
@@ -520,6 +706,7 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
                     prior_receipts=list(dict.fromkeys(v[1] for v in prior.selections.values())),
                     replayed=frozenset(prior.replaced),
                     file_outcomes_table=FILE_TABLES.get(getattr(self, "publication_family", None) or self.name),
+                    carried_partitions=prior.carried_partitions or None,
                     validate=False,  # the completed generation admits these exact bytes once
                 )
             if manifest["unowned_outputs"] or any(manifest["fresh_refused_rows"].values()):

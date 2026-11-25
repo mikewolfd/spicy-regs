@@ -119,6 +119,14 @@ TABLES = (
     "irs990_filings",
     "irs990_officers",
     "irs990_grants",
+    "irs527_transmissions",
+    "irs527_form8871",
+    "irs527_form8872",
+    "irs527_directors",
+    "irs527_related_entities",
+    "irs527_eains",
+    "irs527_contributions",
+    "irs527_expenditures",
     "fjc_judges",
     "fjc_appointments",
     "fjc_service_terms",
@@ -152,6 +160,9 @@ TABLES = (
     "treasury_statement_periods",
     "treasury_statement_classification_cells",
     "census_acs_county_observations",
+    "census_acs_congressional_district_observations",
+    "congress_sessions",
+    "congress_party_control",
     "census_geocoder_lookups",
     "census_geocoder_geographies",
     "foreign_assistance_observations",
@@ -1085,6 +1096,14 @@ def _build_connection_inputs(con, publication):
         "irs990_filings",
         "irs990_officers",
         "irs990_grants",
+        "irs527_transmissions",
+        "irs527_form8871",
+        "irs527_form8872",
+        "irs527_directors",
+        "irs527_related_entities",
+        "irs527_eains",
+        "irs527_contributions",
+        "irs527_expenditures",
         "fjc_judges", "fjc_appointments", "fjc_service_terms", "fjc_courts", "fjc_snapshots",
         "sam_exclusion_observations",
         "sam_exclusion_snapshots",
@@ -1107,6 +1126,12 @@ def _build_connection_inputs(con, publication):
         "lobbying_quarterly_profiles",
         *FEC_RESEARCH_TABLES,
         "census_acs_county_observations",
+        "census_acs_congressional_district_observations",
+        "congress_sessions",
+        "congress_party_control",
+    "census_acs_congressional_district_observations",
+    "congress_sessions",
+    "congress_party_control",
         "census_geocoder_lookups",
         "census_geocoder_geographies",
         "foreign_assistance_observations",
@@ -3321,6 +3346,54 @@ def _tools() -> list[Tool]:
         reply = page(result["occurrences"])
         _refuse_oversized_page(reply, page, result["occurrences"], offset)
         return reply
+
+    @tool
+    def resolve_usc_disposition(
+        former_title: Annotated[int | str, Field(description="Former U.S.C. title number (e.g. 42, 49, or '49A' for Appendix).")],
+        former_section: Annotated[str, Field(min_length=1, max_length=128)],
+        subsection: str | None = None,
+        section_end: str | None = None,
+        appendix: bool = False,
+    ) -> dict[str, Any]:
+        """Resolve a historical U.S.C. section via the pinned disposition tables.
+
+        Checks the 9 SHA-256-pinned statutory disposition tables for former
+        titles recodified into positive law (e.g. Title 49 Appendix or former
+        Title 42 provisions moved to Title 34). Pass former_title (42, 49, or
+        '49A' for Appendix), former_section, and optional subsection,
+        section_end, or appendix. Returns verdict, recodification, successors
+        with target_key, and provenance.
+        """
+        from spicy_regs.citation_resolution import resolve_usc_disposition as _resolve
+
+        return _resolve(former_title, former_section, subsection, section_end=section_end, appendix=appendix)
+
+    @tool
+    def resolve_act_citation(
+        text: Annotated[str | None, Field(min_length=1, max_length=512)] = None,
+        act_name: Annotated[str | None, Field(min_length=1, max_length=256)] = None,
+        section: Annotated[str | None, Field(min_length=1, max_length=64)] = None,
+        division: Annotated[str | None, Field(min_length=1, max_length=32)] = None,
+        enclosing_section: Annotated[str | None, Field(min_length=1, max_length=64)] = None,
+    ) -> dict[str, Any]:
+        """Resolve an Act-relative citation via pinned OLRC tables and source credits.
+
+        Resolves a named-Act citation either from a natural-language phrase in
+        text (e.g. 'section 107(a) of CERCLA') or from structured fields
+        (act_name and section, with optional division and enclosing_section).
+        Uses pinned OLRC Popular Names, Table III, and source-credit indexes;
+        returns target_key and provenance when unique, or an explicit refusal
+        with unresolved_reason.
+        """
+        from spicy_regs.citation_resolution import resolve_act_citation as _resolve
+
+        return _resolve(
+            text,
+            act_name=act_name,
+            section=section,
+            division=division,
+            enclosing_section=enclosing_section,
+        )
 
     @tool
     def prepare_comment(

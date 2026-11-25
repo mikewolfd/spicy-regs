@@ -43,9 +43,11 @@ HEADROOM = 40
 def test_every_registered_description_fits_the_client_cap_without_indentation():
     tools = asyncio.run(server.build_server().list_tools())
     # Named, so a tool that failed to register cannot pass by not being measured.
-    assert [tool.name for tool in tools] == ["lookup_agency", "list_sources", "describe_table", "query_sql",
-                                             "resolve_document_citations", "prepare_comment", "get_rule_text",
-                                             "connection_status"]
+    assert [tool.name for tool in tools] == [
+        "lookup_agency", "list_sources", "describe_table", "query_sql",
+        "resolve_document_citations", "resolve_usc_disposition", "resolve_act_citation",
+        "prepare_comment", "get_rule_text", "connection_status",
+    ]
     for tool in tools:
         description = tool.description or ""
         sent = len(description) + len(json.dumps(tool.input_schema, separators=(",", ":")))

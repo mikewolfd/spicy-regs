@@ -42,7 +42,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Collection, Iterable, Sequence
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from loguru import logger
 from spicy_docs.interpretation.release_matching import (
@@ -64,6 +64,9 @@ from spicy_docs.sources.congress.press_releases import (
 from spicy_regs.sources import r2
 from spicy_regs.transforms.congress_scope import current_congress
 from spicy_regs.transforms.table_merge import merge_contract_table, published_table
+
+if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
 
 
 class PressReleaseSource(Protocol):
@@ -176,6 +179,7 @@ def build_press_releases(
     acquirer: PressReleaseSource | None = None,
     download_prior: Callable[[str, Path], bool] = r2.download,
     receipt_build=None,
+    evidence: CaptureEvidence | None = None,
 ) -> Path:
     """Build ``press_releases.parquet`` from both chambers' feeds.
 
@@ -190,7 +194,12 @@ def build_press_releases(
         return receipt_build.run(build_press_releases, output_dir, **{
             key: value for key, value in locals().items() if key not in {"output_dir", "receipt_build"}
         })
-    acquirer = acquirer or PressReleaseAcquirer(budget=BUDGET)
+    acquirer = acquirer or PressReleaseAcquirer(
+        budget=BUDGET,
+        transport=None
+        if evidence is None
+        else evidence.transport(stage="press-release-feed", max_bytes=BUDGET.max_bytes),
+    )
 
     captures = []
     for chamber, feed in PRESS_RELEASE_FEEDS.items():

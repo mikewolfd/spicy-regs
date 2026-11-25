@@ -107,6 +107,7 @@ EXTERNAL_DATE_CHECKS = (
 
 DATE_CHECKS = BASE_TABLE_CHECKS + EXTERNAL_DATE_CHECKS
 
+RULEMAKING_BUDGET_DAYS = 4
 ROW_CHANGE_BUDGETS = {"usaspending_recipients": 14}
 SKIPPED = {
     "hearing_bill_links": "derived cover links; recall unmeasured, no daily watermark",
@@ -404,6 +405,50 @@ def evaluate_row_changes(
     return failures
 
 
+def read_rulemaking_snapshot(base_url: str) -> dict | None:
+    """Load and validate ``SNAPSHOT_POINTER`` (``materialized/rulemaking/latest.json``) and its manifest."""
+    if base_url.startswith(("http://", "https://")):
+        return publication.load_rulemaking_snapshot(base_url)
+
+    root = Path(base_url)
+
+    def read_local(url: str, *, allow_missing: bool = False, headers=None) -> bytes | None:
+        del headers
+        relative = url.removeprefix(str(root).rstrip("/") + "/")
+        target = root / relative
+        if not target.exists():
+            if allow_missing:
+                return None
+            raise publication.PublicationError(f"Missing rulemaking snapshot object: {relative}")
+        return target.read_bytes()
+
+    return publication.load_rulemaking_snapshot(str(root), read=read_local)
+
+
+def evaluate_rulemaking_freshness(
+    snapshot: Mapping | None,
+    today: date,
+    *,
+    budget_days: int = RULEMAKING_BUDGET_DAYS,
+) -> list[str]:
+    """Check ``materialized/rulemaking/latest.json`` presence and ``asserted_at`` lag."""
+    if snapshot is None:
+        print(f"STALE: rulemaking snapshot ({publication.SNAPSHOT_POINTER}) missing")
+        return [f"rulemaking snapshot ({publication.SNAPSHOT_POINTER}): no published snapshot"]
+    snapshot_id = snapshot.get("snapshot_id", "unknown")
+    manifest = snapshot.get("manifest") or {}
+    asserted = _parse_latest(manifest.get("asserted_at"))
+    if asserted is None:
+        print(f"STALE: rulemaking snapshot ({snapshot_id}) has no parseable asserted_at")
+        return [f"rulemaking snapshot ({publication.SNAPSHOT_POINTER}): no parseable asserted_at"]
+    age = (today - asserted).days
+    status = "OK" if age <= budget_days else "STALE"
+    print(f"{status}: rulemaking snapshot ({snapshot_id}) asserted_at={asserted} age={age}d budget={budget_days}d")
+    if age > budget_days:
+        return [f"rulemaking snapshot ({publication.SNAPSHOT_POINTER}) is {age}d old (budget {budget_days}d)"]
+    return []
+
+
 def evaluate_family_ages(families: Mapping[str, Mapping], rows: Sequence[FreshnessRow], today: date) -> list[str]:
     """Print every family's age beside its declared cadence; return failures for declared families behind it.
 
@@ -471,6 +516,8 @@ def main() -> int:
         with publication.snapshot(args.base_url) as index:
             rows = read_freshness_rows(args.base_url, args.table)
         comment_counts = read_comment_counts(args.base_url) if args.table is None else None
+        check_rulemaking = args.table is None and bool(index["families"])
+        rulemaking_snapshot = read_rulemaking_snapshot(args.base_url) if check_rulemaking else None
     except (duckdb.Error, httpx.HTTPError, publication.PublicationError) as exc:
         print(f"Freshness inputs could not be verified: {exc}", file=sys.stderr)
         return 1
@@ -482,6 +529,8 @@ def main() -> int:
     args.state_file.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
     if args.table is None:
         failures.extend(evaluate_family_ages(index["families"], rows, args.today))
+        if check_rulemaking:
+            failures.extend(evaluate_rulemaking_freshness(rulemaking_snapshot, args.today))
 
     if args.table is None:
         for table, reason in SKIPPED.items():

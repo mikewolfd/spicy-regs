@@ -145,7 +145,7 @@ def test_a_day_appends_whole_id_windows_without_restoring_the_prior(daily, monke
                                              "windows", "requests", "max_requests")} == {
         "source_edition": "2026-06-30", "above": 2, "through": 10, "declared_backlog": 10, "clusters": 5,
         "windows": 2, "requests": 4, "max_requests": 4}
-    assert daily.fetched == [delta.OUTPUT, "etl_receipts.parquet"]
+    assert daily.fetched == [delta.OUTPUT]
     assert not list((daily.work / ".catchup-prior").iterdir())  # The downloaded prior is released once appended.
 
 
@@ -462,3 +462,75 @@ def test_the_bulk_build_needs_no_token_makes_no_search_and_states_what_it_holds(
     assert (stated["source_edition"], stated["through"]) == ("2026-09-30", 12)
     prior = cast(CaptureEvidence, SimpleNamespace(inherited_event={EXPORT_EVENT: stated}.get))
     assert delta.held_selection(prior) == (date(2026, 9, 30), 12)
+
+
+def test_daily_catch_up_upgrades_receipted_courts1_prior_without_losing_promoted_fields(tmp_path, monkeypatch):
+    from spicy_docs.transport import capture
+    from spicy_regs.court_receipts import build_court_generation, write_court_rows
+    from spicy_regs.court_subjects import SUBJECT_SCHEMAS
+    from spicy_regs.generations import build_generation
+    from spicy_regs.native_types import described_schema
+    from tests.test_court_prepared_conversion import unretire_clusters
+
+    monkeypatch.setenv("SPICY_REGS_DISK_FLOOR_GIB", "0")
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://fixture.invalid")
+    monkeypatch.setenv("COURTLISTENER_API_TOKEN", "fixture-token")
+    monkeypatch.setattr(courtlistener, "MIN_REQUEST_INTERVAL_SECONDS", 0)
+    clock = [0.0]
+    clock_ns = SimpleNamespace(monotonic=lambda: clock[0], sleep=lambda s: clock.__setitem__(0, clock[0] + s))
+    monkeypatch.setattr(capture, "time", clock_ns)
+    monkeypatch.setattr(delta, "time", clock_ns)
+    for name, value in (("PAGE_SIZE", 2), ("WINDOW_PAGES", 2), ("DAILY_REQUESTS", 4), ("FRONTIER_MARGIN", 2)):
+        monkeypatch.setattr(delta, name, value)
+
+    # Build a legacy courts/1 receipted prior, then restore current courts/2 retired policy.
+    prior_dir = tmp_path / "legacy-prior"
+    with monkeypatch.context() as patch:
+        unretire_clusters(patch)
+        witness = {"source_id": "orig", "source_uri": None, "sha256": "sha256:" + "a" * 64,
+                   "locator": None, "body_version": None}
+        rows = [{
+            "cluster_id": "2", "case_name": "Two", "source": "C", "slug": "two",
+            "absolute_url": "https://www.courtlistener.com/opinion/2/two/",
+            "date_created": "2026-06-30T08:00:00Z", "date_modified": "2026-06-30T09:00:00Z",
+            "ingest_source": "bulk",
+        }]
+        subject = write_court_rows(delta.DATASET, rows, tmp_path / "src", witnesses=[witness], generation_id="leg-1")
+        legacy_artifact = build_court_generation(prior_dir, family=delta.FAMILY, files=[subject])
+    members = iter_member_descriptors(legacy_artifact, LocalMemberSource(prior_dir))
+    snapshot = publication.empty_index()
+    snapshot["families"][delta.FAMILY] = publication.generation_entry(legacy_artifact, members)
+    work = tmp_path / "work"
+    evidence = CaptureEvidence(work, delta.FAMILY)
+    evidence.inherit_pinned_root(snapshot, canonical_json_bytes(legacy_artifact.root))
+
+    monkeypatch.setattr(courtlistener_resume, "read_usage", lambda token, transport: json.dumps(usage()).encode())
+
+    def fetch(base, member, path, *args, **options):
+        key = member.path.split("/")[-1]
+        shutil.copyfile(prior_dir / key, path)
+        with path.open("rb") as stream:
+            sha256 = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
+        return publication.DownloadedMember(sha256, path.stat().st_size, file_state_from_stat(os.stat(path)))
+
+    monkeypatch.setattr(publication, "fetch_member", fetch)
+    monkeypatch.setattr(delta, "court_jurisdictions", lambda **kwargs: {"ca9": "F"})
+    monkeypatch.setattr(delta, "CourtListenerOpinionSearchReader", courtlistener.CourtListenerOpinionSearchReader)
+    monkeypatch.setattr(delta, "_live_transport", lambda: httpx.MockTransport(Search(TEN)))
+
+    candidate, fault = delta.daily_catch_up(work, evidence=evidence, source_edition=EDITION, above=2)
+    assert fault is None
+    table = pq.read_table(candidate)
+    assert table.schema.equals(SUBJECT_SCHEMAS[delta.DATASET])
+    by_id = {row["cluster_id"]: row for row in table.to_pylist()}
+    assert by_id["2"]["slug"] == "two"
+    assert by_id["2"]["ingest_source"] == "bulk"
+    assert by_id["2"]["date_created"] == "2026-06-30T08:00:00Z"
+    assert by_id["6"]["ingest_source"] == "search"
+    gen = work / "generation"
+    build_generation(
+        gen, family=delta.FAMILY, files=[candidate], expected_keys=[delta.OUTPUT],
+        schemas={delta.DATASET: described_schema(SUBJECT_SCHEMAS[delta.DATASET])},
+        read_snapshot=snapshot, inputs=evidence.inputs(),
+    )
+    assert "etlReceipts" not in verify_generation(gen).root["spec"]

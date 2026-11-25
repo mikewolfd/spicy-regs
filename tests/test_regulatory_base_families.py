@@ -171,6 +171,19 @@ def test_refresh_publishes_the_families_before_the_mirror_captures_base_versions
     assert jobs["base-families"]["with"]["skip_upload"] == "${{ inputs.skip_upload }}"
     assert jobs["mirror"]["needs"] == "base-families"
     assert jobs["derived"]["needs"] == "mirror" and jobs["org-links"]["needs"] == "mirror"
+    assert jobs["derived"]["strategy"]["matrix"]["command"] == [
+        "run-rollup-feed-summary",
+        "run-rollup-agency-stats",
+    ]
+    assert jobs["derived-documents"]["needs"] == "base-families"
+    assert jobs["derived-documents"]["strategy"]["matrix"]["command"] == [
+        "run-rollup-agency-monthly-volume",
+        "run-rollup-discovery-signals",
+    ]
+    assert jobs["derived-documents"]["if"] == (
+        "${{ !cancelled() && inputs.debugger_mode == 'off' && !inputs.skip_upload && !inputs.comments_only && needs.base-families.result == 'success' }}"
+    )
+    assert jobs["verify"]["needs"] == ["mirror", "derived", "derived-documents", "docket-search", "org-links", "rulemaking"]
 
 
 @pytest.mark.parametrize("cancelled,promote_v1,comments_only,expected", [
@@ -197,7 +210,7 @@ def test_refresh_fills_docket_gaps_before_the_families_and_publishes_them_even_i
     condition = jobs["base-families"]["if"].removeprefix("${{").removesuffix("}}")
     terms = [term.strip() for term in condition.split("&&")]
     values = {"!cancelled()": not cancelled, "!inputs.promote_v1": not promote_v1,
-              "!inputs.comments_only": not comments_only}
+              "!inputs.comments_only": not comments_only, "inputs.debugger_mode == 'off'": True}
     assert set(terms) == set(values)
     assert all(values[term] for term in terms) is expected
 
@@ -209,3 +222,49 @@ def test_the_browser_search_blob_is_built_only_where_its_app_reads_this_bucket()
     assert jobs["docket-search"]["with"]["command"] == "run-rollup-docket-search"
     assert "vars.PUBLISH_DOCKET_SEARCH == 'true'" in jobs["docket-search"]["if"]
     assert "docket-search" in jobs["verify"]["needs"]
+
+
+def test_documents_family_skips_rebuild_when_selected_generation_already_carries_current_outcomes(tmp_path, monkeypatch):
+    from tests.regulatory_publication_fakes import install
+    from spicy_regs.pipelines.docket_reconcile import OUTCOME_SCHEMA, OUTCOMES, annotate_documents
+    from spicy_regs.pipelines.regulatory_publication import finish_dataset
+    from spicy_regs.pipelines.rollups.regulatory_base import DocumentsFamily
+    from spicy_regs.selected_generations import SelectedInputs, unique_build_directory
+
+    remote = install(monkeypatch)
+    documents = RECORD_TYPES["documents"]
+    ids = ["FNA-2026-0301-0004", "FNA-2026-0301-0005"]
+    working_copy = pl.DataFrame(
+        [{**dict.fromkeys(documents.schema), "document_id": i, "agency_code": "FNA"} for i in ids],
+        schema=documents.schema,
+    )
+    outcomes = pl.DataFrame(
+        [{"document_id": ids[0], "docket_id": "FNA-2026-0301", "publisher_status": "removed",
+          "observed_at": "2026-10-03T12:40:00+00:00", "removed_observed_at": "2026-10-03T12:40:00+00:00",
+          "http_status": 404, "body_sha256": None}],
+        schema=OUTCOME_SCHEMA,
+    )
+
+    def working(remote_key, local_path):
+        if remote_key != OUTCOMES:
+            return False
+        outcomes.write_parquet(local_path)
+        return True
+
+    monkeypatch.setattr(r2, "download_working_copy", working)
+    source = tmp_path / "documents-source"
+    source.mkdir()
+    input_file = source / "documents.parquet"
+    working_copy.write_parquet(input_file)
+    witnesses = annotate_documents(input_file)
+    inputs = SelectedInputs(source, unique_build_directory(source))
+    finish_dataset(source, "documents", input_file, publish=True, inputs=inputs, witnesses=witnesses)
+
+    before_index = remote.objects[pub.INDEX_V2_KEY]
+    monkeypatch.setattr(
+        DocumentsFamily,
+        "annotate",
+        lambda *args, **kwargs: pytest.fail("DocumentsFamily rebuilt despite matching outcomes witness"),
+    )
+    DocumentsFamily(output_dir=tmp_path / "refresh", skip_upload=False).run()
+    assert remote.objects[pub.INDEX_V2_KEY] == before_index

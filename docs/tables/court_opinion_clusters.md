@@ -51,3 +51,9 @@ One decision can be several clusters. On the 2026-06-30 export (measured 2026-10
 | `headmatter` | `VARCHAR` | Source headmatter text when supplied. |
 | `blocked` | `BOOLEAN` | Source blocked flag as a string; not a current access check. |
 | `date_blocked` | `VARCHAR` | Source date of blocking when supplied. |
+| `source` | `VARCHAR` | CourtListener's source value for the cluster; distinct from the ingest_source route. |
+| `slug` | `VARCHAR` | Source URL slug; not a stable identity. |
+| `absolute_url` | `VARCHAR` | CourtListener decision page URL, constructed from cluster ID/slug for bulk rows or supplied by search. |
+| `date_created` | `VARCHAR` | Source record-creation timestamp when supplied by bulk data. |
+| `date_modified` | `VARCHAR` | Source record-modification timestamp when supplied by bulk data. |
+| `ingest_source` | `VARCHAR` | Route for the retained row: bulk or search. The table does not itself pin the original capture bytes. |

@@ -37,24 +37,18 @@ def acquire(
     max_bytes: int | None = None,
 ) -> dict:
     """Stream ``PolOrgsFullData.zip`` via GET into the raw archive and return capture metadata."""
-    from spicy_docs.sources.irs_527 import DEFAULT_MAX_ARCHIVE_BYTES, FULL_DATA_URL, Irs527Acquirer
+    from spicy_docs.sources.irs_527 import DEFAULT_MAX_ARCHIVE_BYTES, Irs527Acquirer
 
     limit = DEFAULT_MAX_ARCHIVE_BYTES if max_bytes is None else max_bytes
     output_dir = Path(output_dir)
     evidence = CaptureEvidence(output_dir, FAMILY, archive_root=archive_root)
     try:
         owner = _source_context(evidence)
+        retained = owner.transport(transport, stage="irs-527-full-data-zip", max_bytes=limit)
         with TemporaryDirectory(dir=output_dir) as scratch:
             dest = Path(scratch) / "PolOrgsFullData.zip"
-            with Irs527Acquirer(max_bytes=limit, transport=transport) as acquirer:
+            with Irs527Acquirer(max_bytes=limit, transport=retained) as acquirer:
                 download = acquirer.download_full_data(dest, max_bytes=limit)
-            owner.retain_file(
-                download.path,
-                stage="irs-527-full-data-zip",
-                raw_source=True,
-                original_location=FULL_DATA_URL,
-                observed_at=download.observed_at,
-            )
             owner.event(
                 "irs-527-captured",
                 source_url=download.requested_url,

@@ -282,7 +282,7 @@ def test_source_failure_after_flush_preserves_output_and_original_error(
                 raise OSError("cleanup also failed")
 
     monkeypatch.setattr(module.pq, "ParquetWriter", Writer)
-    kwargs = {"skip_court_scope": True} if kind == "clusters" else {}
+    kwargs = {"skip_court_scope": True, "include_prior": False} if kind == "clusters" else {}
     with pytest.raises(CourtListenerCsvError, match="expected 4 columns, got 5"):
         getattr(module, f"build_court_opinion_{kind}")(tmp_path, local_file=dump, **kwargs)
     assert closed == [True]
@@ -310,11 +310,15 @@ def test_a_prior_holding_the_newest_export_reads_no_dump_and_the_build_never_sea
 
     module = importlib.import_module("spicy_regs.transforms.build_court_opinion_clusters")
     prior = {**_shape_bulk({"id": "5", "docket_id": "1", "date_created": prior_created}), "court_id": "dcd"}
-    from spicy_regs.court_receipts import write_court_rows
-    witness = dict(source_id='fixture', source_uri=None, sha256='sha256:' + 'a' * 64,
-                   locator=None, body_version=None)
-    prior_path = write_court_rows('court_opinion_clusters', [prior], tmp_path, witnesses=[witness])
-    assert module.held_export(prior_path) == (5, prior_created[:10])
+    from spicy_regs.court_subjects import SUBJECT_SCHEMAS
+    from spicy_regs import court_receipts
+    schema = SUBJECT_SCHEMAS["court_opinion_clusters"]
+    prior_row = {name: (False if name in ("court_is_federal", "date_filed_is_approximate", "blocked")
+                        else prior.get(name)) for name in schema.names}
+    pq.write_table(pa.Table.from_pylist([prior_row], schema=schema), tmp_path / module.OUTPUT)
+    assert module.held_export(tmp_path / module.OUTPUT) == (5, prior_created[:10])
+    monkeypatch.setattr(court_receipts, "restore_processing_input",
+                        lambda *a, **kw: pytest.fail("retired clusters prior must not be restored"))
     monkeypatch.setattr(bulk, "list_bulk_dumps", lambda: [])
     monkeypatch.setattr(bulk, "latest_dump_date", lambda objects, dataset: DUMP_DATE)
     listed = BulkObject("bulk-data/opinion-clusters-2026-06-30.csv.bz2", 1, '"etag"', "2026-06-30T12:00:00Z")
@@ -336,11 +340,11 @@ def test_a_prior_holding_the_newest_export_reads_no_dump_and_the_build_never_sea
     )
     out = module.build_court_opinion_clusters(tmp_path, dump_date=DUMP_DATE if named_edition else None)
 
-    from spicy_regs.court_receipts import read_court_rows
-    rows = {row["cluster_id"]: row for row in read_court_rows(out, dataset="court_opinion_clusters")}
+    rows = {row["cluster_id"]: row for row in pq.read_table(out).to_pylist()}
     assert bool(exported) is reads_export
     assert sorted(rows) == (["5", "8"] if reads_export else ["5"])
     assert rows["5"]["ingest_source"] == "bulk"
+    assert not list(tmp_path.rglob("etl_receipts.parquet"))
 
 
 @pytest.mark.parametrize("kind", ["clusters"])
@@ -540,13 +544,11 @@ def test_access_refusal_closes_without_retry(monkeypatch, status):
 
 
 def test_cluster_refused_update_keeps_valid_native_prior(tmp_path, monkeypatch, ample_disk_space):
-    from spicy_regs.court_receipts import write_court_rows, local_receipt_selection
     module = importlib.import_module('spicy_regs.transforms.build_court_opinion_clusters')
-    witness = dict(source_id='fixture', source_uri=None, sha256='sha256:' + 'a' * 64,
-                   locator=None, body_version=None)
-    prior = write_court_rows('court_opinion_clusters',
-        [module._shape_bulk({'id': '5', 'case_name': 'Held', 'citation_count': '2'})],
-        tmp_path, witnesses=[witness])
+    monkeypatch.setattr(module.r2, "download", lambda *_: False)
+    first_dump = _dump(tmp_path, b'id,docket_id,case_name,citation_count\n"5","101","Held","2"\n')
+    prior = module.build_court_opinion_clusters(tmp_path, local_file=first_dump, dump_date=DUMP_DATE,
+                                                skip_court_scope=True)
     before = pq.read_table(prior).to_pylist()[0]
     dump = _dump(tmp_path, b'id,docket_id,case_name,citation_count\n"5","101","Rejected","invalid"\n"6","102","New","1"\n')
     result = module.build_court_opinion_clusters(tmp_path, local_file=dump, dump_date=DUMP_DATE,
@@ -554,6 +556,55 @@ def test_cluster_refused_update_keeps_valid_native_prior(tmp_path, monkeypatch, 
     rows = {row['cluster_id']: row for row in pq.read_table(result).to_pylist()}
     assert rows['5'] == before
     assert rows['6']['case_name'] == 'New'
-    receipts = pq.read_table(local_receipt_selection(result)[0]).to_pylist()
-    failed = [r for r in receipts if r['outcome'] == 'refused']
-    assert len(failed) == 1 and 'Rejected' in failed[0]['processing_json']
+    exceptions = pq.read_table(tmp_path / 'court_opinion_clusters.exceptions.parquet').to_pylist()
+    assert len(exceptions) == 1 and exceptions[0]['outcome'] == 'refused' and 'Rejected' in exceptions[0]['source_record']
+    assert not list(tmp_path.rglob('etl_receipts.parquet'))
+
+
+def test_holds_newest_checked_before_prior_download_or_restore(tmp_path, monkeypatch, ample_disk_space):
+    import spicy_docs.sources.courtlistener.bulk as bulk
+    from spicy_docs.sources.courtlistener.listing import BulkObject
+    from spicy_regs import court_receipts
+    from spicy_regs.court_subjects import SUBJECT_SCHEMAS
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    module = importlib.import_module("spicy_regs.transforms.build_court_opinion_clusters")
+    schema = SUBJECT_SCHEMAS["court_opinion_clusters"]
+    prior_row = {name: (False if name in ("court_is_federal", "date_filed_is_approximate", "blocked")
+                        else "5" if name == "cluster_id"
+                        else "2026-06-30 08:16:36.759906+00" if name == "date_created"
+                        else "bulk" if name == "ingest_source"
+                        else None) for name in schema.names}
+    source_prior = tmp_path / "remote_prior.parquet"
+    pq.write_table(pa.Table.from_pylist([prior_row], schema=schema), source_prior)
+
+    order: list[str] = []
+
+    def list_dumps():
+        order.append("list_bulk_dumps")
+        return []
+
+    def download(key, dest):
+        order.append("r2.download")
+        dest.write_bytes(source_prior.read_bytes())
+        return True
+
+    monkeypatch.setattr(bulk, "list_bulk_dumps", list_dumps)
+    monkeypatch.setattr(bulk, "latest_dump_date", lambda objects, dataset: DUMP_DATE)
+    monkeypatch.setattr(bulk, "find_dump", lambda objects, dataset, day: BulkObject(
+        "bulk-data/opinion-clusters-2026-06-30.csv.bz2", 1, '"etag"', "2026-06-30T12:00:00Z"))
+    monkeypatch.setattr(module.r2, "download", download)
+    monkeypatch.setattr(court_receipts, "restore_processing_input",
+                        lambda *a, **kw: pytest.fail("holds_newest must not restore 10M prior rows"))
+    monkeypatch.setattr(module, "merge_local_prior",
+                        lambda *a, **kw: pytest.fail("holds_newest must not merge"))
+    monkeypatch.setattr(CourtListenerBulkReader, "iter_records",
+                        lambda self: pytest.fail("holds_newest must not read bulk dump"))
+
+    evidence = CaptureEvidence(tmp_path / "work", "court-opinion-clusters")
+    monkeypatch.setattr(evidence, "inherited_event", lambda name, **_: (
+        {"source_edition": "2026-06-30", "through": 5} if name == module.EXPORT_EVENT else None
+    ))
+    out = module.build_court_opinion_clusters(tmp_path / "build", evidence=evidence)
+    assert order == ["list_bulk_dumps", "r2.download"]
+    assert pq.read_table(out)["cluster_id"].to_pylist() == ["5"]

@@ -11107,6 +11107,418 @@ tables:
       geography_authority: RefSpec authority resource defining the county GEOID structure; not a county entity roster.
       geography_source_sha256: Digest of the original Census guidance span retained by RefSpec.
 
+  census_acs_congressional_district_observations:
+    label: ACS congressional district population and household income
+    subject: reference
+    summary: One row per selected congressional district and measure in an American Community Survey five-year vintage, with estimates, margins of error and exact source cells.
+    coverage: 'Sampled. Explicit vintage, state and congressional district scope only, with population and median household income. Comparisons describe estimates, not statistically significant differences or individual households.'
+    measured_on: '2026-11-25'
+    grain: One selected vintage, congressional district and measure.
+    identity_columns:
+    - vintage
+    - district_geoid
+    - measure
+    columns:
+      dataset: Census API dataset path, currently acs/acs5.
+      vintage: Final year of the selected ACS five-year period; not acquisition time.
+      geography: Selected geography level, congressional district.
+      state_code: Literal two-digit Census state code, including leading zeros.
+      congressional_district: Literal two-character Census congressional district code, including 00 for at-large, 98 for non-voting delegate, and ZZ for undefined areas.
+      district_geoid: State code plus congressional district code preserving leading zeros and ZZ.
+      source_geo_prefix: Census GEO_ID summary-level and Congress-session prefix (500<session>00US).
+      congress_session_code: Two-digit Congress session code embedded in the Census GEO_ID prefix.
+      name: Publisher-stated congressional district name.
+      source_geo_id: Exact publisher GEO_ID, including the summary-level and session prefix.
+      measure: Population or median household income; each estimate keeps its own margin of error.
+      unit: Persons for population, or US dollars adjusted to the selected vintage for median household income.
+      estimate: Exact decimal estimate; null for a missing or sentinel value. Read estimate_status and the original cell.
+      margin_of_error: Exact decimal margin of error at the ACS 90% confidence level, in the estimate's units; null for missing or sentinel values. Read margin_status and the original cell.
+      estimate_status: Numeric, annotated, lower_bound or upper_bound for an open-ended median, null, blank, or the retained Census sentinel meaning.
+      margin_status: Numeric, annotated, null, blank, or the retained Census sentinel meaning; controlled estimates remain explicit rather than becoming a reported zero.
+      estimate_raw: Exact estimate cell before numeric interpretation; null and empty string stay distinct.
+      margin_raw: Exact margin-of-error cell before numeric interpretation; null and empty string stay distinct.
+      estimate_annotation: Exact estimate annotation, including suppression codes and bound suffixes.
+      margin_annotation: Exact margin-of-error annotation.
+      source_record_id: Congressional district record identity in the retained SpicyDocs source release.
+      source_release_logical_id: Logical identity of the admitted SpicyDocs source release.
+      source_release_digest: Exact artifact digest of that source release.
+      variable_metadata_json: Full source variable metadata for this measure's estimate, margin and annotations.
+      value_sources_json: Per-variable request URL, response digest, observation time and row/column locator.
+      metadata_sources_json: Per-variable metadata URL, response digest, observation time and JSON pointer.
+
+  congress_sessions:
+    label: Congressional session dates reconciled across House and Senate
+    subject: congress
+    summary: Official Congress session beginning and adjournment dates reconciled between the House Historian session-dates page and the Senate Historical Office party-division page.
+    coverage: Window. Reconciled House Historian and Senate Historical Office session tables from the 1st Congress through the current Congress as of the captured pages.
+    measured_on: '2026-11-25'
+    grain: One Congress and reconciled session label.
+    identity_columns:
+    - congress
+    - session
+    columns:
+      congress: Congress number (1st Congress onward).
+      session: Reconciled session label (such as 1, 2, special, or 1 (senate-special)).
+      begins: Reconciled session start date.
+      adjourned: Reconciled session adjournment date; null when open or unstated by the source.
+      adjournment_status: Adjourned, open for an active session, or unstated when a historical source prints no end date.
+      house_session: Session label as listed on the House Historian page; null when Senate-only.
+      house_begins: Session start date printed by the House Historian; null when Senate-only.
+      house_adjourned: Session adjournment date printed by the House Historian; null when open, unstated, or Senate-only.
+      senate_session: Normalized session label from the Senate Historical Office page; null when House-only.
+      senate_begins: Session start date printed by the Senate Historical Office; null when House-only.
+      senate_adjourned: Session adjournment date printed by the Senate Historical Office; null when open, unstated, or House-only.
+      disagreement_kind: Explicit reconciliation category when House and Senate pages differ, otherwise null.
+      correction_reason: Explanation for an applied source correction or disagreement resolution, otherwise null.
+      house_source_url: Official House Historian session-dates URL.
+      house_source_sha256: SHA-256 of the retained House Historian session-dates HTML page.
+      house_observed_at: UTC timestamp when the House Historian session-dates page was captured.
+      senate_source_url: Official Senate Historical Office party-division URL.
+      senate_source_sha256: SHA-256 of the retained Senate Historical Office party-division HTML page.
+      senate_observed_at: UTC timestamp when the Senate Historical Office party-division page was captured.
+
+  congress_party_control:
+    label: Chamber party control and seat divisions by Congress
+    subject: congress
+    summary: House and Senate chamber party seat divisions and majority control intervals from official House Historian and Senate Historical Office history pages.
+    coverage: Window. House initial-election divisions per Congress and Senate session/mid-session division changes from the 1st Congress through the current Congress as of the captured pages.
+    measured_on: '2026-11-25'
+    grain: One chamber, Congress, and effective start date interval.
+    identity_columns:
+    - chamber
+    - congress
+    - effective_from
+    columns:
+      chamber: Legislative chamber (house or senate).
+      congress: Congress number.
+      effective_from: First date on which this chamber division interval applies.
+      effective_to: Inclusive end date of this division interval; null for an open current Congress.
+      majority_party: Named organizing majority party; null when House plurality leaves no stated organizing caucus.
+      majority_seats: Seat count of the majority or leading party.
+      minority_party: Named primary minority party.
+      minority_seats: Seat count of the minority party.
+      other: Literal source text for minor-party or independent seats.
+      vacancies: Vacancy count where printed by the source; null when left blank.
+      total_seats: Total chamber seats reported for the interval.
+      majority_basis: Rule used to determine majority control (such as house-seats-plurality, house-footnote, or senate-table-order).
+      source_url: Official House or Senate history page URL supplying this row.
+      printed_effective_from: Raw effective start date printed on the source page before any documented mistyped-year correction.
+      correction_reason: Reason for an applied printed-date correction, otherwise null.
+      source_sha256: SHA-256 of the retained source HTML page.
+      observed_at: UTC timestamp when the source HTML page was captured.
+
+  irs527_transmissions:
+    label: IRS Section 527 bulk archive transmission metadata
+    subject: campaign_finance
+    summary: Header and footer transmission metadata from the IRS PolOrgsFullData.zip Section 527 bulk export, comparing footer counts with observed data records.
+    coverage: Not a range. Complete single-snapshot header and footer summary for the captured IRS Section 527 PolOrgsFullData.zip archive.
+    measured_on: '2026-11-25'
+    grain: One captured PolOrgsFullData.zip transmission.
+    identity_columns:
+    - source_sha256
+    columns:
+      transmission_date_raw: Literal H-record transmission date string before parsing.
+      transmission_time_raw: Literal H-record transmission time string.
+      file_id_modifier: Literal H-record file identifier modifier (such as A, B, C, D, or F).
+      transmission_date: Parsed H-record transmission date; null when blank or unparsed.
+      transmission_date_status: Parsed, blank, or unparsed status for transmission_date.
+      footer_transmission_date_raw: Literal F-record footer transmission date string.
+      footer_transmission_time_raw: Literal F-record footer transmission time string.
+      footer_record_count: Data record count stated in the F footer record.
+      observed_data_records: Actual count of data records observed in the archive stream.
+      source_sha256: SHA-256 of the retained PolOrgsFullData.zip archive.
+      source_url: Official IRS Section 527 fullData download URL.
+      observed_at: UTC timestamp when PolOrgsFullData.zip was captured.
+
+  irs527_form8871:
+    label: IRS Form 8871 Section 527 notices
+    subject: campaign_finance
+    summary: IRS Form 8871 political organization notice of Section 527 status records (record type 1) from PolOrgsFullData.zip, retaining literal dates and ISO-8859-1 text.
+    coverage: Not a range. All record-type-1 political organization notices (Form 8871) present in the captured IRS Section 527 PolOrgsFullData.zip archive.
+    measured_on: '2026-11-25'
+    grain: One Form 8871 record line in the captured IRS 527 archive.
+    identity_columns:
+    - source_sha256
+    - line_number
+    columns:
+      form_type: IRS form type code (8871).
+      form_id_number: IRS form filing identifier linking to directors, related entities, and EAIN records.
+      initial_report_indicator: Indicator flag (Y/N) for initial Form 8871 notice.
+      amended_report_indicator: Indicator flag (Y/N) for amended Form 8871 notice.
+      final_report_indicator: Indicator flag (Y/N) for final Form 8871 notice.
+      ein: Employer Identification Number reported on the notice.
+      organization_name: Political organization name preserving source ISO-8859-1 characters.
+      mailing_address_1: Mailing street address line 1.
+      mailing_address_2: Mailing street address line 2.
+      mailing_address_city: Mailing address city.
+      mailing_address_state: Mailing address state code.
+      mailing_address_zip_code: Mailing address ZIP code.
+      mailing_address_zip_ext: Mailing address ZIP+4 extension.
+      email_address: Organization email address.
+      established_date_raw: Literal established date string before parsing.
+      established_date: Parsed organization established date; null when blank or unparsed.
+      established_date_status: Parsed, blank, or unparsed status for established_date.
+      custodian_name: Records custodian name.
+      custodian_address_1: Custodian street address line 1.
+      custodian_address_2: Custodian street address line 2.
+      custodian_address_city: Custodian address city.
+      custodian_address_state: Custodian address state code.
+      custodian_address_zip_code: Custodian address ZIP code.
+      custodian_address_zip_ext: Custodian address ZIP+4 extension.
+      contact_person_name: Contact person name.
+      contact_address_1: Contact person street address line 1.
+      contact_address_2: Contact person street address line 2.
+      contact_address_city: Contact person city.
+      contact_address_state: Contact person state code.
+      contact_address_zip_code: Contact person ZIP code.
+      contact_address_zip_ext: Contact person ZIP+4 extension.
+      business_address_1: Business street address line 1.
+      business_address_2: Business street address line 2.
+      business_address_city: Business address city.
+      business_address_state: Business address state code.
+      business_address_zip_code: Business address ZIP code.
+      business_address_zip_ext: Business address ZIP+4 extension.
+      exempt_8872_indicator: Indicator flag (Y/N) for claiming exemption from filing Form 8872.
+      exempt_state: State in which the organization claims a qualified state/local political organization exemption.
+      exempt_990_indicator: Indicator flag (Y/N) for claiming exemption from filing Form 990.
+      purpose: Stated purpose of the political organization.
+      material_change_date_raw: Literal material change date string before parsing.
+      material_change_date: Parsed material change date; null when blank or unparsed.
+      material_change_date_status: Parsed, blank, or unparsed status for material_change_date.
+      insert_datetime_raw: Literal IRS database insert timestamp string.
+      related_entity_bypass: Bypass indicator for related entity disclosures.
+      eain_bypass: Bypass indicator for EAIN disclosures.
+      line_number: One-based physical line number within FullDataFile.txt.
+      source_sha256: SHA-256 of the retained PolOrgsFullData.zip archive.
+      source_url: Official IRS Section 527 fullData download URL.
+      observed_at: UTC timestamp when PolOrgsFullData.zip was captured.
+
+  irs527_form8872:
+    label: IRS Form 8872 Section 527 periodic reports
+    subject: campaign_finance
+    summary: IRS Form 8872 political organization report of contributions and expenditures (record type 2) from PolOrgsFullData.zip, with exact decimal totals and literal source fields.
+    coverage: Not a range. All record-type-2 periodic reports (Form 8872) present in the captured IRS Section 527 PolOrgsFullData.zip archive.
+    measured_on: '2026-11-25'
+    grain: One Form 8872 record line in the captured IRS 527 archive.
+    identity_columns:
+    - source_sha256
+    - line_number
+    columns:
+      form_type: IRS form type code (8872).
+      form_id_number: IRS form filing identifier linking to Schedule A contributions and Schedule B expenditures.
+      period_begin_date_raw: Literal reporting period start date string before parsing.
+      period_begin_date: Parsed reporting period start date; null when blank or unparsed.
+      period_begin_date_status: Parsed, blank, or unparsed status for period_begin_date.
+      period_end_date_raw: Literal reporting period end date string before parsing.
+      period_end_date: Parsed reporting period end date; null when blank or unparsed.
+      period_end_date_status: Parsed, blank, or unparsed status for period_end_date.
+      initial_report_indicator: Indicator flag (Y/N) for initial report.
+      amended_report_indicator: Indicator flag (Y/N) for amended report.
+      final_report_indicator: Indicator flag (Y/N) for final report.
+      change_of_address_indicator: Indicator flag (Y/N) for address change.
+      organization_name: Political organization name preserving source ISO-8859-1 characters.
+      ein: Employer Identification Number reported on the filing.
+      mailing_address_1: Mailing street address line 1.
+      mailing_address_2: Mailing street address line 2.
+      mailing_address_city: Mailing address city.
+      mailing_address_state: Mailing address state code.
+      mailing_address_zip_code: Mailing address ZIP code.
+      mailing_address_zip_ext: Mailing address ZIP+4 extension.
+      email_address: Organization email address.
+      org_formation_date_raw: Literal organization formation date string before parsing.
+      org_formation_date: Parsed organization formation date; null when blank or unparsed.
+      org_formation_date_status: Parsed, blank, or unparsed status for org_formation_date.
+      custodian_name: Records custodian name.
+      custodian_address_1: Custodian street address line 1.
+      custodian_address_2: Custodian street address line 2.
+      custodian_address_city: Custodian address city.
+      custodian_address_state: Custodian address state code.
+      custodian_address_zip_code: Custodian address ZIP code.
+      custodian_address_zip_ext: Custodian address ZIP+4 extension.
+      contact_person_name: Contact person name.
+      contact_address_1: Contact person street address line 1.
+      contact_address_2: Contact person street address line 2.
+      contact_address_city: Contact person city.
+      contact_address_state: Contact person state code.
+      contact_address_zip_code: Contact person ZIP code.
+      contact_address_zip_ext: Contact person ZIP+4 extension.
+      business_address_1: Business street address line 1.
+      business_address_2: Business street address line 2.
+      business_address_city: Business address city.
+      business_address_state: Business address state code.
+      business_address_zip_code: Business address ZIP code.
+      business_address_zip_ext: Business address ZIP+4 extension.
+      qtr_indicator: Quarterly filing period indicator.
+      monthly_rpt_month: Monthly filing period month code.
+      pre_elect_type: Pre-election or post-election filing type code.
+      pre_or_post_elect_date_raw: Literal election date string before parsing.
+      pre_or_post_elect_date: Parsed election date; null when blank or unparsed.
+      pre_or_post_elect_date_status: Parsed, blank, or unparsed status for pre_or_post_elect_date.
+      pre_or_post_elect_state: Election state code for pre/post-election filings.
+      sched_a_ind: Indicator flag (Y/N) whether Schedule A contributions are attached.
+      total_sched_a_raw: Literal reported Schedule A total string before parsing.
+      total_sched_a: Exact decimal Schedule A total reported on the form; null when blank, unparsed, or out of bounds.
+      total_sched_a_status: Parsed, blank, unparsed, exceeds_scale, or exceeds_precision status for total_sched_a.
+      sched_b_ind: Indicator flag (Y/N) whether Schedule B expenditures are attached.
+      total_sched_b_raw: Literal reported Schedule B total string before parsing.
+      total_sched_b: Exact decimal Schedule B total reported on the form; null when blank, unparsed, or out of bounds.
+      total_sched_b_status: Parsed, blank, unparsed, exceeds_scale, or exceeds_precision status for total_sched_b.
+      insert_datetime_raw: Literal IRS database insert timestamp string.
+      line_number: One-based physical line number within FullDataFile.txt.
+      source_sha256: SHA-256 of the retained PolOrgsFullData.zip archive.
+      source_url: Official IRS Section 527 fullData download URL.
+      observed_at: UTC timestamp when PolOrgsFullData.zip was captured.
+
+  irs527_directors:
+    label: IRS Form 8871 directors and officers
+    subject: campaign_finance
+    summary: Directors, officers, and highly compensated employees (record type D) listed on IRS Form 8871 notices in PolOrgsFullData.zip.
+    coverage: Not a range. All director and officer records present in the captured IRS Section 527 PolOrgsFullData.zip archive.
+    measured_on: '2026-11-25'
+    grain: One director/officer record line in the captured IRS 527 archive.
+    identity_columns:
+    - source_sha256
+    - line_number
+    columns:
+      form_id_number: IRS Form 8871 filing identifier.
+      director_id: IRS sequence identifier for the director or officer entry within the filing.
+      org_name: Political organization name.
+      ein: Political organization Employer Identification Number.
+      entity_name: Director or officer name.
+      entity_title: Director or officer title.
+      entity_address_1: Street address line 1.
+      entity_address_2: Street address line 2.
+      entity_address_city: Address city.
+      entity_address_state: Address state code.
+      entity_address_zip_code: Address ZIP code.
+      entity_address_zip_code_ext: Address ZIP+4 extension.
+      line_number: One-based physical line number within FullDataFile.txt.
+      source_sha256: SHA-256 of the retained PolOrgsFullData.zip archive.
+      source_url: Official IRS Section 527 fullData download URL.
+      observed_at: UTC timestamp when PolOrgsFullData.zip was captured.
+
+  irs527_related_entities:
+    label: IRS Form 8871 related entities
+    subject: campaign_finance
+    summary: Connected organizations and related entities (record type R) disclosed on IRS Form 8871 notices in PolOrgsFullData.zip.
+    coverage: Not a range. All related-entity records present in the captured IRS Section 527 PolOrgsFullData.zip archive.
+    measured_on: '2026-11-25'
+    grain: One related-entity record line in the captured IRS 527 archive.
+    identity_columns:
+    - source_sha256
+    - line_number
+    columns:
+      form_id_number: IRS Form 8871 filing identifier.
+      entity_id: IRS sequence identifier for the related entity within the filing.
+      org_name: Political organization name.
+      ein: Political organization Employer Identification Number.
+      entity_name: Related entity name.
+      entity_relationship: Stated relationship to the political organization.
+      entity_address_1: Street address line 1.
+      entity_address_2: Street address line 2.
+      entity_address_city: Address city.
+      entity_address_state: Address state code.
+      entity_address_zip_code: Address ZIP code.
+      entity_address_zip_ext: Address ZIP+4 extension.
+      line_number: One-based physical line number within FullDataFile.txt.
+      source_sha256: SHA-256 of the retained PolOrgsFullData.zip archive.
+      source_url: Official IRS Section 527 fullData download URL.
+      observed_at: UTC timestamp when PolOrgsFullData.zip was captured.
+
+  irs527_eains:
+    label: IRS Form 8871 election authority ID numbers
+    subject: campaign_finance
+    summary: State or local election authority identification numbers (record type E) reported on IRS Form 8871 notices in PolOrgsFullData.zip.
+    coverage: Not a range. All EAIN records present in the captured IRS Section 527 PolOrgsFullData.zip archive.
+    measured_on: '2026-11-25'
+    grain: One EAIN record line in the captured IRS 527 archive.
+    identity_columns:
+    - source_sha256
+    - line_number
+    columns:
+      form_id_number: IRS Form 8871 filing identifier.
+      eain_id: IRS sequence identifier for the EAIN entry within the filing.
+      election_authority_id_number: Election authority identification number issued to the organization.
+      state_issued: Two-letter state code issuing the election authority ID.
+      line_number: One-based physical line number within FullDataFile.txt.
+      source_sha256: SHA-256 of the retained PolOrgsFullData.zip archive.
+      source_url: Official IRS Section 527 fullData download URL.
+      observed_at: UTC timestamp when PolOrgsFullData.zip was captured.
+
+  irs527_contributions:
+    label: IRS Form 8872 Schedule A contributions
+    subject: campaign_finance
+    summary: Itemized contributions (record type A) reported on IRS Form 8872 Schedule A in PolOrgsFullData.zip, retaining literal amounts, dates, and ISO-8859-1 text.
+    coverage: Not a range. All Schedule A contribution records present in the captured IRS Section 527 PolOrgsFullData.zip archive.
+    measured_on: '2026-11-25'
+    grain: One Schedule A contribution record line in the captured IRS 527 archive.
+    identity_columns:
+    - source_sha256
+    - line_number
+    columns:
+      form_id_number: IRS Form 8872 filing identifier.
+      sched_a_id: IRS Schedule A line item identifier.
+      org_name: Political organization name.
+      ein: Political organization Employer Identification Number.
+      contributor_name: Contributor name.
+      contributor_address_1: Contributor street address line 1.
+      contributor_address_2: Contributor street address line 2.
+      contributor_address_city: Contributor city.
+      contributor_address_state: Contributor state code.
+      contributor_address_zip_code: Contributor ZIP code.
+      contributor_address_zip_ext: Contributor ZIP+4 extension.
+      contributor_employer: Contributor employer name.
+      contribution_amount_raw: Literal contribution amount string before parsing.
+      contribution_amount: Exact decimal contribution amount; null when blank, unparsed, or out of bounds.
+      contribution_amount_status: Parsed, blank, unparsed, exceeds_scale, or exceeds_precision status for contribution_amount.
+      contributor_occupation: Contributor occupation.
+      agg_contribution_ytd_raw: Literal year-to-date aggregate contribution amount string before parsing.
+      agg_contribution_ytd: Exact decimal year-to-date aggregate contribution amount; null when blank, unparsed, or out of bounds.
+      agg_contribution_ytd_status: Parsed, blank, unparsed, exceeds_scale, or exceeds_precision status for agg_contribution_ytd.
+      contribution_date_raw: Literal contribution date string before parsing.
+      contribution_date: Parsed contribution date; null when blank or unparsed.
+      contribution_date_status: Parsed, blank, or unparsed status for contribution_date.
+      line_number: One-based physical line number within FullDataFile.txt.
+      source_sha256: SHA-256 of the retained PolOrgsFullData.zip archive.
+      source_url: Official IRS Section 527 fullData download URL.
+      observed_at: UTC timestamp when PolOrgsFullData.zip was captured.
+
+  irs527_expenditures:
+    label: IRS Form 8872 Schedule B expenditures
+    subject: campaign_finance
+    summary: Itemized expenditures (record type B) reported on IRS Form 8872 Schedule B in PolOrgsFullData.zip, retaining literal amounts, dates, and ISO-8859-1 text.
+    coverage: Not a range. All Schedule B expenditure records present in the captured IRS Section 527 PolOrgsFullData.zip archive.
+    measured_on: '2026-11-25'
+    grain: One Schedule B expenditure record line in the captured IRS 527 archive.
+    identity_columns:
+    - source_sha256
+    - line_number
+    columns:
+      form_id_number: IRS Form 8872 filing identifier.
+      sched_b_id: IRS Schedule B line item identifier.
+      org_name: Political organization name.
+      ein: Political organization Employer Identification Number.
+      recipient_name: Expenditure recipient name.
+      recipient_address_1: Recipient street address line 1.
+      recipient_address_2: Recipient street address line 2.
+      recipient_address_city: Recipient city.
+      recipient_address_state: Recipient state code.
+      recipient_address_zip_code: Recipient ZIP code.
+      recipient_address_zip_ext: Recipient ZIP+4 extension.
+      recipient_employer: Recipient employer name.
+      expenditure_amount_raw: Literal expenditure amount string before parsing.
+      expenditure_amount: Exact decimal expenditure amount; null when blank, unparsed, or out of bounds.
+      expenditure_amount_status: Parsed, blank, unparsed, exceeds_scale, or exceeds_precision status for expenditure_amount.
+      recipient_occupation: Recipient occupation.
+      expenditure_date_raw: Literal expenditure date string before parsing.
+      expenditure_date: Parsed expenditure date; null when blank or unparsed.
+      expenditure_date_status: Parsed, blank, or unparsed status for expenditure_date.
+      expenditure_purpose: Stated purpose of the expenditure.
+      line_number: One-based physical line number within FullDataFile.txt.
+      source_sha256: SHA-256 of the retained PolOrgsFullData.zip archive.
+      source_url: Official IRS Section 527 fullData download URL.
+      observed_at: UTC timestamp when PolOrgsFullData.zip was captured.
+
   house_disbursements:
     label: House Statement of Disbursements detail ledger
     summary: "One original detail CSV record, including payments, subtotals and organization totals. Filter row_kind to transaction before summing payments; printed totals are separate levels."
@@ -12817,8 +13229,8 @@ tables:
       concept: Native XBRL concept tag; interpreted only within taxonomy and unit.
       end_from: Inclusive selected lower bound for fact end dates.
       end_through: Inclusive selected upper bound for fact end dates.
-      outcome: observed, concept_not_reported, or no_observations_in_period for this acquired source selection. Refusal
-        produces no generation.
+      outcome: observed, concept_not_reported, no_observations_in_period, or no_companyfacts for this acquired source
+        selection. Refusal produces no generation.
       observation_count: Selected native observation count, including comparatives and amendments; not a count of
         distinct economic periods.
       source_sha256: SHA-256 of the retained original response. A capture identity, not a publisher release date.

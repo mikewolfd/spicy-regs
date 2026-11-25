@@ -9,6 +9,7 @@ import shutil
 
 from loguru import logger
 import pyarrow.parquet as pq
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import uuid4
@@ -69,7 +70,15 @@ def _remember(root, datasets, directory, generation, *, inputs=None, published=N
                 inputs.index['families'][owner] = published['families'][owner]
 
 
-def finish_dataset(root: Path, dataset: str, source: Path, *, publish: bool, inputs=None):
+def finish_dataset(
+    root: Path,
+    dataset: str,
+    source: Path,
+    *,
+    publish: bool,
+    inputs=None,
+    witnesses: Sequence[Mapping] = (),
+):
     if publish and (inputs is None or inputs.index is None):
         raise ValueError('Publication requires the captured native input selection used by this build')
     index = inputs.index if inputs is not None and inputs.index is not None else publication.empty_index()
@@ -88,6 +97,7 @@ def finish_dataset(root: Path, dataset: str, source: Path, *, publish: bool, inp
                 [selected_subject_policy(policy(dataset), prior.subjects)], generation_id=prior.generation_id)
     artifact = build_local_generation(
         {dataset: source}, directory, generation_id=uuid4().hex, family=family, publication_status="complete-family",
+        witnesses=witnesses,
         prior_receipts={dataset: [prior.receipts]} if prior is not None else {}
     )
     from spicy_regs.transforms.regulations_receipts import CARRY_DATASETS

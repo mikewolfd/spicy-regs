@@ -45,7 +45,8 @@ def test_domain_status_and_negative_publisher_count_survive():
     assert row['disposition'] == 'Dismissed'
     assert row['precedential_status'] == 'Unpublished'
     assert row['date_blocked'] == '2018-01-01'
-    assert 'ingest_source' not in SUBJECT_SCHEMAS['court_opinion_clusters'].names
+    assert row['ingest_source'] == 'bulk'
+    assert 'ingest_source' in SUBJECT_SCHEMAS['court_opinion_clusters'].names
 
 
 @pytest.mark.parametrize('field,value', [('blocked', 'unknown'), ('citation_count', '1.5'), ('citation_count', str(2**64))])
