@@ -338,3 +338,18 @@ def test_incoming_parent_keys_are_factored_only_when_every_complete_key_matches(
     mixed = mcp_server._table_joins("parent", measurements=True)
     assert "incoming_parent_columns" not in mixed
     assert [j["parent_columns"] for j in mixed["incoming"]] == [["id"], ["alternate_id"]]
+
+
+def test_cbo_estimate_cards_joins_target_feed_items_and_cost_estimates():
+    feed_join = _only_join("cbo_estimate_cards", "cbo_feed_items")
+    assert feed_join.child_columns == ("publication_id",)
+    assert feed_join.parent_columns == ("publication_id",)
+    assert feed_join.kind == "empty"
+    assert feed_join.expected_cardinality == "one"
+
+    cost_join = _only_join("cbo_estimate_cards", "cbo_cost_estimates")
+    assert cost_join.child_columns == ("publication_id",)
+    assert cost_join.parent_columns == ("publication_id",)
+    assert cost_join.kind == "empty"
+    assert cost_join.expected_cardinality == "many"
+

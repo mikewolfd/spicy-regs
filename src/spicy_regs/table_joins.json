@@ -315,6 +315,42 @@
       "measurement": null
     },
     {
+      "child": "cbo_estimate_cards",
+      "child_columns": [
+        "publication_id"
+      ],
+      "parent": "cbo_feed_items",
+      "parent_columns": [
+        "publication_id"
+      ],
+      "kind": "empty",
+      "reason": "Each archived card comes from a CBO feed publication; the published bill-family generation contains no card rows yet and public population is not yet baselined.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "cbo_estimate_cards",
+      "child_columns": [
+        "publication_id"
+      ],
+      "parent": "cbo_cost_estimates",
+      "parent_columns": [
+        "publication_id"
+      ],
+      "kind": "empty",
+      "reason": "Join publication_id to cbo_cost_estimates for source-stated bill links (multiple rows per publication when a publication names several bills, or none when no bill link resolves); the published bill-family generation contains no card rows yet.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "many",
+      "measurement": null
+    },
+    {
       "child": "committee_reports",
       "child_columns": [
         "bill_id"
@@ -9140,6 +9176,26 @@
         "parent_table": "congress_bills",
         "parent_columns": [
           "bill_id"
+        ]
+      }
+    ],
+    "cbo_estimate_cards": [
+      {
+        "child_columns": [
+          "publication_id"
+        ],
+        "parent_table": "cbo_feed_items",
+        "parent_columns": [
+          "publication_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "publication_id"
+        ],
+        "parent_table": "cbo_cost_estimates",
+        "parent_columns": [
+          "publication_id"
         ]
       }
     ],

@@ -40,6 +40,7 @@ jobs:
     with:
       command: run-rollup-bill-family
       require_bulk: true
+      free_disk: true
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
       bill_family_congresses: ${{ inputs.congresses || '' }}
       bill_family_bill_types: ${{ inputs.bill_types || '' }}
