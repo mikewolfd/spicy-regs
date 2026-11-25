@@ -12,6 +12,8 @@ tickets, not here.
   `git push https://github.com/mikewolfd/spicy-regs.git <branch>`.
 - Never push to or pull from `civictechdc` unless Mike names the branch. A push to its `main` on
   2026-09-17 was a mistake and had to be force-reset.
+- Last upstream triage: `civictechdc/spicy-regs` `7e3b417a5` (2026-11-22) — ported `prepare_comment`,
+  `get_rule_text`, and applicable data-dictionary caveats.
 
 ## Where the plan is
 

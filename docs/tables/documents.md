@@ -4,7 +4,7 @@
 
 **Docket documents**
 
-One row per document posted to a docket — proposed rules, final rules, notices, supporting analyses, and public-submission stubs. Joins to `dockets` on `docket_id`. Two payload fields are not carried: `comment` (the inline submission body) and `restrictReasonType` (why a document is withheld). Read those from the acquisition source, the raw Mirrulations payload or spicy-docs' source-native release, not from this table.
+One row per document posted to a docket — proposed rules, final rules, notices, supporting analyses, and public-submission stubs. Joins to `dockets` on `docket_id`; join `document_attributes` 1:1 on `document_id` for fine-grained agency `subtype` values (e.g. NPRM, Extension of Comment Period, Interim Final Rule, Withdrawal). Two payload fields are not carried: `comment` (the inline submission body) and `restrictReasonType` (why a document is withheld). Read those from the acquisition source, the raw Mirrulations payload or spicy-docs' source-native release, not from this table.
 
 **Coverage.** Sampled repair with retained prior rows. On 2026-09-21 the fork merged every selected retained document release into the prior table, resolving each document to its most recent source record and keeping newer and unrelated rows; the daily regulations ETL adds to it. It is not a fresh regulations.gov census. The repair covered metadata and references; body-text, extraction-status and PDF-extraction-evidence values remain NULL. It does not include a full comments corpus. Receipts: fork-execution-2026-09-21/publication-documents.json and fork-base-repair-2026-09-21/repair-audit.json. *(measured 2026-09-28)*
 
@@ -86,7 +86,7 @@ the same.
 | `docket_id` | `VARCHAR` | Parent docket this document belongs to. Foreign key to `dockets.docket_id`. |
 | `agency_code` | `VARCHAR` | Posting agency's short code. `lookup_agency` resolves it through RefSpec's REF-038 projection: measured 2026-10-30, 307 of 316 codes on 2,003,671 of 2,004,396 rows; the rest (`USC`, `BSC`, `TRAIN`, `PCSCOTUS`, `GAPFAC`, `ERULE`, `ARCTICGAS`, `PRES`, `EOA`) have no projection row. |
 | `title` | `VARCHAR` | Document title. |
-| `document_type` | `VARCHAR` | Document category (e.g. `Rule`, `Proposed Rule`, `Notice`, `Supporting & Related Material`). |
+| `document_type` | `VARCHAR` | Coarse document category (e.g. `Rule`, `Proposed Rule`, `Notice`, `Supporting & Related Material`). For finer agency subtypes such as Notice of Proposed Rulemaking (NPRM), Extension of Comment Period, Interim Final Rule, or Withdrawal, join `document_attributes` 1:1 on `document_id` and read `document_attributes.subtype`. |
 | `posted_date` | `VARCHAR` | Date the document was posted publicly (ISO 8601 string). |
 | `modify_date` | `VARCHAR` | Timestamp the document was last modified (ISO 8601 string). |
 | `comment_start_date` | `VARCHAR` | Literal Regulations.gov commentStartDate. See data_quality for the source-specific calendar conversion; this field does not establish submission purpose. NULL means no value was retained. |
@@ -97,7 +97,7 @@ the same.
 | `fr_doc_num` | `VARCHAR` | Federal Register document number, when the document was published in the FR. Often null. |
 | `withdrawn` | `BOOLEAN` | Whether regulations.gov flags the posting withdrawn, as the string `"true"`/`"false"`. Often null. A withdrawn posting is still held here; the rulemaking tables read it as no evidence (see `proceedings`). |
 | `reason_withdrawn` | `VARCHAR` | Agency-supplied reason for withdrawal, when withdrawn: usually that it was posted to the wrong docket, a duplicate, moved or replaced. Often null. |
-| `additional_rins` | `VARCHAR[]` | Native list of additional Regulation Identifier Numbers beyond the docket's primary RIN. Often null. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `additional_rins` | `VARCHAR[]` | Native list of additional Regulation Identifier Numbers beyond the docket's primary RIN. Rarely populated on regulations.gov, so not a usable RIN join key; use `federal_register.regulation_id_numbers` or `fr_docket_links.regulation_id_numbers_json` instead. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `text_content` | `VARCHAR` | Plain text extracted from the document's PDF attachment(s) by the PDF text-extraction step. Null until that step has run; see `text_extraction_status`. |
 | `text_extraction_status` | `VARCHAR` | Aggregate PDF outcome: `ok` means at least one PDF supplied text, even if another failed; otherwise `error`, `encrypted`, or `empty` (no extractable text) in that order. Null before an attempt. See `pdf_extraction_results_json` for each file. |
 | `pdf_extraction_results_json` | `VARCHAR` | Ordered JSON array from the latest PDF attempt: `{url, source_sha256, status, page_count, error}` per distinct selected URL. SHA-256 identifies observed bytes; no-bytes fetch failures have null digest/page count and a generic error. Null when no PDF attempt is recorded. Describes that attempt, not the provenance of older text retained after a failed overwrite. |
