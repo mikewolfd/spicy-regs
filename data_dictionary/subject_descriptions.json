@@ -770,7 +770,7 @@
       "docket_type": "Docket category, typically `Rulemaking` or `Nonrulemaking`.",
       "modify_date": "Timestamp the docket was last modified on regulations.gov (ISO 8601 string).",
       "abstract": "Agency-written summary of the docket (regulations.gov `dkAbstract`). Often null.",
-      "rin": "Regulation Identifier Number tying the docket to the Unified Agenda. Often null."
+      "rin": "Regulation Identifier Number as reported by regulations.gov. Rarely populated: null, empty, or `Not Assigned` on more than 99% of dockets, and where set it holds a single RIN, often not the most recent one, even though a long-running docket can span several. Not a usable RIN join key; to link a RIN to a docket, use `fr_docket_links` (it carries both `regulation_id_numbers_json` and `docket_id`)."
     }
   },
   "document_attributes": {
@@ -847,7 +847,7 @@
       "docket_id": "Parent docket this document belongs to. Foreign key to `dockets.docket_id`.",
       "agency_code": "Posting agency's short code. `lookup_agency` resolves it through RefSpec's REF-038 projection: measured 2026-10-30, 307 of 316 codes on 2,003,671 of 2,004,396 rows; the rest (`USC`, `BSC`, `TRAIN`, `PCSCOTUS`, `GAPFAC`, `ERULE`, `ARCTICGAS`, `PRES`, `EOA`) have no projection row.",
       "title": "Document title.",
-      "document_type": "Document category (e.g. `Rule`, `Proposed Rule`, `Notice`, `Supporting & Related Material`).",
+      "document_type": "Coarse document category (e.g. `Rule`, `Proposed Rule`, `Notice`, `Supporting & Related Material`). For finer agency subtypes such as Notice of Proposed Rulemaking (NPRM), Extension of Comment Period, Interim Final Rule, or Withdrawal, join `document_attributes` 1:1 on `document_id` and read `document_attributes.subtype`.",
       "posted_date": "Date the document was posted publicly (ISO 8601 string).",
       "modify_date": "Timestamp the document was last modified (ISO 8601 string).",
       "comment_start_date": "Literal Regulations.gov commentStartDate. See data_quality for the source-specific calendar conversion; this field does not establish submission purpose. NULL means no value was retained.",
@@ -857,7 +857,7 @@
       "fr_doc_num": "Federal Register document number, when the document was published in the FR. Often null.",
       "withdrawn": "Whether regulations.gov flags the posting withdrawn, as the string `\"true\"`/`\"false\"`. Often null. A withdrawn posting is still held here; the rulemaking tables read it as no evidence (see `proceedings`).",
       "reason_withdrawn": "Agency-supplied reason for withdrawal, when withdrawn: usually that it was posted to the wrong docket, a duplicate, moved or replaced. Often null.",
-      "additional_rins": "Native list of additional Regulation Identifier Numbers beyond the docket's primary RIN. Often null. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
+      "additional_rins": "Native list of additional Regulation Identifier Numbers beyond the docket's primary RIN. Rarely populated on regulations.gov, so not a usable RIN join key; use `federal_register.regulation_id_numbers` or `fr_docket_links.regulation_id_numbers_json` instead. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "text_content": "Plain text extracted from the document's PDF attachment(s) by the PDF text-extraction step. Null until that step has run; see `text_extraction_status`.",
       "publisher_status": "What Regulations.gov last said of the document when the daily reconcile step checked its docket: `listed` (the docket's document listing names it, or, where the listing does not, its own record still answers) or `removed` (the listing omits it and its own record answers 404 or 410). NULL where the step has never checked it: it checks only dockets with a document posted or modified in the past week, so NULL does not mean the publisher still serves it. A removed document stays in this table (see data_quality).",
       "removed_observed_at": "When the reconcile step first found the document removed, as a UTC ISO 8601 instant; NULL unless `publisher_status` is `removed`.",

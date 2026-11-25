@@ -29,6 +29,8 @@ VALID = {
     "query_sql": {"sql": "SELECT 1"},
     "lookup_agency": {"namespace": "regulations.gov:agency", "identifier": "OPM"},
     "resolve_document_citations": {"document_kind": "govinfo_package", "document_key": "CRPT-example"},
+    "prepare_comment": {"docket_id": "USBC-2026-0628"},
+    "get_rule_text": {"document": "USBC-2026-0628"},
 }
 
 

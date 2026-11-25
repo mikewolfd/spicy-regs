@@ -928,6 +928,49 @@ would reject those hosts with **421**. `build_app` passes the setting to
 `streamable_http_app`. This is a public, stateless, read-only endpoint, not a
 privileged localhost service. The SQL and selected-file guards remain required.
 
+## `prepare_comment` and `get_rule_text` (`mcp_rule_tools.py`)
+
+Both tools live in `src/spicy_regs/mcp_rule_tools.py`, keeping `mcp_server.py`
+focused on transport, connection scoping, and catalog serving. The module imports
+only stdlib, `duckdb`, `httpx`, and `spicy_regs.runtime_bounds` so the minimal
+Cloudflare container image needs no extra packages. Both tools set
+`_requested_relations` (`prepare_comment`: `dockets`, `documents`,
+`document_attributes`; `get_rule_text`: `documents`, `federal_register`,
+`document_attributes`) so remote calls bind only the views they read, and call
+`checkpoint()` around queries and retries.
+
+- **`prepare_comment(docket_id, draft="")` is strictly read-only and never
+  submits.** Regulations.gov's `POST /v4/comments` requires a commenting key
+  whose holder certifies each comment comes from a real person, under strict
+  per-key rate limits; sharing that key on an unauthenticated public endpoint
+  would risk revocation and vouching for unverified text. The tool validates
+  `docket_id` against `DOCKET_ID_PATTERN`, runs parameterized SQL only, inspects
+  `DESCRIBE documents` dynamically (supporting both native `BOOLEAN` and legacy
+  string `withdrawn` values, and excluding `publisher_status = 'removed'` when
+  the column exists), and LEFT JOINs `document_attributes` when loaded to include
+  `subtype`. Comment windows parse ISO timestamps (with `Z`/offsets) and bare
+  `YYYY-MM-DD` dates, sort Proposed Rule first, and return `comment_url` plus a
+  draft length check against the 5,000-character/UTF-8-byte box limit.
+- **`get_rule_text(document, section="", offset=0, max_chars=8000)`** resolves a
+  Federal Register document number (`YYYY-NNNNN`), a regulations.gov document ID
+  via `documents.fr_doc_num`, or a docket ID (Proposed Rule, then Rule, then most
+  recent notice, listing others in `other_notices_in_docket` enriched with
+  `document_attributes.subtype` when available). Agency catch-all dockets
+  (`*_FRDOC_*`) are refused. It inspects `DESCRIBE federal_register` dynamically
+  to normalize both native Arrow columns (`cfr_references`,
+  `regulation_id_numbers`, `body_html_url`) and legacy `*_json` strings.
+  Primary text comes from GPO's official GovInfo copy
+  (`https://www.govinfo.gov/content/pkg/FR-<date>/html/<number>.htm`) with
+  strict `www.govinfo.gov` redirect validation (never sending a request off-host),
+  an 8 MiB stream cap, explicit `User-Agent`, bounded transient retries (up to 3
+  attempts on HTTP 429/5xx or `httpx.TransportError`, 0.5 s / 1.0 s backoff),
+  and an `lru_cache(maxsize=16)`. If GovInfo fails and `body_html_url` is a
+  validated `https://www.federalregister.gov/...` URL, it falls back to
+  `body_html_url` under the same host-locked, 8 MiB-capped client, converts HTML
+  headings/sections/paragraphs to plain text (refusing CAPTCHA / Request Access
+  gates), and records the actual URL in `source` plus
+  `source_fallback: "federal_register_body_html"`.
+
 ## Other invariants
 
 - `ICONS` uses a base64 `data:` URI, not an `https://` URL, so it works on both
