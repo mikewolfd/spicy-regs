@@ -236,3 +236,82 @@ def test_congressional_districts_nationwide_codes_and_session_guard(tmp_path, mo
             geography="congressional district",
             districts=("1000",),
         )
+
+
+def test_build_reads_evidence_from_real_source_native_release_reader(tmp_path):
+    from urllib.parse import unquote_plus
+
+    import httpx
+
+    from spicy_docs.sources.census_acs import AcsAcquirer, AcsSelection
+    from spicy_docs.sources.census_acs_profile import (
+        ACS5_CONGRESSIONAL_DISTRICT_PROFILE,
+        acs_scope,
+        retained_page,
+    )
+    from spicy_docs.storage.blobs import LocalSourceNativeBlobStore
+    from spicy_regs.pipelines.raw_releases import admit_release
+
+    selection = AcsSelection(vintage=2024, state="*", geography="congressional district")
+    variables = selection.variables
+    groups_payloads = {
+        selection.metadata_url(group): json.dumps({
+            "variables": {
+                key: {
+                    "group": group,
+                    "label": key,
+                    "predicateType": "string" if key.endswith("A") else "int",
+                }
+                for key in variables
+                if key.startswith(group + "_")
+            }
+        }).encode()
+        for group in selection.groups
+    }
+    data_url = selection.data_url(selection.chunks[0])
+    data_payload = json.dumps([
+        ["NAME", "GEO_ID", *variables, "state", "congressional district"],
+        ["Congressional District (at Large), Delaware", "5001900US1000", "1000000", "0", None, None, "82000", "1500", None, None, "10", "00"],
+        ["Delegate District (at Large), District of Columbia", "5001900US1198", "670000", "0", None, None, "91000", "2000", None, None, "11", "98"],
+        ["Congressional District (not defined), California", "5001900US06ZZ", "0", "0", None, None, "-666666666", "-222222222", "-", "**", "06", "ZZ"],
+    ]).encode()
+    responses = {unquote_plus(url): body for url, body in {**groups_payloads, data_url: data_payload}.items()}
+
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            stream=httpx.ByteStream(responses[unquote_plus(str(request.url.copy_remove_param("key")))]),
+            headers={"content-type": "application/json"},
+        )
+    )
+    retained = []
+    with AcsAcquirer(api_key="testkey123456", transport=transport) as acq:
+        captures = acq.acquire(selection, retain=retained.append)
+    page = retained_page(selection, captures)
+    scope = acs_scope(selection, captures)
+    blobs = LocalSourceNativeBlobStore(tmp_path / "blobs")
+    reader = admit_release(
+        ACS5_CONGRESSIONAL_DISTRICT_PROFILE,
+        [page],
+        scope,
+        tmp_path / "release",
+        blobs=blobs,
+        observed=[c.observed_at for c in captures],
+    )
+
+    artifact, evidence = build(
+        reader,
+        tmp_path / "build",
+        vintage=2024,
+        state="*",
+        geography="congressional district",
+    )
+    assert artifact.pin.artifact_digest and (evidence / "journal.jsonl").exists()
+    table = pq.read_table(tmp_path / "build" / "generation" / module.CD_OUTPUT)
+    assert table.num_rows == 6
+    income = {r["district_geoid"]: (r["estimate"], r["estimate_status"]) for r in table.to_pylist() if r["measure"] == "median_household_income"}
+    assert income == {
+        "1000": (Decimal("82000.000000"), "numeric"),
+        "1198": (Decimal("91000.000000"), "numeric"),
+        "06ZZ": (None, "unavailable"),
+    }

@@ -501,6 +501,9 @@ def build_bulk_tables(
                             },
                         )
 
+            if orphan := set(seen_continuations) - set(roots):
+                raise ValueError(f"SEC bulk submissions contains continuation(s) without issuer root: {sorted(orphan)}")
+
             for issuer, required in roots.items():
                 cont_map = seen_continuations.get(issuer, {})
                 for name, descriptor in required.items():

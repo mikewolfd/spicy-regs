@@ -308,6 +308,8 @@ def _parse_amount(raw: str) -> tuple[Decimal | None, str]:
         ctx.prec = 44
         if value != value.quantize(Decimal("0.01")):
             return None, "exceeds_scale"
+        if abs(value) >= Decimal("1e36"):
+            return None, "exceeds_precision"
     return value, "parsed"
 
 

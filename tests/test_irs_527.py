@@ -153,3 +153,10 @@ def test_malformed_irs_527_row_refuses_without_writing_generation(tmp_path, monk
     with pytest.raises(Irs527Error, match="malformed or truncated"):
         pipeline.build(selection, out, archive_root=raw)
     assert not (out / "generation").exists()
+
+
+def test_irs_527_oversized_amount_preserves_raw_with_exceeds_precision():
+    from spicy_regs.transforms.build_irs_527 import _parse_amount
+
+    value, status = _parse_amount("9" * 37 + ".00")
+    assert value is None and status == "exceeds_precision"

@@ -41,6 +41,7 @@ def build(
     output_dir = Path(output_dir)
     if (output_dir / "generation").exists():
         raise ValueError("Use a fresh output directory for each ACS source release")
+    from spicy_docs.source_native import MAX_EVIDENCE_BYTES
     from spicy_docs.sources.census_acs_profile import MAX_BUNDLE_BYTES
     evidence = CaptureEvidence(output_dir, "census-acs")
     table_name = TABLE if geography == "county" else CD_TABLE
@@ -60,7 +61,7 @@ def build(
         if len(refs) != 1:
             raise ValueError("ACS release must retain one complete source query archive")
         evidence.retain_bytes(
-            reader.read_evidence(refs.pop(), max_bytes=MAX_BUNDLE_BYTES),
+            reader.read_evidence(refs.pop(), max_bytes=min(MAX_BUNDLE_BYTES, MAX_EVIDENCE_BYTES)),
             stage="census-acs-source-release",
             raw_source=False,
             source_logical_id=reader.pin.logical_id, source_artifact_digest=reader.pin.artifact_digest,

@@ -387,3 +387,22 @@ def test_bulk_zip_streaming_build_and_completeness_guards(tmp_path, monkeypatch)
             archive_root=raw,
         )
     assert not (tmp_path / "bad-cont" / "generation").exists()
+
+    # Orphan continuation without a root refuses cleanly.
+    orphan_sub_zip = tmp_path / "orphan-submissions.zip"
+    with ZipFile(orphan_sub_zip, "w", compression=ZIP_DEFLATED) as zf:
+        zf.writestr(cont_name, json.dumps(columns))
+    with pytest.raises(ValueError, match="without issuer root"):
+        build_bulk(
+            orphan_sub_zip,
+            facts_zip,
+            CONCEPTS,
+            tmp_path / "orphan-cont",
+            filing_start="2023-01-01",
+            filing_end="2024-12-31",
+            fact_start="2023-01-01",
+            fact_end="2024-12-31",
+            ciks=None,
+            archive_root=raw,
+        )
+    assert not (tmp_path / "orphan-cont" / "generation").exists()
