@@ -32,9 +32,7 @@ def family_policies(datasets: frozenset[str] | None = None):
     from spicy_regs.transforms.regulations_receipts import (
         PARENT_PINNED_SUMMARIES, SOURCE_COLUMNS, policy as regulations_policy,
     )
-    from spicy_regs.transforms.fec_identity_receipts import dataset_policy as identity_policy, REGISTRY
-    from spicy_regs.transforms.fec_subject_receipts import dataset_policy as fec_policy
-    from spicy_regs.transforms.fec_native_subjects import FIELD_RULES
+    from spicy_regs.transforms.fec_identity_receipts import dataset_policy as identity_policy
     from spicy_regs.navigation_read_outcomes import POLICIES as navigation_outcomes
 
     from spicy_regs.sources.retained_collections import POLICIES as administration
@@ -64,12 +62,17 @@ def family_policies(datasets: frozenset[str] | None = None):
     for name in SOURCE_COLUMNS:
         if name not in PARENT_PINNED_SUMMARIES:
             add(regulations_policy(name))
-    for name in REGISTRY:
+    for name in (
+        "fec_candidate_history",
+        "fec_collections",
+        "fec_committee_history",
+        "fec_committees",
+        "fec_relationships",
+        "fec_source_catalog",
+        "fec_source_records",
+        "org_committee_links",
+    ):
         add(identity_policy(name))
-    declarations = json.loads((ROOT / 'data_dictionary/fec_typed_schemas.json').read_text())['tables']
-    for name in FIELD_RULES:
-        schema = pa.ipc.read_schema(pa.BufferReader(base64.b64decode(declarations[name]['arrow_schema_ipc_base64'])))
-        add(fec_policy(name, schema))
     if datasets is not None and (missing := datasets - result.keys()):
         raise ValueError(f"Unknown dataset declarations: {sorted(missing)}")
     return result
@@ -166,18 +169,24 @@ def main(argv=None):
                   fec_relationships=RELATIONSHIP_SCHEMA)
     import yaml
     descriptions = yaml.safe_load(dd.DEFAULT_DESCRIPTIONS.read_text())["tables"]
+    existing_processing_path = ROOT / "src/spicy_regs/fec_processing_schemas.json"
+    existing_processing = (
+        json.loads(existing_processing_path.read_text()) if existing_processing_path.exists() else {}
+    )
     payload = {}
     for name, schema in sorted(inputs.items()):
         entry = descriptions.get(name, {})
+        existing_entry = existing_processing.get(name, {})
         prose = (dd.contract_column_prose(name) if entry.get("columns_from") == "spicy_docs" else
-                 dict(entry.get("columns", {})))
+                 {**existing_entry.get("descriptions", {}), **dict(entry.get("columns", {}))})
         missing = set(schema.names) - prose.keys()
         if missing:
             raise ValueError(f"{name}: missing processing field descriptions: {sorted(missing)}")
-        payload[name] = {"columns": described_schema(schema), "subject": entry["subject"],
+        subject = entry.get("subject") or existing_entry.get("subject")
+        payload[name] = {"columns": described_schema(schema), "subject": subject,
                          "arrow_schema": base64.b64encode(schema.serialize().to_pybytes()).decode(),
                          "descriptions": {column: prose[column] for column in schema.names}}
-    (ROOT / "src/spicy_regs/fec_processing_schemas.json").write_text(json.dumps(payload, indent=2) + "\n")
+    existing_processing_path.write_text(json.dumps(payload, indent=2) + "\n")
     print(f'Rewrote {rewritten} of {len(policies)} explicit policies')
 
 if __name__ == '__main__':

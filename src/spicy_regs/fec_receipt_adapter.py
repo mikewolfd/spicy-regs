@@ -14,6 +14,30 @@ from tempfile import TemporaryDirectory
 from spicy_regs.runtime_bounds import checkpoint
 
 
+def _dataset_policy(table: str):
+    """Load an installed descriptor, or construct a maintained FEC processing policy for local/historical bundles."""
+    from .etl_receipts import DatasetPolicy
+    from .subject_catalog import descriptors
+
+    declared = descriptors()
+    if table in declared:
+        return DatasetPolicy.from_descriptor(declared[table])
+    proc = processing_declarations()
+    if table in proc:
+        import pyarrow as pa
+        from .transforms.fec_identity_context_fields import REGISTRY as IDENTITY_REGISTRY
+        from .transforms.fec_identity_receipts import dataset_policy as identity_policy
+        from .transforms.fec_native_subjects import FIELD_RULES
+        from .transforms.fec_subject_receipts import dataset_policy as subject_policy
+
+        if table in IDENTITY_REGISTRY:
+            return identity_policy(table)
+        if table in FIELD_RULES:
+            schema = pa.ipc.read_schema(pa.BufferReader(base64.b64decode(proc[table]["arrow_schema"])))
+            return subject_policy(table, schema)
+    raise KeyError(table)
+
+
 def processing_declarations():
     return json.loads(files("spicy_regs").joinpath("fec_processing_schemas.json").read_text())
 
@@ -104,13 +128,12 @@ class ReceiptAdapter:
 
     def _selected_rows_with_policy(self, table):
         """Keep the admitted historical/current policy beside each verified row."""
-        from .etl_receipts import DatasetPolicy, read_with_receipts, read_attempts, select_receipts, selected_subject_policy, receipt_policies
-        from .subject_catalog import descriptors
+        from .etl_receipts import read_with_receipts, read_attempts, select_receipts, selected_subject_policy, receipt_policies
         from .sources.publication import receipt_members, table_members, table_owner
 
         checkpoint()
         self.require_selected((table,))
-        policy = DatasetPolicy.from_descriptor(descriptors()[table])
+        policy = _dataset_policy(table)
         owner, native = receipt_owner(self.index, table), self.local_native.get(table)
         if native is None and owner is None:
             # Retired receipts: the published table is the whole record (``published_without_receipts``).
@@ -198,12 +221,10 @@ class ReceiptAdapter:
         business values; neither path rewrites selected public relations.
         """
         import pyarrow as pa
-        from .etl_receipts import DatasetPolicy
-        from .subject_catalog import descriptors
 
         checkpoint()
         self.require_selected((table,))
-        policy = DatasetPolicy.from_descriptor(descriptors()[table])
+        policy = _dataset_policy(table)
         declaration = processing_declarations()[table]
         schema = (source_schema if source_schema is not None else
                   pa.ipc.read_schema(pa.BufferReader(base64.b64decode(declaration["arrow_schema"]))))

@@ -1,6 +1,5 @@
 """Admit one maintained ordinary view variant using schema binding, never rows."""
 import json
-from pathlib import Path
 
 import duckdb
 import pytest
@@ -59,11 +58,17 @@ def test_legacy_fec_legal_variants_preserve_invalid_occurrences_and_direction(co
 
 
 def native_legal(connection):
-    metadata = json.loads((Path(__file__).parents[1] / 'src/spicy_regs/table_metadata.json').read_text())
-    names = {'record_id','matter_id','ao_citations','aos_cited_by','regulatory_citations',
-             'statutory_citations','citations','subject','subjects'}
-    columns = [c for c in metadata['fec_legal_matters']['columns'] if c['column_name'] in names]
-    connection.execute('CREATE TABLE fec_legal_matters(' + ','.join('"' + c['column_name'] + '" ' + c['column_type'] for c in columns) + ')')
+    import pyarrow as pa
+    from spicy_regs.transforms.fec_native_subjects import subject_schema
+    from tests.test_fec_subject_receipts import declared_schema
+
+    schema = subject_schema('fec_legal_matters', declared_schema('fec_legal_matters'))
+    names = {'record_id', 'matter_id', 'ao_citations', 'aos_cited_by', 'regulatory_citations',
+             'statutory_citations', 'citations', 'subject', 'subjects'}
+    table = pa.Table.from_batches([], schema=pa.schema([field for field in schema if field.name in names]))
+    connection.register('_native_legal_template', table)
+    connection.execute('CREATE TABLE fec_legal_matters AS SELECT * FROM _native_legal_template')
+    connection.unregister('_native_legal_template')
 
 
 def test_native_fec_legal_variants_keep_direction_and_subject_paths(connection):

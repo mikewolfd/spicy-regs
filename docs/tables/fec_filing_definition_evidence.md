@@ -28,4 +28,3 @@ One exact association from a normalized filing definition to a source context wi
 | `context_pointer` | `VARCHAR` | Exact JSON pointer inside context_column to the retained source fact or definition; does not create a fictional source record. |
 | `witness_sha256` | `VARCHAR` | Digest of the original bytes supporting this witness, which may differ from the primary financial row's digest. |
 | `witness_locator_json` | `VARCHAR` | Native source coordinates of the witness, including worksheet cells, source row address or definition location. |
-| `observation_ordinal` | `BIGINT` | Zero-based observation order within this dataset generation. Repeated observations remain separate; this is not a publisher record identifier. |

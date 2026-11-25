@@ -37,8 +37,16 @@ from .reference import REFERENCE_VIEWS
 from .uscode import USCODE_VIEWS
 
 RELATIONSHIP_VIEWS = (*CONGRESS_RELATIONSHIPS, *REGULATORY_RELATIONSHIPS, *ARTIFACT_TOPIC_RELATIONSHIPS)
+_FEC_LEGAL_VIEW_NAMES = {"fec_legal_citations", "fec_legal_subjects"}
 FEC_QUERY_VIEWS = tuple(
-    replace(spec, role="child_query", category="query_data") for spec in FEC_NATIVE_DOCUMENT_QUERY_VIEWS
+    replace(
+        next(s for s in FEC_DOCUMENT_QUERY_VIEWS if s.name == spec.name)
+        if spec.name in _FEC_LEGAL_VIEW_NAMES
+        else spec,
+        role="child_query",
+        category="query_data",
+    )
+    for spec in FEC_NATIVE_DOCUMENT_QUERY_VIEWS
 )
 SQL_RELATIONSHIP_VIEWS = (
     *BILL_PUBLICATION_VIEWS,
@@ -76,7 +84,7 @@ def describe_relationship_views(
     results = install_arrays(connection, (), RELATIONSHIP_VIEWS, publication)
     results.update(install_comment_references(connection, (), publication))
     specs = (*SQL_RELATIONSHIP_VIEWS, *LEGACY_DIFF_VIEWS, *FEC_QUERY_VIEWS,
-             *FEC_DOCUMENT_QUERY_VIEWS, *NATIVE_IDENTITY_VIEWS, *NATIVE_AFFILIATION_VIEWS,
+             *FEC_NATIVE_DOCUMENT_QUERY_VIEWS, *FEC_DOCUMENT_QUERY_VIEWS, *NATIVE_IDENTITY_VIEWS, *NATIVE_AFFILIATION_VIEWS,
              *ARCHIVE_RELATIONSHIP_VIEWS, *native_regulations_views(available))
     # Alternative definitions are documentation, never a schema verdict.
     versions: dict[str, list[str]] = {}
@@ -172,12 +180,12 @@ def install_relationship_views(
     sql += tuple(spec for spec in LEGACY_DIFF_VIEWS if not set(spec.required) <= native)
     sql += ARCHIVE_RELATIONSHIP_VIEWS
     results.update(install_sql_views(connection, available, filter(requested, sql), publication))
-    legal_names = {"fec_legal_citations", "fec_legal_subjects"}
+    legal_names = _FEC_LEGAL_VIEW_NAMES
     results.update(install_sql_views(connection, available,
                                    [spec for spec in FEC_QUERY_VIEWS if spec.name not in legal_names and requested(spec)], publication))
-    legal_variants = [(next(s for s in FEC_QUERY_VIEWS if s.name == name),
-                       replace(next(s for s in FEC_DOCUMENT_QUERY_VIEWS if s.name == name),
-                               role="child_query", category="query_data"))
+    legal_variants = [(replace(next(s for s in FEC_NATIVE_DOCUMENT_QUERY_VIEWS if s.name == name),
+                               role="child_query", category="query_data"),
+                       next(s for s in FEC_QUERY_VIEWS if s.name == name))
                       for name in sorted(legal_names) if selected_names is None or name in selected_names]
     results.update(install_sql_variants(connection, available, legal_variants, publication))
     # Legacy array installation already reports incompatible columns. If no

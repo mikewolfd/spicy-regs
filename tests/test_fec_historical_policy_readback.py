@@ -45,18 +45,31 @@ def test_adapter_restores_historical_receipt_only_collection_without_new_main_fi
         assert con.execute(f'SELECT collection_id,source_family,record_count FROM "{target}"').fetchall()==[('old-collection','bulk',1)]
 
 
-def test_adapter_and_scalar_reader_keep_old_financial_shape_and_source_literals(tmp_path):
+def test_adapter_and_scalar_reader_keep_old_financial_shape_and_source_literals(tmp_path, monkeypatch):
+    from dataclasses import replace
+    import pyarrow as pa
+    import spicy_regs.etl_receipts as etl_receipts
+    from spicy_regs.fec_receipt_adapter import _dataset_policy
     from tests.test_fec_subject_receipts import source_row
     from spicy_regs.transforms.fec_subject_receipts import mapped_record
     from spicy_regs.transforms.fec_subject_receipts import read_fec_with_receipts
     row=source_row()
-    current=policies()['fec_receipts']
-    prior=DatasetPolicy.from_descriptor(HISTORY['fec_receipts'])
+    current=_dataset_policy('fec_receipts')
+    dropped={'source_namespace', 'amount_status', 'filing_association_target_generation_scope',
+             'filing_association_target_generation_pin'}
+    prior=replace(
+        current,
+        policy_version='fec-subject-receipts/1',
+        subject_schema=pa.schema([f for f in current.subject_schema if f.name not in dropped]),
+    )
+    orig_receipt_policies=etl_receipts.receipt_policies
+    monkeypatch.setattr(etl_receipts,'receipt_policies',lambda p: (current, prior) if p.dataset == 'fec_receipts' else orig_receipt_policies(p))
     mapped=mapped_record('fec_receipts',row,current)
     held={name:mapped.get(name) for name in prior.input_fields}
     held["fec_conversion_inputs"] = {**mapped["fec_conversion_inputs"],
         **{name:value for name,value in row.items() if name not in prior.subject_schema.names}}
-    prior,subject,receipt=old_pair(tmp_path/'bundle','fec_receipts',held)
+    _,receipt=write_dataset([(held,ReceiptContext('historical','row','old-writer',[{'source_id':'retained','body_version':'selected-original'}]))],tmp_path/'bundle',prior)
+    subject=tmp_path/'bundle/fec_receipts.parquet'
     before=subject.read_bytes()
     assert selected_subject_policy(current,[subject]).descriptor()==prior.descriptor()
     [restored]=read_fec_with_receipts([subject],[receipt],current,generation_id='historical')
@@ -97,9 +110,10 @@ def test_additive_fcc_history_preserves_both_exact_old_declarations():
 def test_shared_schema_does_not_admit_a_changed_complete_identity(tmp_path, monkeypatch):
     from dataclasses import replace
     import spicy_regs.etl_receipts as receipts
+    from spicy_regs.fec_receipt_adapter import _dataset_policy
     from tests.test_fec_subject_receipts import source_row
     from spicy_regs.transforms.fec_subject_receipts import mapped_record
-    policy=policies()['fec_receipts']
+    policy=_dataset_policy('fec_receipts')
     alternate=replace(policy,identity_fields=('collection_id',),policy_version='unrelated-history')
     subject,_=write_dataset([(mapped_record('fec_receipts',source_row(),policy),
                             ReceiptContext('same','row','writer',[{'source_id':'fixture','body_version':'selected'}]))],tmp_path/'bundle',policy)

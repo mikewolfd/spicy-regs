@@ -21,7 +21,9 @@ The bulk file is FEC's as filed, including a few single lines of billions of dol
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
 | `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
 | `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
+| `value_mapping_version` | `VARCHAR` | Version of the exact monetary and date conversion rules used for supported values. |
 | `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
+| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
 | `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
 | `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
 | `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
@@ -55,6 +57,17 @@ The bulk file is FEC's as filed, including a few single lines of billions of dol
 | `amendment_indicator` | `VARCHAR` | Literal source amendment flag. It does not by itself prove the amendment chain, replacement scope or current record. |
 | `transaction_id` | `VARCHAR` | Literal transaction identifier within its source filing/layout scope; not a globally unique transaction or economic-event key. |
 | `image_number` | `VARCHAR` | Literal FEC image reference; it is not a transaction ID or filing number. |
+| `spender_identity_status` | `VARCHAR` | State of the spender reference and whether a supported identity resolution exists. |
+| `amount_raw` | `VARCHAR` | Literal source value before conversion for amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `amount_status` | `VARCHAR` | Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
+| `reported_aggregate_amount_raw` | `VARCHAR` | Literal source value before conversion for reported_aggregate_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `reported_aggregate_amount_status` | `VARCHAR` | Source-presence or conversion state for reported_aggregate_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
+| `expenditure_date_raw` | `VARCHAR` | Literal source value before conversion for expenditure_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `expenditure_date_status` | `VARCHAR` | How `expenditure_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `expenditure_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `expenditure_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test. |
+| `dissemination_date_raw` | `VARCHAR` | Literal source value before conversion for dissemination_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `dissemination_date_status` | `VARCHAR` | How `dissemination_date` was read. `exact`: a four-digit year, as an original filing states it. `exact_with_year_bounds`: a two-digit year read in the range described on `dissemination_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `dissemination_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test. |
+| `receipt_date_raw` | `VARCHAR` | Literal source value before conversion for receipt_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `receipt_date_status` | `VARCHAR` | How `receipt_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `receipt_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `receipt_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `amount` | `DECIMAL(38,9)` | Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `reported_aggregate_amount` | `DECIMAL(38,9)` | Exact decimal for the source-stated aggregate accompanying this expenditure. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
@@ -93,18 +106,16 @@ The bulk file is FEC's as filed, including a few single lines of billions of dol
 | `completing_suffix` | `VARCHAR` | The person completing the report's reported name suffix. |
 | `memo_indicator` | `VARCHAR` | Literal memo flag from this layout. Eligibility depends on source definitions and analytic purpose; no blanket memo exclusion is implied. |
 | `memo_text` | `VARCHAR` | Source memo or explanation text associated with the reported record. |
+| `disbursement_date_raw` | `VARCHAR` | Literal source value before conversion for disbursement_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `disbursement_date_status` | `VARCHAR` | Source-presence or conversion state for disbursement_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
+| `signed_date_raw` | `VARCHAR` | Literal source value before conversion for signed_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `signed_date_status` | `VARCHAR` | Source-presence or conversion state for signed_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `disbursement_date` | `DATE` | Date parsed from the source-reported disbursement date, including Schedule E for original-filing rows. NULL requires the source value and conversion status; capture time is not substituted. |
 | `signed_date` | `DATE` | Date parsed from the signature date on the reported form. NULL requires the source value and conversion status; capture time is not substituted. |
 | `definition_set_id` | `VARCHAR` | Key of the pinned source layout in fec_filing_definitions. Join its definition evidence for exact workbook cells; the layout does not validate the submission. |
+| `declared_format_version` | `VARCHAR` | Format version declared by the filing header, retained separately from the reviewed source layout version. |
 | `filing_header_record_id` | `VARCHAR` | Source-record key of the actual file header. Resolve with collection_id and filing_header_locator_json in the source generation. |
 | `filing_header_locator_json` | `VARCHAR` | Exact native coordinates of the file-header witness, separate from the financial row's own locator. |
+| `submission_conformance_status` | `VARCHAR` | Explicit statement of whether submission conformance was established; successful field mapping alone does not establish it. |
 | `financial_grain` | `VARCHAR` | Explicit financial row meaning selected for this layout, separating reported activity, balances, allocations and other observations. |
-| `filing_association_status` | `VARCHAR` | The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing. |
-| `filing_association_policy` | `VARCHAR` | Version of the maintained filing association rule used for this decision. |
-| `filing_association_source_generation_pin` | `VARCHAR` | Exact selected source generation used for the filing association decision. |
-| `filing_association_target_generation_pin` | `VARCHAR` | Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases. |
-| `filing_association_record_id` | `VARCHAR` | Identity of the admitted association witness; null when source context or a singular header witness is unavailable. |
-| `filing_association_referenced_key` | `VARCHAR` | Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified. |
-| `filing_association_target_generation_scope` | `VARCHAR` | Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match. |
-| `filing_association_target_count` | `BIGINT` | Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest. |
-| `filing_association_target_record_ids` | `VARCHAR[]` | Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `aggregation_status` | `VARCHAR` | Declared limitation on adding this observation to other records; requires the relevant named financial policy before totals. |

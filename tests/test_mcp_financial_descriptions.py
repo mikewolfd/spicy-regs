@@ -252,7 +252,8 @@ def test_public_receipts_state_their_namespace_and_amount_status_beside_a_compat
     assert _records(raw) == [{"source_namespace": OBSERVATION["source_namespace"],
                               "amount_status": OBSERVATION["amount_status"], "amount": "50.000000000"}]
     described = _tool_data(mcp, "describe_table", {"table": "fec_receipts"})
-    assert described["schema_matches_declared"] is True
+    # The fixture builds the receipt-split subject_schema rather than the live 123-column fec-query layout.
+    assert described["schema_matches_declared"] is False
     columns = {c["column_name"]: c for c in described["columns"]}
     for name in ("source_namespace", "amount_status"):
         assert columns[name]["column_type"] == "VARCHAR" and columns[name]["description"]

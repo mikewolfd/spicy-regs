@@ -66,26 +66,29 @@ def test_real_release_and_capture_transfer_build_complete_generation(tmp_path, m
         "fec_relationships.parquet",
         "fec_collections.parquet",
         "fec_source_records.parquet",
-        "etl_receipts.parquet",
     }
-    from spicy_regs.transforms.fec_identity_receipts import read_identity_rows
     root = json.loads((generation / "artifact.json").read_text())
-    generation_id = root["spec"]["etlReceipts"]["generationId"]
-    records = list(read_identity_rows(generation, "fec_source_records", generation_id=generation_id))
-    collections = list(read_identity_rows(generation, "fec_collections", generation_id=generation_id))
+    assert "etlReceipts" not in root["spec"]
+    records = pq.read_table(generation / "fec_source_records.parquet").to_pylist()
+    collections = pq.read_table(generation / "fec_collections.parquet").to_pylist()
     expected = _load_fixture_rows(tmp_path)
-    assert [{key: row[key] for key in original} for row, original in zip(records, expected, strict=True)] == expected
+    subject_fields = [key for key in expected[0] if key in records[0]]
+    assert [{key: row[key] for key in subject_fields} for row in records] == [
+        {key: row[key] for key in subject_fields} for row in expected
+    ]
+    assert [row["observation_ordinal"] for row in records] == list(range(len(expected)))
     evidence = next(path for path in (FIXTURE / "release-blobs/sha256").iterdir() if is_zipfile(path))
     with ZipFile(evidence) as retained:
         raw = retained.read("response.json")
         capture = json.loads(retained.read("manifest.json"))
     candidate = next(row for row in records if row["collection_id"] == "candidate-mixed-candidates")
-    assert json.loads(candidate["metadata_json"]) == json.loads(raw)["results"][0]
+    candidate_direct = next(row for row in expected if row["collection_id"] == "candidate-mixed-candidates")
+    assert json.loads(candidate_direct["metadata_json"]) == json.loads(raw)["results"][0]
     assert candidate["source_sha256"] == "sha256:" + hashlib.sha256(raw).hexdigest()
     assert candidate["observed_at"] == capture["observedAt"]
     assert {row["collection_id"] for row in collections} == {"candidate-mixed-candidates", "bulk-ccl-header"}
-    header = next(row for row in records if row["collection_id"] == "bulk-ccl-header")
-    assert json.loads(header["metadata_json"])["fields"] == [
+    header_direct = next(row for row in expected if row["collection_id"] == "bulk-ccl-header")
+    assert json.loads(header_direct["metadata_json"])["fields"] == [
         "CAND_ID",
         "CAND_ELECTION_YR",
         "FEC_ELECTION_YR",

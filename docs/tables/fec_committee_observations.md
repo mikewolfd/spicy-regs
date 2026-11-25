@@ -16,6 +16,26 @@ One committee result occurrence in a retained API response. Makes captured commi
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
+| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
+| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
+| `value_mapping_version` | `VARCHAR` | Version of the exact monetary and date conversion rules used for supported values. |
+| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
+| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
+| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
+| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
+| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
+| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
+| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
+| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
+| `correction_operation` | `VARCHAR` | Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund. |
+| `correction_applicability_status` | `VARCHAR` | Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total. |
+| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
+| `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
+| `filing_link_status` | `VARCHAR` | Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist. |
+| `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
+| `amount_kind` | `VARCHAR` | Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission. |
+| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `committee_id` | `VARCHAR` | Literal FEC committee identifier as reported in this observation. Use cycle and source scope for historical joins. |
 | `name` | `VARCHAR` | Candidate or committee name exactly as captured in this API/history observation; no cross-record name merge. |
 | `committee_type` | `VARCHAR` | Source committee-type code; interpret using the matching source dictionary. |
@@ -28,53 +48,16 @@ One committee result occurrence in a retained API response. Makes captured commi
 | `treasurer_name` | `VARCHAR` | Treasurer name stated by the committee or filing source at this observation. |
 | `organization_type_full` | `VARCHAR` | Source-provided expansion of its organization-type code. |
 | `filing_frequency` | `VARCHAR` | Source-stated filing frequency code; not proof that all required reports are retained. |
-| `affiliated_committee_name` | `VARCHAR` | Literal affiliated committee or connected organization name stated by the API; a name is not a verified committee link or a substitute for bulk CONNECTED_ORG_NM. |
-| `organization_type` | `VARCHAR` | Literal source organization-type code; interpretation follows the source namespace. |
-| `first_file_date` | `DATE` | First filing date as reported in this source observation, not independently reconstructed history. |
-| `last_file_date` | `DATE` | Last filing date as reported in this source observation; later filings may exist. |
-| `first_f1_date` | `DATE` | First Form 1 date reported by the source, without a completeness assertion. |
-| `last_f1_date` | `DATE` | Last Form 1 date reported by the source, without a completeness assertion. |
-| `cycles` | `INTEGER[]` | Literal Native list of reported activity cycles, retaining missing, NULL and empty distinctions. Activity membership does not date the captured profile fields. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
-| `candidate_ids` | `VARCHAR[]` | Literal Native list of candidate IDs stated by the committee API; relationships require their own evidence and state checks. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
-| `sponsor_candidate_ids` | `VARCHAR[]` | Independent ordered array of source sponsor-candidate references; never pair positions with cycles or candidate_ids. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
-| `designated_agent_city` | `VARCHAR` | Committee-designated agent city, exactly as stated by the source. |
-| `designated_agent_first_name` | `VARCHAR` | Committee-designated agent first name, exactly as stated by the source. |
-| `designated_agent_last_name` | `VARCHAR` | Committee-designated agent last name, exactly as stated by the source. |
-| `designated_agent_middle_name` | `VARCHAR` | Committee-designated agent middle name, exactly as stated by the source. |
-| `designated_agent_name` | `VARCHAR` | Committee-designated agent name, exactly as stated by the source. |
-| `designated_agent_phone_number` | `VARCHAR` | Committee-designated agent phone number, exactly as stated by the source. |
-| `designated_agent_prefix` | `VARCHAR` | Committee-designated agent prefix, exactly as stated by the source. |
-| `designated_agent_state` | `VARCHAR` | Committee-designated agent state, exactly as stated by the source. |
-| `designated_agent_street1` | `VARCHAR` | Committee-designated agent street1, exactly as stated by the source. |
-| `designated_agent_street2` | `VARCHAR` | Committee-designated agent street2, exactly as stated by the source. |
-| `designated_agent_suffix` | `VARCHAR` | Committee-designated agent suffix, exactly as stated by the source. |
-| `designated_agent_title` | `VARCHAR` | Committee-designated agent title, exactly as stated by the source. |
-| `designated_agent_zip` | `VARCHAR` | Committee-designated agent zip, exactly as stated by the source. |
-| `sponsor_candidate_list` | `STRUCT(sponsor_candidate_id VARCHAR, sponsor_candidate_name VARCHAR)[]` | Source-listed sponsor candidate identifiers and names serialized in source order, preserving repetitions. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
-| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
-| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
-| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
+| `first_file_date` | `VARCHAR` | First filing date as reported in this source observation, not independently reconstructed history. |
+| `last_file_date` | `VARCHAR` | Last filing date as reported in this source observation; later filings may exist. |
+| `cycles_json` | `VARCHAR` | Literal JSON array of reported activity cycles, retaining missing, NULL and empty distinctions. Activity membership does not date the captured profile fields. |
+| `candidate_ids_json` | `VARCHAR` | Literal JSON array of candidate IDs stated by the committee API; relationships require their own evidence and state checks. |
 | `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
 | `source_pointer` | `VARCHAR` | Exact pointer within the provider-owned native record to the mapped value or metadata object. |
 | `original_result_pointer` | `VARCHAR` | Original API results-array pointer retained separately from the provider wrapper's pointer. |
 | `query_completeness` | `VARCHAR` | Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query. |
 | `registry_scope_status` | `VARCHAR` | Explicit retained-observation scope; this table does not replace the broader current candidate/committee registry. |
+| `native_metadata_json` | `VARCHAR` | Complete native metadata object retained for this observation, including fields outside the typed mapping. |
+| `native_field_states_json` | `VARCHAR` | JSON map of field presence states such as source_missing, source_null, source_empty or reported. |
 | `committee_id_status` | `VARCHAR` | State or syntax check of the reported committee ID; a valid shape is not a resolved identity. |
-| `cycles_status` | `VARCHAR` | Source array state for cycles: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order. |
-| `candidate_ids_status` | `VARCHAR` | Source array state for candidate_ids: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order. |
-| `sponsor_candidate_ids_status` | `VARCHAR` | Source array state for sponsor_candidate_ids: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order. |
-| `first_file_date_status` | `VARCHAR` | Interpretation of source first_file_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `last_file_date_status` | `VARCHAR` | Interpretation of source last_file_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `first_f1_date_status` | `VARCHAR` | Interpretation of source first_f1_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `last_f1_date_status` | `VARCHAR` | Interpretation of source last_f1_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
 | `source_cycle` | `INTEGER` | NULL for general committee API profiles. Activity query cycles remain in retained capture evidence; they do not establish a historical effective cycle for profile fields. |
-| `sponsor_candidate_list_status` | `VARCHAR` | Source-list interpretation outcome; unsupported_shape means the source value did not match the declared candidate-list structure. |

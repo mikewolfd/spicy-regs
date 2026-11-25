@@ -13,6 +13,10 @@ FEC_SOURCE_CATEGORIES = {
     # The reference namespace (ss-j4vz Q1): rebuilt from whole originals, not query data.
     "fec_reference_filing_feed_items": "reference_data",
     "fec_reference_source_pages": "reference_data",
+    "fec_research_context_dispositions": "diagnostics",
+    "fec_research_document_observations": "discovery_leads",
+    "fec_research_response_outcomes": "diagnostics",
+    "fec_retained_csv_observations": "bounded_samples",
 }
 
 
