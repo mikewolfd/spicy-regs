@@ -10,6 +10,7 @@ import shutil
 from typing import Annotated, ClassVar
 
 from cyclopts import App, Parameter
+from loguru import logger
 
 from spicy_regs.ontology.common import RunContext
 from spicy_regs.ontology.federal_register import FederalRegisterIndex
@@ -89,6 +90,43 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
         "agency_lifecycle_stats.parquet",
     )
     receipt_policies: ClassVar[tuple] = tuple(policy(Path(name).stem) for name in published_outputs)
+
+    def validate_before_publish(self, manifest_path: Path) -> None:
+        """Refuse catastrophic row-count drops against the captured prior manifest unless overridden."""
+        if os.getenv("R2_ALLOW_SHRINK") == "1":
+            logger.warning("R2_ALLOW_SHRINK=1: bypassing rulemaking row-count guard")
+            return
+        previous_path = manifest_path.parent / "_rulemaking_previous_manifest.json"
+        if not previous_path.exists():
+            return
+        ratio_env = os.getenv("R2_MIN_SIZE_RATIO", "0.5")
+        try:
+            min_ratio = float(ratio_env)
+        except ValueError as exc:
+            raise RuntimeError(f"Invalid R2_MIN_SIZE_RATIO={ratio_env!r}; expected a float") from exc
+        if not 0.0 <= min_ratio <= 1.0:
+            raise RuntimeError(f"Invalid R2_MIN_SIZE_RATIO={min_ratio}; expected a value between 0 and 1")
+        candidate = json.loads(manifest_path.read_text(encoding="utf-8"))
+        previous = json.loads(previous_path.read_text(encoding="utf-8"))
+        candidate_artifacts = candidate.get("artifacts") or {}
+        previous_artifacts = previous.get("artifacts") or {}
+        for name in self.published_outputs:
+            prev_record = previous_artifacts.get(name)
+            if not isinstance(prev_record, dict):
+                continue
+            prev_rows = prev_record.get("rows")
+            if type(prev_rows) is not int or prev_rows <= 0:
+                continue
+            curr_record = candidate_artifacts.get(name)
+            curr_rows = curr_record.get("rows") if isinstance(curr_record, dict) else None
+            if type(curr_rows) is not int:
+                raise RuntimeError(f"Rulemaking candidate manifest missing row count for {name}")
+            ratio = curr_rows / prev_rows
+            if curr_rows == 0 or ratio < min_ratio:
+                raise RuntimeError(
+                    f"Rulemaking shrink guard refused {name}: {curr_rows:,} rows vs prior {prev_rows:,} rows "
+                    f"(ratio {ratio:.3f} < threshold {min_ratio}). Set R2_ALLOW_SHRINK=1 to override."
+                )
 
     def _publish(self, *, manifest_path, pointer_path, artifact_paths) -> None:
         """Keep ordinary admission and uploads; guard the captured prior before they start."""

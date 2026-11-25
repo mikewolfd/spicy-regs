@@ -205,12 +205,17 @@ def test_catalog_over_source_bound_refuses(tmp_path):
 
 
 def test_large_admitted_catalog_streamed_to_evidence(tmp_path):
+    from spicy_regs.source_evidence import EvidenceMemberSource
+
     published, blobs, controls = make_release(tmp_path, "d", "1.1", catalog_padding=24 * 1024 * 1024)
     reader = open_reader(published, blobs, "1.1")
     assert controls[0].byte_size > 24 * 1024 * 1024
     artifact, evidence = cms_part_d.build(reader, tmp_path / "output", year=2024)
-    retained = evidence / "blobs" / "sha256" / controls[0].sha256.removeprefix("sha256:")
-    assert artifact.pin.artifact_digest and retained.read_bytes() == controls[0].body
+    digest_hex = controls[0].sha256.removeprefix("sha256:")
+    with EvidenceMemberSource(evidence).open("blobs/sha256/" + digest_hex) as stream:
+        retained = stream.read()
+    assert artifact.pin.artifact_digest and retained == controls[0].body
+    assert not (evidence / "blobs" / "sha256" / digest_hex).exists()
 
 
 def test_stream_corruption_refuses_without_generation(tmp_path):
@@ -221,3 +226,50 @@ def test_stream_corruption_refuses_without_generation(tmp_path):
     with pytest.raises(ValueError, match="digest"):
         cms_part_d.build(reader, tmp_path / "output", year=2024)
     assert not (tmp_path / "output" / "generation").exists()
+
+
+def test_acquire_helper_writes_selection_and_feeds_pipeline_build(tmp_path, monkeypatch, capsys):
+    import httpx
+
+    title = "Medicare Part D Spending by Drug"
+    series_id, dataset_id = API + SERIES + "/data", API + SERIES + "/data-viewer"
+    api = API + RELEASE + "/data"
+    catalog = {
+        "conformsTo": {"identifier": "https://resources.data.gov/dcat-us/3.0.0"},
+        "datasetSeries": [{"@id": series_id, "title": title, "last": {"@id": dataset_id}}],
+        "dataset": [
+            {
+                "@id": dataset_id,
+                "inSeries": [{"@id": series_id}],
+                "temporal": [{"startDate": "2024-01-01"}],
+                "modified": "2026-06-25",
+                "distribution": [
+                    {"format": "API", "accessURL": api, "describedBy": {"downloadURL": API + RELEASE + "/dictionary"}}
+                ],
+            }
+        ],
+    }
+    rows = [raw(), raw("Maker")]
+    dictionary = {"data": {"fields": [{"name": n} for n in rows[0]]}}
+    stats = {"found_rows": len(rows), "total_rows": len(rows)}
+
+    def serve(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url == CATALOG_URL:
+            return httpx.Response(200, json=catalog)
+        if url == API + RELEASE + "/dictionary":
+            return httpx.Response(200, json=dictionary)
+        if url == api + "/stats":
+            return httpx.Response(200, json=stats)
+        if url.startswith(api + "?"):
+            return httpx.Response(200, json=rows)
+        raise AssertionError(f"unexpected CMS URL: {url}")
+
+    selection_path = cms_drug_spending.acquire(
+        "cms-part-d", tmp_path / "acquired", page_size=2, transport=httpx.MockTransport(serve)
+    )
+    monkeypatch.setattr(
+        sys, "argv", ["cms", "--selection", str(selection_path), "--output-dir", str(tmp_path / "built")]
+    )
+    cms_drug_spending.main(cms_part_d.build, "test")
+    assert json.loads(capsys.readouterr().out)["artifactDigest"].startswith("sha256:")

@@ -508,6 +508,103 @@ def test_bill_subjects_api_and_bulk_readers_retain_their_responses_without_the_k
     assert_no_secret(evidence, KEY)
 
 
+def test_press_releases_retains_each_feed_without_local_paths(tmp_path, monkeypatch, tee):
+    from dataclasses import replace
+
+    from spicy_docs.sources.congress.press_releases import PRESS_RELEASE_FEEDS
+
+    from tests.test_press_releases import FEED_FILES, FIXTURES
+
+    pr = importlib.import_module("spicy_regs.transforms.build_press_releases")
+    monkeypatch.setattr(pr, "BUDGET", replace(pr.BUDGET, min_request_interval_seconds=0.0))
+    evidence = CaptureEvidence(tmp_path / "audit", "press-releases")
+    bodies = {feed.url: (FIXTURES / FEED_FILES[chamber]).read_bytes() for chamber, feed in PRESS_RELEASE_FEEDS.items()}
+    tee(
+        evidence,
+        lambda request: httpx.Response(
+            200,
+            stream=httpx.ByteStream(bodies[str(request.url)]),
+            headers={"content-type": "application/rss+xml"},
+        ),
+    )
+    output = pr.build_press_releases(tmp_path, download_prior=lambda *a: False, evidence=evidence)
+    assert pq.read_table(output).num_rows == 25
+    retained = captures(evidence)
+    assert stages(evidence) == {"press-release-feed"}
+    assert {c["requested_url"]: payload(evidence, c) for c in retained} == bodies
+
+
+def test_senate_expenditures_retains_discovery_and_granule_without_the_key(tmp_path, monkeypatch, tee):
+    from dataclasses import replace
+
+    senate = importlib.import_module("spicy_regs.transforms.build_senate_expenditures")
+    monkeypatch.setenv("API_GOV", KEY)
+    monkeypatch.setattr(senate, "DISCOVERY_BUDGET", replace(senate.DISCOVERY_BUDGET, min_request_interval_seconds=0.0))
+    monkeypatch.setattr(senate, "BODY_BUDGET", replace(senate.BODY_BUDGET, min_request_interval_seconds=0.0))
+    evidence = CaptureEvidence(tmp_path / "audit", "senate-expenditures")
+    package_id = "GPO-CDOC-119sdoc3"
+    granule_id = f"{package_id}-1"
+    pdf_bytes = b"%PDF-1.4\n%stub\n"
+    mods_xml = (
+        f'<mods xmlns="http://www.loc.gov/mods/v3">'
+        f"<extension><accessId>{granule_id}</accessId><collectionCode>GPO</collectionCode></extension>"
+        f'<relatedItem type="host"><extension><accessId>{package_id}</accessId></extension></relatedItem>'
+        f'<location><url access="raw object">https://www.govinfo.gov/content/pkg/{package_id}/pdf/{granule_id}.pdf</url></location>'
+        f"</mods>"
+    ).encode()
+    discovery_pkgs = json.dumps(
+        {
+            "count": 1,
+            "packages": [
+                {
+                    "packageId": package_id,
+                    "title": "Report of the Secretary of the Senate: October 1, 2024 to March 31, 2025",
+                    "lastModified": "2026-09-20T00:00:00Z",
+                }
+            ],
+            "nextPage": None,
+        }
+    ).encode()
+    discovery_granules = json.dumps(
+        {
+            "count": 1,
+            "granules": [{"granuleId": granule_id, "granuleClass": "CONTENT", "lastModified": "2026-09-20T00:00:00Z"}],
+            "nextPage": None,
+        }
+    ).encode()
+    summary_json = json.dumps(
+        {"packageId": package_id, "granuleId": granule_id, "collectionCode": "GPO"}
+    ).encode()
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if "/published/" in path:
+            return json_response(discovery_pkgs)
+        if path.endswith("/granules"):
+            return json_response(discovery_granules)
+        if path.endswith("/summary"):
+            return json_response(summary_json)
+        if path.endswith("/mods"):
+            return httpx.Response(200, stream=httpx.ByteStream(mods_xml), headers={"content-type": "application/xml"})
+        if path.endswith(".pdf"):
+            return httpx.Response(200, stream=httpx.ByteStream(pdf_bytes), headers={"content-type": "application/pdf"})
+        raise AssertionError(f"unexpected request: {request.url}")
+
+    class StubExtractor:
+        def extract(self, source: bytes, *, media_type: str):
+            assert source == pdf_bytes and media_type == "application/pdf"
+            yield type("Page", (), {"metadata": {"page": 1, "page_count": 1}, "text": "", "tables": ()})()
+
+    tee(evidence, respond)
+    senate.build_senate_expenditures(
+        tmp_path, extractor=StubExtractor(), download_prior=lambda *a: False, evidence=evidence
+    )
+    assert stages(evidence) == {"senate-expenditures-discovery", "senate-expenditures-granule"}
+    assert any(payload(evidence, c) == pdf_bytes for c in captures(evidence))
+    assert any(e["event"] == "acquisition-coverage" for e in journal(evidence))
+    assert_no_secret(evidence, KEY)
+
+
 # --------------------------------------------------------------------------- #
 # Every rollup that reads a publisher keeps what it read, or says here why not.
 # --------------------------------------------------------------------------- #
@@ -521,8 +618,6 @@ EVIDENCE_EXEMPT = {
     "CfrSectionsRollup": _UNWIRED,
     "FecCommitteesRollup": _UNWIRED + "; its captures live only as an expiring workflow artifact",
     "FecSourceCatalogRollup": _UNWIRED,
-    "PressReleasesRollup": _UNWIRED,
-    "SenateExpendituresRollup": _UNWIRED,
 }
 
 

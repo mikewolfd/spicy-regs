@@ -128,9 +128,11 @@ class _Acquirer:
     def __init__(self, refuse: dict[str, Exception] | None = None):
         self.refuse = refuse or {}
         self.asked: list[str] = []
+        self.prefers: list[tuple[str, ...] | None] = []
 
-    def acquire_granule(self, package_id, granule_id, *, max_bytes=None):
+    def acquire_granule(self, package_id, granule_id, *, prefer=None, max_bytes=None):
         self.asked.append(granule_id)
+        self.prefers.append(None if prefer is None else tuple(prefer))
         if granule_id in self.refuse:
             raise self.refuse[granule_id]
         return _Body()
@@ -609,3 +611,44 @@ def test_missing_outside_discovery_sibling_does_not_reread_the_corrected_file(tm
     out = _build(tmp_path, _Reader([], granules), acquirer, _Extractor(page_count=1, tables_per_page=0))
     assert acquirer.asked == [PART_TWO], "the pending sibling is retried when it returns"
     assert {row["file_name"] for row in _rows(out)} == {f"{PART_ONE}.pdf"}
+
+
+def test_acquire_granule_requests_pdf_preference_explicitly(tmp_path):
+    reader = _Reader([_listing()], {PACKAGE: [_granule(PART_ONE)]})
+    acquirer = _Acquirer()
+    _build(tmp_path, reader, acquirer, _Extractor(page_count=1))
+    assert acquirer.prefers == [("pdf",)]
+
+
+@pytest.mark.parametrize("error", [TypeError("internal bug"), KeyError("missing_key")])
+def test_internal_type_or_key_error_is_not_swallowed_as_a_refusal(tmp_path, error):
+    reader = _Reader([_listing()], {PACKAGE: [_granule(PART_ONE)]})
+    acquirer = _Acquirer(refuse={PART_ONE: error})
+    with pytest.raises(type(error)):
+        _build(tmp_path, reader, acquirer, _Extractor(page_count=1))
+
+
+def test_rollup_surfaces_refusal_as_deferred_failure_after_publishing_healthy_rows(tmp_path, monkeypatch):
+    from spicy_regs.pipelines.rollups.senate_expenditures import SenateExpendituresRollup
+
+    assert SenateExpendituresRollup.retain_source_evidence is True
+    reader = _Reader([_listing()], {PACKAGE: [_granule(PART_ONE), _granule(PART_TWO)]})
+    acquirer = _Acquirer(refuse={PART_ONE: PagedJsonSourceError("granule refused")})
+
+    def stub_build(output_dir: Path, **kwargs):
+        assert kwargs["evidence"] is not None
+        kwargs["download_prior"] = _no_download
+        return build_senate_expenditures(
+            output_dir,
+            reader=reader,
+            acquirer=acquirer,
+            extractor=_Extractor(page_count=2),
+            **kwargs,
+        )
+
+    monkeypatch.setattr("spicy_regs.pipelines.rollups.senate_expenditures.build_senate_expenditures", stub_build)
+    pipeline = SenateExpendituresRollup(output_dir=tmp_path, skip_upload=True)
+    with pytest.raises(RuntimeError, match="1 refused"):
+        pipeline.run()
+    [generation] = list((tmp_path / "generations").iterdir())
+    assert {row["file_name"] for row in _rows(generation / "senate_expenditures.parquet")} == {f"{PART_TWO}.pdf"}

@@ -179,3 +179,50 @@ def test_missing_captured_prior_needs_explicit_bootstrap(prepared):
     pipeline.allow_bootstrap = True
     publish(prepared)
     assert store.conditions[0]['IfNoneMatch'] == '*'
+
+
+def test_validate_before_publish_refuses_catastrophic_row_drop_unless_overridden(tmp_path, monkeypatch):
+    pipeline = RulemakingDatasetPipeline(output_dir=tmp_path, skip_upload=True)
+    candidate_manifest = tmp_path / "rulemaking-dataset-manifest.json"
+    previous_manifest = tmp_path / "_rulemaking_previous_manifest.json"
+    previous_manifest.write_text(
+        json.dumps(
+            {
+                "artifacts": {
+                    "proceedings.parquet": {"rows": 100},
+                    "rule_targets.parquet": {"rows": 200},
+                }
+            }
+        )
+    )
+    candidate_manifest.write_text(
+        json.dumps(
+            {
+                "artifacts": {
+                    "proceedings.parquet": {"rows": 80},
+                    "rule_targets.parquet": {"rows": 150},
+                }
+            }
+        )
+    )
+    pipeline.validate_before_publish(candidate_manifest)
+
+    candidate_manifest.write_text(
+        json.dumps(
+            {
+                "artifacts": {
+                    "proceedings.parquet": {"rows": 10},
+                    "rule_targets.parquet": {"rows": 150},
+                }
+            }
+        )
+    )
+    with pytest.raises(RuntimeError, match="Rulemaking shrink guard refused proceedings.parquet"):
+        pipeline.validate_before_publish(candidate_manifest)
+
+    monkeypatch.setenv("R2_ALLOW_SHRINK", "1")
+    pipeline.validate_before_publish(candidate_manifest)
+
+    monkeypatch.delenv("R2_ALLOW_SHRINK")
+    previous_manifest.unlink()
+    pipeline.validate_before_publish(candidate_manifest)

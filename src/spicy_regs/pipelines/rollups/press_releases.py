@@ -19,12 +19,13 @@ class PressReleasesRollup(RollupPipeline):
     """Appropriations committee press releases, captured from both chambers' RSS feeds."""
 
     name: ClassVar[str] = "press-releases"
+    retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
     soft_inputs: ClassVar[tuple[str, ...]] = ("congress_bills.parquet",)
     output: ClassVar[str] = "press_releases.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return self.build_receipts(output_dir, build_press_releases)
+        return self.build_receipts(output_dir, build_press_releases, evidence=self.source_evidence)
 
 
 app = make_rollup_app(PressReleasesRollup)
