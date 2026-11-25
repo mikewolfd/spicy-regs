@@ -579,3 +579,64 @@ def test_an_unchanged_title_41_package_takes_compound_parts_from_its_prior_witho
         f"{package_id}-part60": "41-60-1", f"{package_id}-part60-id334": "41-60-2",
         f"{package_id}-part60-id334-subpartA": "41-60-2"}
     assert is_marked(tmp_path)
+
+
+def test_declared_count_changed_mid_pagination_retries_cleanly_from_page_one():
+    """DeclaredCountChanged on attempt 1 discards partial granules and succeeds cleanly on attempt 2."""
+    from loguru import logger
+
+    next_url = f"{cfr.API_BASE}/packages/{PACKAGE_ID}/granules?offsetMark=page2&pageSize=100"
+    page3_url = f"{cfr.API_BASE}/packages/{PACKAGE_ID}/granules?offsetMark=page3&pageSize=100"
+    second = {**GRANULE, "granuleId": f"{PACKAGE_ID}-sec1-2"}
+    third = {**GRANULE, "granuleId": f"{PACKAGE_ID}-sec1-3"}
+    transport = Transport(
+        page("packages", [PACKAGE]),
+        # Attempt 1: page 1 declares count=2, page 2 mutates to count=3 -> DeclaredCountChanged.
+        page("granules", [GRANULE], count=2, next_page=next_url),
+        page("granules", [second], count=3, next_page=page3_url),
+        # Attempt 2: restarts from page 1 and completes with consistent count=3.
+        page("granules", [GRANULE, second], count=3, next_page=next_url),
+        page("granules", [third], count=3),
+    )
+    warnings: list[str] = []
+    sink = logger.add(warnings.append, level="WARNING", format="{message}")
+    try:
+        cfr_reader = reader(transport)
+        rows = list(cfr_reader.iter_records())
+    finally:
+        logger.remove(sink)
+
+    assert [row["granuleId"] for row in rows] == [
+        GRANULE["granuleId"],
+        second["granuleId"],
+        third["granuleId"],
+    ]
+    assert cfr_reader._seen == 3
+    assert len(transport.calls) == 5
+    assert transport.calls[3].url.params["offsetMark"] == "*"
+    assert any(PACKAGE_ID in message and "attempt 1/3" in message for message in warnings)
+
+
+def test_persistent_declared_count_changed_across_all_attempts_raises():
+    """Persistent DeclaredCountChanged across all 3 attempts raises without yielding partial rows."""
+    from spicy_docs.reading.paged_json import DeclaredCountChanged
+
+    next_url = f"{cfr.API_BASE}/packages/{PACKAGE_ID}/granules?offsetMark=page2&pageSize=100"
+    second = {**GRANULE, "granuleId": f"{PACKAGE_ID}-sec1-2"}
+    transport = Transport(
+        page("packages", [PACKAGE]),
+        # Attempt 1
+        page("granules", [GRANULE], count=2, next_page=next_url),
+        page("granules", [second], count=3),
+        # Attempt 2
+        page("granules", [GRANULE], count=2, next_page=next_url),
+        page("granules", [second], count=3),
+        # Attempt 3
+        page("granules", [GRANULE], count=2, next_page=next_url),
+        page("granules", [second], count=3),
+    )
+    cfr_reader = reader(transport)
+    with pytest.raises(DeclaredCountChanged):
+        list(cfr_reader.iter_records())
+    assert cfr_reader._seen == 0
+    assert len(transport.calls) == 7
