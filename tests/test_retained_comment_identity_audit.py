@@ -327,7 +327,12 @@ def test_supervisor_strips_credentials_and_charges_acquisition_and_backup_elapse
     request, _, _ = extracted(tmp_path)
     monkeypatch.setattr(run.subprocess, "check_output", lambda *a, **kw: "b" * 40)
     prior_acquire = {"status": "complete", "remaining_processes": [], "limits": run.LIMITS, "elapsed_seconds": 22.5}
-    prior_backup = {"status": "complete", "remaining_processes": [], "limits": run.LIMITS, "elapsed_seconds": 10.0}
+    prior_backup = {
+        "status": "complete",
+        "remaining_processes": [],
+        "limits": {**run.LIMITS, "wall_seconds": 877.5},
+        "elapsed_seconds": 10.0,
+    }
     (tmp_path / "acquire-execution.json").write_text(json.dumps(prior_acquire))
     (tmp_path / "backup-execution.json").write_text(json.dumps(prior_backup))
     (tmp_path / "backup.json").write_text(json.dumps({"status": "complete"}))
@@ -359,6 +364,77 @@ def test_supervisor_strips_credentials_and_charges_acquisition_and_backup_elapse
     assert run.os.environ["GITHUB_TOKEN"] == "must-not-reach-child"
     with pytest.raises(ValueError, match="already attempted"):
         run.retained(args)
+
+
+def test_multiphase_retained_audit_charges_cumulative_wall_seconds_and_rejects_tampering(tmp_path, monkeypatch):
+    from scripts import read_comment_attachment_group as supervisor
+
+    request, request_pin, _ = extracted(tmp_path)
+    monkeypatch.setattr(run.subprocess, "check_output", lambda *a, **kw: "b" * 40)
+    phase_elapsed = {"acquire": 12.345678, "backup": 7.654321, "query": 0.5}
+    recorded_limits: dict[str, dict[str, float | int]] = {}
+
+    def supervised(args, *, command, limits):
+        phase = command[command.index("--phase") + 1]
+        recorded_limits[phase] = dict(limits)
+        if phase == "backup":
+            (tmp_path / "backup.json").write_text(json.dumps({"status": "complete"}))
+        elif phase == "query":
+            run.query(tmp_path, request, request_pin, "b" * 40)
+        (tmp_path / "execution.json").write_text(
+            json.dumps(
+                {
+                    "status": "complete",
+                    "remaining_processes": [],
+                    "limits": dict(limits),
+                    "elapsed_seconds": phase_elapsed[phase],
+                }
+            )
+        )
+
+    monkeypatch.setattr(supervisor, "supervise", supervised)
+    for phase in ("acquire", "backup", "query"):
+        args = argparse.Namespace(
+            workdir=tmp_path,
+            retained_request=tmp_path / "request.json",
+            runtime_ref="b" * 40,
+            phase=phase,
+            worker=False,
+        )
+        assert run.retained(args) == 0
+
+    assert recorded_limits["acquire"]["wall_seconds"] == 900
+    assert recorded_limits["backup"]["wall_seconds"] == pytest.approx(900 - phase_elapsed["acquire"])
+    assert recorded_limits["query"]["wall_seconds"] == pytest.approx(
+        900 - phase_elapsed["acquire"] - phase_elapsed["backup"]
+    )
+    backup_exec = json.loads((tmp_path / "backup-execution.json").read_text())
+    assert backup_exec["limits"]["wall_seconds"] == pytest.approx(900 - phase_elapsed["acquire"])
+    complete = json.loads((tmp_path / "completion.json").read_text())
+    assert complete["elapsed_seconds"] == pytest.approx(sum(phase_elapsed.values()))
+
+    # Tampered backup-execution.json must still be rejected by _charge_prior.
+    expected_backup_wall = 900 - phase_elapsed["acquire"]
+    valid_backup = {
+        "status": "complete",
+        "remaining_processes": [],
+        "limits": {**run.LIMITS, "wall_seconds": expected_backup_wall},
+        "elapsed_seconds": phase_elapsed["backup"],
+    }
+    tampered_cases = [
+        ("altered rss_bytes", {**valid_backup, "limits": {**valid_backup["limits"], "rss_bytes": 16 * run.GiB}}),
+        ("altered output_bytes", {**valid_backup, "limits": {**valid_backup["limits"], "output_bytes": 12 * run.GiB}}),
+        ("unreduced wall_seconds", {**valid_backup, "limits": {**valid_backup["limits"], "wall_seconds": 900}}),
+        ("nudged wall_seconds", {**valid_backup, "limits": {**valid_backup["limits"], "wall_seconds": expected_backup_wall + 0.01}}),
+        ("nonzero remaining_processes", {**valid_backup, "remaining_processes": [12345]}),
+        ("negative elapsed_seconds", {**valid_backup, "elapsed_seconds": -0.1}),
+        ("budget exhausted", {**valid_backup, "elapsed_seconds": expected_backup_wall}),
+    ]
+    for label, payload in tampered_cases:
+        (tmp_path / "backup-execution.json").write_text(json.dumps(payload))
+        limits: dict[str, float | int] = {"wall_seconds": expected_backup_wall, **{k: v for k, v in run.LIMITS.items() if k != "wall_seconds"}}
+        with pytest.raises(ValueError, match="did not close|budget exhausted"):
+            run._charge_prior(tmp_path, "backup-execution.json", limits, f"R2 backup ({label})")
 
 
 def test_retained_workflow_cannot_enter_native_or_partition_jobs_or_upload_input():

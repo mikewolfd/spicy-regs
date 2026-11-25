@@ -213,9 +213,20 @@ def test_workflow_qualification_job_has_no_secrets_and_native_requalifies():
     assert "secrets." not in text and "R2_" not in text and "publish_comments_mirror_guarded" not in text
     assert job["steps"][0]["with"]["persist-credentials"] is False
     assert job["if"] == "${{ inputs.debugger_mode == 'qualify' }}"
+    q_steps = job["steps"]
+    q_install = next(step for step in q_steps if step.get("name") == "Install GDB for diagnostic mode")
+    q_qualify = next(step for step in q_steps if step.get("name") == "Qualify installed debugger only")
+    assert "secrets." not in json.dumps(q_install) and "R2_" not in json.dumps(q_install)
+    assert q_install["run"].strip() == "sudo apt-get update && sudo apt-get install -y --no-install-recommends gdb"
+    assert q_steps.index(q_install) + 1 == q_steps.index(q_qualify)
     publish = workflow["jobs"]["publish"]
     steps = publish["steps"]
+    p_install = next(step for step in steps if step.get("name") == "Install GDB for diagnostic mode")
+    assert "secrets." not in json.dumps(p_install) and "R2_" not in json.dumps(p_install)
+    assert p_install["if"] == "${{ inputs.debugger_mode == 'gdb' }}"
+    assert p_install["run"].strip() == "sudo apt-get update && sudo apt-get install -y --no-install-recommends gdb"
     qualify = next(step for step in steps if step.get("name") == "Repeat reviewed debugger qualification without credentials")
+    assert steps.index(p_install) + 1 == steps.index(qualify)
     assert "secrets." not in json.dumps(qualify) and "R2_" not in json.dumps(qualify)
     assert qualify["if"] == "${{ inputs.debugger_mode == 'gdb' }}"
     native = next(step for step in steps if step.get("name") == "Publish comments mirror from the catalog")

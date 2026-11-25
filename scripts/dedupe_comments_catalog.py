@@ -11,6 +11,7 @@ import argparse
 from contextlib import contextmanager
 import hashlib
 import json
+import math
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -584,10 +585,24 @@ def _charge_prior(workdir: Path, name: str, limits: dict[str, float | int], labe
     from spicy_regs import operational_runner as owner
 
     prior = owner.read_json(workdir / name)
+    prior_limits = prior.get("limits")
     require(
         prior["status"] == "complete"
         and prior["remaining_processes"] == []
-        and prior["limits"] == LIMITS
+        and isinstance(prior_limits, dict)
+        and "wall_seconds" in prior_limits
+        and isinstance(prior_limits["wall_seconds"], (int, float))
+        and not isinstance(prior_limits["wall_seconds"], bool)
+        and {k: v for k, v in prior_limits.items() if k != "wall_seconds"}
+        == {k: v for k, v in LIMITS.items() if k != "wall_seconds"}
+        and math.isclose(
+            float(prior_limits["wall_seconds"]),
+            float(limits["wall_seconds"]),
+            rel_tol=1e-6,
+            abs_tol=1e-3,
+        )
+        and isinstance(prior["elapsed_seconds"], (int, float))
+        and not isinstance(prior["elapsed_seconds"], bool)
         and 0 <= prior["elapsed_seconds"] < 900,
         f"{label} did not close successfully within its exact limits",
     )
