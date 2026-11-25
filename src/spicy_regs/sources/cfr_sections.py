@@ -36,6 +36,7 @@ _MAX_PAGES = 2_000
 _MAX_REQUESTS_PER_PAGE = 5
 _MAX_PAGE_BYTES = 8 * 1024 * 1024
 _PROGRESS_EVERY = 5_000
+_MAX_DECLARED_COUNT_ATTEMPTS = 3
 #: GovInfo lists its annual CFR index in the CFR collection; it is not a title
 #: volume and holds no sections, so the walk skips it (and the table drops it).
 INDEX_PACKAGE_RE = re.compile(r"GPO-CFR-INDEX-\d{4}")
@@ -139,22 +140,47 @@ class CfrSectionsReader(Reader):
         """Yield each granule with its package id, lastModified and title attached.
 
         Refuses a granule whose identity does not belong to the requested package.
+        Retries a package walk up to ``_MAX_DECLARED_COUNT_ATTEMPTS`` times when
+        GovInfo's declared count shifts mid-pagination, collecting each attempt
+        before yielding so failed attempts emit no partial or duplicate granules.
         """
+        from spicy_docs.reading.paged_json import DeclaredCountChanged
         from spicy_docs.sources.govinfo.discovery import package_granules_url
 
         assert self._source is not None
         package_id = package["packageId"]
         url = package_granules_url(package_id, page_size=self.page_size)
-        for granule in (row for page in self._source.granules(url, max_pages=_MAX_PAGES) for row in page.records):
-            if not granule["granuleId"].startswith(f"{package_id}-"):
-                raise CfrSectionsError("CFR granule identity differs from its requested package")
+        for attempt in range(1, _MAX_DECLARED_COUNT_ATTEMPTS + 1):
+            try:
+                records: list[dict] = []
+                for page in self._source.granules(url, max_pages=_MAX_PAGES):
+                    for granule in page.records:
+                        if not granule["granuleId"].startswith(f"{package_id}-"):
+                            raise CfrSectionsError("CFR granule identity differs from its requested package")
+                        records.append(
+                            {
+                                **granule,
+                                "_package_id": package_id,
+                                "_package_last_modified": package.get("lastModified"),
+                                "_package_title": package.get("title"),
+                                "_package": dict(package),
+                            }
+                        )
+                break
+            except DeclaredCountChanged as error:
+                if attempt == _MAX_DECLARED_COUNT_ATTEMPTS:
+                    raise
+                logger.warning(
+                    "CFR: {} declared count changed ({} -> {}) on attempt {}/{}; retrying from page 1",
+                    package_id,
+                    error.declared,
+                    error.changed_to,
+                    attempt,
+                    _MAX_DECLARED_COUNT_ATTEMPTS,
+                )
+
+        for record in records:
             self._seen += 1
             if self._seen % _PROGRESS_EVERY == 0:
                 logger.info("CFR: {:,} granules so far...", self._seen)
-            yield {
-                **granule,
-                "_package_id": package_id,
-                "_package_last_modified": package.get("lastModified"),
-                "_package_title": package.get("title"),
-                "_package": dict(package),
-            }
+            yield record
