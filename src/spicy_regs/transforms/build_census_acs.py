@@ -9,6 +9,7 @@ import json
 import re
 from decimal import Decimal, localcontext
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import pyarrow as pa
 
@@ -236,3 +237,47 @@ def build_census_acs(
         schema,
     )
     return destination
+
+
+def build_census_acs_tables(
+    *,
+    county_reader,
+    congressional_district_reader,
+    output_dir: Path,
+    vintage: int,
+    state: str,
+    counties: tuple[str, ...] | None = None,
+    districts: tuple[str, ...] | None = None,
+) -> tuple[Path, Path]:
+    """Atomically write both county and congressional district tables, or preserve prior output."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(dir=output_dir) as scratch:
+        scratch_dir = Path(scratch)
+        county_tmp = write_rows(
+            _observations(
+                county_reader,
+                vintage=vintage,
+                state=state,
+                counties=counties,
+                geography="county",
+            ),
+            scratch_dir / OUTPUT,
+            SCHEMA,
+        )
+        cd_tmp = write_rows(
+            _observations(
+                congressional_district_reader,
+                vintage=vintage,
+                state=state,
+                geography="congressional district",
+                districts=districts,
+            ),
+            scratch_dir / CD_OUTPUT,
+            CD_SCHEMA,
+        )
+        county_dest = output_dir / OUTPUT
+        cd_dest = output_dir / CD_OUTPUT
+        county_tmp.replace(county_dest)
+        cd_tmp.replace(cd_dest)
+        return county_dest, cd_dest

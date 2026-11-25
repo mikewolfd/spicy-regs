@@ -160,3 +160,39 @@ def test_irs_527_oversized_amount_preserves_raw_with_exceeds_precision():
 
     value, status = _parse_amount("9" * 37 + ".00")
     assert value is None and status == "exceeds_precision"
+
+
+def test_irs_527_acquire_uses_evidence_transport_custody_and_records_403_refusal(tmp_path, monkeypatch):
+    from spicy_docs.transport.credentials import CredentialRefusedError
+
+    raw = tmp_path / "raw"
+    monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(raw))
+    zip_bytes = _sample_zip_bytes()
+    acq_dir = tmp_path / "acq"
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            stream=httpx.ByteStream(zip_bytes),
+            headers={"content-type": "application/zip", "content-length": str(len(zip_bytes))},
+        )
+    )
+    selection = pipeline.acquire(acq_dir, archive_root=raw, transport=transport)
+    journals = list((acq_dir / "source-evidence").glob("*/artifact/journal.jsonl"))
+    assert len(journals) == 1
+    events = [json.loads(line) for line in journals[0].read_text().splitlines()]
+    captures = [e for e in events if e.get("event") == "capture" and e.get("stage") == "irs-527-full-data-zip"]
+    assert len(captures) == 1
+    assert captures[0]["blob_store"] == "central-raw"
+    assert captures[0]["sha256"] == selection["archive"]["sha256"]
+    assert captures[0]["byte_size"] == len(zip_bytes)
+
+    refused_dir = tmp_path / "acq-403"
+    refused_transport = httpx.MockTransport(
+        lambda request: httpx.Response(403, content=b"forbidden", headers={"content-type": "text/plain"})
+    )
+    with pytest.raises(CredentialRefusedError):
+        pipeline.acquire(refused_dir, archive_root=raw, transport=refused_transport)
+    refused_journals = list((refused_dir / "source-evidence").glob("*/artifact/journal.jsonl"))
+    assert len(refused_journals) == 1
+    refused_events = [json.loads(line) for line in refused_journals[0].read_text().splitlines()]
+    assert any(e.get("event") == "capture-incomplete" for e in refused_events)

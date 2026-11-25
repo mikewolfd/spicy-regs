@@ -38,7 +38,15 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
-- **Selected Wave B batched reader provider** `spicy_docs-0.85.0+readers.20261125.1` is built from
+- **Selected Wave B hardened reader provider** `spicy_docs-0.85.0+readers.20261125.2` is built from
+  `fd122f600bf4b1b0d050b311e44003ac8a1204c3` (tree `923a5f3e757c7a97f7f68c2b170e8c91e7c226e0`). It
+  hardens `spicy_docs.sources.irs_527` streaming transport retries, `ZYTE_SESSION` rung retries, and
+  Senate eFD agreement refusals on top of `.20261125.1`.
+  See [the receipt](spicy_docs-0.85.0+readers.20261125.2.json) for source, wheel and RECORD identity.
+  The superseded `.20261125.1` wheel is recoverable from this adoption commit's parent;
+  its receipt remains.
+
+- **Prior Wave B batched reader provider** `spicy_docs-0.85.0+readers.20261125.1` is built from
   `bff71cc04c450012d5c907002e8d04e837a2c7fc` (tree `b918534c253cd640815538d5451f30015d33acee`). It
   adds `spicy_docs.sources.irs_527`, nationwide and congressional-district Census ACS profiles,
   Congress sessions and party divisions, streaming SEC EDGAR bulk ZIP readers, and multi-year

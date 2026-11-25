@@ -93,3 +93,138 @@ def test_same_client_number_under_another_registrant_does_not_inherit_industry()
     prior = next(r for r in before if r["sector_code"] == "62" and r["source_family"] == "lda" and r["measure"] == "income")
     current = next(r for r in after if r["sector_code"] == "62" and r["source_family"] == "lda" and r["measure"] == "income")
     assert current["group_profiles"] == prior["group_profiles"] - 1
+
+
+def test_pipeline_streams_activities_beyond_64mib_cap_and_documents_explorer_tables(tmp_path, monkeypatch):
+    from datetime import date
+    import hashlib
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from rulespec_artifacts import LocalMemberSource, iter_member_descriptors
+
+    from spicy_docs.storage.raw_archive import CentralRawArchiveStore
+    from spicy_regs.explorer_metadata import build_bundle
+    from spicy_regs.generations import build_generation
+    from spicy_regs.pipelines import sector_comparisons as pipeline
+    from spicy_regs.sources import publication
+
+    raw = tmp_path / "raw"
+    monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(raw))
+    store = CentralRawArchiveStore(raw)
+
+    assert pipeline.MAX_INPUT_BYTES["lobbying_activities"] >= 279_727_677
+
+    def write_gen(name, table_name, rows, schema=None):
+        gen_dir = tmp_path / f"{name}-gen"
+        src_dir = tmp_path / f"{name}-src"
+        src_dir.mkdir(parents=True, exist_ok=True)
+        path = src_dir / f"{table_name}.parquet"
+        table = pa.Table.from_pylist(rows, schema=schema) if schema is not None else pa.Table.from_pylist(rows)
+        pq.write_table(table, path)
+        artifact = build_generation(
+            gen_dir,
+            family=name,
+            files=[path],
+            expected_keys=[path.name],
+        )
+        digest = "sha256:" + hashlib.file_digest((gen_dir / path.name).open("rb"), "sha256").hexdigest()
+        return gen_dir, artifact.pin.artifact_digest, digest
+
+    fec_rows = [
+        {
+            **{k: v for k, v in row.items() if k not in {"period_start", "period_end"}},
+            "period_start": date.fromisoformat(row["period_start"]),
+            "period_end": date.fromisoformat(row["period_end"]),
+        }
+        for row in FIXTURE["fec"]
+    ]
+    lda_rows = [
+        {
+            **{k: v for k, v in row.items() if k not in {"period_start", "period_end"}},
+            "period_start": date.fromisoformat(row["period_start"]),
+            "period_end": date.fromisoformat(row["period_end"]),
+        }
+        for row in FIXTURE["lda"]
+    ]
+    act_rows = [
+        *FIXTURE["activities"],
+        {"filing_uuid": "unrelated-not-in-selected-profiles", "general_issue_code": "TAX", "extra_ignored": "payload"},
+    ]
+
+    fec_dir, fec_gen, fec_hash = write_gen("fec-financial-profiles", "fec_financial_profiles", fec_rows)
+    lda_dir, lda_gen, lda_hash = write_gen("lobbying-quarterly-profiles", "lobbying_quarterly_profiles", lda_rows)
+    act_dir, act_gen, act_hash = write_gen("lobbying-filings", "lobbying_activities", act_rows)
+
+    scope = deepcopy(FIXTURE["scope"])
+    scope["fec"]["generation"] = fec_gen
+    scope["fec"]["table_sha256"] = fec_hash
+    scope["lda"]["generation"] = lda_gen
+    scope["lda"]["table_sha256"] = lda_hash
+
+    cap_bytes = b'{"source":"synthetic"}'
+    cap_digest = "sha256:" + hashlib.sha256(cap_bytes).hexdigest()
+    store.put_blob(cap_digest, len(cap_bytes), [cap_bytes])
+    selection = {
+        "scope": scope,
+        "mapping": FIXTURE["mapping"],
+        "classification_captures": [
+            {
+                "request_url": "https://example.org/mapping",
+                "observed_at": "2026-11-25T00:00:00Z",
+                "sha256": cap_digest,
+                "byte_size": len(cap_bytes),
+            }
+        ],
+        "inputs": {
+            "fec": {
+                "directory": str(fec_dir),
+                "name": "fec_financial_profiles",
+                "expected_generation": fec_gen,
+                "expected_hash": fec_hash,
+            },
+            "lda": {
+                "directory": str(lda_dir),
+                "name": "lobbying_quarterly_profiles",
+                "expected_generation": lda_gen,
+                "expected_hash": lda_hash,
+            },
+            "lda_activities": {
+                "directory": str(act_dir),
+                "name": "lobbying_activities",
+                "expected_generation": act_gen,
+                "expected_hash": act_hash,
+            },
+        },
+    }
+
+    # Exercise multi-batch streaming over lobbying_activities with small batch_size.
+    orig_iter = pipeline._iter_activities
+    monkeypatch.setattr(pipeline, "_iter_activities", lambda *a, **kw: orig_iter(*a, batch_size=2, **kw))
+
+    out = tmp_path / "sector-out"
+    artifact, evidence = pipeline.build(selection, out)
+    assert artifact.pin.artifact_digest and (evidence / "journal.jsonl").exists()
+    issues = pq.read_table(out / "generation" / "lobbying_issue_financial_observations.parquet").to_pylist()
+    assert all(row["filing_uuid"] != "unrelated-not-in-selected-profiles" for row in issues)
+    assert len(issues) == len(issue_views(FIXTURE["lda"], FIXTURE["activities"], source_generation=lda_gen))
+
+    # Explorer metadata recognizes all 3 sector-comparisons tables and their inputs.
+    index = publication.empty_index()
+    index["version"] = 2
+    for fam, d in (
+        ("fec-financial-profiles", fec_dir),
+        ("lobbying-quarterly-profiles", lda_dir),
+        ("lobbying-filings", act_dir),
+        ("sector-comparisons", out / "generation"),
+    ):
+        adm = pipeline.verify_generation(d)
+        index["families"][fam] = publication.generation_entry(
+            adm, iter_member_descriptors(adm, LocalMemberSource(d))
+        )
+    bundle = build_bundle(index)
+    for name in pipeline.SCHEMAS:
+        assert bundle["tables"][name]["metadataStatus"] == bundle["tables"][name]["sourceStatus"] == "documented"
+    assert bundle["tables"]["lobbying_issue_financial_observations"]["inputs"] == [
+        "lobbying_quarterly_profiles",
+        "lobbying_activities",
+    ]

@@ -139,13 +139,19 @@ def build_tables(selection, concepts, output_dir, *, fact_start, fact_end, store
             raise ValueError("Invalid SEC source identity")
         if kind == "companyfacts" and continuation is not None:
             raise ValueError("Companyfacts has no continuation route")
+        status = source.get("status")
+        if status not in {None, "no-companyfacts"} or (
+            status == "no-companyfacts" and (kind != "companyfacts" or continuation is not None)
+        ):
+            raise ValueError("Invalid SEC source status")
         url = submissions_url(issuer, continuation) if kind == "submissions" else companyfacts_url(issuer)
         key = issuer, kind, continuation
+        min_bytes = 0 if status == "no-companyfacts" else 1
         if (
             key in pages
             or source["url"] != url
             or type(source["bytes"]) is not int
-            or not 0 < source["bytes"] <= MAX_BYTES
+            or not min_bytes <= source["bytes"] <= MAX_BYTES
         ):
             raise ValueError("SEC source repeats or differs from selected route/size")
         pages[key] = source
@@ -153,11 +159,17 @@ def build_tables(selection, concepts, output_dir, *, fact_start, fact_end, store
             body = stream.read(MAX_BYTES + 1)
         if len(body) != source["bytes"] or "sha256:" + hashlib.sha256(body).hexdigest() != source["sha256"]:
             raise ValueError("SEC original differs from its pinned digest/size")
-        value = (
-            read_submissions(body, issuer, continuation=continuation)
-            if kind == "submissions"
-            else read_companyfacts(body, issuer)
-        )
+        if status == "no-companyfacts":
+            value = None
+            metadata = {"status": "no-companyfacts", "http_status": 404}
+        elif kind == "submissions":
+            value = read_submissions(body, issuer, continuation=continuation)
+            metadata = {**value.metadata, "continuations": list(value.continuations)}
+        else:
+            value = read_companyfacts(body, issuer)
+            metadata = {k: v for k, v in value.items() if k != "facts"}
+            if not value["facts"]:
+                metadata["facts_status"] = "empty_facts"
         parsed[key] = value
         # Re-retain by exact bytes: the central content store reuses the original object.
         evidence.retain_bytes(
@@ -170,11 +182,7 @@ def build_tables(selection, concepts, output_dir, *, fact_start, fact_end, store
             covered_period=f"{start}/{end}",
             source_version=source["sha256"],
             observed_at=source["observed_at"],
-        )
-        metadata = (
-            {**value.metadata, "continuations": list(value.continuations)}
-            if not isinstance(value, dict)
-            else {k: v for k, v in value.items() if k != "facts"}
+            **({"source_validation": "no-companyfacts"} if status == "no-companyfacts" else {}),
         )
         sources.append(
             {
@@ -236,6 +244,21 @@ def build_tables(selection, concepts, output_dir, *, fact_start, fact_end, store
                     )
         value = parsed[issuer, "companyfacts", None]
         source = pages[issuer, "companyfacts", None]
+        if value is None:
+            for taxonomy, concept in concepts:
+                tables[SCOPES].append(
+                    {
+                        "cik": issuer,
+                        "taxonomy": taxonomy,
+                        "concept": concept,
+                        "end_from": fact_start,
+                        "end_through": fact_end,
+                        "outcome": "no_companyfacts",
+                        "observation_count": 0,
+                        **_provenance(source, ""),
+                    }
+                )
+            continue
         counts = dict.fromkeys(concepts, 0)
         for taxonomy, concept, unit, label, description, row, pointer in fact_observations(value, concepts):
             if not fact_start <= row["end"] <= fact_end:
@@ -533,6 +556,9 @@ def build_bulk_tables(
                     "url": source_url,
                     "observed_at": observed_at,
                 }
+                metadata = {k: v for k, v in value.items() if k != "facts"}
+                if not value["facts"]:
+                    metadata["facts_status"] = "empty_facts"
                 emit(
                     SOURCES,
                     {
@@ -540,7 +566,7 @@ def build_bulk_tables(
                         "kind": "companyfacts",
                         "continuation": None,
                         "source_bytes": member.byte_size,
-                        "metadata_json": _json({k: v for k, v in value.items() if k != "facts"}),
+                        "metadata_json": _json(metadata),
                         **_provenance(source, ""),
                     },
                 )
@@ -603,11 +629,46 @@ def build_bulk_tables(
                     )
 
             if selected_ciks is not None:
-                missing = set(selected_ciks) - (set(roots) & facts_ciks)
+                missing = set(selected_ciks) - set(roots)
                 if missing:
                     raise ValueError(f"SEC bulk archives omit selected issuer(s): {sorted(missing)}")
-            elif not roots or set(roots) != facts_ciks:
-                raise ValueError("SEC bulk submissions and companyfacts archives must cover matching issuers")
+            elif not roots:
+                raise ValueError("SEC bulk submissions archive contains no issuers")
+            if extra := facts_ciks - set(roots):
+                raise ValueError(
+                    f"SEC bulk companyfacts archive contains issuer(s) absent from submissions: {sorted(extra)}"
+                )
+            for issuer in sorted(set(roots) - facts_ciks):
+                source = {
+                    "sha256": companyfacts_sha256,
+                    "url": COMPANYFACTS_BULK_URL,
+                    "observed_at": observed_at,
+                }
+                emit(
+                    SOURCES,
+                    {
+                        "cik": issuer,
+                        "kind": "companyfacts",
+                        "continuation": None,
+                        "source_bytes": 0,
+                        "metadata_json": _json({"status": "no-companyfacts", "reason": "absent_from_companyfacts_zip"}),
+                        **_provenance(source, ""),
+                    },
+                )
+                for taxonomy, concept in concepts:
+                    emit(
+                        SCOPES,
+                        {
+                            "cik": issuer,
+                            "taxonomy": taxonomy,
+                            "concept": concept,
+                            "end_from": fact_start,
+                            "end_through": fact_end,
+                            "outcome": "no_companyfacts",
+                            "observation_count": 0,
+                            **_provenance(source, ""),
+                        },
+                    )
 
             for name in SCHEMAS:
                 flush(name)
