@@ -153,3 +153,37 @@ requires six characters and rejects normalized values that differ from native
 input. Tests retain the old function as an independent oracle, with no declared
 verdict divergences. Retained provider IDs and mutation evidence are recorded
 in the final package handoff.
+
+## U.S. Code disposition tables (`usc-disposition-tables/`, `ss-iorw`)
+
+Vendored from RefSpec (`fork/main` `facc0eb5`, `research/evidence/usc-disposition-tables-2026-08-23/`,
+`usc-disposition-tables-2026-11-18/`, and `usc-disposition-tables-2026-11-18-complete/`). All 9 tables across 8
+recodification families (Titles 10 ROPMA, 31, 34 [editorial reclassification], 41, 46 / 46 App., 49 / 49 App., 49
+positive-law companion, 51, and 54) are SHA-256-pinned and verified at load time by
+`spicy_regs.ontology.usc_dispositions`.
+
+| File | Bytes | Rows | sha256 |
+| --- | ---: | ---: | --- |
+| `usc-disposition-tables/usc-1996-title10-ropma-disposition.parquet` | 9,180 | 371 | `5a08734b3c8ea948340203e0e3c67a256a6a62c95ece863a1328a662691eace6` |
+| `usc-disposition-tables/usc-1994-title31-disposition.parquet` | 21,251 | 1,563 | `febacca0f59193fc4524ce780d29ba5440d8ee47f8041f133fda161d0c765cd5` |
+| `usc-disposition-tables/usc-2017-title34-disposition.parquet` | 21,329 | 1,002 | `17e063ddd410d39c135e4d14550dceadc62707a811dc9e7bd2f63999014dd047` |
+| `usc-disposition-tables/usc-2011-title41-disposition.parquet` | 9,706 | 549 | `327de9b607eaf74679c21af8a6cf27086c7bf5aaf19c01dbcf3005959fa3a51b` |
+| `usc-disposition-tables/usc-2006-title46-disposition.parquet` | 29,320 | 2,169 | `2b6a315482a8b8ba142360ea3303e55e6e8e07d632ebe4c3a1a24d38a9efca84` |
+| `usc-disposition-tables/usc-1994-title49-disposition.parquet` | 37,672 | 3,102 | `8403212c0193b3361accf7ff4be238420634beb5aa5740d78b9960fef5b2aedd` |
+| `usc-disposition-tables/usc-1994-title49-positivelaw-disposition.parquet` | 4,624 | 49 | `6387ca0487ec234ae04811e90d1490e9bf93407d1b3dd5f3fa40836e3bc21510` |
+| `usc-disposition-tables/usc-2010-title51-disposition.parquet` | 8,074 | 345 | `507bdd8da5dd9a1ff6b5f395193408e1f36120803637ee367ddfecc3792d7c0a` |
+| `usc-disposition-tables/usc-2014-title54-disposition.parquet` | 17,061 | 626 | `49e79253f9240b75edd85afa3d8fe9b513e231e060434d4fea0d6bab3ac60034` |
+
+## Act index popular names, quarantine, and source credits (`usc-act-index/`, `ss-njjd`)
+
+Vendored from RefSpec (`fork/main` `facc0eb5`, `output/usc-act-index-2026-08-22/` and
+`output/usc-source-credit-index-2026-08-02/`), complementing the already-vendored `usc-act-sections.parquet`
+(`9040d4460e90704aef911b4d4f704e9f432cebd7b58717f31f090a3008ca6159`). All four files are SHA-256-pinned and
+verified at load time by `spicy_regs.ontology.act_resolution`.
+
+| File | Bytes | Rows | sha256 |
+| --- | ---: | ---: | --- |
+| `usc-act-index/usc-popular-names.parquet` | 563,299 | 20,865 | `603d5b072133d8fe6802736aeaa70b9fb9832e4fb996158a083fae3ce1026a9a` |
+| `usc-act-index/usc-act-sections.parquet` | 2,213,252 | 302,156 | `9040d4460e90704aef911b4d4f704e9f432cebd7b58717f31f090a3008ca6159` |
+| `usc-act-index/quarantine.parquet` | 369,783 | 35,805 | `a89305172a27e682488e05e8fc82d8b0521d20a8fcee7d97a00331e8527acfac` |
+| `usc-act-index/usc-source-credits.parquet` | 60,840 | 3,721 | `d377545fe60d592a120bda30dffba665380cf82f826ae06cb327a581f0af9d8a` |
