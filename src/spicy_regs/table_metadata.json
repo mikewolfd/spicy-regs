@@ -41,7 +41,7 @@
       {
         "column_name": "rin",
         "column_type": "VARCHAR",
-        "description": "Regulation Identifier Number tying the docket to the Unified Agenda. Often null."
+        "description": "Regulation Identifier Number as reported by regulations.gov. Rarely populated: null, empty, or `Not Assigned` on more than 99% of dockets, and where set it holds a single RIN, often not the most recent one, even though a long-running docket can span several. Not a usable RIN join key; to link a RIN to a docket, use `fr_docket_links` (it carries both `regulation_id_numbers_json` and `docket_id`)."
       }
     ],
     "subject": "rulemaking",
@@ -107,7 +107,7 @@
   "documents": {
     "table": "documents",
     "label": "Docket documents",
-    "summary": "One row per document posted to a docket — proposed rules, final rules, notices, supporting analyses, and public-submission stubs. Joins to `dockets` on `docket_id`. Two payload fields are not carried: `comment` (the inline submission body) and `restrictReasonType` (why a document is withheld). Read those from the acquisition source, the raw Mirrulations payload or spicy-docs' source-native release, not from this table.",
+    "summary": "One row per document posted to a docket — proposed rules, final rules, notices, supporting analyses, and public-submission stubs. Joins to `dockets` on `docket_id`; join `document_attributes` 1:1 on `document_id` for fine-grained agency `subtype` values (e.g. NPRM, Extension of Comment Period, Interim Final Rule, Withdrawal). Two payload fields are not carried: `comment` (the inline submission body) and `restrictReasonType` (why a document is withheld). Read those from the acquisition source, the raw Mirrulations payload or spicy-docs' source-native release, not from this table.",
     "coverage": "Sampled repair with retained prior rows. On 2026-09-21 the fork merged every selected retained document release into the prior table, resolving each document to its most recent source record and keeping newer and unrelated rows; the daily regulations ETL adds to it. It is not a fresh regulations.gov census. The repair covered metadata and references; body-text, extraction-status and PDF-extraction-evidence values remain NULL. It does not include a full comments corpus. Receipts: fork-execution-2026-09-21/publication-documents.json and fork-base-repair-2026-09-21/repair-audit.json.",
     "kind": "sampled",
     "measured_on": "2026-09-28",
@@ -136,7 +136,7 @@
       {
         "column_name": "document_type",
         "column_type": "VARCHAR",
-        "description": "Document category (e.g. `Rule`, `Proposed Rule`, `Notice`, `Supporting & Related Material`)."
+        "description": "Coarse document category (e.g. `Rule`, `Proposed Rule`, `Notice`, `Supporting & Related Material`). For finer agency subtypes such as Notice of Proposed Rulemaking (NPRM), Extension of Comment Period, Interim Final Rule, or Withdrawal, join `document_attributes` 1:1 on `document_id` and read `document_attributes.subtype`."
       },
       {
         "column_name": "posted_date",
@@ -191,7 +191,7 @@
       {
         "column_name": "additional_rins",
         "column_type": "VARCHAR[]",
-        "description": "Native list of additional Regulation Identifier Numbers beyond the docket's primary RIN. Often null. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        "description": "Native list of additional Regulation Identifier Numbers beyond the docket's primary RIN. Rarely populated on regulations.gov, so not a usable RIN join key; use `federal_register.regulation_id_numbers` or `fr_docket_links.regulation_id_numbers_json` instead. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
         "column_name": "text_content",
@@ -1573,6 +1573,194 @@
         ]
       }
     }
+  },
+  "oira_reviews": {
+    "table": "oira_reviews",
+    "label": "OIRA EO 12866 reviews",
+    "summary": "One row per Executive Order 12866 regulatory review conducted by OMB's Office of Information and Regulatory Affairs (OIRA), ingested from reginfo.gov bulk XML exports via `spicy_docs.sources.oira` and `build_oira_reviews`. Covers both concluded reviews and rules currently pending at OIRA (`review_status = 'Under Review'`), filling the lifecycle stage between agency drafting and Federal Register publication. Keyed by `rin` (not unique: a rule may undergo multiple reviews across stages or resubmissions) for joining to `unified_agenda`, `federal_register`, and `oira_meetings`. Each downloaded XML original is retained once in the shared raw archive and referenced by `source_sha256`.",
+    "coverage": "True range. RegInfo.gov bulk XML exports of EO 12866 reviews from 1981 through the current year-to-date file plus rules currently under review; `source_file` names each XML export and `source_sha256` pins its retained bytes. Rebuilt in full on each run because reviews carry no publisher ID and reginfo.gov backfills `published_date` after review concludes.",
+    "kind": "true_range",
+    "measured_on": "2026-11-25",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "rin",
+        "column_type": "VARCHAR",
+        "description": "Regulation Identifier Number of the rule reviewed. Join key to `unified_agenda`, `federal_register`, and `oira_meetings`."
+      },
+      {
+        "column_name": "agency_code",
+        "column_type": "VARCHAR",
+        "description": "Acronym of the agency that owns the RIN, matching `unified_agenda.agency_code`. Falls back to the numeric 4-digit agency code when the agency is absent from `AGY_AGENCY_LIST.xml` (such as defunct historical agencies)."
+      },
+      {
+        "column_name": "agency_name",
+        "column_type": "VARCHAR",
+        "description": "Full name of the agency that owns the RIN from reginfo.gov's agency list. Null when absent from the list."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "Title of the rule as submitted to OIRA."
+      },
+      {
+        "column_name": "stage",
+        "column_type": "VARCHAR",
+        "description": "Rulemaking stage reviewed (e.g. `Proposed Rule`, `Final Rule`, `Interim Final Rule`, `Prerule`, `Notice`). Pre-2000 files use some historical labels."
+      },
+      {
+        "column_name": "review_status",
+        "column_type": "VARCHAR",
+        "description": "`Concluded` for a completed review or `Under Review` for one still pending at OIRA on the build date."
+      },
+      {
+        "column_name": "received_date",
+        "column_type": "VARCHAR",
+        "description": "Date OIRA received the rule for review (ISO `YYYY-MM-DD`)."
+      },
+      {
+        "column_name": "concluded_date",
+        "column_type": "VARCHAR",
+        "description": "Date OIRA concluded review (ISO `YYYY-MM-DD`). Null while `Under Review`."
+      },
+      {
+        "column_name": "review_days",
+        "column_type": "BIGINT",
+        "description": "Calendar days from `received_date` to `concluded_date`. Null while `Under Review`."
+      },
+      {
+        "column_name": "review_outcome",
+        "column_type": "VARCHAR",
+        "description": "OIRA's literal decision string as published (e.g. `Consistent with Change`, `Consistent without Change`, `Withdrawn`, or historical pre-2000 phrasing such as `Consistent w/no change`). Null while `Under Review`."
+      },
+      {
+        "column_name": "economically_significant",
+        "column_type": "VARCHAR",
+        "description": "`Yes`/`No`: whether designated economically significant under EO 12866 section 3(f)(1)."
+      },
+      {
+        "column_name": "major",
+        "column_type": "VARCHAR",
+        "description": "`Yes`/`No`: whether designated a major rule under the Congressional Review Act. Null when omitted or whitespace-only."
+      },
+      {
+        "column_name": "legal_deadline",
+        "column_type": "VARCHAR",
+        "description": "Whether the rule faced a deadline (`None`, `Statutory`, or `Judicial`)."
+      },
+      {
+        "column_name": "review_extended",
+        "column_type": "VARCHAR",
+        "description": "`Yes` when OIRA extended its review period; rarely populated."
+      },
+      {
+        "column_name": "published_date",
+        "column_type": "VARCHAR",
+        "description": "Date the rule appeared in the Federal Register after review (ISO `YYYY-MM-DD`), when recorded by reginfo.gov."
+      },
+      {
+        "column_name": "flags_json",
+        "column_type": "VARCHAR",
+        "description": "JSON object of additional review flag tags keyed by lower-cased XML tag name (e.g. `expedited_review`, `tcja`, `unfunded_mandates`, `federalism_implications`, `regulatory_flexibility_analysis`, `small_entities_affected`, `homeland_security`, `international_impacts`, `health_care_act`, `dodd_frank_act`, `pandemic_response`). Null when the source file carries none."
+      },
+      {
+        "column_name": "source_file",
+        "column_type": "VARCHAR",
+        "description": "RegInfo.gov XML export file name that supplied the row (e.g. `EO_RULE_COMPLETED_2025.xml`, `EO_RULE_COMPLETED_YTD.xml`, `EO_RULES_UNDER_REVIEW.xml`)."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest (`sha256:<hex>`) of the retained RegInfo.gov XML export that supplied the row."
+      }
+    ],
+    "subject": "rulemaking",
+    "grain": null,
+    "identity_columns": []
+  },
+  "oira_meetings": {
+    "table": "oira_meetings",
+    "label": "OIRA EO 12866 meetings",
+    "summary": "OIRA's Executive Order 12866 meeting log: meetings OIRA held with outside parties about rules under review, ingested from reginfo.gov bulk XML exports via `spicy_docs.sources.oira` and `build_oira_meetings`. One row per log entry (requesting organization and contact for a meeting on a rule). Keyed by `rin` for joining to `oira_reviews`, `unified_agenda`, and `federal_register`. Each downloaded Cp1252 XML original is retained once in the shared raw archive and referenced by `source_sha256`.",
+    "coverage": "Window. RegInfo.gov currently publishes EO 12866 meeting logs in bulk XML only for the first and second halves of 2024 (`source_file` names the export and `source_sha256` pins its retained bytes); other years exist only in reginfo.gov's interactive HTML search. Rebuilt in full on each run.",
+    "kind": "window",
+    "measured_on": "2026-11-25",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "meeting_id",
+        "column_type": "VARCHAR",
+        "description": "RegInfo.gov meeting identifier. Present on second-half 2024 rows; omitted (null) in the first-half 2024 export."
+      },
+      {
+        "column_name": "rin",
+        "column_type": "VARCHAR",
+        "description": "Regulation Identifier Number of the rule discussed. Join key to `oira_reviews`, `unified_agenda`, and `federal_register`."
+      },
+      {
+        "column_name": "agency_code",
+        "column_type": "VARCHAR",
+        "description": "Acronym of the agency that owns the RIN, matching `unified_agenda.agency_code`."
+      },
+      {
+        "column_name": "agency_name",
+        "column_type": "VARCHAR",
+        "description": "Full name of the agency that owns the RIN from reginfo.gov's agency list. Null when absent."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "Title of the rule discussed."
+      },
+      {
+        "column_name": "rule_stage",
+        "column_type": "VARCHAR",
+        "description": "Rulemaking stage at the time of the meeting (e.g. `Proposed Rule Stage`, `Final Rule Stage`)."
+      },
+      {
+        "column_name": "meeting_date",
+        "column_type": "VARCHAR",
+        "description": "Date of the meeting (ISO `YYYY-MM-DD`)."
+      },
+      {
+        "column_name": "meeting_status",
+        "column_type": "VARCHAR",
+        "description": "`Completed`, `Scheduled`, or `No Show`."
+      },
+      {
+        "column_name": "requestor_organization",
+        "column_type": "VARCHAR",
+        "description": "Organization that requested the meeting (HTML entities unescaped once; original bytes pinned by `source_sha256`)."
+      },
+      {
+        "column_name": "requestor_name",
+        "column_type": "VARCHAR",
+        "description": "Contact person for the requesting organization."
+      },
+      {
+        "column_name": "summary",
+        "column_type": "VARCHAR",
+        "description": "Meeting summary when OIRA recorded one; typically null in the bulk XML export."
+      },
+      {
+        "column_name": "source_file",
+        "column_type": "VARCHAR",
+        "description": "RegInfo.gov XML export file name that supplied the row (e.g. `EO_12866_Meeting_Data_First_Half_2024.xml`)."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest (`sha256:<hex>`) of the retained RegInfo.gov XML export that supplied the row."
+      },
+      {
+        "column_name": "url",
+        "column_type": "VARCHAR",
+        "description": "RegInfo.gov meeting detail page URL listing attendees and handout documents; null when `meeting_id` is null."
+      }
+    ],
+    "subject": "rulemaking",
+    "grain": null,
+    "identity_columns": []
   },
   "rule_targets": {
     "table": "rule_targets",
@@ -20195,7 +20383,7 @@
   "gao_reports": {
     "table": "gao_reports",
     "label": "Government Accountability Office reports",
-    "summary": "One GAO report or testimony, keyed by product ID. GovInfo, GAO listings/RSS, retained package data and explicit repairs supply records. The table retains earlier observations and fills missing cells; source routes have different periods and metadata. Native `/3` rows expose product URL and source route; earlier schemas retain them in receipts. Major-rule letters provide separate source-stated agency, date and RIN fields, with reading evidence in receipts.",
+    "summary": "One GAO report or testimony, keyed by product ID. GovInfo, GAO listings/RSS, retained package data and explicit repairs supply records. The table retains earlier observations and fills missing cells; source routes have different periods and metadata. Native `/3` rows expose product URL and source route; earlier schemas retain them in receipts. Major-rule letters provide separate source-stated agency, date and RIN fields, with reading evidence in receipts. For Congressional Review Act disapproval resolutions introduced in Congress (as distinct from GAO's major-rule reports), query `congress_bills` (`bill_type` `hjres`/`sjres`, titles mentioning \"congressional disapproval under chapter 8\").",
     "coverage": "True range on GovInfo's closed archive (1989-11-15–2008-09-18), combined with bounded GAO listings, recent RSS reads, retained package data and explicit repairs. Completed GAO listing scopes extend from 2009; major-rule listings reach April 1996. Recent RSS reads began 2026-09-22 and first reached 2026-09-15; the upstream copy covers 2026-07-13–2026-09-14. The retained R package reaches 1922 but adds only otherwise unheld reports. Intermediate periods remain incomplete where listing walks or repairs have not filled them. Numbered legal decisions belong to `gao_decisions`. Missing enrichment is not proof of an absent report.",
     "kind": "true_range",
     "measured_on": "2026-10-05",
@@ -20437,7 +20625,7 @@
   "court_dockets": {
     "table": "court_dockets",
     "label": "Court dockets of APA suits against agencies",
-    "summary": "One CourtListener docket object selected as nature-of-suit 899, an Administrative Procedure Act case. Search API and bulk sources cover mainly district courts; direct appellate challenges are largely absent. Agency names in case/party text identify candidates, not confirmed regulatory links. `cl_docket_id` identifies a docket object, not necessarily a unique case; use `court_docket_groups` to inspect related objects and retain reused-number ambiguity.",
+    "summary": "One CourtListener docket object selected as nature-of-suit 899, an Administrative Procedure Act case. Search API and bulk sources cover mainly district courts; challenges that a statute routes directly to the courts of appeals (e.g. many Clean Air Act and Clean Water Act rules, often in the D.C. Circuit) are largely absent, so an empty result is not evidence that a rule went unchallenged. There is no machine join key (`docket_id`, RIN, FR document number, or CFR citation); agency names in case/party text identify candidates, not confirmed regulatory links. `cl_docket_id` identifies a docket object, not necessarily a unique case; use `court_docket_groups` to inspect related objects and retain reused-number ambiguity.",
     "coverage": "True range with a density caveat: dockets filed from 1992 on, but only the nature-of-suit 899 (Administrative Procedure Act) selection, not the full docket record. Party names of dockets from the bulk edition are read a bounded slice per run; until read, parties is NULL. Recall against the publisher's nature-of-suit coding is unmeasured.",
     "kind": "true_range",
     "measured_on": "2026-09-28",
@@ -42540,7 +42728,7 @@
   "document_attributes": {
     "table": "document_attributes",
     "label": "Regulations.gov document attributes",
-    "summary": "One row per Regulations.gov document, keyed by `document_id`, with the attributes the thin `documents` table does not carry: abstract, authors, topics, dates, page count, comment-window flags, the submitter's stated contact details (decision 66) and the agency's display properties. Typed where the value is (decision 67): flags BOOLEAN, `page_count` INTEGER, dates TIMESTAMPTZ, authors and topics string lists. Projected from each record's API attributes by SpicyDocs' contract.",
+    "summary": "One row per Regulations.gov document, keyed by `document_id`, with the attributes the thin `documents` table does not carry: abstract, `subtype` (e.g. NPRM, Extension of Comment Period, Interim Final Rule, Withdrawal), authors, topics, dates, page count, comment-window flags, the submitter's stated contact details (decision 66) and the agency's display properties. Typed where the value is (decision 67): flags BOOLEAN, `page_count` INTEGER, dates TIMESTAMPTZ, authors and topics string lists. Projected from each record's API attributes by SpicyDocs' contract.",
     "coverage": "True range. Every document record in the Mirrulations mirror, read whole by `run-attributes-sweep` and kept current by the daily regulations ETL. DocSpec's API capture of 2026-09-02 is the input baseline (receipt `regulations-attributes-20260926/`); the published count is the live pin.",
     "kind": "true_range",
     "measured_on": "2026-09-27",

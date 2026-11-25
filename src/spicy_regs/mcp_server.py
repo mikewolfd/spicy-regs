@@ -60,6 +60,13 @@ from spicy_regs.duckdb_settings import INTERACTIVE_HTTP_RETRIES, load_public_htt
 from spicy_regs.fec_release import QUERY_RELEASE_FIELDS, RELEASE_INVENTORIES, release_summary
 from spicy_regs.public_url import resolve_r2_base_url, service_url
 from spicy_regs.fec_receipt_adapter import qualified_views, selected_qualified_views
+from spicy_regs.mcp_rule_tools import (
+    RULE_TEXT_DEFAULT_CHARS,
+    RULE_TEXT_MAX_CHARS,
+    RULE_TEXT_MIN_CHARS,
+    get_rule_text as _get_rule_text_impl,
+    prepare_comment as _prepare_comment_impl,
+)
 from spicy_regs.vocabulary_mapping import Namespace
 
 TABLES = (
@@ -76,6 +83,8 @@ TABLES = (
     "congress_bills",
     "bill_subjects",
     "unified_agenda",
+    "oira_reviews",
+    "oira_meetings",
     "federal_register",
     # The materialized rulemaking dataset, read through its own snapshot pointer
     # (publication.SNAPSHOT_POINTER), not the publication index.
@@ -421,7 +430,10 @@ INSTRUCTIONS = (
     "verify the analysis generation's source parent matches the selected scorecards generation. "
     "If compatibility is unavailable or differs, do not present those links as current. "
     "Derived relationship views retain source occurrences separately from distinct pairs. "
-    "Use resolve_document_citations for bounded target lookups; a normalized citation key alone does not prove existence."
+    "Use resolve_document_citations for bounded target lookups; a normalized citation key alone does not prove existence. "
+    "To read what a proposed or final rule actually says, use get_rule_text: call it once with no section for an outline, "
+    "then request a section such as '60.4'. When someone wants to comment on a rule, use prepare_comment to find open "
+    "documents, deadlines, comment_url, and check a draft; it never submits—help them write in their own words."
 )
 
 ICONS = [Icon(src=ICON_DATA_URI, mime_type="image/png", sizes=["512x512"])]
@@ -2792,6 +2804,10 @@ def _tools() -> list[Tool]:
                                 requested_token = _requested_relations.set(_tables_named(parser, arguments['sql']))
                         elif name in ('list_sources', 'describe_table'):
                             requested_token = _requested_relations.set({arguments['table']} if name == 'describe_table' else set())
+                        elif name == 'prepare_comment':
+                            requested_token = _requested_relations.set({'dockets', 'documents', 'document_attributes'})
+                        elif name == 'get_rule_text':
+                            requested_token = _requested_relations.set({'documents', 'federal_register', 'document_attributes'})
                         return _run_observed_tool(fn, arguments)
                 finally:
                     if requested_token is not None:
@@ -3378,6 +3394,55 @@ def _tools() -> list[Tool]:
             division=division,
             enclosing_section=enclosing_section,
         )
+
+    @tool
+    def prepare_comment(
+        docket_id: str,
+        draft: str = "",
+    ) -> dict[str, Any]:
+        """Get ready to comment on a docket: find open documents and check a draft.
+
+        Returns the docket's documents currently open for public comment (excluding
+        withdrawn and removed postings), Proposed Rule first, each with its
+        document_type, subtype (when document_attributes is available), deadline,
+        days_left, and regulations.gov comment_url. If draft is given, checks its
+        length against the 5,000-character/UTF-8-byte comment box limit.
+
+        Read-only: this tool never submits anything. The person reviews their
+        comment and submits it themselves at comment_url. Help them write in their
+        own words; agencies weigh the substance of comments, not their number.
+        """
+        cursor = _get_connection().cursor()
+        with _statement_timeout(cursor):
+            return _prepare_comment_impl(cursor, docket_id, draft)
+
+    @tool
+    def get_rule_text(
+        document: str,
+        section: str = "",
+        offset: Annotated[int, Field(ge=0)] = 0,
+        max_chars: Annotated[int, Field(ge=RULE_TEXT_MIN_CHARS, le=RULE_TEXT_MAX_CHARS)] = RULE_TEXT_DEFAULT_CHARS,
+    ) -> dict[str, Any]:
+        """Read the text of a proposed or final rule as published in the Federal Register.
+
+        document is a docket ID ('USBC-2026-0628'), a regulations.gov document ID
+        ('USBC-2026-0628-0001'), or a Federal Register document number
+        ('2026-18481'). For a docket, Proposed Rule or Rule is picked first and
+        other_notices_in_docket lists remaining notices (with subtype when
+        available). Agency catch-all dockets (*_FRDOC_*) are refused.
+
+        Call first with no section for the outline: title, summary, dates, CFR
+        references, RINs, parts, and sections. Then pass section='60.4' (or
+        '§ 60.4'/'Sec. 60.4') for one section, 'part 60' for a whole part, or
+        'full' for the whole document. Page long text with offset=next_offset
+        until next_offset is null (max_chars 500-20000).
+
+        Fetches GPO's official govinfo copy with bounded retries, falling back to
+        federalregister.gov body HTML when available. Quote section numbers used.
+        """
+        cursor = _get_connection().cursor()
+        with _statement_timeout(cursor):
+            return _get_rule_text_impl(cursor, document, section, offset, max_chars)
 
     async def connection_status() -> CallToolResult:
         """Read bounded active/recent phase timings without opening a connection or using a tool slot.

@@ -46,7 +46,7 @@ def test_every_registered_description_fits_the_client_cap_without_indentation():
     assert [tool.name for tool in tools] == [
         "lookup_agency", "list_sources", "describe_table", "query_sql",
         "resolve_document_citations", "resolve_usc_disposition", "resolve_act_citation",
-        "connection_status",
+        "prepare_comment", "get_rule_text", "connection_status",
     ]
     for tool in tools:
         description = tool.description or ""

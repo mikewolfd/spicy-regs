@@ -4,7 +4,7 @@
 
 **Court dockets of APA suits against agencies**
 
-One CourtListener docket object selected as nature-of-suit 899, an Administrative Procedure Act case. Search API and bulk sources cover mainly district courts; direct appellate challenges are largely absent. Agency names in case/party text identify candidates, not confirmed regulatory links. `cl_docket_id` identifies a docket object, not necessarily a unique case; use `court_docket_groups` to inspect related objects and retain reused-number ambiguity.
+One CourtListener docket object selected as nature-of-suit 899, an Administrative Procedure Act case. Search API and bulk sources cover mainly district courts; challenges that a statute routes directly to the courts of appeals (e.g. many Clean Air Act and Clean Water Act rules, often in the D.C. Circuit) are largely absent, so an empty result is not evidence that a rule went unchallenged. There is no machine join key (`docket_id`, RIN, FR document number, or CFR citation); agency names in case/party text identify candidates, not confirmed regulatory links. `cl_docket_id` identifies a docket object, not necessarily a unique case; use `court_docket_groups` to inspect related objects and retain reused-number ambiguity.
 
 **Coverage.** True range with a density caveat: dockets filed from 1992 on, but only the nature-of-suit 899 (Administrative Procedure Act) selection, not the full docket record. Party names of dockets from the bulk edition are read a bounded slice per run; until read, parties is NULL. Recall against the publisher's nature-of-suit coding is unmeasured. *(measured 2026-09-28)*
 

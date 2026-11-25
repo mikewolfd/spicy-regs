@@ -72,6 +72,8 @@ def test_build_server_registers_expected_tools():
         "lookup_agency",
         "resolve_usc_disposition",
         "resolve_act_citation",
+        "prepare_comment",
+        "get_rule_text",
         "connection_status",
     }
 

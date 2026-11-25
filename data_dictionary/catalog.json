@@ -2717,7 +2717,7 @@
     {
       "table": "documents",
       "label": "Docket documents",
-      "summary": "One row per document posted to a docket — proposed rules, final rules, notices, supporting analyses, and public-submission stubs. Joins to `dockets` on `docket_id`. Two payload fields are not carried: `comment` (the inline submission body) and `restrictReasonType` (why a document is withheld). Read those from the acquisition source, the raw Mirrulations payload or spicy-docs' source-native release, not from this table.",
+      "summary": "One row per document posted to a docket — proposed rules, final rules, notices, supporting analyses, and public-submission stubs. Joins to `dockets` on `docket_id`; join `document_attributes` 1:1 on `document_id` for fine-grained agency `subtype` values (e.g. NPRM, Extension of Comment Period, Interim Final Rule, Withdrawal). Two payload fields are not carried: `comment` (the inline submission body) and `restrictReasonType` (why a document is withheld). Read those from the acquisition source, the raw Mirrulations payload or spicy-docs' source-native release, not from this table.",
       "coverage": "Sampled repair with retained prior rows. On 2026-09-21 the fork merged every selected retained document release into the prior table, resolving each document to its most recent source record and keeping newer and unrelated rows; the daily regulations ETL adds to it. It is not a fresh regulations.gov census. The repair covered metadata and references; body-text, extraction-status and PDF-extraction-evidence values remain NULL. It does not include a full comments corpus. Receipts: fork-execution-2026-09-21/publication-documents.json and fork-base-repair-2026-09-21/repair-audit.json.",
       "kind": "sampled",
       "measured_on": "2026-09-28",
@@ -3007,6 +3007,60 @@
         "first_action_date",
         "next_action_date",
         "related_rins"
+      ]
+    },
+    {
+      "table": "oira_reviews",
+      "label": "OIRA EO 12866 reviews",
+      "summary": "One row per Executive Order 12866 regulatory review conducted by OMB's Office of Information and Regulatory Affairs (OIRA), ingested from reginfo.gov bulk XML exports via `spicy_docs.sources.oira` and `build_oira_reviews`. Covers both concluded reviews and rules currently pending at OIRA (`review_status = 'Under Review'`), filling the lifecycle stage between agency drafting and Federal Register publication. Keyed by `rin` (not unique: a rule may undergo multiple reviews across stages or resubmissions) for joining to `unified_agenda`, `federal_register`, and `oira_meetings`. Each downloaded XML original is retained once in the shared raw archive and referenced by `source_sha256`.",
+      "coverage": "True range. RegInfo.gov bulk XML exports of EO 12866 reviews from 1981 through the current year-to-date file plus rules currently under review; `source_file` names each XML export and `source_sha256` pins its retained bytes. Rebuilt in full on each run because reviews carry no publisher ID and reginfo.gov backfills `published_date` after review concludes.",
+      "kind": "true_range",
+      "measured_on": "2026-11-25",
+      "data_quality": null,
+      "columns": [
+        "rin",
+        "agency_code",
+        "agency_name",
+        "title",
+        "stage",
+        "review_status",
+        "received_date",
+        "concluded_date",
+        "review_days",
+        "review_outcome",
+        "economically_significant",
+        "major",
+        "legal_deadline",
+        "review_extended",
+        "published_date",
+        "flags_json",
+        "source_file",
+        "source_sha256"
+      ]
+    },
+    {
+      "table": "oira_meetings",
+      "label": "OIRA EO 12866 meetings",
+      "summary": "OIRA's Executive Order 12866 meeting log: meetings OIRA held with outside parties about rules under review, ingested from reginfo.gov bulk XML exports via `spicy_docs.sources.oira` and `build_oira_meetings`. One row per log entry (requesting organization and contact for a meeting on a rule). Keyed by `rin` for joining to `oira_reviews`, `unified_agenda`, and `federal_register`. Each downloaded Cp1252 XML original is retained once in the shared raw archive and referenced by `source_sha256`.",
+      "coverage": "Window. RegInfo.gov currently publishes EO 12866 meeting logs in bulk XML only for the first and second halves of 2024 (`source_file` names the export and `source_sha256` pins its retained bytes); other years exist only in reginfo.gov's interactive HTML search. Rebuilt in full on each run.",
+      "kind": "window",
+      "measured_on": "2026-11-25",
+      "data_quality": null,
+      "columns": [
+        "meeting_id",
+        "rin",
+        "agency_code",
+        "agency_name",
+        "title",
+        "rule_stage",
+        "meeting_date",
+        "meeting_status",
+        "requestor_organization",
+        "requestor_name",
+        "summary",
+        "source_file",
+        "source_sha256",
+        "url"
       ]
     },
     {
@@ -6624,7 +6678,7 @@
     {
       "table": "gao_reports",
       "label": "Government Accountability Office reports",
-      "summary": "One GAO report or testimony, keyed by product ID. GovInfo, GAO listings/RSS, retained package data and explicit repairs supply records. The table retains earlier observations and fills missing cells; source routes have different periods and metadata. Native `/3` rows expose product URL and source route; earlier schemas retain them in receipts. Major-rule letters provide separate source-stated agency, date and RIN fields, with reading evidence in receipts.",
+      "summary": "One GAO report or testimony, keyed by product ID. GovInfo, GAO listings/RSS, retained package data and explicit repairs supply records. The table retains earlier observations and fills missing cells; source routes have different periods and metadata. Native `/3` rows expose product URL and source route; earlier schemas retain them in receipts. Major-rule letters provide separate source-stated agency, date and RIN fields, with reading evidence in receipts. For Congressional Review Act disapproval resolutions introduced in Congress (as distinct from GAO's major-rule reports), query `congress_bills` (`bill_type` `hjres`/`sjres`, titles mentioning \"congressional disapproval under chapter 8\").",
       "coverage": "True range on GovInfo's closed archive (1989-11-15–2008-09-18), combined with bounded GAO listings, recent RSS reads, retained package data and explicit repairs. Completed GAO listing scopes extend from 2009; major-rule listings reach April 1996. Recent RSS reads began 2026-09-22 and first reached 2026-09-15; the upstream copy covers 2026-07-13–2026-09-14. The retained R package reaches 1922 but adds only otherwise unheld reports. Intermediate periods remain incomplete where listing walks or repairs have not filled them. Numbered legal decisions belong to `gao_decisions`. Missing enrichment is not proof of an absent report.",
       "kind": "true_range",
       "measured_on": "2026-10-05",
@@ -6684,7 +6738,7 @@
     {
       "table": "court_dockets",
       "label": "Court dockets of APA suits against agencies",
-      "summary": "One CourtListener docket object selected as nature-of-suit 899, an Administrative Procedure Act case. Search API and bulk sources cover mainly district courts; direct appellate challenges are largely absent. Agency names in case/party text identify candidates, not confirmed regulatory links. `cl_docket_id` identifies a docket object, not necessarily a unique case; use `court_docket_groups` to inspect related objects and retain reused-number ambiguity.",
+      "summary": "One CourtListener docket object selected as nature-of-suit 899, an Administrative Procedure Act case. Search API and bulk sources cover mainly district courts; challenges that a statute routes directly to the courts of appeals (e.g. many Clean Air Act and Clean Water Act rules, often in the D.C. Circuit) are largely absent, so an empty result is not evidence that a rule went unchallenged. There is no machine join key (`docket_id`, RIN, FR document number, or CFR citation); agency names in case/party text identify candidates, not confirmed regulatory links. `cl_docket_id` identifies a docket object, not necessarily a unique case; use `court_docket_groups` to inspect related objects and retain reused-number ambiguity.",
       "coverage": "True range with a density caveat: dockets filed from 1992 on, but only the nature-of-suit 899 (Administrative Procedure Act) selection, not the full docket record. Party names of dockets from the bulk edition are read a bounded slice per run; until read, parties is NULL. Recall against the publisher's nature-of-suit coding is unmeasured.",
       "kind": "true_range",
       "measured_on": "2026-09-28",
@@ -12111,7 +12165,7 @@
     {
       "table": "document_attributes",
       "label": "Regulations.gov document attributes",
-      "summary": "One row per Regulations.gov document, keyed by `document_id`, with the attributes the thin `documents` table does not carry: abstract, authors, topics, dates, page count, comment-window flags, the submitter's stated contact details (decision 66) and the agency's display properties. Typed where the value is (decision 67): flags BOOLEAN, `page_count` INTEGER, dates TIMESTAMPTZ, authors and topics string lists. Projected from each record's API attributes by SpicyDocs' contract.",
+      "summary": "One row per Regulations.gov document, keyed by `document_id`, with the attributes the thin `documents` table does not carry: abstract, `subtype` (e.g. NPRM, Extension of Comment Period, Interim Final Rule, Withdrawal), authors, topics, dates, page count, comment-window flags, the submitter's stated contact details (decision 66) and the agency's display properties. Typed where the value is (decision 67): flags BOOLEAN, `page_count` INTEGER, dates TIMESTAMPTZ, authors and topics string lists. Projected from each record's API attributes by SpicyDocs' contract.",
       "coverage": "True range. Every document record in the Mirrulations mirror, read whole by `run-attributes-sweep` and kept current by the daily regulations ETL. DocSpec's API capture of 2026-09-02 is the input baseline (receipt `regulations-attributes-20260926/`); the published count is the live pin.",
       "kind": "true_range",
       "measured_on": "2026-09-27",

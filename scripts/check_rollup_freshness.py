@@ -101,6 +101,8 @@ EXTERNAL_DATE_CHECKS = (
     # failed run shows on its own workflow. Orders come irregularly: the longest gap between publication days in
     # 1994-2026 is 87 days (2009-07-06 to 2009-10-01, measured 2026-11-10), so a refresh that stopped shows here.
     DateCheck("executive_order_observations", "publication_date", 100, "newest order"),
+    # Under-review list updates on weekdays; 14 days rides out federal holidays and quiet stretches.
+    DateCheck("oira_reviews", "received_date", 14),
 )
 
 DATE_CHECKS = BASE_TABLE_CHECKS + EXTERNAL_DATE_CHECKS
@@ -112,6 +114,7 @@ SKIPPED = {
     "cbo_cost_estimates": "sparse publication index; no daily publication guarantee",
     "committee_report_reads": "processing receipts; integrity checked, no source-date age rule",
     "unified_agenda": "semiannual edition, not a daily date watermark",
+    "oira_meetings": "reginfo.gov bulk meeting XML covers 2024 only; no daily watermark",
     "sam_entities": "registration_date does not change when an existing entity is refreshed",
     # Derived from comments + fec_committees, so it carries no date watermark of
     # its own; both of its sources are already watched above. Its row count is a

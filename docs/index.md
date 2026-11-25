@@ -56,6 +56,8 @@ is queryable through the MCP server (`list_sources` / `describe_table` /
 | --- | --- | --- |
 | [`federal_register`](tables/federal_register.md) | one row per dated Federal Register record | `document_number`, `publication_date` |
 | [`unified_agenda`](tables/unified_agenda.md) | one row per RIN per agenda edition | `rin` |
+| [`oira_reviews`](tables/oira_reviews.md) | one row per EO 12866 OIRA review (concluded and under review) | `rin` |
+| [`oira_meetings`](tables/oira_meetings.md) | one row per EO 12866 OIRA meeting requestor entry (2024 bulk exports) | `rin` |
 | [`congress_bills`](tables/congress_bills.md) | one row per bill | `bill_id` |
 | [`cfr_sections`](tables/cfr_sections.md) | one row per CFR granule | `granule_id` |
 | [`fcc_proceedings`](tables/fcc_proceedings.md) | one row per FCC proceeding (docket) | `name` |

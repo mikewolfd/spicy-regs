@@ -86,6 +86,8 @@ nav:
       - congress_bills: tables/congress_bills.md
       - bill_subjects: tables/bill_subjects.md
       - unified_agenda: tables/unified_agenda.md
+      - oira_reviews: tables/oira_reviews.md
+      - oira_meetings: tables/oira_meetings.md
       - federal_register: tables/federal_register.md
       # The materialized rulemaking dataset (materialized/rulemaking/latest.json)
       - rule_targets: tables/rule_targets.md
