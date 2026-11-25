@@ -6,6 +6,16 @@ on:
     - cron: '0 9 * * 0'  # read-only audit, Sunday 09:00 UTC
   workflow_dispatch:
     inputs:
+      retained_membership:
+        description: 'Pinned retained-membership artifact request JSON; offline audit only'
+        required: false
+        default: ''
+        type: string
+      backup_to_r2:
+        description: 'Retained mode only: back up verified artifact ZIP to immutable R2 staging custody'
+        required: false
+        default: true
+        type: boolean
       probe_partition:
         description: 'Create and remove a scratch table to check partition support'
         required: false
@@ -20,6 +30,7 @@ concurrency:
 
 jobs:
   audit:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.retained_membership == '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -50,7 +61,7 @@ jobs:
     # Manual-dispatch only: the one-command verification for the comments
     # catalog PARTITION BY restructure (see docs/fork-generation.md). Creates
     # a scratch table, reads it back through an agency predicate, drops it.
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.probe_partition }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.probe_partition && inputs.retained_membership == '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -76,3 +87,82 @@ jobs:
           R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
           R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
         run: uv run python scripts/probe_iceberg_partition.py
+
+  retained-membership:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.retained_membership != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read
+    env:
+      WORKDIR: /tmp/comment-retained-identity-audit
+      PYTHONDONTWRITEBYTECODE: '1'
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      POLARS_MAX_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --frozen --extra operational-runner
+      - name: Retain exact request and reject scratch probing
+        env:
+          REQUEST: ${{ inputs.retained_membership }}
+          PROBE: ${{ inputs.probe_partition }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          assert os.environ['PROBE'] != 'true', 'Retained audit cannot probe the native catalog'
+          raw = os.environ['REQUEST'].encode()
+          assert len(raw) <= 16384, 'Request exceeds bound'
+          json.loads(raw)
+          root = Path(os.environ['WORKDIR'])
+          root.mkdir(exist_ok=False)
+          (root / 'request.json').write_bytes(raw)
+          PY
+      - name: Acquire and verify exact retained artifact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RUNTIME_REF: ${{ github.sha }}
+        run: |
+          uv run --no-sync python -B scripts/dedupe_comments_catalog.py \
+            --retained-request "$WORKDIR/request.json" --workdir "$WORKDIR" \
+            --runtime-ref "$RUNTIME_REF" --phase acquire
+      - name: Back up verified archive to R2 custody
+        if: ${{ inputs.backup_to_r2 }}
+        env:
+          RUNTIME_REF: ${{ github.sha }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          uv run --no-sync python -B scripts/dedupe_comments_catalog.py \
+            --retained-request "$WORKDIR/request.json" --workdir "$WORKDIR" \
+            --runtime-ref "$RUNTIME_REF" --phase backup
+      - name: Audit only admitted local membership without credentials
+        env:
+          RUNTIME_REF: ${{ github.sha }}
+        run: |
+          uv run --no-sync python -B scripts/dedupe_comments_catalog.py \
+            --retained-request "$WORKDIR/request.json" --workdir "$WORKDIR" \
+            --runtime-ref "$RUNTIME_REF" --phase query
+      - name: Retain bounded audit controls without membership or archive
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retained-comment-identities-${{ github.run_id }}
+          path: |
+            ${{ env.WORKDIR }}/*.json
+            ${{ env.WORKDIR }}/*.log
+            ${{ env.WORKDIR }}/inputs/*.json
+            ${{ env.WORKDIR }}/inputs/*.log
+            ${{ env.WORKDIR }}/inputs/physical/membership-explain.json
+          if-no-files-found: warn
+          retention-days: 30
