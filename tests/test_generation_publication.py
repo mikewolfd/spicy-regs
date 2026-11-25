@@ -817,3 +817,46 @@ def test_a_single_file_rebuilt_as_a_split_table_faces_the_ordinary_ratio(tmp_pat
     assert 0.2 < ratio < 0.5  # measured 0.333
     with pytest.raises(RuntimeError, match=r"Refusing to upload s\.parquet: .* < threshold 0\.5\)\."):
         publish(store, tmp_path / "two", prior)
+
+
+def test_zero_row_discovery_signals_publishes_over_populated_prior_while_other_shrinks_fail(tmp_path):
+    """ss-lza7: 0-row discovery_signals.parquet (~520 B) passes against ~1,225 B prior; non-zero or other tables fail."""
+    populated = pa.table({
+        "agency_code": [f"AG{i:03d}" for i in range(200)],
+        "recent_30d": list(range(10, 210)),
+        "baseline": [float(i + 1) for i in range(200)],
+        "ratio": [2.5 + i * 0.1 for i in range(200)],
+    })
+    empty = pa.table({
+        "agency_code": pa.array([], type=pa.string()),
+        "recent_30d": pa.array([], type=pa.int64()),
+        "baseline": pa.array([], type=pa.float64()),
+        "ratio": pa.array([], type=pa.float64()),
+    })
+    one_row = pa.table({
+        "agency_code": ["AG00"],
+        "recent_30d": [10],
+        "baseline": [1.0],
+        "ratio": [10.0],
+    })
+    prior_dir, _ = build(tmp_path, "prior", family="discovery-signals", keys=("discovery_signals.parquet",), table=populated)
+    empty_dir, _ = build(tmp_path, "empty", family="discovery-signals", keys=("discovery_signals.parquet",), table=empty)
+    one_dir, _ = build(tmp_path, "one", family="discovery-signals", keys=("discovery_signals.parquet",), table=one_row)
+    assert (empty_dir / "discovery_signals.parquet").stat().st_size < (prior_dir / "discovery_signals.parquet").stat().st_size * 0.5
+    assert (one_dir / "discovery_signals.parquet").stat().st_size < (prior_dir / "discovery_signals.parquet").stat().st_size * 0.5
+
+    store = Store()
+    prior = publish(store, prior_dir)
+    with pytest.raises(RuntimeError, match="shrink"):
+        publish(store, one_dir, prior)
+
+    published = publish(store, empty_dir, prior)
+    desc = pub.table_descriptor(published, "discovery_signals.parquet")
+    assert desc is not None and desc["rows"] == 0
+
+    other_prior_dir, _ = build(tmp_path, "other-prior", family="other", keys=("agency_stats.parquet",), table=populated)
+    other_empty_dir, _ = build(tmp_path, "other-empty", family="other", keys=("agency_stats.parquet",), table=empty)
+    other_store = Store()
+    other_prior = publish(other_store, other_prior_dir)
+    with pytest.raises(RuntimeError, match="shrink"):
+        publish(other_store, other_empty_dir, other_prior)

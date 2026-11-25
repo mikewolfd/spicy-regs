@@ -126,6 +126,20 @@ jobs:
       comments_captured_input_sha256: ${{ inputs.comments_captured_input_sha256 }}
       comments_local_python: ${{ inputs.comments_local_python }}
       comments_local_python_sha256: ${{ inputs.comments_local_python_sha256 }}
+  derived-documents:
+    needs: base-families
+    if: ${{ !cancelled() && inputs.debugger_mode == 'off' && !inputs.skip_upload && !inputs.comments_only && needs.base-families.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        command:
+          - run-rollup-agency-monthly-volume
+          - run-rollup-discovery-signals
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: ${{ matrix.command }}
+      timeout_minutes: 60
   derived:
     needs: mirror
     if: ${{ inputs.debugger_mode == 'off' && !inputs.skip_upload && !inputs.comments_only }}
@@ -135,8 +149,6 @@ jobs:
         command:
           - run-rollup-feed-summary
           - run-rollup-agency-stats
-          - run-rollup-agency-monthly-volume
-          - run-rollup-discovery-signals
     uses: ./.github/workflows/_rollup.yml
     secrets: inherit
     with:
@@ -168,7 +180,7 @@ jobs:
     uses: ./.github/workflows/materialize-rulemaking.yml
     secrets: inherit
   verify:
-    needs: [mirror, derived, docket-search, org-links, rulemaking]
+    needs: [mirror, derived, derived-documents, docket-search, org-links, rulemaking]
     if: ${{ always() && inputs.debugger_mode == 'off' && !inputs.skip_upload && needs.mirror.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45

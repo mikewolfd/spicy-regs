@@ -362,3 +362,46 @@ def test_a_publish_without_credentials_fails_instead_of_skipping(tmp_path: Path,
         r2.upload_file(table)
     with pytest.raises(RuntimeError, match="R2 credentials"):
         r2.preflight_uploads(tmp_path, [table])
+
+
+def test_empty_discovery_signals_bypasses_shrink_guard_on_r2_upload_without_weakening_other_cases(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ss-lza7: 0-row discovery_signals.parquet (~520 B) passes against ~1,225 B prior; non-empty or other tables fail."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    _upload_env(monkeypatch)
+    monkeypatch.delenv("R2_ALLOW_SHRINK", raising=False)
+    monkeypatch.setattr(r2, "get_r2_client", lambda: __import__("unittest.mock", fromlist=["MagicMock"]).MagicMock())
+    monkeypatch.setattr(r2, "_get_remote_size", lambda *a, **k: 1_225)
+    monkeypatch.setattr(r2, "purge_urls", lambda urls: None)
+
+    empty_signals = tmp_path / "discovery_signals.parquet"
+    pq.write_table(
+        pa.table({"agency_code": pa.array([], type=pa.string()), "recent_30d": pa.array([], type=pa.int64())}),
+        empty_signals,
+        store_schema=False,
+    )
+    assert empty_signals.stat().st_size < 1_225 * 0.5
+    r2.preflight_uploads(tmp_path, [empty_signals])
+    r2.upload_file(empty_signals)
+
+    non_empty_signals = tmp_path / "non_empty" / "discovery_signals.parquet"
+    non_empty_signals.parent.mkdir()
+    pq.write_table(pa.table({"agency_code": ["EPA"], "recent_30d": [1]}), non_empty_signals, store_schema=False)
+    assert non_empty_signals.stat().st_size < 1_225 * 0.5
+    with pytest.raises(RuntimeError, match="Publication preflight failed.*discovery_signals.parquet") as exc_info:
+        r2.preflight_uploads(non_empty_signals.parent, [non_empty_signals])
+    assert "shrink" in str(exc_info.value.__cause__)
+    with pytest.raises(RuntimeError, match="shrink"):
+        r2.upload_file(non_empty_signals)
+
+    other_empty = tmp_path / "agency_stats.parquet"
+    pq.write_table(pa.table({"agency_code": pa.array([], type=pa.string())}), other_empty, store_schema=False)
+    assert other_empty.stat().st_size < 1_225 * 0.5
+    with pytest.raises(RuntimeError, match="Publication preflight failed.*agency_stats.parquet") as other_exc:
+        r2.preflight_uploads(tmp_path, [other_empty])
+    assert "shrink" in str(other_exc.value.__cause__)
+    with pytest.raises(RuntimeError, match="shrink"):
+        r2.upload_file(other_empty)
