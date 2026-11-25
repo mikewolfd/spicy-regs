@@ -3319,6 +3319,40 @@ def _tools() -> list[Tool]:
     return tools
 
 
+def resolve_usc_disposition(
+    former_title: int | str,
+    former_section: str,
+    subsection: object = None,
+    *,
+    section_end: object = None,
+    appendix: bool = False,
+) -> dict[str, Any]:
+    """Resolve a historical U.S.C. section via the pinned disposition tables without eager ontology imports."""
+    from spicy_regs.citation_resolution import resolve_usc_disposition as _resolve
+
+    return _resolve(former_title, former_section, subsection, section_end=section_end, appendix=appendix)
+
+
+def resolve_act_citation(
+    text: str | None = None,
+    *,
+    act_name: str | None = None,
+    section: str | None = None,
+    division: str | None = None,
+    enclosing_section: str | None = None,
+) -> dict[str, Any]:
+    """Resolve an Act-relative citation via pinned OLRC Popular Names, Table III, and source credits."""
+    from spicy_regs.citation_resolution import resolve_act_citation as _resolve
+
+    return _resolve(
+        text,
+        act_name=act_name,
+        section=section,
+        division=division,
+        enclosing_section=enclosing_section,
+    )
+
+
 def build_server() -> MCPServer:
     """Build the MCP server with discovery, read-only queries and citation lookup; stdio, or HTTP via build_app."""
     return MCPServer("spicy-regs", instructions=INSTRUCTIONS, icons=ICONS, tools=_tools())
