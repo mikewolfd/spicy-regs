@@ -273,3 +273,117 @@ def test_acquisition_reuses_exact_originals_without_network(tmp_path, monkeypatc
         reuse=selection["sources"],
     )
     assert actual == selection
+
+
+def test_bulk_zip_streaming_build_and_completeness_guards(tmp_path, monkeypatch):
+    from zipfile import ZIP_DEFLATED, ZipFile
+
+    from spicy_regs.pipelines.sec_edgar import build_bulk
+
+    raw = tmp_path / "raw"
+    monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(raw))
+
+    sub_root = json.loads((FIXTURES / "submissions.json").read_text())
+    facts_root = json.loads((FIXTURES / "companyfacts.json").read_text())
+
+    # Include a second CIK and a continuation page to prove streaming + CIK filtering + continuation checks.
+    other_sub = deepcopy(sub_root)
+    other_sub["cik"] = "0000789019"
+    other_sub["name"] = "MICROSOFT CORP"
+    other_facts = deepcopy(facts_root)
+    other_facts["cik"] = 789019
+    other_facts["entityName"] = "MICROSOFT CORP"
+
+    columns = sub_root["filings"]["recent"]
+    cont_name = "CIK0000320193-submissions-001.json"
+    paged_sub = deepcopy(sub_root)
+    paged_sub["filings"] = {
+        "recent": {key: [] for key in columns},
+        "files": [
+            {
+                "name": cont_name,
+                "filingCount": len(columns["form"]),
+                "filingFrom": min(columns["filingDate"]),
+                "filingTo": max(columns["filingDate"]),
+            }
+        ],
+    }
+
+    sub_zip = tmp_path / "submissions.zip"
+    with ZipFile(sub_zip, "w", compression=ZIP_DEFLATED) as zf:
+        zf.writestr("CIK0000320193.json", json.dumps(paged_sub))
+        zf.writestr(cont_name, json.dumps(columns))
+        zf.writestr("CIK0000789019.json", json.dumps(other_sub))
+
+    facts_zip = tmp_path / "companyfacts.zip"
+    with ZipFile(facts_zip, "w", compression=ZIP_DEFLATED) as zf:
+        zf.writestr("CIK0000320193.json", json.dumps(facts_root))
+        zf.writestr("CIK0000789019.json", json.dumps(other_facts))
+
+    out = tmp_path / "bulk-build"
+    artifact, evidence = build_bulk(
+        sub_zip,
+        facts_zip,
+        CONCEPTS,
+        out,
+        filing_start="2023-01-01",
+        filing_end="2024-12-31",
+        fact_start="2023-01-01",
+        fact_end="2024-12-31",
+        ciks=["320193"],
+        observed_at="2026-11-25T12:00:00Z",
+        archive_root=raw,
+    )
+    assert artifact.pin.artifact_digest and (evidence / "journal.jsonl").exists()
+    assert all(
+        pq.read_schema(out / "generation" / (name + ".parquet")).equals(schema)
+        for name, schema in SCHEMAS.items()
+    )
+    with connection(out / "generation") as con:
+        assert con.execute("select count(distinct cik) from sec_issuer_sources").fetchone()[0] == 1
+        assert con.execute("select count(*) from sec_filings").fetchone()[0] == 2
+        res = select_fact(
+            con,
+            cik="320193",
+            taxonomy="us-gaap",
+            concept="Assets",
+            unit="USD",
+            end="2024-09-28",
+            accession="0000320193-24-000123",
+        )
+        assert res["outcome"] == "selected" and res["observations"][0]["value_text"] == "364980000000"
+
+    # Missing selected CIK refuses cleanly without leaving a generation.
+    with pytest.raises(ValueError, match="omit selected issuer"):
+        build_bulk(
+            sub_zip,
+            facts_zip,
+            CONCEPTS,
+            tmp_path / "missing-cik",
+            filing_start="2023-01-01",
+            filing_end="2024-12-31",
+            fact_start="2023-01-01",
+            fact_end="2024-12-31",
+            ciks=["999999"],
+            archive_root=raw,
+        )
+    assert not (tmp_path / "missing-cik" / "generation").exists()
+
+    # Incomplete continuation inside bulk submissions.zip refuses cleanly.
+    bad_sub_zip = tmp_path / "bad-submissions.zip"
+    with ZipFile(bad_sub_zip, "w", compression=ZIP_DEFLATED) as zf:
+        zf.writestr("CIK0000320193.json", json.dumps(paged_sub))
+    with pytest.raises(ValueError, match="continuation selection is incomplete"):
+        build_bulk(
+            bad_sub_zip,
+            facts_zip,
+            CONCEPTS,
+            tmp_path / "bad-cont",
+            filing_start="2023-01-01",
+            filing_end="2024-12-31",
+            fact_start="2023-01-01",
+            fact_end="2024-12-31",
+            ciks=["320193"],
+            archive_root=raw,
+        )
+    assert not (tmp_path / "bad-cont" / "generation").exists()

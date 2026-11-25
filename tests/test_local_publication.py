@@ -1,5 +1,7 @@
 """The hand-run publish command: its dry run on a disk store, its refusals and its public readback."""
 
+from datetime import date
+from decimal import Decimal
 import json
 from pathlib import Path
 import shutil
@@ -20,16 +22,47 @@ from tests.generation_fakes import Store
 FAMILY = "irs-form990"
 
 
+def _dummy_value(dtype: pa.DataType, row_id: str, index: int):
+    if pa.types.is_string(dtype) or pa.types.is_large_string(dtype):
+        return row_id
+    if pa.types.is_boolean(dtype):
+        return False
+    if pa.types.is_integer(dtype):
+        return index
+    if pa.types.is_floating(dtype):
+        return float(index)
+    if pa.types.is_decimal(dtype):
+        return Decimal("0")
+    if pa.types.is_date(dtype):
+        return date(2025, 1, 1)
+    if pa.types.is_list(dtype):
+        return []
+    return None
+
+
+def _table_for_schema(schema: pa.Schema, ids: list[str]) -> pa.Table:
+    rows = [
+        {field.name: _dummy_value(field.type, item, idx) for field in schema}
+        for idx, item in enumerate(ids, start=1)
+    ]
+    return pa.Table.from_pylist(rows, schema=schema)
+
+
 def generation(tmp_path, name, tables, *, read=None, family=FAMILY, publication_status="complete-family"):
     """A generation of ``tables`` (table name to its ids) with evidence citing one raw original.
 
     ``read`` is the published index bytes and prior root bytes a build recorded as what it read.
     """
+    declared = command._family_schemas(family) or {}
     files = []
     for table, ids in tables.items():
         path = tmp_path / f"{name}-source" / f"{table}.parquet"
         path.parent.mkdir(exist_ok=True)
-        pq.write_table(pa.table({"id": ids}), path)
+        if table in declared:
+            arrow_table = _table_for_schema(declared[table], ids)
+        else:
+            arrow_table = pa.table({"id": ids})
+        pq.write_table(arrow_table, path)
         files.append(path)
     evidence = CaptureEvidence(tmp_path / f"{name}-build", family)
     evidence.retain_bytes(f"the original {name} was built from".encode(), stage="fixture-original", raw_source=True)
@@ -76,7 +109,8 @@ def test_census_acs_cli_registration_keeps_family_and_evidence_guards(tmp_path):
 
 def test_usaspending_cli_registration_retains_family_evidence_and_partial_guards(tmp_path):
     family = "usaspending-awards"
-    directory, digest, evidence = generation(tmp_path, "awards", {"transactions": ["a"]}, family=family)
+    directory, digest, evidence = generation(
+        tmp_path, "awards", {"usaspending_transactions": ["a"]}, family=family)
     live = tmp_path / "private-prior.json"
     original_index = json.dumps(publication.empty_index()).encode()
     live.write_bytes(original_index)
@@ -85,11 +119,11 @@ def test_usaspending_cli_registration_retains_family_evidence_and_partial_guards
         run(tmp_path, "wrong-family", directory, evidence, *dry)
     with pytest.raises(publication.PublicationError, match="pass --evidence"):
         run(tmp_path, "missing-evidence", directory, None, *dry, family=family)
-    _, _, other_evidence = generation(tmp_path, "other", {"transactions": ["other"]})
+    _, _, other_evidence = generation(tmp_path, "other", {"irs990_filings": ["other"]})
     with pytest.raises(publication.PublicationError, match="source evidence is missing or differs"):
         run(tmp_path, "wrong-evidence", directory, other_evidence, *dry, family=family)
     partial, _, partial_evidence = generation(
-        tmp_path, "partial-awards", {"transactions": ["a"]}, family=family, publication_status="local-partial")
+        tmp_path, "partial-awards", {"usaspending_transactions": ["a"]}, family=family, publication_status="local-partial")
     with pytest.raises(publication.PublicationError, match="local partial candidate cannot be published"):
         run(tmp_path, "partial-refused", partial, partial_evidence, *dry, family=family)
     assert not any((tmp_path / name).exists() for name in (
@@ -103,14 +137,15 @@ def test_usaspending_cli_registration_retains_family_evidence_and_partial_guards
 
 
 def test_dry_run_runs_the_publication_guards_on_a_disk_store(tmp_path, capsys, monkeypatch):
-    first, first_digest, first_evidence = generation(tmp_path, "first", {"debt": ["a", "b"], "periods": ["p"]})
+    first, first_digest, first_evidence = generation(
+        tmp_path, "first", {"irs990_filings": ["a", "b"], "irs990_officers": ["p"]})
     store = DiskStore(tmp_path / "live", bucket="live")
     publication.publish_generation(first, client=store, bucket="live", prior_index=publication.empty_index(),
                                    evidence_directories=(first_evidence,))
     live = tmp_path / "publication.v2.json"
     live.write_bytes(store.objects[publication.INDEX_V2_KEY].read_bytes())
     second, second_digest, evidence = generation(
-        tmp_path, "second", {"debt": ["a", "b", "c"], "periods": ["p"], "cells": ["x"]})
+        tmp_path, "second", {"irs990_filings": ["a", "b", "c"], "irs990_officers": ["p"], "irs990_grants": ["x"]})
     dry = ("--dry-run", "--scratch-raw", "--live-index", str(live))
     refused = publication.PublicationError
 
@@ -124,16 +159,16 @@ def test_dry_run_runs_the_publication_guards_on_a_disk_store(tmp_path, capsys, m
     with pytest.raises(refused, match="Family membership changed; explicit migration is required"):
         run(tmp_path, "accepted", second, evidence, *dry)
     with pytest.raises(refused, match=f"Live {FAMILY} is {first_digest}, not the expected"):
-        run(tmp_path, "accepted", second, evidence, *dry, "--added-table", "cells.parquet",
+        run(tmp_path, "accepted", second, evidence, *dry, "--added-table", "irs990_grants.parquet",
             "--expect-prior", second_digest)
     with monkeypatch.context() as loosened:
         loosened.setenv("R2_MIN_SIZE_RATIO", "0.01")
         with pytest.raises(refused, match="Unset R2_MIN_SIZE_RATIO: a hand publish keeps the default shrink guard"):
-            run(tmp_path, "accepted", second, evidence, *dry, "--added-table", "cells.parquet")
+            run(tmp_path, "accepted", second, evidence, *dry, "--added-table", "irs990_grants.parquet")
     # Every refusal above named the same --output and left nothing there, so the corrected command runs as typed.
     assert not (tmp_path / "accepted").exists()
 
-    output = run(tmp_path, "accepted", second, evidence, *dry, "--added-table", "cells.parquet",
+    output = run(tmp_path, "accepted", second, evidence, *dry, "--added-table", "irs990_grants.parquet",
                  "--expect-prior", first_digest[:12])
     receipt = json.loads((output / "dry-run.json").read_text())
     assert json.loads(capsys.readouterr().out) == receipt
@@ -142,24 +177,24 @@ def test_dry_run_runs_the_publication_guards_on_a_disk_store(tmp_path, capsys, m
     assert receipt["prefix"] == f"generations/{FAMILY}/{second_digest}"
     assert receipt["prior"]["artifactDigest"] == "sha256:" + first_digest
     assert {key: (table["rows"], table["priorRows"]) for key, table in receipt["tables"].items()} == {
-        "cells.parquet": (1, None), "debt.parquet": (3, 2), "periods.parquet": (1, 1)}
-    assert receipt["added_tables"] == ["cells.parquet"] and receipt["other_family_changes"] == []
+        "irs990_grants.parquet": (1, None), "irs990_filings.parquet": (3, 2), "irs990_officers.parquet": (1, 1)}
+    assert receipt["added_tables"] == ["irs990_grants.parquet"] and receipt["other_family_changes"] == []
     assert receipt["raw_archive"] == "scratch: not publishable" and len(receipt["evidence"]) == 1
-    # periods.parquet is byte-identical to the live member, so the publisher copies it server-side.
+    # irs990_officers.parquet is byte-identical to the live member, so the publisher copies it server-side.
     assert receipt["store_members_copied"] == 1 and receipt["store_bytes_written"] > 0
     # The store was a rehearsal: only the receipt remains, and the saved live index is as it was.
     assert [path.name for path in output.iterdir()] == ["dry-run.json"]
     assert not list(tmp_path.glob(".dry-run-store-*"))
     assert publication.parse_index(live.read_bytes())["families"][FAMILY]["artifactDigest"] == "sha256:" + first_digest
     with pytest.raises(SystemExit):
-        run(tmp_path, "accepted", second, evidence, *dry, "--added-table", "cells.parquet")
+        run(tmp_path, "accepted", second, evidence, *dry, "--added-table", "irs990_grants.parquet")
 
     # A build that recorded the index it read is held to it by the publisher itself: once the family has
     # moved on, naming the new live digest in --expect-prior does not make the old build publishable.
-    third, _, third_evidence = generation(tmp_path, "third", {"debt": ["a", "b", "d"], "periods": ["p"]},
+    third, _, third_evidence = generation(tmp_path, "third", {"irs990_filings": ["a", "b", "d"], "irs990_officers": ["p"]},
                                           read=(live.read_bytes(), (first / "artifact.json").read_bytes()))
     publication.publish_generation(second, client=store, bucket="live", prior_index=publication.parse_index(
-        live.read_bytes()), evidence_directories=(evidence,), added_tables=frozenset({"cells.parquet"}))
+        live.read_bytes()), evidence_directories=(evidence,), added_tables=frozenset({"irs990_grants.parquet"}))
     moved = tmp_path / "publication-moved.json"
     moved.write_bytes(store.objects[publication.INDEX_V2_KEY].read_bytes())
     with pytest.raises(refused, match="Family changed since the build read its inputs; rebuild before publishing"):
@@ -168,8 +203,8 @@ def test_dry_run_runs_the_publication_guards_on_a_disk_store(tmp_path, capsys, m
 
 
 def test_publish_holds_the_target_and_raw_root_then_reads_back_publicly(tmp_path, monkeypatch):
-    directory, digest, evidence = generation(tmp_path, "candidate", {"debt": ["a", "b"]})
-    later, later_digest, later_evidence = generation(tmp_path, "later", {"debt": ["a", "b", "c"]})
+    directory, digest, evidence = generation(tmp_path, "candidate", {"irs990_filings": ["a", "b"]})
+    later, later_digest, later_evidence = generation(tmp_path, "later", {"irs990_filings": ["a", "b", "c"]})
     store = Store()
     endpoint = SimpleNamespace(endpoint_url=r2.VERIFIED_ENDPOINT)
     monkeypatch.setattr(store, "meta", endpoint, raising=False)
@@ -220,9 +255,9 @@ def test_publish_holds_the_target_and_raw_root_then_reads_back_publicly(tmp_path
     monkeypatch.setattr(publication, "verify_member", lambda base, member: len(store.objects[member.path]))
     receipt = json.loads((run(tmp_path, "receipt", directory, evidence) / "receipt.json").read_text())
     assert receipt["status"] == "published_public_readback" and receipt["prior"] is None
-    assert receipt["artifactDigest"] == "sha256:" + digest and receipt["tables"]["debt.parquet"]["rows"] == 2
+    assert receipt["artifactDigest"] == "sha256:" + digest and receipt["tables"]["irs990_filings.parquet"]["rows"] == 2
     assert receipt["public_index_url"] == "https://data.spicygov.ai/publication.v2.json"
-    assert receipt["public_bytes_read"] == len(store.objects[receipt["prefix"] + "/debt.parquet"])
+    assert receipt["public_bytes_read"] == len(store.objects[receipt["prefix"] + "/irs990_filings.parquet"])
     assert served == ["https://data.spicygov.ai"]
 
     # A rerun after an uncertain result writes nothing: the family already is this generation.
@@ -241,7 +276,7 @@ def test_publish_holds_the_target_and_raw_root_then_reads_back_publicly(tmp_path
                            / "receipt.json").read_text())
     assert replaced["status"] == "published_public_readback"
     assert replaced["prior"]["artifactDigest"] == "sha256:" + digest
-    assert replaced["tables"]["debt.parquet"] == {**replaced["tables"]["debt.parquet"], "rows": 3, "priorRows": 2}
+    assert replaced["tables"]["irs990_filings.parquet"] == {**replaced["tables"]["irs990_filings.parquet"], "rows": 3, "priorRows": 2}
 
 
 def test_only_publisher_originals_must_be_in_the_shared_archive(tmp_path, monkeypatch):
@@ -302,10 +337,120 @@ def test_census_geocoder_uses_the_cli_with_the_existing_family_gates(tmp_path, c
 
 
 def test_open_payments_cli_refuses_a_generation_of_another_family(tmp_path):
-    directory, _, evidence = generation(tmp_path, "local", {"debt": ["a"]})
+    directory, _, evidence = generation(tmp_path, "local", {"irs990_filings": ["a"]})
     with pytest.raises(publication.PublicationError, match="not the expected cms-open-payments"):
         run(tmp_path, "refused", directory, evidence, "--dry-run", family="cms-open-payments")
     assert not (tmp_path / "refused").exists()
+
+
+def test_schema_parity_guard_refuses_missing_and_mismatched_columns_on_dry_run(tmp_path):
+    from spicy_regs.schemas.house_disbursement_pages import PARTITION_COLUMNS, SCHEMAS as HDP_SCHEMAS
+
+    live = tmp_path / "private-publication.v2.json"
+    live.write_text(json.dumps(publication.empty_index()))
+    dry = ("--dry-run", "--scratch-raw", "--live-index", str(live))
+
+    # 1. Single-file table missing a declared column fails dry_run with PublicationError.
+    rows_schema = HDP_SCHEMAS["house_disbursement_pdf_rows"]
+    pages_schema = HDP_SCHEMAS["house_disbursement_pdf_pages"]
+    broken_rows = pa.schema([field for field in rows_schema if field.name != "reading_method"])
+
+    src = tmp_path / "broken-single-src"
+    src.mkdir()
+    pq.write_table(_table_for_schema(broken_rows, ["1"]), src / "house_disbursement_pdf_rows.parquet")
+    pq.write_table(_table_for_schema(pages_schema, ["1"]), src / "house_disbursement_pdf_pages.parquet")
+    ev = CaptureEvidence(tmp_path / "broken-single-ev", "house-disbursement-pages")
+    ev.retain_bytes(b"pdf original", stage="fixture-original", raw_source=True)
+    gen_dir = tmp_path / "broken-single-gen"
+    build_generation(
+        gen_dir,
+        family="house-disbursement-pages",
+        files=[src / "house_disbursement_pdf_rows.parquet", src / "house_disbursement_pdf_pages.parquet"],
+        expected_keys=["house_disbursement_pdf_rows.parquet", "house_disbursement_pdf_pages.parquet"],
+        inputs=ev.inputs(),
+    )
+    ev.finish()
+    with pytest.raises(publication.PublicationError, match="reading_method"):
+        run(tmp_path, "refused-missing-col", gen_dir, ev.artifact_dir, *dry, family="house-disbursement-pages")
+    assert not (tmp_path / "refused-missing-col").exists()
+
+    # 2. Partitioned table with a drifted partition member (Nov 6 35/23-col v3 mismatch shape) fails dry_run.
+    part_src = tmp_path / "part-src"
+    rows_dir = part_src / "house_disbursement_pdf_rows" / "report_year=2025" / "report_start_month=1"
+    rows_dir.mkdir(parents=True)
+    # Write partition file missing trailing columns.
+    drifted_schema = pa.schema(list(rows_schema)[:23])
+    drifted_table = _table_for_schema(drifted_schema, ["1"]).set_column(
+        rows_schema.get_field_index("report_year"),
+        "report_year",
+        pa.array([2025], type=pa.int32()),
+    ).set_column(
+        rows_schema.get_field_index("report_start_month"),
+        "report_start_month",
+        pa.array([1], type=pa.int32()),
+    )
+    pq.write_table(drifted_table, rows_dir / "part-000000.parquet")
+
+    pages_dir = part_src / "house_disbursement_pdf_pages" / "report_year=2025" / "report_start_month=1"
+    pages_dir.mkdir(parents=True)
+    valid_pages = _table_for_schema(pages_schema, ["1"]).set_column(
+        pages_schema.get_field_index("report_year"),
+        "report_year",
+        pa.array([2025], type=pa.int32()),
+    ).set_column(
+        pages_schema.get_field_index("report_start_month"),
+        "report_start_month",
+        pa.array([1], type=pa.int32()),
+    )
+    pq.write_table(valid_pages, pages_dir / "part-000000.parquet")
+
+    ev_part = CaptureEvidence(tmp_path / "part-ev", "house-disbursement-pages")
+    ev_part.retain_bytes(b"pdf original", stage="fixture-original", raw_source=True)
+    part_gen = tmp_path / "part-gen"
+    build_generation(
+        part_gen,
+        family="house-disbursement-pages",
+        files=[part_src / "house_disbursement_pdf_rows", part_src / "house_disbursement_pdf_pages"],
+        expected_keys=["house_disbursement_pdf_rows.parquet", "house_disbursement_pdf_pages.parquet"],
+        partitioned={
+            "house_disbursement_pdf_rows.parquet": PARTITION_COLUMNS,
+            "house_disbursement_pdf_pages.parquet": PARTITION_COLUMNS,
+        },
+        inputs=ev_part.inputs(),
+    )
+    ev_part.finish()
+    with pytest.raises(publication.PublicationError, match="schema parity check failed.*house_disbursement_pdf_rows"):
+        run(tmp_path, "refused-part-drift", part_gen, ev_part.artifact_dir, *dry, family="house-disbursement-pages")
+    assert not (tmp_path / "refused-part-drift").exists()
+
+    # 3. Matching partitioned house-disbursement-pages generation passes dry_run.
+    valid_rows = _table_for_schema(rows_schema, ["1"]).set_column(
+        rows_schema.get_field_index("report_year"),
+        "report_year",
+        pa.array([2025], type=pa.int32()),
+    ).set_column(
+        rows_schema.get_field_index("report_start_month"),
+        "report_start_month",
+        pa.array([1], type=pa.int32()),
+    )
+    pq.write_table(valid_rows, rows_dir / "part-000000.parquet")
+    ev_ok = CaptureEvidence(tmp_path / "ok-ev", "house-disbursement-pages")
+    ev_ok.retain_bytes(b"pdf original", stage="fixture-original", raw_source=True)
+    ok_gen = tmp_path / "ok-gen"
+    build_generation(
+        ok_gen,
+        family="house-disbursement-pages",
+        files=[part_src / "house_disbursement_pdf_rows", part_src / "house_disbursement_pdf_pages"],
+        expected_keys=["house_disbursement_pdf_rows.parquet", "house_disbursement_pdf_pages.parquet"],
+        partitioned={
+            "house_disbursement_pdf_rows.parquet": PARTITION_COLUMNS,
+            "house_disbursement_pdf_pages.parquet": PARTITION_COLUMNS,
+        },
+        inputs=ev_ok.inputs(),
+    )
+    ev_ok.finish()
+    out_ok = run(tmp_path, "accepted-hdp", ok_gen, ev_ok.artifact_dir, *dry, family="house-disbursement-pages")
+    assert json.loads((out_ok / "dry-run.json").read_text())["status"] == "dry_run_accepted"
 
 
 def test_local_families_are_disjoint_from_hosted_rollup_workflows():

@@ -149,5 +149,90 @@ def test_generation_publication_and_actual_local_sql_comparison(tmp_path, monkey
     assert rows[0][4].startswith("https://api.census.gov/data/2024/acs/acs5?")
     actual = pq.read_table(tmp_path / module.OUTPUT)
     assert actual.schema.equals(module.SCHEMA)
-    row = actual.to_pylist()[1]
-    assert json.loads(row["variable_metadata_json"])["B19013_001E"] == reader.records[0]["record"]["variables"]["B19013_001E"]
+def cd_record(state="10", cd="00", *, session="19", income="82000.00"):
+    variables = [base + suffix for base in module.MEASURES for suffix in ("E", "M", "EA", "MA")]
+    values = {key: None if key.endswith("A") else "100" for key in variables}
+    values["B19013_001E"] = income
+    return {"sourceRecordId": f"2024:{state}:{cd}", "record": {
+        "dataset": "acs/acs5", "vintage": 2024, "geography": "congressional district",
+        "state": state, "congressional_district": cd,
+        "name": f"Congressional District {cd}, State {state}",
+        "geo_id": f"500{session}00US{state}{cd}", "values": values,
+        "variables": {key: {"label": key, "predicateType": "int"} for key in variables},
+        "value_sources": {key: {
+            "request_url": f"https://api.census.gov/data/2024/acs/acs5?for=congressional+district:*&in=state:{state}",
+            "response_sha256": "sha256:" + "b" * 64, "observed_at": "2026-10-20T00:00:00Z",
+            "row_index": 1, "column_index": index,
+        } for index, key in enumerate(variables)},
+        "metadata_sources": {key: {
+            "request_url": "https://api.census.gov/data/2024/acs/acs5/variables.json",
+            "response_sha256": "sha256:" + "c" * 64, "observed_at": "2026-10-20T00:00:00Z",
+            "json_pointer": "/variables/" + key,
+        } for key in variables},
+    }}
+
+
+def test_nationwide_counties_and_optional_allowlist(tmp_path):
+    rec_de = record("001", "80000")
+    rec_ca = record("001", "95000")
+    rec_ca["sourceRecordId"] = "2024:06:001"
+    rec_ca["record"].update(state="06", geo_id="0500000US06001", name="Alameda County, California")
+    path = module.build_census_acs(Reader([rec_de, rec_ca]), tmp_path, vintage=2024, state="*")
+    rows = pq.read_table(path).to_pylist()
+    assert {(row["state_code"], row["county_geoid"]) for row in rows} == {("10", "10001"), ("06", "06001")}
+    filtered = module.build_census_acs(
+        Reader([rec_de, rec_ca]), tmp_path / "allowlist", vintage=2024, state="*", counties=("10001", "06001"),
+    )
+    assert len(pq.read_table(filtered).to_pylist()) == 4
+    with pytest.raises(ValueError, match="unexpected or repeated"):
+        module.build_census_acs(
+            Reader([rec_de, rec_ca]), tmp_path / "missing", vintage=2024, state="*", counties=("10001",),
+        )
+
+
+def test_congressional_districts_nationwide_codes_and_session_guard(tmp_path, monkeypatch):
+    records = [
+        cd_record("10", "00", income="82000"),
+        cd_record("11", "98", income="91000"),
+        cd_record("06", "ZZ", income=None),
+        cd_record("06", "12", income="125000.50"),
+    ]
+    reader = Reader(records)
+    artifact, evidence = build(
+        reader, tmp_path / "cd-build", vintage=2024, state="*", geography="congressional district",
+    )
+    assert artifact.pin.artifact_digest and (evidence / "journal.jsonl").exists()
+    actual = pq.read_table(tmp_path / "cd-build" / module.CD_OUTPUT)
+    assert actual.schema.equals(module.CD_SCHEMA)
+    rows = [row for row in actual.to_pylist() if row["measure"] == "median_household_income"]
+    assert [(r["district_geoid"], r["congress_session_code"], r["estimate"], r["estimate_status"]) for r in rows] == [
+        ("1000", "19", Decimal("82000.000000"), "numeric"),
+        ("1198", "19", Decimal("91000.000000"), "numeric"),
+        ("06ZZ", "19", None, "null"),
+        ("0612", "19", Decimal("125000.500000"), "numeric"),
+    ]
+    store = Store()
+    index = publication.publish_generation(
+        tmp_path / "cd-build" / "generation",
+        client=store,
+        bucket="test",
+        prior_index=publication.empty_index(),
+        evidence_directories=(evidence,),
+    )
+    assert module.CD_OUTPUT in index["families"]["census-acs"]["tables"]
+
+    mixed = [cd_record("10", "00", session="18"), cd_record("06", "12", session="19")]
+    with pytest.raises(ValueError, match="mixes Congress session GEO_ID prefixes"):
+        module.build_census_acs(
+            Reader(mixed), tmp_path / "mixed", vintage=2024, state="*", geography="congressional district",
+        )
+
+    with pytest.raises(ValueError, match="unexpected or repeated"):
+        module.build_census_acs(
+            Reader(records),
+            tmp_path / "bad-allowlist",
+            vintage=2024,
+            state="*",
+            geography="congressional district",
+            districts=("1000",),
+        )

@@ -335,3 +335,286 @@ def select_fact(connection, *, cik, taxonomy, concept, unit, end, start=None, ac
         else "selected",
         "observations": rows,
     }
+
+
+def _validate_concepts(concepts):
+    pairs = [tuple(item) for item in concepts]
+    if (
+        not pairs
+        or any(len(item) != 2 or not all(isinstance(v, str) and v for v in item) for item in pairs)
+        or len(set(pairs)) != len(pairs)
+    ):
+        raise ValueError("Select unique SEC taxonomy/concept pairs")
+    return pairs
+
+
+def build_bulk_tables(
+    submissions_zip,
+    companyfacts_zip,
+    concepts,
+    output_dir,
+    *,
+    filing_start,
+    filing_end,
+    fact_start,
+    fact_end,
+    submissions_sha256,
+    companyfacts_sha256,
+    observed_at,
+    ciks=None,
+    batch_size: int = 2_000,
+    max_member_bytes: int | None = None,
+    max_entries: int | None = None,
+    max_nodes: int | None = None,
+):
+    """Stream SEC bulk ``submissions.zip`` and ``companyfacts.zip`` into the 4 SEC Parquet tables."""
+    from tempfile import TemporaryDirectory
+
+    import pyarrow.parquet as pq
+
+    from spicy_docs.sources.sec_edgar import (
+        COMPANYFACTS_BULK_URL,
+        DEFAULT_BULK_MAX_ENTRIES,
+        DEFAULT_BULK_MAX_MEMBER_BYTES,
+        DEFAULT_BULK_MAX_NODES,
+        SUBMISSIONS_BULK_URL,
+        cik,
+        fact_observations,
+        filing_url,
+        iso_date,
+        iter_companyfacts_zip,
+        iter_submissions_zip,
+    )
+
+    if type(batch_size) is not int or batch_size <= 0:
+        raise ValueError("batch_size must be a positive integer")
+    start, end = map(iso_date, (filing_start, filing_end))
+    if start > end or iso_date(fact_start) > iso_date(fact_end):
+        raise ValueError("SEC selection window is reversed")
+    concepts = _validate_concepts(concepts)
+    selected_ciks = None if ciks is None else [cik(item) for item in ciks]
+    if selected_ciks is not None and (not selected_ciks or len(selected_ciks) != len(set(selected_ciks))):
+        raise ValueError("Declare unique SEC issuer CIKs")
+
+    member_limit = DEFAULT_BULK_MAX_MEMBER_BYTES if max_member_bytes is None else max_member_bytes
+    entry_limit = DEFAULT_BULK_MAX_ENTRIES if max_entries is None else max_entries
+    node_limit = DEFAULT_BULK_MAX_NODES if max_nodes is None else max_nodes
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=False)
+
+    with TemporaryDirectory(dir=output_dir) as scratch:
+        scratch_dir = Path(scratch)
+        writers = {
+            name: pq.ParquetWriter(scratch_dir / (name + ".parquet"), schema, compression="zstd")
+            for name, schema in SCHEMAS.items()
+        }
+        buffers: dict[str, list[dict]] = {name: [] for name in SCHEMAS}
+
+        def flush(name: str) -> None:
+            if buffers[name]:
+                writers[name].write_table(pa.Table.from_pylist(buffers[name], schema=SCHEMAS[name]))
+                buffers[name].clear()
+
+        def emit(name: str, row: dict) -> None:
+            buffers[name].append(row)
+            if len(buffers[name]) >= batch_size:
+                flush(name)
+
+        try:
+            roots: dict[str, dict] = {}
+            seen_continuations: dict[str, dict[str, tuple[int, str, str]]] = {}
+            seen_accessions: dict[str, set[str]] = {}
+
+            for member in iter_submissions_zip(
+                submissions_zip,
+                ciks=selected_ciks,
+                max_member_bytes=member_limit,
+                max_entries=entry_limit,
+                max_nodes=node_limit,
+            ):
+                issuer = member.issuer_cik
+                source_url = f"{SUBMISSIONS_BULK_URL}#{member.member_name}"
+                source = {
+                    "sha256": submissions_sha256,
+                    "url": source_url,
+                    "observed_at": observed_at,
+                }
+                page = member.page
+                metadata = (
+                    {**page.metadata, "continuations": list(page.continuations)}
+                    if member.continuation is None
+                    else {}
+                )
+                emit(
+                    SOURCES,
+                    {
+                        "cik": issuer,
+                        "kind": "submissions",
+                        "continuation": member.continuation,
+                        "source_bytes": member.byte_size,
+                        "metadata_json": _json(metadata),
+                        **_provenance(source, ""),
+                    },
+                )
+                if member.continuation is None:
+                    if issuer in roots:
+                        raise ValueError("SEC bulk submissions repeats an issuer root")
+                    roots[issuer] = {
+                        file["name"]: file
+                        for file in page.continuations
+                        if file["filingFrom"] <= end and file["filingTo"] >= start
+                    }
+                else:
+                    row_dates = [row["filingDate"] for row in page.rows]
+                    seen_continuations.setdefault(issuer, {})[member.continuation] = (
+                        len(page.rows),
+                        min(row_dates) if row_dates else "",
+                        max(row_dates) if row_dates else "",
+                    )
+                acc_set = seen_accessions.setdefault(issuer, set())
+                for index, row in enumerate(page.rows):
+                    number = row["accessionNumber"]
+                    if number in acc_set:
+                        raise ValueError("SEC submissions repeats an accession across history pages")
+                    acc_set.add(number)
+                    if start <= row["filingDate"] <= end:
+                        emit(
+                            FILINGS,
+                            {
+                                "cik": issuer,
+                                "accession": number,
+                                "form": row["form"],
+                                "is_amendment": row["form"].endswith("/A"),
+                                "filing_date": row["filingDate"],
+                                "report_date_raw": row["reportDate"],
+                                "acceptance_datetime_raw": row.get("acceptanceDateTime"),
+                                "filing_url": filing_url(issuer, number),
+                                "primary_document_url": filing_url(issuer, number, row["primaryDocument"])
+                                if row["primaryDocument"]
+                                else None,
+                                "raw_row_json": _json(row),
+                                **_provenance(
+                                    source,
+                                    f"/{'filings/recent/' if member.continuation is None else ''}accessionNumber/{index}",
+                                ),
+                            },
+                        )
+
+            for issuer, required in roots.items():
+                cont_map = seen_continuations.get(issuer, {})
+                for name, descriptor in required.items():
+                    if name not in cont_map:
+                        raise ValueError("SEC continuation selection is incomplete or outside the declared history window")
+                    row_count, min_date, max_date = cont_map[name]
+                    if row_count != descriptor["filingCount"] or (
+                        row_count > 0
+                        and (min_date < descriptor["filingFrom"] or max_date > descriptor["filingTo"])
+                    ):
+                        raise ValueError("SEC continuation disagrees with its inventory count/date bounds")
+
+            facts_ciks: set[str] = set()
+            for member in iter_companyfacts_zip(
+                companyfacts_zip,
+                ciks=selected_ciks,
+                max_member_bytes=member_limit,
+                max_entries=entry_limit,
+                max_nodes=node_limit,
+            ):
+                issuer = member.issuer_cik
+                facts_ciks.add(issuer)
+                value = member.companyfacts
+                source_url = f"{COMPANYFACTS_BULK_URL}#{member.member_name}"
+                source = {
+                    "sha256": companyfacts_sha256,
+                    "url": source_url,
+                    "observed_at": observed_at,
+                }
+                emit(
+                    SOURCES,
+                    {
+                        "cik": issuer,
+                        "kind": "companyfacts",
+                        "continuation": None,
+                        "source_bytes": member.byte_size,
+                        "metadata_json": _json({k: v for k, v in value.items() if k != "facts"}),
+                        **_provenance(source, ""),
+                    },
+                )
+                counts = dict.fromkeys(concepts, 0)
+                for taxonomy, concept, unit, label, description, row, pointer in fact_observations(value, concepts):
+                    if not fact_start <= row["end"] <= fact_end:
+                        continue
+                    counts[taxonomy, concept] += 1
+                    fy = row.get("fy")
+                    if fy is not None and (type(fy) is not int or not 0 < fy < 10000):
+                        raise ValueError("SEC fiscal year is invalid")
+                    period_kind = "instant" if "start" not in row else "unknown" if row["start"] is None else "duration"
+                    emit(
+                        FACTS,
+                        {
+                            "cik": issuer,
+                            "taxonomy": taxonomy,
+                            "concept": concept,
+                            "unit": unit,
+                            "value_text": None if row["val"] is None else str(row["val"]),
+                            "value_status": "json_null" if row["val"] is None else "reported",
+                            "period_kind": period_kind,
+                            "period_start": row.get("start"),
+                            "period_end": row["end"],
+                            "accession": row["accn"],
+                            "form": row["form"],
+                            "is_amendment": row["form"].endswith("/A"),
+                            "filed_date": row["filed"],
+                            "fiscal_year": fy,
+                            "fiscal_period": row.get("fp"),
+                            "frame": row.get("frame"),
+                            "label": label,
+                            "description": description,
+                            "context_json": _json(row),
+                            "observation_id": hashlib.sha256(
+                                (companyfacts_sha256 + "/" + member.member_name + pointer).encode()
+                            ).hexdigest(),
+                            "filing_url": filing_url(issuer, row["accn"]),
+                            **_provenance(source, pointer),
+                        },
+                    )
+                for (taxonomy, concept), count in counts.items():
+                    exists = concept in value["facts"].get(taxonomy, {})
+                    emit(
+                        SCOPES,
+                        {
+                            "cik": issuer,
+                            "taxonomy": taxonomy,
+                            "concept": concept,
+                            "end_from": fact_start,
+                            "end_through": fact_end,
+                            "outcome": "observed"
+                            if count
+                            else "no_observations_in_period"
+                            if exists
+                            else "concept_not_reported",
+                            "observation_count": count,
+                            **_provenance(source, "/facts"),
+                        },
+                    )
+
+            if selected_ciks is not None:
+                missing = set(selected_ciks) - (set(roots) & facts_ciks)
+                if missing:
+                    raise ValueError(f"SEC bulk archives omit selected issuer(s): {sorted(missing)}")
+            elif not roots or set(roots) != facts_ciks:
+                raise ValueError("SEC bulk submissions and companyfacts archives must cover matching issuers")
+
+            for name in SCHEMAS:
+                flush(name)
+        finally:
+            for writer in writers.values():
+                writer.close()
+
+        destinations = []
+        for name in SCHEMAS:
+            dest = output_dir / (name + ".parquet")
+            (scratch_dir / (name + ".parquet")).replace(dest)
+            destinations.append(dest)
+        return tuple(destinations)
