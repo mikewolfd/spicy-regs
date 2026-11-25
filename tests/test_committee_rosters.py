@@ -335,12 +335,59 @@ def test_a_file_not_established_keeps_its_chambers_prior_seats(tmp_path):
     "rosters",
     [
         StubRosters(house_error=CommitteeRosterRefusedError("https://clerk.house.gov/xml/lists/MemberData.xml")),
+        StubRosters(senate_error=CommitteeRosterRefusedError("https://www.senate.gov/legislative/LIS_MEMBER/cvc_member_data.xml")),
         StubRosters(senate_error=CredentialRefusedError("stub: 403")),
     ],
 )
-def test_a_refusal_of_access_aborts_the_run(tmp_path, rosters):
+def test_a_refusal_of_access_aborts_the_run_without_prior_senate_rows(tmp_path, rosters):
     with pytest.raises((CommitteeRosterRefusedError, CredentialRefusedError)):
         _build(tmp_path, rosters=rosters)
+
+
+def test_senate_403_preserves_prior_senate_rows_while_updating_house_and_committees(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(bcr, "directory_congresses_pending", lambda *args, **kwargs: [])
+    seed(
+        tmp_path,
+        "committee_assignments",
+        [
+            {
+                "congress": "119",
+                "system_code": "hsxx00",
+                "bioguide_id": "X000001",
+                "chamber": "house",
+                "observed_at": "2026-01-01",
+            },
+            {
+                "congress": "119",
+                "system_code": "ssxx00",
+                "bioguide_id": "X000002",
+                "chamber": "senate",
+                "observed_at": "2026-01-01",
+            },
+        ],
+    )
+
+    class _RecordingEvidence:
+        def __init__(self) -> None:
+            self.refusals: list[tuple[str, str]] = []
+
+        def refusal(self, error: BaseException, *, stage: str) -> None:
+            self.refusals.append((type(error).__name__, stage))
+
+    evidence = _RecordingEvidence()
+    committees, assignments, _ = _build(
+        tmp_path,
+        rosters=StubRosters(senate_error=CommitteeRosterRefusedError("https://www.senate.gov/legislative/LIS_MEMBER/cvc_member_data.xml")),
+        evidence=evidence,
+    )
+    assert len(_rows(committees)) == len(NEWEST_FIRST)
+    rows = _rows(assignments)
+    assert [r["bioguide_id"] for r in rows if r["chamber"] == "senate"] == ["X000002"]
+    assert any(r["chamber"] == "house" and r["bioguide_id"] == "B001323" for r in rows)
+    assert not [r for r in rows if r["bioguide_id"] == "X000001"], "House rows still refreshed"
+    assert evidence.refusals == [("CommitteeRosterRefusedError", "committee-roster-senate")]
+    warnings = [line for line in capsys.readouterr().out.splitlines() if "Senate roster refused access" in line]
+    assert len(warnings) == 1 and "prior Senate rows remain intact" in warnings[0]
 
 
 def test_the_published_shapes_are_the_contracts(tmp_path):

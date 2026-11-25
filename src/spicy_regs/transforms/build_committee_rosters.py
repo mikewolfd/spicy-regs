@@ -76,6 +76,7 @@ from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyBudget
 from spicy_docs.sources.govinfo.directory_rosters import DirectoryRosterError
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
+from spicy_regs.phase_log import annotate
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.congress_scope import current_congress
@@ -273,8 +274,25 @@ def _committee_rows(
     return rows
 
 
-def _assignment_rows(rosters: RosterSource, congress: int, prior_file: Path | None) -> list[dict]:
-    """Today's seats from both chamber files; a file not established this run leaves its chamber's prior rows."""
+def _has_prior_chamber_rows(prior_file: Path | None, chamber: str) -> bool:
+    if prior_file is None or not prior_file.exists():
+        return False
+    import duckdb
+    import pyarrow.parquet as pq
+
+    if "chamber" not in pq.read_schema(prior_file).names:
+        return False
+    with duckdb.connect() as con:
+        return con.execute(
+            "SELECT 1 FROM read_parquet(?) WHERE chamber = ? LIMIT 1", [str(prior_file), chamber]
+        ).fetchone() is not None
+
+
+def _assignment_rows(
+    rosters: RosterSource, congress: int, prior_file: Path | None, *, evidence: Any = None
+) -> list[dict]:
+    """Today's seats from both chamber files; a file not established (or a refused Senate read with prior Senate rows)
+    leaves its chamber's prior rows."""
     rows: list[dict] = []
     try:
         house = rosters.acquire_house(congress=congress)
@@ -309,8 +327,17 @@ def _assignment_rows(rosters: RosterSource, congress: int, prior_file: Path | No
         )
     try:
         senate = rosters.acquire_senate()
-    except CommitteeRosterRefusedError:
-        raise
+    except CommitteeRosterRefusedError as error:
+        if not _has_prior_chamber_rows(prior_file, "senate"):
+            raise
+        if evidence is not None:
+            evidence.refusal(error, stage="committee-roster-senate")
+        annotate(
+            "warning",
+            "committee_assignments",
+            f"Senate roster refused access ({scrub_credential(str(error), '')}); "
+            "House assignments and committees updated and prior Senate rows remain intact",
+        )
     except (CommitteeRosterError, httpx.HTTPError, ConnectionError) as error:
         logger.warning("Committee assignments: Senate file not established: {}", scrub_credential(str(error), ""))
     else:
@@ -489,7 +516,7 @@ def build_committee_rosters(
     committee_rows = _committee_rows(listed, _held_committees(priors[NAME]), reader, max_details)
 
     # 2. Today's seats, for the Congress the files describe.
-    assignment_rows = _assignment_rows(rosters, current_congress(), priors[ASSIGNMENTS])
+    assignment_rows = _assignment_rows(rosters, current_congress(), priors[ASSIGNMENTS], evidence=evidence)
 
     # 3. Earlier Congresses' seats, once each, from their directory editions.
     reread = {int(c) for c in os.environ.get(DIRECTORY_REREAD_ENV, "").split(",") if c.strip()}
