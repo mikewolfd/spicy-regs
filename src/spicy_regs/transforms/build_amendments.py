@@ -37,8 +37,9 @@ publishing a truncated table.
 
 from __future__ import annotations
 
+import json
 import os
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import date, datetime, timedelta
 from operator import itemgetter
 from pathlib import Path
@@ -91,6 +92,10 @@ OVERLAP_DAYS = 3
 #: successive runs instead of timing out and persisting nothing.
 MAX_WINDOW_DAYS = 90
 
+#: Parquet KV_METADATA key retaining the checked-through window upper bound per
+#: Congress, so quiet prior Congresses advance past ``watermark + MAX_WINDOW_DAYS``.
+CHECKED_THROUGH_KEY = "spicy_regs.amendments.checked_through.v1"
+
 
 def _prior_watermarks(prior_file: Path) -> dict[str, date]:
     """Largest ``update_date`` per Congress in the prior table, in one scan; empty when absent."""
@@ -107,6 +112,51 @@ def _prior_watermarks(prior_file: Path) -> dict[str, date]:
         except ValueError:
             continue
     return marks
+
+
+def _prior_checked_through(prior_file: Path) -> dict[str, date]:
+    """Per-Congress checked-through upper-bound dates from ``prior_file`` metadata."""
+    if not prior_file.exists():
+        return {}
+    import pyarrow.parquet as pq
+
+    raw = (pq.read_metadata(prior_file).metadata or {}).get(CHECKED_THROUGH_KEY.encode())
+    if raw is None:
+        return {}
+    try:
+        loaded = json.loads(raw, parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
+    except (ValueError, UnicodeDecodeError):
+        logger.warning("Amendments: invalid {} metadata in {}; ignoring", CHECKED_THROUGH_KEY, prior_file.name)
+        return {}
+    if not isinstance(loaded, dict):
+        logger.warning("Amendments: unexpected {} metadata shape in {}; ignoring", CHECKED_THROUGH_KEY, prior_file.name)
+        return {}
+    checked: dict[str, date] = {}
+    for congress, stamp in loaded.items():
+        try:
+            checked[str(int(str(congress)))] = date.fromisoformat(str(stamp)[:10])
+        except ValueError:
+            continue
+    return checked
+
+
+def _checked_through_metadata(prior_file: Path | None, checked_through: Mapping[str, date]) -> dict[str, str]:
+    """Encode ``checked_through`` for ``merge_contract_table``, preserving unrelated prior metadata."""
+    import pyarrow.parquet as pq
+
+    metadata = {} if prior_file is None or not prior_file.exists() else pq.read_metadata(prior_file).metadata or {}
+    result = {
+        key.decode(): value.decode()
+        for key, value in metadata.items()
+        if key not in {b"ARROW:schema", CHECKED_THROUGH_KEY.encode()}
+    }
+    result[CHECKED_THROUGH_KEY] = json.dumps(
+        {str(key): value.isoformat() for key, value in sorted(checked_through.items())},
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    return result
 
 
 def max_details_from_env(var: str = "AMENDMENTS_MAX_DETAILS") -> int | None:
@@ -256,17 +306,23 @@ def build_amendments(
     last_since: date | None = explicit_since
     last_until: date | None = explicit_until
 
+    today = date.today()
+    checked_through = _prior_checked_through(prior_file) if have_prior else {}
     watermarks = _prior_watermarks(prior_file) if explicit_since is None and have_prior else {}
+    updated_checked_through = dict(checked_through)
     for congress in congresses:
+        congress_key = str(int(congress))
         congress_since = explicit_since
         congress_until = explicit_until
         if congress_since is None and have_prior:
-            watermark = watermarks.get(str(int(congress)))
-            congress_since = (watermark - timedelta(days=OVERLAP_DAYS)) if watermark else None
+            watermark = watermarks.get(congress_key)
+            prior_checked = checked_through.get(congress_key)
+            anchor = max((d for d in (watermark, prior_checked) if d is not None), default=None)
+            congress_since = (anchor - timedelta(days=OVERLAP_DAYS)) if anchor else None
         if congress_since is not None:
             if congress_until is not None and congress_until < congress_since:
                 raise ValueError(f"AMENDMENTS_UNTIL {congress_until} precedes since {congress_since}")
-            congress_until = min(congress_until or date.today(), congress_since + timedelta(days=MAX_WINDOW_DAYS))
+            congress_until = min(congress_until or today, congress_since + timedelta(days=MAX_WINDOW_DAYS))
         last_since, last_until = congress_since, congress_until
         logger.info(
             "Amendments: Congress {} — fetching amendments updated {} through {}",
@@ -289,6 +345,10 @@ def build_amendments(
             for record in pooled.records:
                 item = dict(record)
                 listed_records[_amendment_key(item)] = item
+        if explicit_since is None:
+            window_end = congress_until or today
+            previous = updated_checked_through.get(congress_key)
+            updated_checked_through[congress_key] = window_end if previous is None else max(previous, window_end)
         logger.info(
             "Amendments: Congress {} — {:,} amendments in window, in {} walk(s)",
             congress,
@@ -324,4 +384,12 @@ def build_amendments(
     if evidence is not None:
         evidence.event("amendment-selection", since=None if last_since is None else last_since.isoformat(),
                        until=None if last_until is None else last_until.isoformat(), rows=len(rows))
-    return merge_contract_table(output_dir, "amendments", rows, prior_present=have_prior, download_prior=download_prior)
+    metadata = _checked_through_metadata(prior_file if have_prior else None, updated_checked_through)
+    return merge_contract_table(
+        output_dir,
+        "amendments",
+        rows,
+        prior_present=have_prior,
+        download_prior=download_prior,
+        parquet_metadata=metadata,
+    )

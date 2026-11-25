@@ -85,17 +85,69 @@ def test_each_answer_is_classified_and_recorded(working):
     assert dict(zip(outcomes["docket_id"], outcomes["http_status"], strict=True))["CFPB-2026-0008"] == 404
 
 
-def test_absent_and_invalid_ids_are_not_asked_again_until_the_retry_window_passes(working):
+def test_absent_invalid_and_alias_ids_are_not_asked_again_until_the_retry_window_passes(working):
     with pytest.raises(RuntimeError):
         docket_gaps.fill(working, _Reader(), now=lambda: NOW)
     reader = _Reader()
     with pytest.raises(RuntimeError):
         docket_gaps.fill(working, reader, now=lambda: NOW + timedelta(days=1))
-    assert reader.asked == ["BIS-2023-0005", "FAA-2026-9999", "GIPSA-2010-FGIS-0004-RULEMAKING", "GIPSA-2010-FGIS-0004"]
+    assert reader.asked == ["BIS-2023-0005", "FAA-2026-9999"]
     later = _Reader()
     with pytest.raises(RuntimeError):
         docket_gaps.fill(working, later, now=lambda: NOW + docket_gaps.RETRY_AFTER + timedelta(days=1))
     assert "CFPB-2026-0008" in later.asked and "GIPSA-2010-FGIS-0002-RULEMAKING" in later.asked
+    assert "GIPSA-2010-FGIS-0004-RULEMAKING" in later.asked
+
+
+def test_alias_with_canonical_id_already_in_dockets_is_suppressed_past_retry_window(working):
+    with pytest.raises(RuntimeError):
+        docket_gaps.fill(working, _Reader(), now=lambda: NOW)
+    dockets = docket_gaps.RECORD_TYPES["dockets"]
+    existing = pl.read_parquet(working / "dockets.parquet")
+    canonical = pl.DataFrame(
+        [{**dict.fromkeys(dockets.schema), "docket_id": "GIPSA-2010-FGIS-0004", "agency_code": "GIPSA"}],
+        schema=dockets.schema,
+    )
+    pl.concat([existing, canonical]).write_parquet(working / "dockets.parquet")
+
+    later = _Reader()
+    with pytest.raises(RuntimeError):
+        docket_gaps.fill(working, later, now=lambda: NOW + docket_gaps.RETRY_AFTER + timedelta(days=1))
+    assert "GIPSA-2010-FGIS-0004-RULEMAKING" not in later.asked
+    assert "GIPSA-2010-FGIS-0004" not in later.asked
+
+
+def test_docket_gaps_downloads_dockets_and_documents_via_managed_generations(tmp_path, monkeypatch):
+    downloaded: list[tuple[str, str]] = []
+
+    def fake_download(key, path):
+        downloaded.append(("managed", key))
+        if key == "dockets.parquet":
+            dockets = docket_gaps.RECORD_TYPES["dockets"]
+            pl.DataFrame([{**dict.fromkeys(dockets.schema), "docket_id": "EPA-1", "agency_code": "EPA"}],
+                         schema=dockets.schema).write_parquet(path)
+            return True
+        if key == "documents.parquet":
+            pl.DataFrame({"docket_id": ["EPA-1"]}).write_parquet(path)
+            return True
+        return False
+
+    def fake_working_copy(key, path):
+        downloaded.append(("working", key))
+        if key == "comments_index.parquet":
+            pl.DataFrame({"docket_id": ["EPA-1"]}).write_parquet(path)
+            return True
+        return False
+
+    monkeypatch.setattr(r2, "download", fake_download)
+    monkeypatch.setattr(r2, "download_working_copy", fake_working_copy)
+    counts = docket_gaps.fill(tmp_path, _Reader(), now=lambda: NOW)
+    assert counts["missing"] == 0
+    assert ("managed", "dockets.parquet") in downloaded
+    assert ("managed", "documents.parquet") in downloaded
+    assert ("working", "comments_index.parquet") in downloaded
+    assert ("working", "dockets.parquet") not in downloaded
+    assert ("working", "documents.parquet") not in downloaded
 
 
 def test_a_served_docket_becomes_a_row_through_the_etl_extraction():

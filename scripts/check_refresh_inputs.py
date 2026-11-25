@@ -2,9 +2,9 @@
 """Retain and verify the mutable base versions used by a regulatory refresh.
 
 Managed rollup generations retain their publication-index snapshot separately.
-This receipt covers the bare base objects and the managed dockets/documents
-families that dependents read in their place. The caller holds the catalog
-writer lock from capture through verification.
+This receipt covers the remaining bare base objects and the managed
+dockets/documents families that dependents read via ``publication.v2.json``.
+The caller holds the catalog writer lock from capture through verification.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import httpx
 from spicy_regs.public_url import resolve_r2_base_url
 from spicy_regs.sources import publication
 
-BASE_KEYS = ('dockets.parquet', 'documents.parquet', 'comments.parquet', 'comments_index.parquet', 'manifest.parquet')
+BASE_KEYS = ('comments.parquet', 'comments_index.parquet', 'manifest.parquet')
 BASE_FAMILIES = ('dockets', 'documents')
 REUSED_FAMILIES = (*BASE_FAMILIES, 'docket-attributes', 'document-attributes', 'comment-attributes', 'comments')
 

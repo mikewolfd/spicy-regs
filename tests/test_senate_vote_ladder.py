@@ -37,6 +37,9 @@ class Fetcher:
         return SimpleNamespace(resolved_url=url, status_code=200, content_type=self.content_type, body=self.body,
                                request_id="req-1")  # fmt: skip
 
+    def fetch_in_session(self, url, *, session_url, timeout_seconds, max_bytes):
+        return self.fetch(url, timeout_seconds=timeout_seconds, max_bytes=max_bytes)
+
 
 class Evidence:
     def __init__(self) -> None:
@@ -143,7 +146,7 @@ def test_every_rung_failing_is_a_refusal_naming_each_rung():
         source.list_senate_votes(119, 1)
     kinds = [(outcome.transport.value, outcome.kind) for outcome in refused.value.__dict__["rung_outcomes"]]
     assert kinds == [("direct", "publisher-refused"), ("zyte_http", "credential-error"),
-                     ("firecrawl_raw", "credential-error")]  # fmt: skip
+                     ("firecrawl_raw", "credential-error"), ("zyte_session", "credential-error")]  # fmt: skip
     assert not source.rungs
 
 
@@ -181,7 +184,38 @@ def test_a_proxy_that_fails_one_senate_file_is_not_asked_again_this_run():
     for _ in range(3):
         with pytest.raises(VoteRefusedError):
             source.acquire(SENATE_1)
-    assert (zyte.calls, firecrawl.calls) == (1, 1), "an exhausted ladder retires both proxies"
+    assert (zyte.calls, firecrawl.calls) == (2, 1), "an exhausted ladder retires both proxies"
+
+
+def test_the_session_rung_serves_when_http_and_firecrawl_fail_and_stays_active():
+    class SessionZyte:
+        def __init__(self, session_body: bytes) -> None:
+            self.http_calls = 0
+            self.session_calls = 0
+            self.session_body = session_body
+
+        def fetch(self, url, *, timeout_seconds, max_bytes, mode=None):
+            self.http_calls += 1
+            return SimpleNamespace(
+                resolved_url=url, status_code=200, content_type="text/html",
+                body=b"<!DOCTYPE html><html><body>Website Ban</body></html>", request_id="req-http",
+            )
+
+        def fetch_in_session(self, url, *, session_url, timeout_seconds, max_bytes):
+            assert session_url == "https://www.senate.gov/"
+            self.session_calls += 1
+            return SimpleNamespace(
+                resolved_url=url, status_code=200, content_type="text/xml",
+                body=self.session_body, request_id="req-session",
+            )
+
+    page = b"<!DOCTYPE html><html><body>Website Ban</body></html>"
+    zyte, firecrawl = SessionZyte(VOTE), Fetcher(page, "text/html")
+    source = acquirer(refusing, zyte, firecrawl)
+    for _ in range(2):
+        assert source.acquire(SENATE_1).capture.body == VOTE
+    assert (zyte.http_calls, zyte.session_calls, firecrawl.calls) == (2, 2, 1)
+    assert source.rungs == {"zyte_session": 2}
 
 
 def test_house_reads_never_reach_the_ladder():
@@ -253,7 +287,9 @@ def test_no_archive_capture_keeps_the_ladder_refusal():
     source = no_proxies(refusing)
     with pytest.raises(VoteRefusedError) as refused:
         source.acquire(SENATE_1)
-    assert [o.transport.value for o in refused.value.__dict__["rung_outcomes"]] == ["direct", "zyte_http", "firecrawl_raw"]
+    assert [o.transport.value for o in refused.value.__dict__["rung_outcomes"]] == [
+        "direct", "zyte_http", "firecrawl_raw", "zyte_session"
+    ]
 
 
 def test_an_unreachable_archive_is_the_file_s_refusal_not_a_crash(monkeypatch):
@@ -363,3 +399,42 @@ def test_a_menu_reads_its_own_capture_exactly():
     assert menu.menu.votes[0].vote_number == 659
     [cdx] = [url for url in archive.requests if "/cdx/" in url]
     assert "matchType" not in cdx and "vote_menu_119_1.xml" in cdx
+
+
+def test_stale_sitting_congress_wayback_menu_emits_explicit_warning():
+    from datetime import UTC, datetime
+
+    from loguru import logger
+
+    from spicy_regs.sources.senate_vote_ladder import SITTING_MENU_MAX_AGE_DAYS, ArchiveServe, senate_warnings
+
+    menu = "https://www.senate.gov/legislative/LIS/roll_call_lists/vote_menu_119_1.xml"
+    stale_days = SITTING_MENU_MAX_AGE_DAYS + 5
+    stale_capture = datetime(2026, 11, 1, 6, 0, tzinfo=UTC)
+    served = [ArchiveServe(menu, stale_capture, stale_days * 86400)]
+    warnings = senate_warnings(served, 0, sitting_congresses=(119,))
+    assert warnings == [
+        f"STALE sitting-Congress Senate vote menu {menu} read from an Internet Archive capture of "
+        f"2026-11-01 06:00 UTC, {stale_days} day(s) old (threshold {SITTING_MENU_MAX_AGE_DAYS} day(s))"
+    ]
+    # A prior Congress's menu at the same age is not sitting and keeps the plain notice.
+    prior_menu = "https://www.senate.gov/legislative/LIS/roll_call_lists/vote_menu_118_2.xml"
+    assert senate_warnings([ArchiveServe(prior_menu, stale_capture, stale_days * 86400)], 0, sitting_congresses=(119,)) == [
+        f"Senate vote menu {prior_menu} read from an Internet Archive capture of 2026-11-01 06:00 UTC, {stale_days} day(s) old"
+    ]
+
+    ts = "20261101060000"
+    archive = Archive({replay(ts, menu): (MENU, {"content-type": "text/xml"})}, [[ts, menu, digest(MENU)]])
+    source = LadderVoteAcquirer(
+        budget=BUDGET,
+        transport=httpx.MockTransport(archive),
+        clock=lambda: datetime(2026, 11, 13, 6, 0, tzinfo=UTC),
+    )
+    source._proxies = ProxyFetchers("ZYTE_TOKEN is not set", "FIRECRAWL_API_KEY is not set")
+    logged: list[str] = []
+    sink_id = logger.add(lambda message: logged.append(str(message)), level="WARNING")
+    try:
+        source.list_senate_votes(119, 1)
+    finally:
+        logger.remove(sink_id)
+    assert any("sitting-Congress Senate vote menu" in entry and "is stale" in entry for entry in logged)
