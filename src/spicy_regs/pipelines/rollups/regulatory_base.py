@@ -6,7 +6,6 @@ publication input. A table whose receipts are retired has nothing to rebind:
 the ETL's generation stands, and its family publishes nothing.
 """
 
-import hashlib
 from pathlib import Path
 from typing import ClassVar
 
@@ -15,7 +14,6 @@ import pyarrow.parquet as pq
 
 from spicy_regs.pipelines.rollups.base import RollupPipeline, Unchanged, make_rollup_app
 from spicy_regs.schemas.regulations import RECORD_TYPES
-from spicy_regs.sources import r2
 from spicy_regs.etl_receipts import select_receipts, rebind_receipt, RECEIPT_SCHEMA
 from spicy_regs.transforms.parquet_rows import write_rows
 from spicy_regs.transforms.regulations_receipts import policy, write_held_dataset
@@ -119,19 +117,47 @@ class DocumentsFamily(_BaseTableFamily):
     name: ClassVar[str] = "documents"
     output: ClassVar[str] = "documents.parquet"
 
-    def annotate(self, path: Path) -> tuple[dict, ...]:
-        from spicy_regs.pipelines.docket_reconcile import OUTCOMES, with_publisher_status
+    def build(self, output_dir: Path) -> Path:
+        import pyarrow.dataset as ds
 
-        outcomes = path.with_name(OUTCOMES)
-        available = r2.download_working_copy(OUTCOMES, outcomes)
-        with_publisher_status(path, outcomes if available else None)
-        if not available:
-            return ()
-        with outcomes.open("rb") as source:
-            digest = "sha256:" + hashlib.file_digest(source, "sha256").hexdigest()
-        r2.note_read(OUTCOMES, sha256=digest, byte_size=outcomes.stat().st_size)
-        return ({"source_id": "regulations-gov-reconciliation", "source_uri": None,
-                 "sha256": digest, "locator": None, "body_version": None},)
+        from spicy_regs.pipelines.docket_reconcile import OUTCOMES, RECONCILE_SOURCE_ID, fetch_outcomes
+        from spicy_regs.schemas.regulations import DOCUMENT_FAMILY_COLUMNS
+
+        selected = SelectedPriors(output_dir / ".selected")
+        selection = selected.select("documents")
+        if selection is None:
+            raise RuntimeError(f"{self.output}: no selected native generation to publish")
+        if selection.receipts is None:
+            raise ValueError("documents has retired receipts; the base regulatory family still reads them")
+        fetched = fetch_outcomes(output_dir / OUTCOMES)
+        if fetched is None:
+            if all(
+                col in pq.read_schema(subject).names
+                for subject in selection.subjects
+                for col in DOCUMENT_FAMILY_COLUMNS
+            ):
+                raise Unchanged("no docket_reconcile_outcomes.parquet to apply; the selected documents generation stands")
+        else:
+            table = ds.dataset(selection.receipts, format="parquet").to_table(
+                columns=["witnesses"],
+                filter=(ds.field("dataset") == "documents") & (ds.field("outcome") == "observed"),
+            )
+            if any(
+                witness.get("source_id") == RECONCILE_SOURCE_ID and witness.get("sha256") == fetched[1]
+                for row in table["witnesses"].to_pylist()
+                for witness in (row or ())
+            ):
+                raise Unchanged("documents already carries the current docket_reconcile_outcomes")
+        self._prefetched_outcomes = fetched
+        try:
+            return super().build(output_dir)
+        finally:
+            self._prefetched_outcomes = None
+
+    def annotate(self, path: Path) -> tuple[dict, ...]:
+        from spicy_regs.pipelines.docket_reconcile import annotate_documents
+
+        return annotate_documents(path, prefetched=getattr(self, "_prefetched_outcomes", None))
 
 
 class _AttributesFamily(_BaseTableFamily):

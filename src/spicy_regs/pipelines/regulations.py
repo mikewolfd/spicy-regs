@@ -768,13 +768,16 @@ class RegulationsPipeline(Pipeline):
             if (table := ATTRIBUTE_TABLES.get(name)) and self._merge_attributes(staging_dir, output_dir, table)
         ]
 
+        from spicy_regs.pipelines.docket_reconcile import annotate_documents
         from spicy_regs.pipelines.regulatory_publication import finish_attribute_dataset, finish_dataset
 
         root = self.output_dir or Path.cwd() / "output"
         for name in non_comment:
             source = output_dir / f"{name}.parquet"
             if source.exists():
-                finish_dataset(root, name, source, publish=not self.skip_upload, inputs=self._selected_inputs)
+                witnesses = annotate_documents(source, always_rewrite=False) if name == "documents" else ()
+                finish_dataset(root, name, source, publish=not self.skip_upload,
+                               inputs=self._selected_inputs, witnesses=witnesses)
         for table in self._merged_attributes:
             finish_attribute_dataset(root, table, output_dir / f"{table}.parquet",
                                      publish=not self.skip_upload, inputs=self._selected_inputs)

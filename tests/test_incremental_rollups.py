@@ -574,3 +574,65 @@ def test_amendments_per_congress_watermark_and_bounded_max_details_drain_across_
     assert rows3["118-samdt-30"]["sponsor_bioguide_id"] == "S30"
     assert rows3["118-samdt-20"]["sponsor_bioguide_id"] == "S20"
     assert rows3["118-samdt-20"]["amended_bill_id"] == "118-s-1"
+
+
+def test_amendments_quiet_prior_congress_advances_past_90_day_window(tmp_path, monkeypatch):
+    """A quiet prior Congress advances its checked-through watermark across runs up to today instead of looping."""
+    import shutil
+    from datetime import timedelta
+
+    from spicy_regs.transforms import build_amendments as ba
+
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "118")
+    monkeypatch.delenv("AMENDMENTS_SINCE", raising=False)
+    monkeypatch.delenv("AMENDMENTS_UNTIL", raising=False)
+    fake_today = date(2025, 8, 1)
+    monkeypatch.setattr(
+        ba,
+        "date",
+        type("FakeDate", (date,), {"today": classmethod(lambda cls: fake_today)}),
+    )
+
+    seed(
+        tmp_path,
+        "amendments",
+        [
+            {
+                "amendment_id": "118-samdt-1",
+                "congress": "118",
+                "amendment_type": "samdt",
+                "amendment_number": "1",
+                "update_date": "2024-12-20T00:00:00Z",
+                "sponsor_bioguide_id": "S1",
+                "amended_bill_id": "118-hr-1",
+            }
+        ],
+    )
+
+    windows: list[tuple[str, str]] = []
+    for run in range(4):
+        reader = StubListingReader()
+        out = ba.build_amendments(tmp_path, reader=reader, download_prior=no_download)
+        assert len(reader.urls) == 1
+        url = reader.urls[0]
+        from_part = next(p.split("=", 1)[1] for p in url.split("&") if p.startswith("fromDateTime="))[:10]
+        to_part = next(p.split("=", 1)[1] for p in url.split("&") if p.startswith("toDateTime="))[:10]
+        windows.append((from_part, to_part))
+        # Carry this run's output as the next run's prior (including its KV_METADATA).
+        shutil.copyfile(out, tmp_path / "_amendments_prior.parquet")
+
+    # Run 0: watermark 2024-12-20 - 3d = 2024-12-17 .. +90d = 2025-03-17
+    # Run 1: checked_through 2025-03-17 - 3d = 2025-03-14 .. +90d = 2025-06-12
+    # Run 2: checked_through 2025-06-12 - 3d = 2025-06-09 .. min(2025-08-01, +90d) = 2025-08-01
+    # Run 3: steady-state 2025-08-01 - 3d = 2025-07-29 .. 2025-08-01
+    expected_w0_end = date(2024, 12, 17) + timedelta(days=ba.MAX_WINDOW_DAYS)
+    expected_w1_start = expected_w0_end - timedelta(days=ba.OVERLAP_DAYS)
+    expected_w1_end = expected_w1_start + timedelta(days=ba.MAX_WINDOW_DAYS)
+    expected_w2_start = expected_w1_end - timedelta(days=ba.OVERLAP_DAYS)
+    expected_w3_start = fake_today - timedelta(days=ba.OVERLAP_DAYS)
+    assert windows == [
+        ("2024-12-17", expected_w0_end.isoformat()),
+        (expected_w1_start.isoformat(), expected_w1_end.isoformat()),
+        (expected_w2_start.isoformat(), fake_today.isoformat()),
+        (expected_w3_start.isoformat(), fake_today.isoformat()),
+    ]

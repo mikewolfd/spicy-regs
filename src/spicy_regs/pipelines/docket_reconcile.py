@@ -39,6 +39,7 @@ from spicy_regs.schemas.regulations import DOCUMENT_FAMILY_COLUMNS
 from spicy_regs.sources import r2
 
 OUTCOMES = "docket_reconcile_outcomes.parquet"
+RECONCILE_SOURCE_ID = "regulations-gov-reconciliation"
 OUTCOME_SCHEMA = {"document_id": pl.Utf8, "docket_id": pl.Utf8, "publisher_status": pl.Utf8,
                   "observed_at": pl.Utf8, "removed_observed_at": pl.Utf8, "http_status": pl.Int64,
                   "body_sha256": pl.Utf8}
@@ -166,8 +167,8 @@ def reconcile(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     documents = output_dir / "documents.parquet"
-    if not documents.exists() and not r2.download_working_copy(documents.name, documents):
-        raise RuntimeError("docket reconcile: working copy documents.parquet is missing")
+    if not documents.exists() and not r2.download(documents.name, documents):
+        raise RuntimeError("docket reconcile: documents.parquet is missing")
     outcome_file, prior = load_outcomes(output_dir, OUTCOMES, OUTCOME_SCHEMA)
     started = now()
     held = active_dockets(documents, (started - timedelta(days=window_days)).date(), dockets)
@@ -240,6 +241,37 @@ def with_publisher_status(documents: Path, outcomes: Path | None) -> None:
                     group = group.append_column(column, values)
             writer.write_table(group, row_group_size=max(group.num_rows, 1))
     staged.replace(documents)
+
+
+def fetch_outcomes(destination: Path) -> tuple[Path, str] | None:
+    """Download ``docket_reconcile_outcomes.parquet`` if published and return ``(path, sha256_digest)``."""
+    if not r2.download_working_copy(OUTCOMES, destination):
+        return None
+    with destination.open("rb") as source:
+        digest = "sha256:" + hashlib.file_digest(source, "sha256").hexdigest()
+    r2.note_read(OUTCOMES, sha256=digest, byte_size=destination.stat().st_size)
+    return destination, digest
+
+
+def annotate_documents(
+    documents: Path,
+    *,
+    outcomes: Path | None = None,
+    prefetched: tuple[Path, str] | None = None,
+    always_rewrite: bool = True,
+) -> tuple[dict[str, Any], ...]:
+    """Join ``docket_reconcile_outcomes.parquet`` onto ``documents`` and return its source witness."""
+    import pyarrow.parquet as pq
+
+    fetched = prefetched if prefetched is not None else fetch_outcomes(outcomes or documents.with_name(OUTCOMES))
+    if fetched is None:
+        if always_rewrite or not set(DOCUMENT_FAMILY_COLUMNS) <= set(pq.read_schema(documents).names):
+            with_publisher_status(documents, None)
+        return ()
+    outcomes_path, digest = fetched
+    with_publisher_status(documents, outcomes_path)
+    return ({"source_id": RECONCILE_SOURCE_ID, "source_uri": None,
+             "sha256": digest, "locator": None, "body_version": None},)
 
 
 app = App(name="reconcile-dockets", help="Flag held documents Regulations.gov no longer serves.")
