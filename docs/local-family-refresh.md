@@ -347,14 +347,22 @@ These are the 2026-10 generations the first refreshes replace.
 ## Hosted refresh
 
 Each family also has a hosted workflow, `rollup-<family>.yml`, that runs
-`run-rollup-<family>` through the shared `_rollup.yml`. They are dispatch-only
-until one hosted run with `skip_upload` (the default when dispatched) has
-passed for each; a schedule starts running the day it reaches main.
+`run-rollup-<family>` through the shared `_rollup.yml`. Unrehearsed families
+(`house-disbursements`) remain dispatch-only until one hosted run with
+`skip_upload` (the default when dispatched) has passed; a schedule starts
+running the day it reaches main.
 `treasury-fiscal` passed its rehearsal on 2026-11-10 (it built and admitted the
 generation with the newly listed debt day) and has run daily at 22:43 UTC since.
 `fec-financial-profiles` passed its rehearsal on 2026-11-11 (run 42933717394
 built and admitted 19,260 profiles) and the real run after it published at
 00:47:29Z; it runs daily at 11:51 UTC, after FEC rewrites the summaries.
+`grants-opportunities` (run 45653300809, built and admitted generation
+`e50b3d4d05f2c199553b172693aa75a8789d7b03ead195d9499dc1deedd415cf`),
+`ofac-sanctions` (run 45653307413, built and admitted generation
+`84c7ac84eade0b92b5de957fe2a4dd488978e70dcbc124d8db1f5fb3d10d336f`), and
+`administration-policy` (run 45653315161, verified unchanged at `502eb0541d0c`)
+passed their `skip_upload=true` rehearsals on 2026-11-25 and run daily at
+11:47 UTC, 22:17 UTC, and 23:13 UTC respectively.
 
 A hosted runner has no shared raw archive. Each run downloads through its
 generation's source evidence, and publication uploads every evidence blob to
@@ -376,21 +384,12 @@ The Treasury run needs the three-table generation, so it can start only after
 the first hand refresh above. It adds debt days only: a new monthly statement
 still needs its reviewed estimate entries and a hand refresh.
 
-Schedules to add once the rehearsals pass, each beside `workflow_dispatch`:
+Schedule to add once the `house-disbursements` rehearsal passes, beside `workflow_dispatch`:
 
 ```yaml
-# rollup-grants-opportunities.yml: two hours after the 2026-11-09 export was written (09:41 UTC)
-  schedule:
-    - cron: '47 11 * * *'
-# rollup-ofac-sanctions.yml
-  schedule:
-    - cron: '17 22 * * *'
 # rollup-house-disbursements.yml: weekly; a quarter posts about two months after it ends
   schedule:
     - cron: '29 13 * * 1'
-# rollup-administration-policy.yml
-  schedule:
-    - cron: '13 23 * * *'
 ```
 
 ## hospital-cost-reports
