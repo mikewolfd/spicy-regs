@@ -271,3 +271,20 @@ def test_the_seeded_prior_is_read_through_download_prior_when_absent_locally(tmp
     rows = pq.read_table(path).to_pylist()
     assert asked == ["congress_bills.parquet", "press_releases.parquet"]
     assert sum(1 for row in rows if row["bill_id"]) == 4
+
+
+def test_rollup_retains_source_evidence_and_passes_it_to_builder(tmp_path, monkeypatch):
+    from spicy_regs.pipelines.rollups.press_releases import PressReleasesRollup
+
+    assert PressReleasesRollup.retain_source_evidence is True
+    seen = {}
+
+    def stub_build(output_dir: Path, **kwargs):
+        seen.update(kwargs)
+        return build_press_releases(output_dir, acquirer=StubAcquirer(), **kwargs)
+
+    monkeypatch.setattr("spicy_regs.pipelines.rollups.press_releases.build_press_releases", stub_build)
+    pipeline = PressReleasesRollup(output_dir=tmp_path, skip_upload=True)
+    pipeline.run()
+    assert seen["evidence"] is pipeline.source_evidence and pipeline.source_evidence is not None
+    assert list((tmp_path / "generations").iterdir())

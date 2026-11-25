@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -226,6 +228,12 @@ def export_file(published: BulkObject, work_dir: Path, evidence: CaptureEvidence
 #: A staged raw-archive write untouched this long has no live writer: a download rewrites its file continuously.
 STALE_PENDING_SECONDS = 6 * 3600
 _BZIP2 = b"BZh"
+EXPORT_USER_AGENT = "spicy-regs/1.0"
+_EXPORT_RETRY_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
+_MAX_EXPORT_RETRIES = 5
+_MAX_EXPORT_RESUMES = 64
+_RETRY_BACKOFF_SECONDS = 0.5
+_CONTENT_RANGE = re.compile(r"^bytes (\d+)-(\d+)/(\d+|\*)$")
 
 
 def clear_stale_export_downloads(raw_root: Path, *, now: float | None = None) -> list[Path]:
@@ -256,29 +264,195 @@ def clear_stale_export_downloads(raw_root: Path, *, now: float | None = None) ->
     return removed
 
 
+def _find_retained_export(store, published: BulkObject) -> tuple[Path, str] | None:
+    """Return an existing verified archive original matching ``published`` by URL, size, and ETag, if any."""
+    from spicy_docs.storage.raw_archive import iter_acquisition_receipts
+
+    from spicy_regs.pipelines.raw_releases import raw_original
+
+    for _path, document in iter_acquisition_receipts(store.root, verify_objects=False):
+        receipt = document.get("receipt") or {}
+        if receipt.get("stage") != EXPORT_STAGE or receipt.get("byte_size") != published.size:
+            continue
+        if published.url not in (
+            receipt.get("requested_url"),
+            receipt.get("source_url"),
+            receipt.get("original_location"),
+        ):
+            continue
+        etag_matches = receipt.get("etag") == published.etag or any(
+            isinstance(pair, (list, tuple))
+            and len(pair) == 2
+            and str(pair[0]).lower() == "etag"
+            and pair[1] == published.etag
+            for pair in (receipt.get("response_headers") or ())
+        )
+        sha256 = receipt.get("sha256")
+        if not etag_matches or not isinstance(sha256, str):
+            continue
+        try:
+            return raw_original(store, sha256, published.size), sha256
+        except (FileNotFoundError, ValueError):
+            continue
+    return None
+
+
+def _check_content_range(header: str | None, *, offset: int, total_size: int, filename: str) -> None:
+    if not header:
+        return
+    match = _CONTENT_RANGE.fullmatch(header.strip())
+    if match is None:
+        raise RuntimeError(f"CourtListener bulk: {filename} returned invalid Content-Range {header!r}")
+    start, end, total = match.groups()
+    if int(start) != offset or int(end) < int(start):
+        raise RuntimeError(f"CourtListener bulk: {filename} resumed at offset {start}, expected {offset}")
+    if total != "*" and int(total) != total_size:
+        raise RuntimeError(f"CourtListener bulk: {filename} Content-Range total {total}, expected {total_size}")
+
+
 def _retain_export(published: BulkObject, evidence: CaptureEvidence, *, transport=None) -> tuple[Path, str]:
-    """Stream one export into the raw archive (one write, with its capture receipt); return the archive copy."""
+    """Stream one export into the raw archive with Range + If-Match resume, or reuse a matching archive original."""
     import httpx
 
     from spicy_regs.pipelines.raw_releases import raw_original
 
+    url = _bucket_url(published.url)
+    existing = _find_retained_export(evidence.store, published)
+    if existing is not None:
+        existing_path, sha256 = existing
+        logger.info("CourtListener bulk: reusing retained archive original for {} ({})", published.filename, sha256)
+        evidence.retain_file(
+            existing_path,
+            stage=EXPORT_STAGE,
+            raw_source=True,
+            source_url=url,
+            original_location=url,
+            etag=published.etag,
+        )
+        return existing_path, sha256
+
     clear_stale_export_downloads(evidence.store.root)
-    check_headroom(published.size, path=evidence.store.root)
-    retained = evidence.transport(transport, stage=EXPORT_STAGE, max_bytes=published.size,
-                                  response_header_names=("etag",))
-    with httpx.Client(transport=retained, timeout=120, follow_redirects=False) as client:
-        with client.stream("GET", _bucket_url(published.url), headers={"Accept-Encoding": "identity"}) as response:
-            response.raise_for_status()
-            if response.headers.get("etag") != published.etag:
-                raise RuntimeError(f"CourtListener bulk: {published.filename} is ETag "
-                                   f"{response.headers.get('etag')}, not the listed {published.etag}")
-            for _ in response.iter_raw():  # the transport has retained every byte before it replays them
-                pass
-            capture = response.extensions["spicy_docs.completed_capture"]
-    if capture.byte_size != published.size:
-        raise RuntimeError(f"CourtListener bulk: {published.filename} is {capture.byte_size} bytes, "
-                           f"not the listed {published.size}")
-    return raw_original(evidence.store, capture.sha256, published.size), capture.sha256
+    pending_dir = evidence.store.root / ".pending"
+    pending_dir.mkdir(parents=True, exist_ok=True)
+    resume_key = hashlib.sha256(f"{url}\0{published.etag}".encode()).hexdigest()[:24]
+    partial = pending_dir / f"export-{resume_key}.partial"
+    offset = partial.stat().st_size if partial.exists() else 0
+    if offset > published.size:
+        partial.unlink(missing_ok=True)
+        offset = 0
+    check_headroom(published.size - offset, path=evidence.store.root)
+
+    attempts = 0
+    resumes = 0
+    consecutive_failures = 0
+    observed_at: str | None = None
+    content_type: str | None = None
+    last_status = 200
+
+    with httpx.Client(transport=transport, timeout=120, follow_redirects=False) as client:
+        while attempts == 0 or offset < published.size:
+            attempts += 1
+            offset_before = offset
+            headers = {
+                "User-Agent": EXPORT_USER_AGENT,
+                "Accept-Encoding": "identity",
+            }
+            if offset > 0:
+                headers["Range"] = f"bytes={offset}-"
+                headers["If-Match"] = published.etag
+            try:
+                with client.stream("GET", url, headers=headers) as response:
+                    if response.status_code == 412:
+                        partial.unlink(missing_ok=True)
+                        raise RuntimeError(
+                            f"CourtListener bulk: {published.filename} ETag changed during resume "
+                            f"(expected {published.etag})"
+                        )
+                    if response.status_code in _EXPORT_RETRY_STATUSES:
+                        raise httpx.TransportError(f"Transient HTTP {response.status_code} for {published.filename}")
+                    response.raise_for_status()
+                    etag = response.headers.get("etag")
+                    if etag != published.etag:
+                        raise RuntimeError(
+                            f"CourtListener bulk: {published.filename} is ETag {etag}, not the listed {published.etag}"
+                        )
+                    if offset > 0 and response.status_code == 206:
+                        _check_content_range(
+                            response.headers.get("content-range"),
+                            offset=offset,
+                            total_size=published.size,
+                            filename=published.filename,
+                        )
+                        mode = "ab"
+                    else:
+                        offset = 0
+                        mode = "wb"
+                    observed_at = datetime.now(UTC).isoformat()
+                    content_type = response.headers.get("content-type")
+                    last_status = response.status_code
+                    with partial.open(mode) as handle:
+                        chunks = (
+                            response.iter_bytes()
+                            if response.is_stream_consumed
+                            else response.iter_raw()
+                        )
+                        for chunk in chunks:
+                            if offset + len(chunk) > published.size:
+                                partial.unlink(missing_ok=True)
+                                raise RuntimeError(
+                                    f"CourtListener bulk: {published.filename} exceeds listed {published.size} bytes"
+                                )
+                            handle.write(chunk)
+                            offset += len(chunk)
+                        handle.flush()
+            except (httpx.TransportError, httpx.StreamError, OSError):
+                if offset > offset_before:
+                    resumes += 1
+                    consecutive_failures = 0
+                    if resumes > _MAX_EXPORT_RESUMES:
+                        raise
+                    continue
+                consecutive_failures += 1
+                if consecutive_failures > _MAX_EXPORT_RETRIES:
+                    raise
+                time.sleep(min(_RETRY_BACKOFF_SECONDS * (2 ** (consecutive_failures - 1)), 30.0))
+                continue
+
+            if offset < published.size:
+                if offset > offset_before:
+                    resumes += 1
+                    consecutive_failures = 0
+                    if resumes <= _MAX_EXPORT_RESUMES:
+                        continue
+                else:
+                    consecutive_failures += 1
+                    if consecutive_failures <= _MAX_EXPORT_RETRIES:
+                        time.sleep(min(_RETRY_BACKOFF_SECONDS * (2 ** (consecutive_failures - 1)), 30.0))
+                        continue
+                raise RuntimeError(
+                    f"CourtListener bulk: {published.filename} is {offset} bytes, not the listed {published.size}"
+                )
+
+    with partial.open("rb") as stream:
+        sha256 = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
+        stream.seek(0)
+        evidence._retain_file(
+            stream,
+            sha256=sha256,
+            byte_size=published.size,
+            stage=EXPORT_STAGE,
+            requested_url=url,
+            resolved_url=url,
+            observed_at=observed_at or datetime.now(UTC).isoformat(),
+            status_code=last_status,
+            content_type=content_type,
+            content_encoding="identity",
+            method="GET",
+            request_body=None,
+            response_headers=[("etag", published.etag)],
+        )
+    partial.unlink(missing_ok=True)
+    return raw_original(evidence.store, sha256, published.size), sha256
 
 
 def _file_sha256(path: Path) -> str:

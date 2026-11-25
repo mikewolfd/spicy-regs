@@ -12,11 +12,63 @@ on:
         required: false
         default: true
         type: boolean
+      mts_issue_date:
+        description: 'Optional reviewed MTS issue date (YYYY-MM-DD) to capture alongside Debt to the Penny'
+        required: false
+        default: ''
+        type: string
 jobs:
   run:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.mts_issue_date == '' }}
     uses: ./.github/workflows/_rollup.yml
     secrets: inherit
     with:
       command: run-rollup-treasury-fiscal
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
       timeout_minutes: 20
+
+  run_mts_issue:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mts_issue_date != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Run Treasury fiscal rollup with MTS issue date
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          SPICY_REGS_DISK_FLOOR_GIB: '4'
+          TREASURY_MTS_ISSUE_DATE: ${{ inputs.mts_issue_date }}
+          SKIP_UPLOAD: ${{ inputs.skip_upload }}
+        run: |
+          if [ "$SKIP_UPLOAD" = "true" ]; then
+            UPLOAD_ARG="--skip-upload"
+          else
+            UPLOAD_ARG="--no-skip-upload"
+          fi
+          export SPICYGOV_RAW_ROOT="$GITHUB_WORKSPACE/output/raw-source-originals"
+          uv run --frozen run-rollup-treasury-fiscal "$UPLOAD_ARG"
+      - name: Retain source evidence and outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollup-audit-run-rollup-treasury-fiscal-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            output/source-evidence/
+            output/raw-source-originals/
+          if-no-files-found: ignore
+          retention-days: 30

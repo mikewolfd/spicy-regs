@@ -381,3 +381,70 @@ def test_house_quarters_are_held_by_the_quarter_end_in_their_rows():
     rows = [("house_disbursements", "quarter end", "2026-06-30 00:00:00", 10)]
     assert evaluate_date_rows(rows, date(2026, 12, 14)) == []
     assert evaluate_date_rows(rows, date(2026, 12, 15)), "July-September not published by mid-December is stale"
+
+
+def test_rulemaking_snapshot_pointer_freshness_and_lag_checks(tmp_path, monkeypatch, capsys):
+    assert freshness.evaluate_rulemaking_freshness(None, date(2026, 11, 10)) == [
+        f"rulemaking snapshot ({publication.SNAPSHOT_POINTER}): no published snapshot"
+    ]
+    assert freshness.evaluate_rulemaking_freshness({"snapshot_id": "s1", "manifest": {}}, date(2026, 11, 10)) == [
+        f"rulemaking snapshot ({publication.SNAPSHOT_POINTER}): no parseable asserted_at"
+    ]
+    fresh = {"snapshot_id": "s1", "manifest": {"asserted_at": "2026-11-06T12:00:00Z"}}
+    assert freshness.evaluate_rulemaking_freshness(fresh, date(2026, 11, 10)) == []
+    stale = freshness.evaluate_rulemaking_freshness(fresh, date(2026, 11, 11))
+    assert stale == [f"rulemaking snapshot ({publication.SNAPSHOT_POINTER}) is 5d old (budget 4d)"]
+
+    # End-to-end local SNAPSHOT_POINTER check through read_rulemaking_snapshot.
+    snapshot_id = "snapshot_1"
+    prefix = f"materialized/rulemaking/snapshots/{snapshot_id}"
+    (tmp_path / "materialized/rulemaking").mkdir(parents=True)
+    (tmp_path / prefix).mkdir(parents=True)
+    (tmp_path / publication.SNAPSHOT_POINTER).write_text(
+        json.dumps(
+            {
+                "dataset": "rulemaking",
+                "format_version": 2,
+                "snapshot_id": snapshot_id,
+                "manifest_key": f"{prefix}/manifest.json",
+            }
+        )
+    )
+    (tmp_path / f"{prefix}/manifest.json").write_text(
+        json.dumps(
+            {
+                "dataset": "rulemaking",
+                "format_version": 2,
+                "snapshot_id": snapshot_id,
+                "run_id": "run-1",
+                "asserted_at": "2026-11-01T00:00:00Z",
+                "artifacts": {
+                    "proceedings.parquet": {
+                        "remote_key": f"{prefix}/proceedings.parquet",
+                        "sha256": "a" * 64,
+                        "bytes": 1,
+                        "rows": 2,
+                        "visibility": "public",
+                    },
+                    "etl_receipts.parquet": {
+                        "remote_key": f"{prefix}/etl_receipts.parquet",
+                        "sha256": "b" * 64,
+                        "bytes": 1,
+                        "rows": 2,
+                        "visibility": "internal",
+                    },
+                },
+                "etlReceipts": {
+                    "key": "etl_receipts.parquet",
+                    "generationId": "run-1",
+                    "policies": [{"dataset": "proceedings"}],
+                },
+            }
+        )
+    )
+    loaded = freshness.read_rulemaking_snapshot(str(tmp_path))
+    assert loaded is not None and loaded["snapshot_id"] == snapshot_id
+    assert freshness.evaluate_rulemaking_freshness(loaded, date(2026, 11, 10)) == [
+        f"rulemaking snapshot ({publication.SNAPSHOT_POINTER}) is 9d old (budget 4d)"
+    ]
+    capsys.readouterr()

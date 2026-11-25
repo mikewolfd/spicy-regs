@@ -144,6 +144,71 @@ def test_a_download_with_evidence_goes_once_into_the_raw_archive_and_is_read_the
     with pytest.raises(RuntimeError, match="not the listed"):
         module.export_file(stale, tmp_path / "work", evidence, transport=httpx.MockTransport(serve))
 
+    # Same URL, size, and ETag reuses the central-raw archive original without an HTTP request.
+    reused_evidence = CaptureEvidence(tmp_path / "work-reused", "court-citations", archive_root=tmp_path / "raw")
+    reused_path, reused_digest = module.export_file(
+        listed,
+        tmp_path / "work-reused",
+        reused_evidence,
+        transport=httpx.MockTransport(lambda req: pytest.fail(f"unexpected HTTP request: {req.url}")),
+    )
+    assert reused_path == path and reused_digest == digest
+
+
+def test_resumable_export_download_sends_range_if_match_and_user_agent(tmp_path, monkeypatch):
+    import httpx
+    from spicy_docs.sources.courtlistener.listing import BulkObject
+
+    from spicy_regs.source_evidence import CaptureEvidence
+    from spicy_regs.transforms import build_court_bulk_tables as module
+
+    body = (FIXTURE / "exports/citation-map.csv.bz2").read_bytes()
+    split = len(body) // 2
+    listed = BulkObject("bulk-data/citation-map-2026-09-30.csv.bz2", len(body), '"etag-resume"', "2026-09-30T12:00:00Z")
+    seen_headers: list[dict[str, str]] = []
+
+    class DroppingStream(httpx.SyncByteStream):
+        def __init__(self, chunk: bytes):
+            self._chunk = chunk
+
+        def __iter__(self):
+            yield self._chunk
+            raise httpx.ReadError("connection dropped mid-stream")
+
+    def serve(request: httpx.Request) -> httpx.Response:
+        seen_headers.append({k.lower(): v for k, v in request.headers.items()})
+        attempt = len(seen_headers)
+        if attempt == 1:
+            return httpx.Response(
+                200,
+                headers={"etag": listed.etag, "content-length": str(len(body))},
+                stream=DroppingStream(body[:split]),
+            )
+        if attempt == 2:
+            return httpx.Response(503, headers={"etag": listed.etag})
+        assert request.headers["range"] == f"bytes={split}-"
+        assert request.headers["if-match"] == listed.etag
+        return httpx.Response(
+            206,
+            headers={
+                "etag": listed.etag,
+                "content-range": f"bytes {split}-{len(body) - 1}/{len(body)}",
+                "content-length": str(len(body) - split),
+            },
+            content=body[split:],
+        )
+
+    monkeypatch.delenv(module.RETAINED_DIR_ENV, raising=False)
+    monkeypatch.setenv("SPICY_REGS_DISK_FLOOR_GIB", "0")
+    monkeypatch.setattr(module, "_RETRY_BACKOFF_SECONDS", 0.0)
+    evidence = CaptureEvidence(tmp_path / "work", "court-citations", archive_root=tmp_path / "raw")
+    path, digest = module.export_file(listed, tmp_path / "work", evidence, transport=httpx.MockTransport(serve))
+    assert path.read_bytes() == body
+    assert digest == "sha256:" + hashlib.sha256(body).hexdigest()
+    assert len(seen_headers) == 3
+    assert all(h["user-agent"] == module.EXPORT_USER_AGENT for h in seen_headers)
+    assert not list((tmp_path / "raw" / ".pending").glob("export-*.partial"))
+
 
 @pytest.mark.parametrize("table,export,edition,version,copies", CASES, ids=lambda case: getattr(case, "dataset", None))
 def test_the_full_size_check_reads_the_same_copies_in_sql_and_sees_a_change(

@@ -38,7 +38,7 @@ from collections.abc import Callable, Iterator, Sequence
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import httpx
 from loguru import logger
@@ -58,6 +58,9 @@ from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.read_checkpoints import checkpoint_metadata, read_checkpoints
 from spicy_regs.transforms.table_merge import merge_contract_table, published_table
+
+if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
 
 NAME = "senate_expenditures"
 #: Bump when this adapter changes how it reads or interprets a page stream.
@@ -117,8 +120,6 @@ _REFUSALS = (
     httpx.HTTPError,
     ConnectionError,
     ValueError,
-    TypeError,
-    KeyError,
     OSError,
 )
 
@@ -134,7 +135,9 @@ class PackageDiscoverySource(Protocol):
 class GranuleBodySource(Protocol):
     """What this transform needs of a GovInfo body acquirer: one granule's PDF."""
 
-    def acquire_granule(self, package_id: str, granule_id: str, *, max_bytes: int | None = ...) -> Any: ...
+    def acquire_granule(
+        self, package_id: str, granule_id: str, *, prefer: Sequence[str] = ..., max_bytes: int | None = ...
+    ) -> Any: ...
 
 
 class PageSource(Protocol):
@@ -353,6 +356,8 @@ def build_senate_expenditures(
     extractor: PageSource | None = None,
     max_packages: int = MAX_PACKAGES_PER_RUN,
     download_prior: Callable[[str, Path], bool] = r2.download,
+    evidence: CaptureEvidence | None = None,
+    coverage: dict[str, Any] | None = None,
 ) -> Path:
     """Build ``senate_expenditures.parquet`` from the report's ruled tables."""
     if reader is None or acquirer is None:
@@ -361,8 +366,25 @@ def build_senate_expenditures(
             raise RuntimeError(
                 f"Senate expenditures need an api.data.gov key (set one of {', '.join(API_KEY_ENV_VARS)})"
             )
-        reader = reader or GovInfoDiscoveryReader(budget=DISCOVERY_BUDGET, api_key=api_key)
-        acquirer = acquirer or GovInfoBodyAcquirer(budget=BODY_BUDGET, api_key=api_key)
+        if evidence is not None:
+            evidence.credential = api_key
+        reader = reader or GovInfoDiscoveryReader(
+            budget=DISCOVERY_BUDGET,
+            api_key=api_key,
+            transport=None
+            if evidence is None
+            else evidence.transport(stage="senate-expenditures-discovery", max_bytes=DISCOVERY_BUDGET.max_page_bytes),
+        )
+        acquirer = acquirer or GovInfoBodyAcquirer(
+            budget=BODY_BUDGET,
+            api_key=api_key,
+            transport=None
+            if evidence is None
+            else evidence.transport(
+                stage="senate-expenditures-granule",
+                max_bytes=max(BODY_BUDGET.max_body_bytes, BODY_BUDGET.max_metadata_bytes),
+            ),
+        )
     extractor = extractor or _extractor()
 
     prior = published_table(output_dir, NAME, download_prior)
@@ -410,6 +432,8 @@ def build_senate_expenditures(
         except CredentialRefusedError:
             raise
         except _REFUSALS as error:
+            if evidence is not None:
+                evidence.refusal(error, stage="senate-expenditures-discovery")
             reason = type(error).__name__
             refusals[reason] += 1
             logger.warning("{}: granule list refused ({}): {}", package_id, reason, scrub_credential(str(error), ""))
@@ -457,7 +481,7 @@ def build_senate_expenditures(
         for granule_id, granule_modified in unheld:
             file_name = f"{granule_id}.pdf"
             try:
-                body = acquirer.acquire_granule(package_id, granule_id)
+                body = acquirer.acquire_granule(package_id, granule_id, prefer=("pdf",))
                 read_pages, page_count = _read_pages(body, extractor)
                 file_rows, found = _file_rows(
                     read_pages,
@@ -470,6 +494,8 @@ def build_senate_expenditures(
             except CredentialRefusedError:
                 raise
             except _REFUSALS as error:
+                if evidence is not None:
+                    evidence.refusal(error, stage="senate-expenditures-granule")
                 reason = type(error).__name__
                 refusals[reason] += 1
                 logger.warning(
@@ -532,6 +558,18 @@ def build_senate_expenditures(
         # row but none for the run's distribution, and an "unrecognised" count
         # above zero is the signal that the print changed shape.
         logger.info("Senate expenditures: rows by grid — {}", dict(grids))
+
+    status = {
+        "refused": sum(refusals.values()),
+        "refusals": dict(refusals),
+        "read_files": read_files,
+        "skipped": skipped,
+        "packages": packages,
+    }
+    if coverage is not None:
+        coverage.update(status)
+    if evidence is not None:
+        evidence.event("acquisition-coverage", **status)
 
     metadata = checkpoint_metadata(prior, NAME, (checkpoints[key] for key in sorted(checkpoints)))
     return merge_contract_table(

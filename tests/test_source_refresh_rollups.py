@@ -347,6 +347,72 @@ def test_treasury_adds_listed_debt_days_to_the_published_generation(tmp_path, mo
     assert generations(tmp_path / "unchanged") == []
 
 
+def test_treasury_publishes_new_reviewed_mts_edition_via_mts_issue_date(tmp_path, monkeypatch):
+    workflow = yaml.safe_load((WORKFLOWS / "rollup-treasury-fiscal.yml").read_text())
+    mts_input = workflow[True]["workflow_dispatch"]["inputs"]["mts_issue_date"]
+    assert mts_input["default"] == "" and mts_input["required"] is False
+
+    report_0331 = b"%PDF-1.7 statement 2026-03-31"
+    report_0930 = b"%PDF-1.7 statement 2026-09-30"
+
+    def serve(request):
+        if request.url.path.endswith("202603.pdf"):
+            return httpx.Response(200, content=report_0331, headers={"content-type": "application/pdf"})
+        if request.url.path.endswith("202609.pdf"):
+            return httpx.Response(200, content=report_0930, headers={"content-type": "application/pdf"})
+        if request.url.path.endswith("/publishedfiles"):
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "report_date": "2026-03-31",
+                        "report_group_id": "5",
+                        "path": "/static-data/published-reports/mts/MonthlyTreasuryStatement_202603.pdf",
+                    },
+                    {
+                        "report_date": "2026-09-30",
+                        "report_group_id": "5",
+                        "path": "/static-data/published-reports/mts/MonthlyTreasuryStatement_202609.pdf",
+                    },
+                ],
+            )
+        wanted = request.url.params["filter"]
+        if wanted.startswith("record_date:gt:"):
+            return httpx.Response(200, json={"data": [], "meta": {"total-count": 0}})
+        name = f"{request.url.path.rsplit('/', 1)[-1]}-{wanted.removeprefix('record_date:eq:')}.json"
+        return httpx.Response(200, content=(TREASURY / name).read_bytes(), headers={"content-type": "application/json"})
+
+    transport = httpx.MockTransport(serve)
+    selection = treasury_fiscal.acquire(
+        [
+            ("mts_table_1", datetime(2026, 3, 31).date()),
+            ("mts_table_2", datetime(2026, 3, 31).date()),
+            ("debt_to_penny", datetime(2026, 10, 16).date()),
+        ],
+        [datetime(2026, 3, 31).date()],
+        tmp_path / "acquire",
+        transport=transport,
+    )
+    treasury_fiscal.build_from_captures(selection, tmp_path / "march")
+
+    def held(self, directory):
+        shutil.copytree(tmp_path / "march" / "generation", directory)
+        return sorted(directory.glob("treasury_*.parquet"))
+
+    monkeypatch.setattr(rollups.TreasuryFiscalRollup, "published_tables", held)
+    monkeypatch.setattr(rollups.TreasuryFiscalRollup, "transport", transport)
+    monkeypatch.setenv("TREASURY_MTS_ISSUE_DATE", "2026-09-30")
+    rollups.TreasuryFiscalRollup(output_dir=tmp_path / "added").run()
+    generation, _events = published(tmp_path / "added")
+    periods = pq.read_table(generation / "treasury_statement_periods.parquet").to_pylist()
+    assert {row["report_date"].isoformat() for row in periods} == {"2026-03-31", "2026-09-30"}
+
+    # Already-published MTS date with no new debt dates exits cleanly as Unchanged.
+    monkeypatch.setenv("TREASURY_MTS_ISSUE_DATE", "2026-03-31")
+    rollups.TreasuryFiscalRollup(output_dir=tmp_path / "already").run()
+    assert generations(tmp_path / "already") == []
+
+
 def test_published_evidence_restores_the_originals_a_runner_lacks(tmp_path):
     from spicy_docs.storage.raw_archive import CentralRawArchiveStore
 

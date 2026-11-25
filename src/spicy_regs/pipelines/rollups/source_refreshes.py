@@ -124,15 +124,16 @@ class AdministrationPolicyRollup(SourceRefreshRollup):
 
 
 class TreasuryFiscalRollup(SourceRefreshRollup):
-    """Add each newly listed Debt to the Penny day to the published Treasury generation.
+    """Add each newly listed Debt to the Penny day (and optional reviewed MTS issue) to the Treasury generation.
 
     The published rows name every capture behind them, and published evidence holds those bytes, so a run
     needs no capture file from an earlier one. A new monthly statement needs its reviewed estimate entries
-    and is added by hand.
+    in ``treasury_units.json`` and is selected via ``TREASURY_MTS_ISSUE_DATE`` (workflow ``mts_issue_date``).
     """
 
     name = "treasury-fiscal"
     outputs = tuple(f"{table}.parquet" for table in build_treasury_fiscal.SCHEMAS)
+    mts_issue_date: str | None = None
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         evidence = self.evidence
@@ -141,10 +142,18 @@ class TreasuryFiscalRollup(SourceRefreshRollup):
                      if scope["selection"]["dataset"] == "debt_to_penny"]
         listed = treasury_fiscal.debt_dates_after(evidence, date.fromisoformat(max(debt_days)),
                                                   transport=self.transport)
-        if not listed:
+        mts_raw = (self.mts_issue_date or getenv("TREASURY_MTS_ISSUE_DATE") or "").strip()
+        mts_dates = [date.fromisoformat(mts_raw)] if mts_raw else []
+        published_reports = set(published["reports"])
+        new_mts_dates = [day for day in mts_dates if day.isoformat() not in published_reports]
+        if not listed and not new_mts_dates:
+            if mts_dates:
+                raise Unchanged(f"no debt date is listed after {max(debt_days)} and MTS {mts_raw} is already published")
             raise Unchanged(f"no debt date is listed after {max(debt_days)}")
-        added = treasury_fiscal.capture(evidence, [("debt_to_penny", day) for day in listed], [],
-                                        transport=self.transport)
+        selections = [("debt_to_penny", day) for day in listed]
+        for day in new_mts_dates:
+            selections.extend([("mts_table_1", day), ("mts_table_2", day)])
+        added = treasury_fiscal.capture(evidence, selections, new_mts_dates, transport=self.transport)
         held = [capture["response_sha256"] for scope in published["releases"] for capture in scope["captures"]]
         held += [report["sha256"] for report in published["reports"].values()]
         restore_originals(evidence.store, held, getenv("R2_PUBLIC_URL", r2.VERIFIED_PUBLIC_URL),
