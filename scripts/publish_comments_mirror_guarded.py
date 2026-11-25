@@ -136,6 +136,7 @@ def copy_diagnostics(args, receipt):
     from spicy_regs.sources import regulatory_catalog as native
 
     original = native._copy
+    original_pyiceberg = iceberg._copy_pinned_iceberg_snapshot
     target_sql = f"SELECT * FROM {iceberg._qualified(COMMENT)}"
     report: dict[str, Any] = {"source_commit": args.expected_source_sha, "admitted_subject": receipt["snapshot"],
               "expected_subject": diagnostic_subject(args), "skip_upload": True, "native_copy_calls": 0,
@@ -158,6 +159,7 @@ def copy_diagnostics(args, receipt):
             return original(con, sql, path, **kwargs)
         report["native_copy_calls"] += 1
         require(report["native_copy_calls"] == 1, "Unexpected repeated native COPY in diagnostic")
+        report["copy_backend"] = "duckdb"
         report["query"] = sql
         report["output"] = str(Path(path).resolve().relative_to(args.workdir.resolve()))
         report["resources"] = asdict(kwargs["resources"])
@@ -175,8 +177,36 @@ def copy_diagnostics(args, receipt):
         retain("native_copy_complete")
         return result
 
+    def observed_pyiceberg_copy(record_type, current, namespace, path, *, work_dir, resources):
+        if record_type is not COMMENT:
+            return original_pyiceberg(record_type, current, namespace, path, work_dir=work_dir, resources=resources)
+        report["native_copy_calls"] += 1
+        require(report["native_copy_calls"] == 1, "Unexpected repeated native COPY in diagnostic")
+        report["copy_backend"] = "pyiceberg"
+        report["query"] = target_sql
+        report["output"] = str(Path(path).resolve().relative_to(args.workdir.resolve()))
+        report["resources"] = asdict(resources)
+        report["parameters_present"] = False
+        retain("native_copy_snapshot")
+        report["copy_transaction_pair"] = asdict(current)
+        retain("native_copy_snapshot")
+        actual_subject = asdict(current.subject()) if isinstance(current, iceberg.CatalogPairSnapshot) else asdict(current)
+        require(actual_subject == report["expected_subject"] == report["admitted_subject"],
+                "Native COPY transaction subject differs from diagnostic admission")
+        retain("native_runtime_identity")
+        diag_con = iceberg._connect()
+        try:
+            report["runtime"] = runtime_identity(diag_con)
+        finally:
+            diag_con.close()
+        retain("native_copy")
+        result = original_pyiceberg(record_type, current, namespace, path, work_dir=work_dir, resources=resources)
+        retain("native_copy_complete")
+        return result
+
     retain("publisher_starting")
     setattr(native, "_copy", observed_copy)
+    setattr(iceberg, "_copy_pinned_iceberg_snapshot", observed_pyiceberg_copy)
     try:
         yield
         require(report["native_copy_calls"] == 1, "Diagnostic publisher did not execute its native COPY")
@@ -189,6 +219,7 @@ def copy_diagnostics(args, receipt):
         raise
     finally:
         native._copy = original
+        iceberg._copy_pinned_iceberg_snapshot = original_pyiceberg
 
 
 def worker(args):
