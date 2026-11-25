@@ -197,7 +197,7 @@ def test_refresh_fills_docket_gaps_before_the_families_and_publishes_them_even_i
     condition = jobs["base-families"]["if"].removeprefix("${{").removesuffix("}}")
     terms = [term.strip() for term in condition.split("&&")]
     values = {"!cancelled()": not cancelled, "!inputs.promote_v1": not promote_v1,
-              "!inputs.comments_only": not comments_only}
+              "!inputs.comments_only": not comments_only, "inputs.debugger_mode == 'off'": True}
     assert set(terms) == set(values)
     assert all(values[term] for term in terms) is expected
 

@@ -114,6 +114,21 @@ def diagnostic_subject(args):
     return None
 
 
+def qualified_debugger(args):
+    path = getattr(args, "debugger_qualification", None)
+    expected = getattr(args, "expected_gdb_sha256", "")
+    if path is None:
+        require(not expected, "Debugger pin requires a qualification receipt")
+        return None
+    require(diagnostic_subject(args) is not None, "Debugger requires exact no-upload diagnostic subject")
+    from scripts import comments_native_debugger as debugger
+    debugger.verified_module(runner, debugger.SUPERVISOR_PATH, "supervisor")
+    debugger.verified_module(owner, debugger.OWNER_PATH, "owner")
+    debugger.verified_module(sys.modules[__name__], debugger.PUBLISHER_PATH, "publisher")
+    invocation = os.getenv("GITHUB_RUN_ID", "") + "." + os.getenv("GITHUB_RUN_ATTEMPT", "")
+    return debugger.verified_qualification(path, args.expected_source_sha, expected, invocation)
+
+
 @contextmanager
 def copy_diagnostics(args, receipt):
     """Observe the unchanged copy on its actual connection; never replace its query or sink."""
@@ -128,6 +143,10 @@ def copy_diagnostics(args, receipt):
               "core_dump_limit_bytes": resource.getrlimit(resource.RLIMIT_CORE)[0],
               "debugger": {"status": "unavailable", "reason": "No credential-free hosted debugger qualification; not invoked"},
               "native_backtrace": False}
+    debugger = qualified_debugger(args)
+    if debugger is not None:
+        report["debugger"] = {"status": "qualified", "qualification": debugger["receipt"],
+                              "binary": debugger["binding"]["gdb"]}
 
     def retain(phase):
         report["phase"] = phase
@@ -195,10 +214,12 @@ def worker(args):
 
 def run(args):
     expected_snapshot = diagnostic_subject(args)
+    debugger = qualified_debugger(args)
     require(os.getenv(iceberg.CATALOG_LOCK_ENV) == "comments-catalog-write", "Hold the shared comments-catalog-write lock")
     args.workdir.mkdir(parents=True, exist_ok=True)
     require(not any((args.workdir / name).exists() for name in
-                    ("comments-admission.json", "comments.parquet", "comments", ".comments-generations")),
+                    ("comments-admission.json", "comments.parquet", "comments", ".comments-generations",
+                     "comments-publish-debugger-native")),
             "Use a fresh publication directory; preserve previous refusal evidence")
     start = time.monotonic()
     command = [sys.executable, "-B", str(Path(__file__).resolve()), "--expected-source-sha", args.expected_source_sha,
@@ -209,10 +230,18 @@ def run(args):
         command.append("--force")
     if expected_snapshot is not None:
         command.extend(["--diagnostic-native-snapshot", json.dumps(expected_snapshot, sort_keys=True)])
+    if debugger is not None:
+        command.extend(["--debugger-qualification", str(args.debugger_qualification),
+                        "--expected-gdb-sha256", args.expected_gdb_sha256])
 
     def watched(phase, limits):
+        child_command = [*command, "--phase", phase]
+        if phase == "publish" and debugger is not None:
+            from scripts.comments_native_debugger import launch_command
+            child_command = launch_command(args.workdir / "comments-publish-debugger-native", debugger["binding"],
+                                           child_command, credential_free=False)
         try:
-            runner.supervise(args, command=[*command, "--phase", phase], limits=limits)
+            runner.supervise(args, command=child_command, limits=limits)
         finally:
             for name in ("execution.json", "process-closure.json", "execution.log"):
                 path = args.workdir / name
@@ -221,7 +250,8 @@ def run(args):
 
     watched("admit", PRELIMITS)
     receipt = json.loads((args.workdir / "comments-admission.json").read_text())
-    limits = {**PRELIMITS, "wall_seconds": ACTIVE_SECONDS - (time.monotonic() - start),
+    qualification_seconds = debugger["elapsed_seconds"] if debugger is not None else 0
+    limits = {**PRELIMITS, "wall_seconds": ACTIVE_SECONDS - qualification_seconds - (time.monotonic() - start),
               "rss_bytes": receipt["tree_rss_cap_bytes"], "output_bytes": receipt["output_cap_bytes"]}
     watched("publish", limits)
 
@@ -234,6 +264,8 @@ def main():
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--diagnostic-native-snapshot", default="",
                         help="Exact UUID/snapshot/schema JSON for no-upload native COPY diagnostics")
+    parser.add_argument("--debugger-qualification", type=Path, help="Fresh hosted installed-GDB qualification receipt")
+    parser.add_argument("--expected-gdb-sha256", default="", help="Independently reviewed installed-GDB SHA-256")
     parser.add_argument("--phase", choices=("admit", "publish"), help=argparse.SUPPRESS)
     args = parser.parse_args()
     args.diagnostic_native_snapshot = json.loads(args.diagnostic_native_snapshot) if args.diagnostic_native_snapshot else None
