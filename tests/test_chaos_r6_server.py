@@ -29,6 +29,8 @@ VALID = {
     "query_sql": {"sql": "SELECT 1"},
     "lookup_agency": {"namespace": "regulations.gov:agency", "identifier": "OPM"},
     "resolve_document_citations": {"document_kind": "govinfo_package", "document_key": "CRPT-example"},
+    "resolve_usc_disposition": {"former_title": 42, "former_section": "3711"},
+    "resolve_act_citation": {"text": "section 107(a) of CERCLA"},
 }
 
 
