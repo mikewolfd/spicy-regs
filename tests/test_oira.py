@@ -289,17 +289,17 @@ def test_build_oira_meetings_decodes_cp1252_entities_and_retains_evidence(tmp_pa
     archive_root = tmp_path / "central-raw"
     out_dir = tmp_path / "out"
     evidence = CaptureEvidence(out_dir, "oira-meetings", archive_root=archive_root)
-    reader = OiraMeetingsReader(
-        fetch_bytes=_mock_fetcher(_all_urls()),
-        on_capture=lambda c: evidence.retain_bytes(
+    def _on_capture(c) -> None:
+        evidence.retain_bytes(
             c.raw_bytes,
             stage="oira-meetings-xml",
             raw_source=True,
             file_name=c.file_name,
             source_url=c.url,
             fetched_at=c.fetched_at,
-        ),
-    )
+        )
+
+    reader = OiraMeetingsReader(fetch_bytes=_mock_fetcher(_all_urls()), on_capture=_on_capture)
     parquet_path = build_oira_meetings(out_dir, reader=reader, evidence=evidence)
     evidence.finish()
 
