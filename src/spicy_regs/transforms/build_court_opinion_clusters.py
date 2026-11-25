@@ -36,7 +36,10 @@ from __future__ import annotations
 from collections.abc import Generator
 from contextlib import closing
 from datetime import date
+from functools import partial
 from pathlib import Path
+import shutil
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, cast
 from uuid import uuid4
 
@@ -44,6 +47,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs import court_bulk
 from spicy_regs.sources import r2
 from spicy_regs.transforms._courtlistener_writer import CourtListenerTableWriter
 from spicy_regs.sources.courtlistener import record_json
@@ -53,9 +57,9 @@ from spicy_regs.transforms.court_scope import (
     court_jurisdictions,
 )
 from spicy_regs.transforms.table_merge import merge_local_prior
-from spicy_regs.court_subjects import SUBJECT_SCHEMAS
+from spicy_regs.court_subjects import SUBJECT_SCHEMAS, normalize_court_row
 from spicy_regs.court_receipts import (
-    finish_court_output, file_witness, read_court_rows, prior_receipt_selection, restore_processing_input, admit_court_updates,
+    prior_receipt_selection, read_court_rows, restore_processing_input,
 )
 
 if TYPE_CHECKING:
@@ -117,7 +121,9 @@ INPUT_COLUMNS = (
     "raw_source_record",
 )
 _SCHEMA = pa.schema([(c, pa.list_(pa.string()) if c == 'attorneys' else pa.string()) for c in INPUT_COLUMNS])
-COLUMNS = tuple(SUBJECT_SCHEMAS['court_opinion_clusters'].names)
+_NATIVE_SCHEMA = SUBJECT_SCHEMAS['court_opinion_clusters']
+COLUMNS = tuple(_NATIVE_SCHEMA.names)
+_RETIRED_PRIOR_COLUMNS = frozenset({'cluster_id', 'date_created', 'ingest_source'})
 
 
 def _s(value: object) -> str | None:
@@ -247,6 +253,8 @@ def held_export(table: Path, *, receipt_path: Path | None = None,
     whose newest bulk row was created on or after a dump's date already holds it.
     One scan of two columns.
     """
+    if receipt_path is None and _RETIRED_PRIOR_COLUMNS <= set(pq.read_schema(table).names):
+        return _held_restored_export(table)
     high, created = None, None
     for row in read_court_rows(table, dataset='court_opinion_clusters', receipt_path=receipt_path,
                               generation_id=generation_id):
@@ -277,6 +285,30 @@ def _held_restored_export(table: Path) -> tuple[int | None, str | None]:
                 if identity and identity.isdecimal():
                     high = max(high or 0, int(identity))
     return high, created[:10] if created else None
+
+
+def _to_native_table(source: Path, destination: Path, work_dir: Path, *,
+                     exceptions: Path | None = None) -> tuple[int, int]:
+    """Convert a staged or restored clusters table into the typed native schema with no receipts."""
+    if exceptions is not None:
+        exceptions.unlink(missing_ok=True)
+        return court_bulk.write_table(
+            'court_opinion_clusters',
+            source,
+            destination,
+            constants={},
+            exceptions=exceptions,
+            attempt=partial(normalize_court_row, 'court_opinion_clusters'),
+        )
+    with TemporaryDirectory(prefix='.clusters-exc-', dir=work_dir) as tmp:
+        return court_bulk.write_table(
+            'court_opinion_clusters',
+            source,
+            destination,
+            constants={},
+            exceptions=Path(tmp) / 'exceptions.parquet',
+            attempt=partial(normalize_court_row, 'court_opinion_clusters'),
+        )
 
 
 def build_court_opinion_clusters(
@@ -319,31 +351,16 @@ def build_court_opinion_clusters(
         latest_dump_date,
         list_bulk_dumps,
     )
+    from spicy_regs.transforms.catch_up_court_opinion_clusters import held_selection
 
+    output_dir.mkdir(parents=True, exist_ok=True)
     out_file = output_dir / OUTPUT
-    prior_file = out_file if out_file.is_symlink() else output_dir / "_clusters_prior.parquet"
+    prior_file = out_file if out_file.exists() else output_dir / "_clusters_prior.parquet"
     new_file = output_dir / f".clusters-new-{uuid4().hex}.parquet"
 
-    # 1. Prior table (absence just means first build).
-    have_prior = include_prior and (prior_file.exists() or r2.download(OUTPUT, prior_file))
-    input_witnesses = [file_witness(prior_file)] if have_prior else []
-    receipt_path = None
-    if have_prior:
-        receipt_path, generation_id = prior_receipt_selection(prior_file, dataset='court_opinion_clusters')
-        if receipt_path is not None:
-            input_witnesses.append(file_witness(receipt_path))
-        prior_file = restore_processing_input(prior_file, output_dir / f'.clusters-prior-{uuid4().hex}.parquet',
-            dataset='court_opinion_clusters', schema=_SCHEMA, receipt_path=receipt_path,
-            generation_id=generation_id)
-        prior_export = _held_restored_export(prior_file)
-    logger.info(
-        "Opinion clusters: {}",
-        f"merging against prior table {prior_file}" if have_prior else "no prior table — full build",
-    )
-
-    # 2. Resolve which published dump to read.
-    held_high: int | None = None
-    holds_newest = False
+    # 1. Resolve which published dump to read before downloading or restoring any prior.
+    resolved: date | None
+    published = None
     if local_file is None:
         objects = list_bulk_dumps()
         resolved = dump_date or latest_dump_date(objects, DATASET)
@@ -352,21 +369,103 @@ def build_court_opinion_clusters(
         published = find_dump(objects, DATASET, resolved)
         if published is None:
             raise RuntimeError(f"CourtListener bulk: no {DATASET} dump for {resolved}")
-        held_high, held_day = prior_export if have_prior and dump_date is None else (None, None)
-        holds_newest = held_high is not None and held_day is not None and held_day >= resolved.isoformat()
-        if holds_newest:
-            logger.info("Opinion clusters: prior holds the {} export (to id {:,}); no dump is read", resolved, held_high)
-        else:
-            logger.info(
-                "Opinion clusters: reading dump {} ({:.3f} GiB compressed)",
-                published.filename,
-                published.size / 2**30,
-            )
     else:
         resolved = dump_date
+
+    # 2. Check the journal's held export before downloading or restoring 10M+ prior rows.
+    journal_held = (
+        held_selection(evidence)
+        if include_prior and local_file is None and dump_date is None and evidence is not None
+        else None
+    )
+    held_high: int | None = None
+    holds_newest = False
+    if journal_held is not None and resolved is not None and journal_held[0] >= resolved:
+        held_high, holds_newest = journal_held[1], True
+
+    # 3. Prior table (absence just means first build).
+    downloaded_prior = False
+    have_prior = False
+    if include_prior:
+        if prior_file.exists():
+            have_prior = True
+        elif r2.download(OUTPUT, prior_file):
+            have_prior = True
+            downloaded_prior = prior_file != out_file
+    if not have_prior:
+        holds_newest = False
+
+    restored_prior: Path | None = None
+    prior_is_native = False
+    prior_has_export_cols = False
+    if have_prior:
+        prior_schema = pq.read_schema(prior_file)
+        prior_is_native = prior_schema.equals(_NATIVE_SCHEMA)
+        prior_has_export_cols = _RETIRED_PRIOR_COLUMNS <= set(prior_schema.names)
+        if prior_has_export_cols:
+            if not holds_newest and local_file is None and dump_date is None:
+                held_high, held_day = _held_restored_export(prior_file)
+                holds_newest = (
+                    held_high is not None and held_day is not None
+                    and resolved is not None and held_day >= resolved.isoformat()
+                )
+        else:
+            receipt_path, generation_id = prior_receipt_selection(prior_file, dataset='court_opinion_clusters')
+            restored_prior = restore_processing_input(
+                prior_file,
+                output_dir / f'.clusters-prior-{uuid4().hex}.parquet',
+                dataset='court_opinion_clusters',
+                schema=_SCHEMA,
+                receipt_path=receipt_path,
+                generation_id=generation_id,
+            )
+            if receipt_path is not None and not (prior_file.is_symlink() or (prior_file.parent / 'court-build.json').exists() or (prior_file.parent / 'court-family.json').exists()):
+                receipt_path.unlink(missing_ok=True)
+            if not holds_newest and local_file is None and dump_date is None:
+                held_high, held_day = _held_restored_export(restored_prior)
+                holds_newest = (
+                    held_high is not None and held_day is not None
+                    and resolved is not None and held_day >= resolved.isoformat()
+                )
+
+    if holds_newest:
+        logger.info("Opinion clusters: prior holds the {} export (to id {:,}); no dump is read", resolved, held_high)
+        staged_prior = output_dir / f'.clusters-prior-copy-{uuid4().hex}.parquet'
+        try:
+            source_prior = restored_prior or prior_file
+            if restored_prior is None and prior_is_native:
+                if prior_file != out_file:
+                    shutil.copyfile(prior_file, staged_prior)
+                    staged_prior.replace(out_file)
+            else:
+                _to_native_table(source_prior, staged_prior, output_dir)
+                staged_prior.replace(out_file)
+        finally:
+            staged_prior.unlink(missing_ok=True)
+            if restored_prior is not None:
+                restored_prior.unlink(missing_ok=True)
+            if downloaded_prior:
+                prior_file.unlink(missing_ok=True)
+        total = pq.ParquetFile(out_file).metadata.num_rows
+        logger.info("Court opinion clusters: {:,} rows", total)
+        _journal_export(evidence, resolved, out_file)
+        return out_file
+
+    logger.info(
+        "Opinion clusters: {}",
+        f"merging against prior table {prior_file}" if have_prior else "no prior table — full build",
+    )
+    if local_file is None:
+        assert published is not None
+        logger.info(
+            "Opinion clusters: reading dump {} ({:.3f} GiB compressed)",
+            published.filename,
+            published.size / 2**30,
+        )
+    else:
         logger.info("Opinion clusters: reading local dump {}", local_file)
 
-    # 3. Load the court scope, so every row can say which court decided it.
+    # 4. Load the court scope, so every row can say which court decided it.
     #
     # The cluster dump has no court_id — that lives on the docket, one join and
     # a different 4.67 GiB file away. Resolving it *while shaping* rather than
@@ -377,25 +476,20 @@ def build_court_opinion_clusters(
     scope: CourtScope | None = None
     if not skip_court_scope:
         jurisdictions = court_jurisdictions(dump_date=resolved, local_file=courts_local_file)
-        if holds_newest:
-            # No bulk row is shaped, so no docket map is needed.
-            scope = CourtScope.for_courts(jurisdictions)
-        else:
-            map_file = docket_court_map or build_docket_court_map(output_dir, dump_date=resolved)
-            scope = CourtScope.from_map(map_file, jurisdictions)
+        map_file = docket_court_map or build_docket_court_map(output_dir, dump_date=resolved)
+        scope = CourtScope.from_map(map_file, jurisdictions)
 
-    # 4. Stream the dump into the staging table, batch by batch.
+    # 5. Stream the dump into the staging table, batch by batch.
     writer = CourtListenerTableWriter(new_file, schema=_SCHEMA, batch_size=BATCH_ROWS)
     try:
-        if not holds_newest:
-            reader = CourtListenerBulkReader(
-                DATASET, dump_date=resolved, local_file=local_file, max_records=max_records
-            )
-            with closing(cast(Generator[dict, None, None], reader.iter_records())) as source_rows:
-                for row in source_rows:
-                    writer.add(_shape_bulk(row, scope=scope))
-            if reader.stopped_early:
-                raise RuntimeError('Opinion cluster dump was not read to its end')
+        reader = CourtListenerBulkReader(
+            DATASET, dump_date=resolved, local_file=local_file, max_records=max_records
+        )
+        with closing(cast(Generator[dict, None, None], reader.iter_records())) as source_rows:
+            for row in source_rows:
+                writer.add(_shape_bulk(row, scope=scope))
+        if reader.stopped_early:
+            raise RuntimeError('Opinion cluster dump was not read to its end')
 
         writer.close()
     except BaseException:
@@ -403,63 +497,80 @@ def build_court_opinion_clusters(
             writer.abort()
         except Exception:
             logger.exception("Could not finish cleaning up failed CourtListener staging output")
+        if restored_prior is not None:
+            restored_prior.unlink(missing_ok=True)
         raise
-    bulk_rows = writer.written
-    logger.info("Opinion clusters: staged {:,} bulk rows", bulk_rows)
+    logger.info("Opinion clusters: staged {:,} bulk rows", writer.written)
 
-    # 5. Merge prior + new, dedup on cluster_id preferring the freshest row.
+    # 6. Convert staged bulk rows directly to native schema (recording refusals/respellings in exceptions),
+    # skipping the redundant admit_court_updates round-trip.
+    exceptions = output_dir / "court_opinion_clusters.exceptions.parquet"
+    typed_new = output_dir / f".clusters-typed-{uuid4().hex}.parquet"
+    try:
+        _, recorded_exceptions = _to_native_table(new_file, typed_new, output_dir, exceptions=exceptions)
+    except BaseException:
+        if restored_prior is not None:
+            restored_prior.unlink(missing_ok=True)
+        raise
+    finally:
+        new_file.unlink(missing_ok=True)
+    if evidence is not None and recorded_exceptions:
+        evidence.retain_file(exceptions, stage="courtlistener-export-exceptions", table="court_opinion_clusters")
+
+    # 7. Merge prior + new, dedup on cluster_id preferring the freshest row.
     #
     # A first build has nothing to merge *against*: one dump, whose cluster_id is
     # the publisher's primary key, so the dedup is a no-op. Running the merge
     # anyway would hold the staged copy and the merged copy on disk at once —
     # 7.1 GiB rather than 3.6 GiB at the 2026-06-30 dump's size — which is the
     # difference between fitting inside the project's free-space floor and not.
-    # So the first build promotes the staged file instead, and pays for that with
+    # So the first build promotes the typed file instead, and pays for that with
     # dump order rather than date order.
     if not have_prior:
-        witnesses = [file_witness(new_file)]
-        if local_file is not None:
-            witnesses.insert(0, file_witness(local_file))
-        # The receipt diagnostics keep their three names; this build adds no search row.
-        out_file = finish_court_output('court_opinion_clusters', new_file, output_dir, witnesses=witnesses,
-            diagnostics={'dump_date': resolved.isoformat() if resolved else None, 'bulk_rows': bulk_rows,
-                         'search_rows': 0})
+        typed_new.replace(out_file)
         total = pq.ParquetFile(out_file).metadata.num_rows
         logger.info("Court opinion clusters: {:,} rows (first build, dump order)", total)
         _journal_export(evidence, resolved, out_file)
         return out_file
 
-    build_generation_id = uuid4().hex
-    new_file, fresh_receipts = admit_court_updates(
-        'court_opinion_clusters', new_file, output_dir / '.court-updates' / build_generation_id,
-        schema=_SCHEMA, generation_id=build_generation_id,
-    )
-    spill_dir = output_dir / ".duckdb_tmp"
-    spill_dir.mkdir(exist_ok=True)
-    con = duckdb.connect()
-    con.execute("SET memory_limit='4GB'")
-    con.execute("SET preserve_insertion_order=false")
-    con.execute("SET threads=2")
-    con.execute(f"SET temp_directory='{spill_dir}'")
+    typed_prior: Path | None = None
+    try:
+        if restored_prior is not None or not prior_is_native:
+            typed_prior = output_dir / f".clusters-prior-typed-{uuid4().hex}.parquet"
+            _to_native_table(restored_prior or prior_file, typed_prior, output_dir)
+        merge_prior = typed_prior or prior_file
 
-    staged = output_dir / f'.clusters-merged-{uuid4().hex}.parquet'
-    merge_local_prior(
-        con,
-        columns=INPUT_COLUMNS,
-        identity="cluster_id",
-        order_by="date_filed DESC, cluster_id",
-        prior_file=prior_file if have_prior else None,
-        new_file=new_file,
-        out_file=staged,
-    )
-    con.close()
+        spill_dir = output_dir / ".duckdb_tmp"
+        spill_dir.mkdir(exist_ok=True)
+        con = duckdb.connect()
+        try:
+            con.execute("SET memory_limit='4GB'")
+            con.execute("SET preserve_insertion_order=false")
+            con.execute("SET threads=2")
+            con.execute(f"SET temp_directory='{spill_dir}'")
 
-    out_file = finish_court_output('court_opinion_clusters', staged, output_dir,
-        generation_id=build_generation_id, refused_receipts=fresh_receipts, prior_receipts=receipt_path,
-        witnesses=[file_witness(staged), *input_witnesses],
-        diagnostics={'dump_date': resolved.isoformat() if resolved else None, 'bulk_rows': bulk_rows,
-                     'search_rows': 0})
+            staged = output_dir / f'.clusters-merged-{uuid4().hex}.parquet'
+            merge_local_prior(
+                con,
+                columns=COLUMNS,
+                identity="cluster_id",
+                order_by="date_filed DESC, cluster_id",
+                prior_file=merge_prior,
+                new_file=typed_new,
+                out_file=staged,
+            )
+        finally:
+            con.close()
+    finally:
+        typed_new.unlink(missing_ok=True)
+        if typed_prior is not None:
+            typed_prior.unlink(missing_ok=True)
+        if restored_prior is not None:
+            restored_prior.unlink(missing_ok=True)
 
+    staged.replace(out_file)
+    if downloaded_prior:
+        prior_file.unlink(missing_ok=True)
     total = pq.ParquetFile(out_file).metadata.num_rows
     logger.info("Court opinion clusters: {:,} rows", total)
     _journal_export(evidence, resolved, out_file)

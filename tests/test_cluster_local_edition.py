@@ -56,18 +56,14 @@ def test_local_edition_uses_pinned_scope_and_preserves_prior(tmp_path: Path, mon
 
 
 def test_incremental_rerun_uses_latest_complete_local_pair(tmp_path, monkeypatch):
-    """A later source edition merges against the selected local build and its receipts."""
-    from spicy_regs.court_receipts import read_court_rows
-
+    """A later source edition merges against the selected local table without receipts."""
     monkeypatch.setattr(r2, "download", lambda *args, **kwargs: False)
     first_source = tmp_path / "first.csv.bz2"
     first_source.write_bytes(bz2.compress(
         b'id,case_name,date_created\n"1","First","2026-06-30T08:00:00Z"\n'
     ))
-    first = build_court_opinion_clusters(tmp_path, local_file=first_source,
-        skip_court_scope=True)
-    first_bytes = first.read_bytes()
-    # Retained pre-migration scratch must not displace the complete native pair.
+    build_court_opinion_clusters(tmp_path, local_file=first_source, skip_court_scope=True)
+    # Retained pre-migration scratch must not displace the complete native table.
     (tmp_path / "_clusters_prior.parquet").write_bytes(b"stale retained scratch")
     second_source = tmp_path / "second.csv.bz2"
     second_source.write_bytes(bz2.compress(
@@ -75,9 +71,9 @@ def test_incremental_rerun_uses_latest_complete_local_pair(tmp_path, monkeypatch
     ))
     second = build_court_opinion_clusters(tmp_path, local_file=second_source,
         skip_court_scope=True)
-    restored = {r["cluster_id"]: r for r in read_court_rows(second, dataset="court_opinion_clusters")}
-    assert set(restored) == {"1", "2"}
-    assert restored["1"]["date_created"] == "2026-06-30T08:00:00Z"
-    assert restored["2"]["date_created"] == "2026-07-01T08:00:00Z"
-    assert first.read_bytes() == first_bytes
+    rows = {r["cluster_id"]: r for r in pq.read_table(second).to_pylist()}
+    assert set(rows) == {"1", "2"}
+    assert rows["1"]["date_created"] == "2026-06-30T08:00:00Z"
+    assert rows["2"]["date_created"] == "2026-07-01T08:00:00Z"
     assert (tmp_path / "court_opinion_clusters.parquet").resolve() == second
+    assert not list(tmp_path.rglob("etl_receipts.parquet"))

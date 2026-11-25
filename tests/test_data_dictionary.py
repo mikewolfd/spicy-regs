@@ -873,18 +873,21 @@ def test_retained_court_legacy_declarations_preserve_native_and_refuse_drift(mon
     from spicy_regs.sources import publication
 
     from spicy_regs.subject_catalog import retired_receipt_datasets
+    from tests.test_court_prepared_conversion import unretire_clusters
 
     fixture = json.loads((Path(__file__).parent / "fixtures" /
                           "court_selected_legacy_dictionary.json").read_text())
     index = fixture["index"]
     every = {table: [tuple(field) for field in fields] for table, fields in fixture["schemas"].items()}
     # A table whose receipts are retired (ss-vse3) publishes none, so a generation without them is its current
-    # format, held to its installed schema: the citation tables' legacy shapes are no longer a selectable format.
+    # format, held to its installed schema: the retired tables' legacy shapes are no longer a selectable format.
     retired = set(every) & retired_receipt_datasets()
-    assert retired == {"court_citations", "court_citation_map", "court_parentheticals"}
+    assert retired == {"court_citations", "court_citation_map", "court_parentheticals", "court_opinion_clusters"}
     selected = dd.selected_dictionary_definitions(index, every, dd.DEFAULT_DESCRIPTIONS)[1]
     assert {table: selected[table] for table in retired} == {table: dd.expected_schemas()[table] for table in retired}
-    live = {table: fields for table, fields in every.items() if table not in retired}
+    # Verify legacy selection and drift refusal against court_opinion_clusters in its pre-retirement state.
+    unretire_clusters(monkeypatch)
+    live = {"court_opinion_clusters": every["court_opinion_clusters"]}
     native = {table: dd.expected_schemas()[table] for table in live}
     monkeypatch.setattr(publication, "load_index", lambda _: index)
     monkeypatch.setattr(dd, "published_row_counts", lambda *_, **_kwargs: {})

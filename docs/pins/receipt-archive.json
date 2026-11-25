@@ -51,6 +51,12 @@
    "publishedAt": "2026-10-20T00:50:52Z",
    "receipts": "generations/court-citations/7c2fc74c1b8096801f0f779baceb77e538e34047f234afbd9e56aa6515261d9d/etl_receipts.parquet"
   },
+  "court_opinion_clusters": {
+   "family": "court-opinion-clusters",
+   "artifactDigest": "sha256:d91e6fd95df6044367afebac29a261707d692106cd4f153188be698f11fb21cc",
+   "publishedAt": "2026-11-25T07:01:15Z",
+   "receipts": "generations/court-opinion-clusters/d91e6fd95df6044367afebac29a261707d692106cd4f153188be698f11fb21cc/etl_receipts.parquet"
+  },
   "court_opinions": {
    "family": "court-opinions",
    "artifactDigest": "sha256:85589a33b63f22bfac522e5f2c41210eb69437b763b81380562eda1fd33ef298",

@@ -60,20 +60,24 @@ def test_partial_stream_and_duplicate_identity_preserve_the_complete_prior_pair(
     assert path.resolve() == previous
 
 
-def test_cluster_incremental_watermark_uses_selected_receipts(tmp_path):
-    path = write(tmp_path, 'court_opinion_clusters', [
-        {'cluster_id': '10', 'date_created': '2026-06-30T08:00:00Z', 'ingest_source': 'bulk'},
-        {'cluster_id': '20', 'date_created': '2026-07-01T08:00:00Z', 'ingest_source': 'search'},
-    ])
-    assert 'ingest_source' not in pq.read_schema(path).names
-    assert held_export(path) == (10, '2026-06-30')
+def test_cluster_incremental_watermark_reads_native_and_rejects_empty_legacy_generation(tmp_path):
+    native = tmp_path / 'court_opinion_clusters.parquet'
+    schema = SUBJECT_SCHEMAS['court_opinion_clusters']
+    row_defaults = {name: (False if pa.types.is_boolean(schema.field(name).type) else None) for name in schema.names}
+    pq.write_table(pa.Table.from_pylist([
+        {**row_defaults, 'cluster_id': '10', 'date_created': '2026-06-30T08:00:00Z', 'ingest_source': 'bulk'},
+        {**row_defaults, 'cluster_id': '20', 'date_created': '2026-07-01T08:00:00Z', 'ingest_source': 'search'},
+    ], schema=schema), native)
+    assert 'ingest_source' in pq.read_schema(native).names
+    assert held_export(native) == (10, '2026-06-30')
+    path = write(tmp_path, 'court_dockets', [{'cl_docket_id': '10', 'parties_json': '[]'}])
     receipt, _ = local_receipt_selection(path)
     with pytest.raises(ValueError, match='generation'):
-        held_export(path, receipt_path=receipt, generation_id='')
+        held_export(native, receipt_path=receipt, generation_id='')
     copied = tmp_path / 'unbound.parquet'
     copied.write_bytes(path.read_bytes())
     with pytest.raises(ValueError, match='no selected receipt'):
-        list(read_court_rows(copied, dataset='court_opinion_clusters'))
+        list(read_court_rows(copied, dataset='court_dockets'))
 
 
 def _pdf(body=b'pdf', text='Retained opinion', status='ok'):
@@ -149,16 +153,16 @@ def test_installed_court_policies_refuse_generation_without_receipts(tmp_path):
     installed = installed_policies()
     for name, policy in POLICIES.items():
         assert installed[name].descriptor() == policy.descriptor()
-    path = write(tmp_path, 'court_opinion_clusters', [{'cluster_id': '1'}])
+    path = write(tmp_path, 'court_dockets', [{'cl_docket_id': '1', 'parties_json': '[]'}])
     with pytest.raises(ValueError, match='require ETL receipts'):
-        build_generation(tmp_path / 'bypass', family='court-opinion-clusters',
+        build_generation(tmp_path / 'bypass', family='courtlistener',
                          files=[path], expected_keys=[path.name])
 
 
 def test_generation_moves_owned_combined_receipts_and_preserves_selected_shards(tmp_path, monkeypatch):
     from spicy_regs import court_receipts
 
-    path = write(tmp_path, 'court_opinion_clusters', [{'cluster_id': '1'}])
+    path = write(tmp_path, 'court_dockets', [{'cl_docket_id': '1', 'parties_json': '[]'}])
     shard, _ = local_receipt_selection(path)
     original_bytes = shard.read_bytes()
     combined = []
@@ -169,7 +173,7 @@ def test_generation_moves_owned_combined_receipts_and_preserves_selected_shards(
         return combine(paths, destination)
 
     monkeypatch.setattr(court_receipts, 'combine_receipts', tracked)
-    build_court_generation(tmp_path / 'generation', family='court-opinion-clusters', files=[path])
+    build_court_generation(tmp_path / 'generation', family='courtlistener', files=[path])
     assert combined and not combined[0].exists()
     assert shard.read_bytes() == original_bytes
     assert (tmp_path / 'generation' / 'etl_receipts.parquet').is_file()

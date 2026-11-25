@@ -26,8 +26,7 @@ from typing import ClassVar
 
 from loguru import logger
 
-from spicy_regs.pipelines.rollups.base import make_rollup_app
-from spicy_regs.pipelines.rollups.court_receipts import CourtReceiptRollup as RollupPipeline
+from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.sources import r2
 from spicy_regs.sources.courtlistener import DEFAULT_MAX_REQUESTS, DEFAULT_MAX_WAIT_SECONDS
 from spicy_regs.transforms.build_court_opinion_clusters import DATASET, build_court_opinion_clusters

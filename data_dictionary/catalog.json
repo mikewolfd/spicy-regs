@@ -926,25 +926,6 @@
         ]
       },
       {
-        "dataset": "court_opinion_clusters",
-        "receipt_only": false,
-        "policy_version": "courts/1",
-        "identity_columns": [
-          "cluster_id"
-        ],
-        "processing_fields": [
-          "source",
-          "slug",
-          "absolute_url",
-          "date_created",
-          "date_modified",
-          "ingest_source",
-          "conversion_inputs",
-          "raw_source_record",
-          "source_observation"
-        ]
-      },
-      {
         "dataset": "court_opinion_pdf_extractions",
         "receipt_only": false,
         "policy_version": "courts/2",
@@ -6790,7 +6771,13 @@
         "arguments",
         "headmatter",
         "blocked",
-        "date_blocked"
+        "date_blocked",
+        "source",
+        "slug",
+        "absolute_url",
+        "date_created",
+        "date_modified",
+        "ingest_source"
       ]
     },
     {

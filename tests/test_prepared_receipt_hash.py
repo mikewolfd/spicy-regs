@@ -159,6 +159,9 @@ def _family_rows(family):
 
 @pytest.mark.parametrize("family", ["cfr-sections", "documents", "court-opinion-clusters"])
 def test_sealed_and_full_paths_reach_identical_entries_and_proofs(tmp_path, monkeypatch, bucket, family):
+    if family == "court-opinion-clusters":
+        from tests.test_court_prepared_conversion import unretire_clusters
+        unretire_clusters(monkeypatch)
     table, rows = _family_rows(family)
     old = publish_old(bucket, monkeypatch, tmp_path, family, {table: rows})
     done = convert(family, tmp_path / "work")
