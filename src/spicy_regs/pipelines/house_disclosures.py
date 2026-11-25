@@ -116,6 +116,36 @@ def _index(store, selection):
     return index, body, parse_index_zip(body, year=index["year"])
 
 
+def _indexes(store, selection):
+    """Load single-year (``index``) or multi-year (``indexes``) House index ZIPs deterministically."""
+    from spicy_docs.sources.house_disclosures import index_url, parse_index_zips
+
+    if selection.get("format") != "house-disclosures-captures" or selection.get("version") != 1:
+        raise ValueError("Unsupported House capture selection")
+    if "indexes" in selection:
+        if "index" in selection:
+            raise ValueError("House capture selection cannot specify both index and indexes")
+        entries = selection["indexes"]
+        if not isinstance(entries, list) or not entries:
+            raise ValueError("House multi-year capture selection requires non-empty indexes")
+    elif "index" in selection:
+        entries = [selection["index"]]
+    else:
+        raise ValueError("House capture selection requires index or indexes")
+    seen_years = set()
+    loaded = []
+    for index in entries:
+        year = index["year"]
+        if year in seen_years:
+            raise ValueError(f"House index selection repeats year {year}")
+        if index["url"] != index_url(year):
+            raise ValueError("House index URL differs from its selected year")
+        seen_years.add(year)
+        loaded.append((index, _original(store, index)))
+    rows = parse_index_zips([(index["year"], body) for index, body in loaded])
+    return loaded, rows
+
+
 def acquire_index(year, output_dir, *, archive_root=None, transport=None):
     """Capture one explicit annual index; callers check retained versions before refresh."""
     from spicy_docs.sources.house_disclosures import HouseDisclosureAcquirer, MAX_BYTES
@@ -136,59 +166,159 @@ def acquire_index(year, output_dir, *, archive_root=None, transport=None):
     return selection
 
 
-def acquire(selection: dict, doc_ids, output_dir: Path, *, archive_root=None, transport=None):
+def acquire_indexes(
+    years=None,
+    output_dir=None,
+    *,
+    start_year=None,
+    end_year=None,
+    max_requests=None,
+    archive_root=None,
+    transport=None,
+):
+    """Capture multiple annual House disclosure index ZIPs under one bounded request budget."""
+    from spicy_docs.sources.house_disclosures import (
+        DEFAULT_MAX_INDEX_YEAR,
+        DEFAULT_MAX_REQUESTS,
+        MIN_INDEX_YEAR,
+        HouseDisclosureAcquirer,
+        MAX_BYTES,
+        index_years,
+    )
+
+    if output_dir is None:
+        raise ValueError("output_dir is required")
+    selected_years = index_years(
+        years,
+        start_year=MIN_INDEX_YEAR if start_year is None else start_year,
+        end_year=DEFAULT_MAX_INDEX_YEAR if end_year is None else end_year,
+    )
+    budget = DEFAULT_MAX_REQUESTS if max_requests is None else max_requests
+    evidence = CaptureEvidence(Path(output_dir), FAMILY, archive_root=archive_root)
+    try:
+        retained = evidence.transport(transport, stage="house-index", max_bytes=MAX_BYTES)
+        with HouseDisclosureAcquirer(max_requests=budget, transport=retained) as acquirer:
+            captures = acquirer.acquire_indexes(selected_years)
+        indexes = [
+            {
+                "year": item.year,
+                "url": item.capture.requested_url,
+                "sha256": item.capture.sha256,
+                "bytes": item.capture.byte_size,
+                "observed_at": item.capture.observed_at,
+            }
+            for item in captures
+        ]
+        year_span = (
+            f"{selected_years[0]}"
+            if len(selected_years) == 1
+            else f"{selected_years[0]}-{selected_years[-1]}"
+        )
+        selection = {
+            "format": "house-disclosures-captures",
+            "version": 1,
+            "scope": (
+                f"Observed complete House {year_span} annual index responses ({len(selected_years)} years); "
+                "report originals are selected separately."
+            ),
+            "indexes": indexes,
+            "reports": [],
+        }
+    except BaseException as error:
+        evidence.finish(error)
+        raise
+    evidence.finish()
+    return selection
+
+
+def acquire(selection: dict, doc_ids, output_dir: Path, *, max_requests: int | None = None, archive_root=None, transport=None):
     """Acquire only missing explicitly selected PTRs; exact existing captures replay locally.
 
     A caller checks the source catalog before this operation. Existing entries
     must have the exact expected URL, DocID, year and verified bytes to be reused.
     Source refusal aborts the operation and leaves its ordinary failed evidence.
     """
-    from spicy_docs.sources.house_disclosures import HouseDisclosureAcquirer, MAX_BYTES, report_url
+    from spicy_docs.sources.house_disclosures import (
+        DEFAULT_MAX_REQUESTS,
+        HouseDisclosureAcquirer,
+        MAX_BYTES,
+        is_native_ptr_candidate,
+        report_url,
+    )
 
     store = open_raw(archive_root)
-    index, _, rows = _index(store, selection)
+    loaded, rows = _indexes(store, selection)
+    years = {index["year"] for index, _ in loaded}
     groups = {}
+    by_doc = {}
     for row in rows:
-        groups.setdefault(row.doc_id, []).append(row)
-    filings = {doc: group[0] for doc, group in groups.items() if len(group) == 1}
-    selected = sorted(set(doc_ids))
-    if not selected or any(doc not in filings or filings[doc].filing_type != "P" for doc in selected):
+        groups.setdefault((row.index_year, row.doc_id), []).append(row)
+        by_doc.setdefault(row.doc_id, []).append(row)
+    filings = {key: group[0] for key, group in groups.items() if len(group) == 1}
+
+    selected_pairs = []
+    for item in doc_ids:
+        if isinstance(item, tuple) and len(item) == 2:
+            pair = (item[0], item[1])
+        elif isinstance(item, str):
+            matches = [row for row in by_doc.get(item, ()) if len(groups.get((row.index_year, row.doc_id), ())) == 1]
+            if len(matches) != 1:
+                raise ValueError("Select index-stated P filings; P does not cover the other categories")
+            pair = (matches[0].index_year, matches[0].doc_id)
+        else:
+            raise ValueError("House PTR selection must be doc_id or (year, doc_id)")
+        if pair not in filings or not is_native_ptr_candidate(filings[pair]):
+            raise ValueError("Select index-stated P filings; P does not cover the other categories")
+        selected_pairs.append(pair)
+    selected_pairs = sorted(set(selected_pairs))
+    if not selected_pairs:
         raise ValueError("Select index-stated P filings; P does not cover the other categories")
+
     held = {}
     for source in selection.get("reports", []):
-        doc = source["doc_id"]
-        if doc in held or source["year"] != index["year"] or source["url"] != report_url(index["year"], doc, ptr=True):
+        key = (source["year"], source["doc_id"])
+        if key in held or key[0] not in years or source["url"] != report_url(key[0], key[1], ptr=True):
             raise ValueError("Ambiguous or mismatched House report selection")
-        held[doc] = source
+        held[key] = source
+    budget = DEFAULT_MAX_REQUESTS if max_requests is None else max_requests
     evidence = CaptureEvidence(Path(output_dir), FAMILY, archive_root=archive_root)
     try:
         retained = evidence.transport(transport, stage="house-ptr-pdf", max_bytes=MAX_BYTES)
-        with HouseDisclosureAcquirer(transport=retained) as acquirer:
-            for doc in selected:
-                if doc in held:
-                    _original(store, held[doc])
-                    evidence.event("house-ptr-reused", doc_id=doc, sha256=held[doc]["sha256"])
+        with HouseDisclosureAcquirer(max_requests=budget, transport=retained) as acquirer:
+            for year, doc in selected_pairs:
+                if (year, doc) in held:
+                    _original(store, held[(year, doc)])
+                    evidence.event("house-ptr-reused", year=year, doc_id=doc, sha256=held[(year, doc)]["sha256"])
                     continue
-                _, capture = acquirer.acquire_ptr(year=index["year"], doc_id=doc)
-                held[doc] = {"year": index["year"], "doc_id": doc, "url": capture.requested_url,
-                             "sha256": capture.sha256, "bytes": capture.byte_size, "observed_at": capture.observed_at}
+                _, capture = acquirer.acquire_ptr(year=year, doc_id=doc, reset_budget=False)
+                held[(year, doc)] = {
+                    "year": year,
+                    "doc_id": doc,
+                    "url": capture.requested_url,
+                    "sha256": capture.sha256,
+                    "bytes": capture.byte_size,
+                    "observed_at": capture.observed_at,
+                }
     except BaseException as error:
         evidence.finish(error)
         raise
     evidence.finish()
-    return {**selection, "reports": [held[doc] for doc in sorted(held)]}
+    return {**selection, "reports": [held[key] for key in sorted(held, key=lambda item: (item[1], item[0]))]}
 
 
 def candidate(selection, output_dir, evidence, *, store):
     from spicy_docs.reading.house_ptr import read_ptr_pdf
     from spicy_docs.sources.house_disclosures import PARSER_VERSION, report_url
 
-    index, body, filings = _index(store, selection)
-    evidence.retain_bytes(body, stage="house-index", raw_source=True, original_location=index["url"],
-                          observed_at=index.get("observed_at"))
+    loaded, filings = _indexes(store, selection)
+    index_by_year = {index["year"]: index for index, _ in loaded}
+    for index, body in loaded:
+        evidence.retain_bytes(body, stage="house-index", raw_source=True, original_location=index["url"],
+                              observed_at=index.get("observed_at"))
     tables = {name: [] for name in SCHEMAS}
     indexed = {}
     for filing in filings:
+        index = index_by_year[filing.index_year]
         filing_id = _id(index["sha256"], filing.source_line)
         filing_date, date_status = _date(filing.filing_date_raw)
         row = {**asdict(filing), "filing_id": filing_id, "filing_date": filing_date,
@@ -198,15 +328,16 @@ def candidate(selection, output_dir, evidence, *, store):
                "raw_cells_json": _json(filing.raw_cells)}
         row.pop("raw_cells")
         tables[INDEX].append(row)
-        indexed.setdefault(filing.doc_id, []).append(row)
-    indexed = {doc: group[0] for doc, group in indexed.items() if len(group) == 1}
-    reports, seen = {}, set()
-    for source in sorted(selection.get("reports", []), key=lambda item: item["doc_id"]):
+        indexed.setdefault((filing.index_year, filing.doc_id), []).append(row)
+    indexed = {key: group[0] for key, group in indexed.items() if len(group) == 1}
+    reports, reports_by_doc, seen = {}, {}, set()
+    for source in sorted(selection.get("reports", []), key=lambda item: (item["year"], item["doc_id"])):
+        key = (source["year"], source["doc_id"])
         doc = source["doc_id"]
-        if doc in seen or doc not in indexed or indexed[doc]["filing_type"] != "P":
+        if key in seen or key not in indexed or indexed[key]["filing_type"] != "P":
             raise ValueError("House report selection is duplicate, absent from the index or not P")
-        seen.add(doc)
-        if source["year"] != index["year"] or source["url"] != report_url(index["year"], doc, ptr=True):
+        seen.add(key)
+        if source["year"] not in index_by_year or source["url"] != report_url(source["year"], doc, ptr=True):
             raise ValueError("House report locator differs from its index identity")
         body = _original(store, source)
         evidence.retain_bytes(body, stage="house-ptr-pdf", raw_source=True,
@@ -216,22 +347,23 @@ def candidate(selection, output_dir, evidence, *, store):
             # The qualified originals spell the native name as these literal
             # index components in this order. Only whitespace is folded; no
             # aliases, omitted honorifics, initials or fuzzy names are inferred.
-            declared_name = " ".join(" ".join(indexed[doc][field].split())
+            declared_name = " ".join(" ".join(indexed[key][field].split())
                                      for field in ("prefix", "first", "last", "suffix")
-                                     if indexed[doc][field].strip())
+                                     if indexed[key][field].strip())
             if not declared_name or " ".join((reading.get("filer_name_raw") or "").split()) != declared_name:
                 raise ValueError("House native filer name differs from its selected index name")
-            if reading.get("state_district_raw") != indexed[doc]["state_district"]:
+            if reading.get("state_district_raw") != indexed[key]["state_district"]:
                 raise ValueError("House report district differs from its selected filing")
-        report_id = _id(indexed[doc]["filing_id"], source["sha256"])
-        report = {"report_id": report_id, "filing_id": indexed[doc]["filing_id"], "doc_id": doc,
-                  "index_year": index["year"], "source_uri": source["url"], "source_sha256": source["sha256"],
+        report_id = _id(indexed[key]["filing_id"], source["sha256"])
+        report = {"report_id": report_id, "filing_id": indexed[key]["filing_id"], "doc_id": doc,
+                  "index_year": source["year"], "source_uri": source["url"], "source_sha256": source["sha256"],
                   "source_bytes": source["bytes"], "observed_at": source.get("observed_at"),
                   "extraction_status": reading["status"], "refusal_reason": reading["reason"],
                   "page_count": reading["page_count"], "transaction_count": len(reading["transactions"]),
                   **{name: reading.get(name) for name in ("parser_version", "backend", "backend_version", "model",
                                                          "filer_name_raw", "state_district_raw", "signed_date_raw")}}
-        reports[doc] = report
+        reports[key] = report
+        reports_by_doc.setdefault(doc, []).append(report)
         tables[REPORTS].append(report)
         for page in reading["pages"]:
             number = page["page_number"]
@@ -246,7 +378,7 @@ def candidate(selection, output_dir, evidence, *, store):
             fragments = transaction["fragments"]
             row = {**{name: value for name, value in transaction.items() if name != "fragments"},
                    "transaction_id": _id(report_id, transaction["row_number"]), "report_id": report_id,
-                   "filing_id": indexed[doc]["filing_id"], "doc_id": doc,
+                   "filing_id": indexed[key]["filing_id"], "doc_id": doc,
                    "transaction_date": date, "transaction_date_status": date_status,
                    "notification_date": notified, "notification_date_status": notified_status,
                    "amount_lower_usd": lower, "amount_upper_usd": upper, "amount_status": amount_status,
@@ -254,7 +386,7 @@ def candidate(selection, output_dir, evidence, *, store):
                    "page_locator": source["url"] + f"#page={transaction['page_number']}",
                    "fragments_json": _json(fragments)}
             tables[TRANSACTIONS].append(row)
-        evidence.event("house-report-reading", doc_id=doc, source_sha256=source["sha256"],
+        evidence.event("house-report-reading", doc_id=doc, year=source["year"], source_sha256=source["sha256"],
                        status=reading["status"], reason=reading["reason"], pages=reading["page_count"],
                        transactions=len(reading["transactions"]), parser_version=reading["parser_version"],
                        backend_version=reading["backend_version"])
@@ -272,14 +404,26 @@ def candidate(selection, output_dir, evidence, *, store):
             evidence.retain_file(image, stage="house-raw-visual-image")
         link_ids = set()
         for link in links:
-            original, amended = (reports[link[key]] for key in ("original_doc_id", "amended_doc_id"))
+            def _resolve_report(prefix):
+                doc_id = link[prefix + "_doc_id"]
+                if (year := link.get(prefix + "_year")) is not None:
+                    return reports[(year, doc_id)]
+                matches = reports_by_doc.get(doc_id, [])
+                if len(matches) != 1:
+                    raise ValueError(f"House amendment link {prefix} doc_id {doc_id} is missing or ambiguous")
+                return matches[0]
+
+            original, amended = _resolve_report("original"), _resolve_report("amended")
             for key, report in (("original", original), ("amended", amended)):
                 if link[key + "_source_sha256"] != report["source_sha256"]:
                     raise ValueError("House amendment link names a different original version")
                 number = link[key + "_page_number"]
                 if type(number) is not int or not 1 <= number <= report["page_count"]:
                     raise ValueError("House amendment review names an unavailable page")
-            first, last = indexed[original["doc_id"]], indexed[amended["doc_id"]]
+            first, last = (
+                indexed[(original["index_year"], original["doc_id"])],
+                indexed[(amended["index_year"], amended["doc_id"])],
+            )
             if (first["first"], first["last"], first["state_district"]) != (last["first"], last["last"], last["state_district"]):
                 raise ValueError("House amendment review names different filers")
             if (original["doc_id"] == amended["doc_id"] or link["link_status"] != "reviewed_date_reference"
@@ -292,7 +436,8 @@ def candidate(selection, output_dir, evidence, *, store):
                         == (first["first"], first["last"], first["state_district"], first["filing_date"])]
             if len(matching) != 1:
                 raise ValueError("House prior-filing-date reference is ambiguous in the selected index")
-            row = {key: value for key, value in link.items() if key != "prior_filing_date_raw"}
+            row = {key: value for key, value in link.items()
+                   if key not in {"prior_filing_date_raw", "original_year", "amended_year"}}
             row.update(link_id=_id(original["report_id"], amended["report_id"], review["sha256"]),
                        original_report_id=original["report_id"], amended_report_id=amended["report_id"],
                        review_sha256=review["sha256"],
@@ -341,20 +486,34 @@ def build(selection, output_dir, *, archive_root=None, read_index=None):
     return artifact, evidence.artifact_dir, summary
 
 
+def _parse_doc_arg(value: str):
+    if ":" in value:
+        year_text, doc_id = value.split(":", 1)
+        if year_text.isdigit():
+            return (int(year_text), doc_id)
+    return value
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for command in ("build", "acquire", "acquire-index"):
+    for command in ("build", "acquire", "acquire-index", "acquire-indexes"):
         sub = commands.add_parser(command)
-        if command != "acquire-index":
+        if command in ("build", "acquire"):
             sub.add_argument("--selection", type=Path, required=True)
-        else:
+        elif command == "acquire-index":
             sub.add_argument("--year", type=int, required=True)
+        else:
+            sub.add_argument("--year", type=int, action="append", dest="years")
+            sub.add_argument("--start-year", type=int)
+            sub.add_argument("--end-year", type=int)
+            sub.add_argument("--max-requests", type=int)
         sub.add_argument("--output-dir", type=Path, required=True)
         sub.add_argument("--archive-root", type=Path)
         if command != "build":
             if command == "acquire":
                 sub.add_argument("--doc-id", action="append", required=True)
+                sub.add_argument("--max-requests", type=int)
             sub.add_argument("--captures-out", type=Path, required=True)
         else:
             sub.add_argument("--read-index", type=Path)
@@ -362,9 +521,24 @@ def main():
     if args.command != "build":
         if args.command == "acquire-index":
             selected = acquire_index(args.year, args.output_dir, archive_root=args.archive_root)
+        elif args.command == "acquire-indexes":
+            selected = acquire_indexes(
+                args.years,
+                args.output_dir,
+                start_year=args.start_year,
+                end_year=args.end_year,
+                max_requests=args.max_requests,
+                archive_root=args.archive_root,
+            )
         else:
-            selected = acquire(json.loads(args.selection.read_text()), args.doc_id, args.output_dir,
-                               archive_root=args.archive_root)
+            doc_ids = [_parse_doc_arg(item) for item in args.doc_id]
+            selected = acquire(
+                json.loads(args.selection.read_text()),
+                doc_ids,
+                args.output_dir,
+                max_requests=args.max_requests,
+                archive_root=args.archive_root,
+            )
         args.captures_out.write_text(_json(selected) + "\n")
         print(_json({"captures": str(args.captures_out), "reports": len(selected["reports"])}))
     else:

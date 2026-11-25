@@ -14,30 +14,64 @@ from rulespec_artifacts import ArtifactPin, LocalMemberSource
 from spicy_regs.contract_types import described_schema
 from spicy_regs.generations import build_generation
 from spicy_regs.source_evidence import CaptureEvidence
-from spicy_regs.transforms.build_census_acs import OUTPUT, SCHEMA, TABLE, build_census_acs
+from spicy_regs.transforms.build_census_acs import (
+    CD_OUTPUT,
+    CD_SCHEMA,
+    CD_TABLE,
+    OUTPUT,
+    SCHEMA,
+    TABLE,
+    build_census_acs,
+)
 
 
-def build(reader, output_dir: Path, *, vintage: int, state: str, counties: tuple[str, ...]):
+def build(
+    reader,
+    output_dir: Path,
+    *,
+    vintage: int,
+    state: str,
+    counties: tuple[str, ...] | None = None,
+    geography: str = "county",
+    districts: tuple[str, ...] | None = None,
+):
     """Use the existing source-evidence lineage and generation publication format."""
+    if geography not in {"county", "congressional district"}:
+        raise ValueError("ACS geography must be 'county' or 'congressional district'")
     output_dir = Path(output_dir)
     if (output_dir / "generation").exists():
         raise ValueError("Use a fresh output directory for each ACS source release")
+    from spicy_docs.source_native import MAX_EVIDENCE_BYTES
     from spicy_docs.sources.census_acs_profile import MAX_BUNDLE_BYTES
     evidence = CaptureEvidence(output_dir, "census-acs")
+    table_name = TABLE if geography == "county" else CD_TABLE
+    output_name = OUTPUT if geography == "county" else CD_OUTPUT
+    schema = SCHEMA if geography == "county" else CD_SCHEMA
     try:
-        table = build_census_acs(reader, output_dir, vintage=vintage, state=state, counties=counties)
+        table = build_census_acs(
+            reader,
+            output_dir,
+            vintage=vintage,
+            state=state,
+            counties=counties,
+            geography=geography,
+            districts=districts,
+        )
         refs = {entry["evidenceBlobRef"] for entry in reader.iter_record_evidence()}
         if len(refs) != 1:
-            raise ValueError("ACS county release must retain one complete source query archive")
+            raise ValueError("ACS release must retain one complete source query archive")
         evidence.retain_bytes(
-            reader.read_evidence(refs.pop(), max_bytes=MAX_BUNDLE_BYTES),
+            reader.read_evidence(refs.pop(), max_bytes=min(MAX_BUNDLE_BYTES, MAX_EVIDENCE_BYTES)),
             stage="census-acs-source-release",
+            raw_source=False,
             source_logical_id=reader.pin.logical_id, source_artifact_digest=reader.pin.artifact_digest,
-            vintage=vintage, state=state, counties=list(counties),
+            vintage=vintage, state=state, geography=geography,
+            counties=list(counties) if counties is not None else None,
+            districts=list(districts) if districts is not None else None,
         )
         artifact = build_generation(
-            output_dir / "generation", family="census-acs", files=(table,), expected_keys=(OUTPUT,),
-            schemas={TABLE: described_schema(SCHEMA)}, inputs=evidence.inputs(),
+            output_dir / "generation", family="census-acs", files=(table,), expected_keys=(output_name,),
+            schemas={table_name: described_schema(schema)}, inputs=evidence.inputs(),
         )
     except BaseException as error:
         evidence.finish(error)
@@ -55,21 +89,32 @@ def main():
     parser.add_argument("--verifier-implementation-id", required=True)
     parser.add_argument("--vintage", type=int, required=True)
     parser.add_argument("--state", required=True)
-    parser.add_argument("--counties", nargs="+", required=True)
+    parser.add_argument("--geography", choices=("county", "congressional district"), default="county")
+    parser.add_argument("--counties", nargs="+")
+    parser.add_argument("--districts", nargs="+")
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     from spicy_docs.source_native import SourceNativeReleaseReader
-    from spicy_docs.sources.census_acs_profile import ACS5_COUNTY_PROFILE
+    from spicy_docs.sources.census_acs_profile import ACS5_CONGRESSIONAL_DISTRICT_PROFILE, ACS5_COUNTY_PROFILE
     from spicy_docs.storage.blobs import LocalSourceNativeBlobStore
 
+    profile = ACS5_COUNTY_PROFILE if args.geography == "county" else ACS5_CONGRESSIONAL_DISTRICT_PROFILE
     reader = SourceNativeReleaseReader(
         LocalMemberSource(args.source_release),
         blob_source=LocalSourceNativeBlobStore(args.source_blobs),
-        profile=ACS5_COUNTY_PROFILE,
+        profile=profile,
         accepted_verifier_implementation_ids=frozenset({args.verifier_implementation_id}),
         expected_pin=ArtifactPin(args.source_logical_id, args.source_digest),
     )
-    artifact, evidence = build(reader, args.output_dir, vintage=args.vintage, state=args.state, counties=tuple(args.counties))
+    artifact, evidence = build(
+        reader,
+        args.output_dir,
+        vintage=args.vintage,
+        state=args.state,
+        counties=tuple(args.counties) if args.counties else None,
+        geography=args.geography,
+        districts=tuple(args.districts) if args.districts else None,
+    )
     print(json.dumps({"directory": str(args.output_dir / "generation"),
                       "sourceEvidence": str(evidence),
                       "logicalId": artifact.pin.logical_id, "artifactDigest": artifact.pin.artifact_digest}))

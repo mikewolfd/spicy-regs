@@ -212,3 +212,108 @@ def test_reviewed_reference_is_bound_to_source_versions_and_review_bytes(selecte
     review.write_text("changed")
     with pytest.raises(ValueError, match="review differs"):
         house.build(changed, tmp_path / "changed-review")
+
+
+def _synthetic_index_zip(year: int, entries: list[tuple[str, str, str, str, str, str]]) -> bytes:
+    from zipfile import ZIP_DEFLATED, ZipFile
+
+    header = "Prefix\tLast\tFirst\tSuffix\tFilingType\tStateDst\tYear\tFilingDate\tDocID\n"
+    body_lines = [
+        f"Hon.\t{last}\t{first}\t\t{ftype}\t{sd}\t{year}\t{fdate}\t{doc_id}"
+        for first, last, ftype, sd, fdate, doc_id in entries
+    ]
+    buf = BytesIO()
+    with ZipFile(buf, "w", compression=ZIP_DEFLATED) as zf:
+        zf.writestr(f"{year}FD.txt", (header + "\n".join(body_lines) + "\n").encode("utf-8"))
+    return buf.getvalue()
+
+
+def test_multi_year_indexes_and_configurable_ptr_batch_preserve_guards(tmp_path, monkeypatch):
+    from spicy_docs.sources.house_disclosures import HouseDisclosureError, index_url, report_url
+
+    raw = tmp_path / "raw"
+    monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(raw))
+    zip_2024 = _synthetic_index_zip(
+        2024,
+        [
+            ("Alice", "Tester", "P", "DE00", "05/10/2024", "20240001"),
+            ("Bob", "Annual", "A", "CA12", "05/15/2024", "10240001"),
+            ("Cara", "Blank", "B", "NY01", "05/16/2024", "10240002"),
+        ],
+    )
+    zip_2025 = (FIXTURES / "2025FD.zip").read_bytes()
+    pdf_2024 = (FIXTURES / "8220747.pdf").read_bytes()
+    pdf_2025 = (FIXTURES / "20030591.pdf").read_bytes()
+
+    url_2024 = index_url(2024)
+    url_2025 = index_url(2025)
+
+    def idx_handler(request):
+        url = str(request.url)
+        if url == url_2024:
+            body = zip_2024
+        elif url == url_2025:
+            body = zip_2025
+        else:
+            raise AssertionError(f"Unexpected index URL: {url}")
+        return httpx.Response(200, stream=httpx.ByteStream(body), headers={"content-type": "application/zip"})
+
+    selection = house.acquire_indexes(
+        [2024, 2025],
+        tmp_path / "multi-idx",
+        max_requests=4,
+        archive_root=raw,
+        transport=httpx.MockTransport(idx_handler),
+    )
+    assert [item["year"] for item in selection["indexes"]] == [2024, 2025]
+
+    # Forms A and B are strictly refused even in multi-year batches.
+    with pytest.raises(ValueError, match="P filings"):
+        house.acquire(selection, [(2024, "10240001")], tmp_path / "refuse-a", archive_root=raw)
+    with pytest.raises(ValueError, match="P filings"):
+        house.acquire(selection, [(2024, "10240002")], tmp_path / "refuse-b", archive_root=raw)
+
+    # max_requests=1 refuses when 2 PTRs are requested uncached.
+    with pytest.raises(HouseDisclosureError, match="budget|request"):
+        house.acquire(
+            selection,
+            [(2024, "20240001"), (2025, "20030591")],
+            tmp_path / "budget-too-small",
+            max_requests=1,
+            archive_root=raw,
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200,
+                    stream=httpx.ByteStream(pdf_2024 if "2024" in str(request.url) else pdf_2025),
+                    headers={"content-type": "application/pdf"},
+                )
+            ),
+        )
+
+    # Configurable max_requests allows batch acquisition across years.
+    ptr_urls = {
+        report_url(2024, "20240001", ptr=True): pdf_2024,
+        report_url(2025, "20030591", ptr=True): pdf_2025,
+    }
+    acquired = house.acquire(
+        selection,
+        [(2024, "20240001"), (2025, "20030591")],
+        tmp_path / "multi-ptr",
+        max_requests=4,
+        archive_root=raw,
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                stream=httpx.ByteStream(ptr_urls[str(request.url)]),
+                headers={"content-type": "application/pdf"},
+            )
+        ),
+    )
+    assert {(r["year"], r["doc_id"]) for r in acquired["reports"]} == {(2024, "20240001"), (2025, "20030591")}
+
+    artifact, _evidence, summary = house.build(acquired, tmp_path / "multi-build", archive_root=raw)
+    assert artifact.pin.artifact_digest
+    assert summary["rows"][house.INDEX] == 2938
+    assert summary["rows"][house.REPORTS] == 2
+    txs = rows(tmp_path / "multi-build", house.TRANSACTIONS)
+    assert txs and all(row["owner_raw"] == "" for row in txs)

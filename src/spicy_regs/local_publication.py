@@ -36,6 +36,7 @@ LOCAL_FAMILIES = frozenset({
     "census-acs",
     "census-geocoder",
     "cms-open-payments",
+    "congress-sessions",
     "court-opinions",
     "cms-medicare-provider",
     "executive-disclosures",
@@ -50,6 +51,7 @@ LOCAL_FAMILIES = frozenset({
     "house-disbursement-pages",
     "house-disclosures",
     "fjc-judicial-careers",
+    "irs-527",
     "irs-form990",
     "sam-exclusions",
     "sam-opportunities",
@@ -64,6 +66,147 @@ RAW_ROOT_ENV = "SPICYGOV_RAW_ROOT"
 SHRINK_OVERRIDES = ("R2_ALLOW_SHRINK", "R2_MIN_SIZE_RATIO")
 
 
+def _family_schemas(family: str) -> dict | None:
+    """Declared Arrow ``SCHEMAS`` for local families with explicit Arrow schema modules."""
+    if family == "census-acs":
+        from spicy_regs.transforms.build_census_acs import SCHEMAS
+        return SCHEMAS
+    if family == "census-geocoder":
+        from spicy_regs.transforms.build_census_geocoder import SCHEMAS
+        return SCHEMAS
+    if family == "cms-medicare-provider":
+        from spicy_regs.transforms.build_cms_provider import SCHEMA, TABLE
+        return {TABLE: SCHEMA}
+    if family == "cms-open-payments":
+        from spicy_regs.transforms.build_cms_open_payments import SCHEMA, TABLE
+        return {TABLE: SCHEMA}
+    if family == "congress-sessions":
+        from spicy_regs.transforms.build_congress_sessions import SCHEMAS
+        return SCHEMAS
+    if family == "executive-disclosures":
+        from spicy_regs.transforms.build_executive_disclosures import SCHEMAS
+        return SCHEMAS
+    if family == "fara":
+        from spicy_regs.transforms.build_fara import SCHEMAS
+        return SCHEMAS
+    if family == "fec-election-results":
+        from spicy_regs.transforms.fec_election_results import SCHEMAS
+        return SCHEMAS
+    if family == "fec-research-profiles":
+        from spicy_regs.pipelines.fec_research_profiles import SCHEMAS
+        return SCHEMAS
+    if family == "fjc-judicial-careers":
+        from spicy_regs.transforms.build_fjc import SCHEMAS
+        return SCHEMAS
+    if family == "foreign-assistance":
+        from spicy_regs.transforms.build_foreign_assistance import SCHEMAS
+        return SCHEMAS
+    if family == "grants-status":
+        from spicy_regs.transforms.build_grants_status import SCHEMAS
+        return SCHEMAS
+    if family == "gsa-iolp":
+        from spicy_regs.transforms.build_gsa_iolp import SCHEMAS
+        return SCHEMAS
+    if family == "historical-vetoes":
+        from spicy_regs.transforms.build_historical_vetoes import SCHEMAS
+        return SCHEMAS
+    if family == "hospital-cost-reports":
+        from spicy_regs.transforms.build_hospital_cost_reports import SCHEMAS
+        return SCHEMAS
+    if family == "house-disbursement-pages":
+        from spicy_regs.schemas.house_disbursement_pages import SCHEMAS
+        return SCHEMAS
+    if family == "house-disclosures":
+        from spicy_regs.pipelines.house_disclosures import SCHEMAS
+        return SCHEMAS
+    if family == "irs-527":
+        from spicy_regs.transforms.build_irs_527 import SCHEMAS
+        return SCHEMAS
+    if family == "irs-form990":
+        from spicy_regs.transforms.build_irs_form990 import SCHEMAS
+        return SCHEMAS
+    if family == "lobbying-quarterly-profiles":
+        from spicy_regs.transforms.build_lobbying_quarterly_profiles import SCHEMA, TABLE
+        return {TABLE: SCHEMA}
+    if family == "sam-exclusions":
+        from spicy_regs.transforms.build_sam_sources import SCHEMAS, SNAPSHOTS, TABLES
+        return {key: SCHEMAS[key] for key in (TABLES["exclusions"], SNAPSHOTS["exclusions"])}
+    if family == "sam-opportunities":
+        from spicy_regs.transforms.build_sam_sources import SCHEMAS, SNAPSHOTS, TABLES
+        return {key: SCHEMAS[key] for key in (TABLES["opportunities"], SNAPSHOTS["opportunities"])}
+    if family == "sec-edgar":
+        from spicy_regs.transforms.build_sec_edgar import SCHEMAS
+        return SCHEMAS
+    if family == "sector-comparisons":
+        from spicy_regs.transforms.sector_comparisons import SCHEMAS
+        return SCHEMAS
+    if family == "usaspending-awards":
+        from spicy_regs.transforms.build_usaspending_awards import SCHEMAS
+        return SCHEMAS
+    if family == "uscode-editions":
+        from spicy_regs.sources.uscode_editions import SCHEMAS
+        return SCHEMAS
+    if family == "white-house-actions":
+        from spicy_regs.pipelines.white_house import SCHEMA, TABLE
+        return {TABLE: SCHEMA}
+    return None
+
+
+def _parquet_schema_diff(expected, actual) -> list[str]:
+    expected_types = {field.name: field.type for field in expected}
+    actual_types = {field.name: field.type for field in actual}
+    issues = []
+    if missing := [field.name for field in expected if field.name not in actual_types]:
+        issues.append(f"missing columns {missing}")
+    if extra := [field.name for field in actual if field.name not in expected_types]:
+        issues.append(f"unexpected columns {extra}")
+    if mismatched := [
+        f"{field.name} (expected {expected_types[field.name]}, got {field.type})"
+        for field in actual
+        if field.name in expected_types and field.type != expected_types[field.name]
+    ]:
+        issues.append(f"type mismatch on {mismatched}")
+    if not issues and actual.names != expected.names:
+        issues.append(f"column order differs (expected {expected.names}, got {actual.names})")
+    return issues
+
+
+def _verify_family_schemas(directory: Path, family: str, root: dict) -> None:
+    """Refuse any candidate generation whose Parquet file schemas drift from the family's declared Arrow schemas."""
+    import pyarrow.parquet as pq
+
+    declared = _family_schemas(family)
+    if declared is None:
+        return
+    tables = root.get("spec", {}).get("tables") or {}
+    for table_key, table_spec in sorted(tables.items()):
+        table_name = table_key.removesuffix(".parquet")
+        if table_name not in declared:
+            raise PublicationError(
+                f"{family} candidate generation declares unexpected table {table_key!r}; "
+                f"declared tables are {sorted(declared)}"
+            )
+        expected = declared[table_name]
+        if "partitionColumns" in table_spec:
+            member_dir = directory / table_name
+            files = sorted(member_dir.rglob("*.parquet")) if member_dir.is_dir() else []
+            if not files:
+                raise PublicationError(f"{family} partitioned table {table_key!r} has no Parquet member files")
+        else:
+            parquet_path = directory / table_key
+            if not parquet_path.is_file():
+                raise PublicationError(f"{family} table {table_key!r} is missing its Parquet file")
+            files = [parquet_path]
+        for parquet_path in files:
+            actual = pq.read_schema(parquet_path)
+            if issues := _parquet_schema_diff(expected, actual):
+                relative = parquet_path.relative_to(directory).as_posix()
+                raise PublicationError(
+                    f"{family} schema parity check failed for {table_key} ({relative}): "
+                    + "; ".join(issues)
+                )
+
+
 def _candidate(directory: Path, family: str, evidence: tuple[Path, ...]) -> dict:
     """The generation's root, refused unless it is the expected family and pins source evidence.
 
@@ -75,6 +218,7 @@ def _candidate(directory: Path, family: str, evidence: tuple[Path, ...]) -> dict
         raise PublicationError(f"Generation is family {root['spec']['family']}, not the expected {family}")
     if not evidence or not any(item["role"] == INPUT_ROLE for item in root["inputs"]):
         raise PublicationError(f"A {family} generation is published with the source evidence it pins; pass --evidence")
+    _verify_family_schemas(directory, family, root)
     return root
 
 
@@ -219,6 +363,7 @@ def dry_run(args, root: dict) -> dict:
     """Every guard of a real publish, against a disk store holding a copy of the public index."""
     from spicy_regs.sources.disk_store import DiskStore
 
+    _verify_family_schemas(args.generation, args.family, root)
     if not args.scratch_raw:
         _require_shared_raw(tuple(args.evidence))
     _require_default_thresholds()
@@ -255,6 +400,7 @@ def publish(args, root: dict) -> dict:
     """Publish to the verified target unless the family already is this generation, then read it back publicly."""
     from dotenv import load_dotenv
 
+    _verify_family_schemas(args.generation, args.family, root)
     _require_shared_raw(tuple(args.evidence))
     load_dotenv(args.env_file)
     _require_default_thresholds()

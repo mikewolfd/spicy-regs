@@ -161,6 +161,107 @@ def build(selection, concepts, output_dir, *, fact_start, fact_end, archive_root
     return artifact, evidence.artifact_dir
 
 
+def build_bulk(
+    submissions_zip: Path,
+    companyfacts_zip: Path,
+    concepts,
+    output_dir: Path,
+    *,
+    filing_start: str,
+    filing_end: str,
+    fact_start: str,
+    fact_end: str,
+    ciks=None,
+    observed_at: str | None = None,
+    archive_root: Path | None = None,
+    read_index: Path | None = None,
+    max_member_bytes: int | None = None,
+    max_entries: int | None = None,
+    max_nodes: int | None = None,
+):
+    """Stream SEC bulk ``submissions.zip`` and ``companyfacts.zip`` into an evidenced generation."""
+    from datetime import UTC, datetime
+
+    from spicy_docs.sources.sec_edgar import COMPANYFACTS_BULK_URL, SUBMISSIONS_BULK_URL
+    from spicy_regs.generations import build_generation
+    from spicy_regs.native_types import described_schema
+    from spicy_regs.pipelines.raw_releases import inherit_read_index
+    from spicy_regs.transforms.build_sec_edgar import SCHEMAS, build_bulk_tables
+
+    submissions_zip = Path(submissions_zip)
+    companyfacts_zip = Path(companyfacts_zip)
+    output_dir = Path(output_dir)
+    if (output_dir / "candidate").exists() or (output_dir / "generation").exists():
+        raise ValueError("Use fresh SEC candidate output paths")
+    stamp = observed_at or datetime.now(UTC).isoformat()
+    evidence = CaptureEvidence(output_dir, FAMILY, archive_root=archive_root)
+    try:
+        snapshot = inherit_read_index(evidence, read_index)
+        owner = source_context(evidence)
+        sub_receipt = owner.retain_file(
+            submissions_zip,
+            stage="sec-edgar-bulk-submissions",
+            raw_source=True,
+            original_location=SUBMISSIONS_BULK_URL,
+            observed_at=stamp,
+        )
+        facts_receipt = owner.retain_file(
+            companyfacts_zip,
+            stage="sec-edgar-bulk-companyfacts",
+            raw_source=True,
+            original_location=COMPANYFACTS_BULK_URL,
+            observed_at=stamp,
+        )
+        evidence.retain_bytes(
+            json.dumps(
+                {
+                    "submissions_sha256": sub_receipt["sha256"],
+                    "companyfacts_sha256": facts_receipt["sha256"],
+                    "ciks": list(ciks) if ciks is not None else None,
+                    "concepts": concepts,
+                    "filing_start": filing_start,
+                    "filing_end": filing_end,
+                    "fact_start": fact_start,
+                    "fact_end": fact_end,
+                },
+                sort_keys=True,
+            ).encode(),
+            stage="sec-edgar-bulk-selection",
+        )
+        tables = build_bulk_tables(
+            submissions_zip,
+            companyfacts_zip,
+            concepts,
+            output_dir / "candidate",
+            filing_start=filing_start,
+            filing_end=filing_end,
+            fact_start=fact_start,
+            fact_end=fact_end,
+            submissions_sha256=sub_receipt["sha256"],
+            companyfacts_sha256=facts_receipt["sha256"],
+            observed_at=stamp,
+            ciks=ciks,
+            max_member_bytes=max_member_bytes,
+            max_entries=max_entries,
+            max_nodes=max_nodes,
+        )
+        artifact = build_generation(
+            output_dir / "generation",
+            family=FAMILY,
+            files=tables,
+            expected_keys=[name + ".parquet" for name in SCHEMAS],
+            schemas={name: described_schema(schema) for name, schema in SCHEMAS.items()},
+            inputs=evidence.inputs(),
+            read_snapshot=snapshot,
+            owned_output_root=output_dir,
+        )
+    except BaseException as error:
+        evidence.finish(error)
+        raise
+    evidence.finish()
+    return artifact, evidence.artifact_dir
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -182,6 +283,18 @@ def main():
     candidate.add_argument("--output-dir", type=Path, required=True)
     candidate.add_argument("--archive-root", type=Path)
     candidate.add_argument("--read-index", type=Path)
+    bulk = commands.add_parser("build-bulk")
+    bulk.add_argument("--submissions-zip", type=Path, required=True)
+    bulk.add_argument("--companyfacts-zip", type=Path, required=True)
+    bulk.add_argument("--cik", action="append", dest="ciks")
+    bulk.add_argument("--concept", action="append", required=True, help="taxonomy:concept, repeatable")
+    bulk.add_argument("--filing-start", required=True)
+    bulk.add_argument("--filing-end", required=True)
+    bulk.add_argument("--fact-start", required=True)
+    bulk.add_argument("--fact-end", required=True)
+    bulk.add_argument("--output-dir", type=Path, required=True)
+    bulk.add_argument("--archive-root", type=Path)
+    bulk.add_argument("--read-index", type=Path)
     args = parser.parse_args()
     if args.command == "acquire":
         reuse = json.loads(args.reuse_captures.read_text())["sources"] if args.reuse_captures else ()
@@ -190,6 +303,30 @@ def main():
         )
         args.captures_out.write_text(json.dumps(selection, indent=2, sort_keys=True) + "\n")
         print(json.dumps(selection))
+    elif args.command == "build-bulk":
+        concepts = [name.split(":", 1) for name in args.concept]
+        artifact, evidence = build_bulk(
+            args.submissions_zip,
+            args.companyfacts_zip,
+            concepts,
+            args.output_dir,
+            filing_start=args.filing_start,
+            filing_end=args.filing_end,
+            fact_start=args.fact_start,
+            fact_end=args.fact_end,
+            ciks=args.ciks,
+            archive_root=args.archive_root,
+            read_index=args.read_index,
+        )
+        print(
+            json.dumps(
+                {
+                    "logical_id": artifact.pin.logical_id,
+                    "digest": artifact.pin.artifact_digest,
+                    "evidence": str(evidence),
+                }
+            )
+        )
     else:
         concepts = [name.split(":", 1) for name in args.concept]
         artifact, evidence = build(
