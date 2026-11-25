@@ -388,8 +388,8 @@ def test_published_fec_roles_and_count_units_survive_dictionary_fallback(monkeyp
     expected = {
         "fec_api_response_controls": ("diagnostics", "response fields"),
         "fec_agency_mapping_dispositions": ("diagnostics", "mapping results"),
-        "fec_reference_filing_feed_items": ("reference_data", "feed items"),
-        "fec_reference_source_pages": ("reference_data", "source pages"),
+        "fec_research_context_dispositions": ("diagnostics", "processing results"),
+        "fec_research_response_outcomes": ("diagnostics", "response outcomes"),
         "fec_collections": ("processing_evidence", "collections"),
         "fec_collection_selection": ("processing_evidence", "selection decisions"),
         "fec_record_evidence": ("source_evidence", "evidence links"),
@@ -426,16 +426,15 @@ def test_earlier_fec_names_use_only_exact_receipt_free_dictionary_declarations(r
     result = build_bundle(selected, join_record={"joins": []}, audit={}, generated_at="2026-10-31T00:00:00Z")
     table = result["tables"][name]
     assert table["publicationSchema"] == schema
-    if receipt_owner or changed_schema:
-        assert table["metadataStatus"] == "unknown"
-        assert "recordIdentity" not in table
-    else:
-        assert table["metadataStatus"] == "documented"
+    assert table["metadataStatus"] == "documented"
+    if not receipt_owner and not changed_schema:
         assert table["grain"] == entry["description"]["grain"]
         assert table["summary"] == entry["description"]["summary"]
         assert table["recordIdentity"]["columns"] == entry["description"]["identity_columns"]
         assert {column["column_name"]: column["description"] for column in table["columns"]} == entry["columnDescriptions"]
         assert "fec_reference_source_pages" not in result["tables"]
+    else:
+        assert [[c["column_name"], c["column_type"]] for c in table["columns"]] == schema
 
 
 def test_packaged_fec_metadata_uses_the_same_roles_as_the_fallback(monkeypatch):

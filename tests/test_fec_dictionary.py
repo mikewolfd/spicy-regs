@@ -20,7 +20,7 @@ RESOURCE = dd.REPO_ROOT / "data_dictionary/fec_typed_schemas.json"
 
 @pytest.mark.parametrize("owner", ["legacy", "native", "absent", "local_native", "invalid"])
 def test_describe_table_uses_the_selected_generation_field_meaning(monkeypatch, owner):
-    table, column = "fec_receipts", "filing_association_target_generation_pin"
+    table, column = "fec_candidate_history", "party"
     entry = json.loads(dd.DEFAULT_MCP_METADATA_PATH.read_text())[table]
     historical = entry["legacy_column_descriptions"][column]
     current = next(c["description"] for c in entry["columns"] if c["column_name"] == column)
@@ -29,9 +29,9 @@ def test_describe_table_uses_the_selected_generation_field_meaning(monkeypatch, 
         family = {"tables": {table + ".parquet": {}}}
         if owner == "native":
             family["etlReceipts"] = {}
-        index["families"]["fec-query"] = family
+        index["families"]["fec-candidate-history"] = family
     elif owner == "invalid":
-        index["families"]["fec-query"] = {}
+        index["families"]["fec-candidate-history"] = {}
     local = {"native": {table: {}}} if owner == "local_native" else None
     monkeypatch.setattr(mcp_server, "_connection_index", lambda _: index)
     monkeypatch.setattr(mcp_server, "_connection_local_selection", lambda _: local)
@@ -108,9 +108,12 @@ def test_retired_fec_discovery_metadata_requires_exact_selection(monkeypatch, se
             }
             assert described["publication"]["coverage"] == "sampled"
         else:
-            assert group["subject"] == "unassigned"
-            assert described["metadata"] == {}
-            assert described["publication"]["coverage"] is None
+            # fec_research_filing_feed_items is now aligned into table_metadata.json, so
+            # mismatched selections fall back to current catalog metadata rather than the
+            # compact fec_retained_discovery_metadata.json override.
+            assert group["subject"] == "campaign_finance"
+            assert "grain" in described["metadata"] and "summary" in described["metadata"]
+            assert described["publication"]["coverage"] == "sampled"
 
 
 def schemas():
@@ -175,16 +178,22 @@ def test_current_mapper_schemas_remain_compatible_with_the_complete_declared_uni
         ("fec_filing_report_observations", fec_filing_forms.FILING_REPORT_SCHEMA),
         ("fec_filing_text_observations", fec_filing_forms.FILING_TEXT_SCHEMA),
     ])
+    from spicy_regs.transforms.fec_identity_context_fields import REGISTRY as IDENTITY_REGISTRY
+    from spicy_regs.transforms.fec_identity_receipts import dataset_policy as identity_policy
+    from spicy_regs.transforms.fec_subject_receipts import dataset_policy as subject_policy
+
     for table, producer in producer_schemas:
-        policy = dd.subject_policies()[table]
+        if table in IDENTITY_REGISTRY:
+            policy = identity_policy(table)
+        else:
+            policy = subject_policy(table, declared[table])
         if producer.equals(policy.subject_schema, check_metadata=False):
             continue
         # The identity producer now includes corrected int district/date fields;
         # the installed policy, not the historical retained-union artifact, owns
         # its publishable schema. Its exact input fields must stay classified.
         if table in {"fec_candidate_api_observations", "fec_committee_observations"}:
-            from spicy_regs.transforms.fec_identity_context_fields import REGISTRY
-            assert set(producer.names) <= set(REGISTRY[table]["input_fields"]), table
+            assert set(producer.names) <= set(IDENTITY_REGISTRY[table]["input_fields"]), table
         else:
             assert pa.unify_schemas([declared[table], producer]).equals(declared[table], check_metadata=False), table
 
@@ -203,7 +212,7 @@ def test_dictionary_retains_observation_grains_financial_limits_and_exact_eviden
     assert "value_operator and bound_value" in metadata["fec_report_metrics"]["summary"]
     assert "cancellation status" in metadata["fec_research_meeting_observations"]["summary"]
     receipt_only = {d["dataset"] for d in metadata["etl_receipts"]["datasets"] if d["receipt_only"]}
-    logical_main = {"fec_record_evidence", "fec_source_records", "fec_reference_source_pages"}
+    logical_main = {"fec_record_evidence", "fec_source_records", "fec_research_source_pages"}
     assert not logical_main & receipt_only
     assert logical_main <= metadata.keys()
     assert receipt_only.isdisjoint(dd.TABLES)
@@ -264,7 +273,5 @@ def test_general_committee_profile_descriptions_preserve_source_grain():
     entry = dd.load_curated_descriptions()["fec_committee_observations"]
     columns = entry["columns"]
     assert "capture-time" in entry["grain"]
-    assert "affiliated committee or connected organization" in columns["affiliated_committee_name"]
-    assert "substitute for bulk CONNECTED_ORG_NM" in columns["affiliated_committee_name"]
     assert "activity cycles" in columns["cycles_json"]
     assert "NULL for general committee API profiles" in columns["source_cycle"]

@@ -14,7 +14,9 @@ from spicy_regs.etl_receipts import RECEIPT_SCHEMA
 from spicy_regs.generations import implementation_id
 from spicy_regs.transforms.fec_identity_receipts import IdentityReceiptWriter
 from spicy_regs.sources import publication
-from tests.test_fec_native_conversion import old_family, fec_bucket
+from tests.test_fec_native_conversion import (  # noqa: F401 (autouse fixture)
+    old_family, fec_bucket, observations_on_its_receipt_route,
+)
 from tests.test_native_conversion import MAIN, WHEEL, STATE, BUCKET
 
 PIN = {'fixture_source_commit': 'a' * 40, 'installed_sdk': '0.65.0'}

@@ -102,13 +102,17 @@ def test_subject_tamper_missing_receipt_duplicate_identity_and_existing_output_r
         list(read_identity_rows(output, table, generation_id="g1"))
 
 
-def test_real_mapping_build_and_generation_admission(tmp_path):
+def test_real_mapping_build_and_generation_admission(tmp_path, monkeypatch):
     import hashlib
     import pyarrow as pa
+    from spicy_regs import subject_catalog
     from spicy_regs.transforms.build_fec_identity_context import build_fec_identity_context
     from spicy_regs.transforms.fec_identity_receipts import seal_identity_context
     from spicy_regs.generations import verify_generation
     from tests.test_fec_candidate_observations import entry, row, GEN
+
+    retired = subject_catalog.retired_receipt_datasets()
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired - {"fec_source_records"})
 
     source = tmp_path / "source.parquet"
     pq.write_table(

@@ -15,7 +15,6 @@ One explicit target-to-witness association with exact endpoint coordinates. Reso
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `observation_ordinal` | `BIGINT` | Zero-based observation order within this dataset generation. Repeated observations remain separate; this is not a publisher record identifier. |
 | `target_table` | `VARCHAR` | Typed table containing the evidence or association target; target_record_id is scoped to that table and resolved generation. |
 | `target_record_id` | `VARCHAR` | Exact typed observation key supported by this witness or filing association; not a native source ID. |
 | `target_generation_scope` | `VARCHAR` | Whether the target is in this containing generation or an external generation. A self reference resolves through publication metadata, avoiding a self-hash cycle. |

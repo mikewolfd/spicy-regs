@@ -237,13 +237,18 @@ def test_agency_text_keeps_reading_order_without_source_locator():
 @pytest.mark.parametrize("column", ["source_namespace", "amount_status"])
 def test_returned_column_is_a_text_column_of_exactly_the_decided_tables(column):
     """Owner decision, 2026-10-05: the column returns where its published value varies, and nowhere else."""
-    from spicy_regs.etl_policy_registry import installed_policies
     from spicy_regs.fec_receipt_adapter import processing_declarations
+    from spicy_regs.transforms.fec_identity_context_fields import REGISTRY as IDENTITY_REGISTRY
     from spicy_regs.transforms.fec_identity_receipts import dataset_policy as identity_policy
     from spicy_regs.transforms.fec_subject_receipts import dataset_policy
-    from tests.test_fec_subject_receipts import RETURNED, declared_schema
+    from tests.test_fec_subject_receipts import FIELD_RULES, RETURNED, declared_schema
 
-    installed = installed_policies()
+    # Track 3A-1 removed the 50 unbuilt fec-query policy declarations from etl_policies/;
+    # construct the current policy objects directly from the identity and subject rule sets.
+    installed = {
+        **{name: identity_policy(name) for name in IDENTITY_REGISTRY},
+        **{name: dataset_policy(name, declared_schema(name)) for name in FIELD_RULES},
+    }
     holders = {name for name, policy in installed.items() if name.startswith("fec_") and column in policy.subject_schema.names}
     assert holders == RETURNED[column]
     for name in sorted(holders):

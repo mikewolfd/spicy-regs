@@ -61,7 +61,15 @@ def _frozen_answer_problems(installed):
             earlier = earlier_policy(name, declared["policy_version"])
             recorded[descriptor_digest(earlier)] = earlier
     unpublished = _unpublished_digests()
-    answers = {digest: answer for digest, answer in frozen["answers"].items() if digest not in unpublished}
+    from spicy_regs.data_dictionary import FEC_TYPED_TABLES
+
+    unshipped_fec = frozenset(FEC_TYPED_TABLES)
+    assert not unshipped_fec & (installed.keys() | policy_migrations.ledger().keys())
+    answers = {
+        digest: answer
+        for digest, answer in frozen["answers"].items()
+        if digest not in unpublished and answer[0] not in unshipped_fec
+    }
     deviations = frozen["deviations"]
     problems = [f"{dataset} {version} is no longer recorded" for digest, (dataset, version, _) in answers.items()
                 if digest not in recorded]

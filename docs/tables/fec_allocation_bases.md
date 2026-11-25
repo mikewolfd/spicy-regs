@@ -20,7 +20,9 @@ One source-reported allocation method, ratio or supporting-basis record version.
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
 | `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
 | `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
+| `value_mapping_version` | `VARCHAR` | Version of the exact monetary and date conversion rules used for supported values. |
 | `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
+| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
 | `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
 | `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
 | `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
@@ -68,12 +70,45 @@ One source-reported allocation method, ratio or supporting-basis record version.
 | `senate_only_year_indicator` | `VARCHAR` | Literal source flag for a Senate-only election year in this allocation formula. Interpret using the pinned layout definition; no automatic total eligibility. |
 | `nonpresidential_nonsenate_year_indicator` | `VARCHAR` | Literal source flag for an election year without presidential or Senate races in this allocation formula. Interpret using the pinned layout definition; no automatic total eligibility. |
 | `financial_grain` | `VARCHAR` | Explicit financial row meaning selected for this layout, separating reported activity, balances, allocations and other observations. |
+| `aggregation_status` | `VARCHAR` | Declared limitation on adding this observation to other records; requires the relevant named financial policy before totals. |
+| `actual_federal_support_amount_raw` | `VARCHAR` | Literal source value before conversion for actual_federal_support_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `actual_federal_support_amount_status` | `VARCHAR` | Source-presence or conversion state for actual_federal_support_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
+| `actual_nonfederal_support_amount_raw` | `VARCHAR` | Literal source value before conversion for actual_nonfederal_support_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `actual_nonfederal_support_amount_status` | `VARCHAR` | Source-presence or conversion state for actual_nonfederal_support_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `actual_federal_support_amount` | `DECIMAL(38,9)` | Exact decimal for actual federal support reported for the allocation basis. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `actual_nonfederal_support_amount` | `DECIMAL(38,9)` | Exact decimal for actual nonfederal support reported for the allocation basis. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `definition_set_id` | `VARCHAR` | Key of the pinned source layout in fec_filing_definitions. Join its definition evidence for exact workbook cells; the layout does not validate the submission. |
+| `declared_format_version` | `VARCHAR` | Format version declared by the filing header, retained separately from the reviewed source layout version. |
 | `filing_header_record_id` | `VARCHAR` | Source-record key of the actual file header. Resolve with collection_id and filing_header_locator_json in the source generation. |
 | `filing_header_locator_json` | `VARCHAR` | Exact native coordinates of the file-header witness, separate from the financial row's own locator. |
+| `submission_conformance_status` | `VARCHAR` | Explicit statement of whether submission conformance was established; successful field mapping alone does not establish it. |
+| `source_placeholder_2` | `VARCHAR` | Literal value at source position 2, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_3` | `VARCHAR` | Literal value at source position 3, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_4` | `VARCHAR` | Literal value at source position 4, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_5` | `VARCHAR` | Literal value at source position 5, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_6` | `VARCHAR` | Literal value at source position 6, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_7` | `VARCHAR` | Literal value at source position 7, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_8` | `VARCHAR` | Literal value at source position 8, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_9` | `VARCHAR` | Literal value at source position 9, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_10` | `VARCHAR` | Literal value at source position 10, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_11` | `VARCHAR` | Literal value at source position 11, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_12` | `VARCHAR` | Literal value at source position 12, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_13` | `VARCHAR` | Literal value at source position 13, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_14` | `VARCHAR` | Literal value at source position 14, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_15` | `VARCHAR` | Literal value at source position 15, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_16` | `VARCHAR` | Literal value at source position 16, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_17` | `VARCHAR` | Literal value at source position 17, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_18` | `VARCHAR` | Literal value at source position 18, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_19` | `VARCHAR` | Literal value at source position 19, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_20` | `VARCHAR` | Literal value at source position 20, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_21` | `VARCHAR` | Literal value at source position 21, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_22` | `VARCHAR` | Literal value at source position 22, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_23` | `VARCHAR` | Literal value at source position 23, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_24` | `VARCHAR` | Literal value at source position 24, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_25` | `VARCHAR` | Literal value at source position 25, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_placeholder_26` | `VARCHAR` | Literal value at source position 26, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_internal_use` | `VARCHAR` | Literal source field designated for internal use; retained without assigning an undocumented financial meaning. |
 | `flat_minimum_federal_percentage` | `VARCHAR` | Source-stated flat minimum federal allocation percentage retained as text. It defines an allocation basis, not an additional payment amount. |
 | `federal_percentage` | `VARCHAR` | Source-stated federal share percentage retained as text. It defines an allocation basis, not an additional payment amount. |
 | `nonfederal_percentage` | `VARCHAR` | Source-stated nonfederal share percentage retained as text. It defines an allocation basis, not an additional payment amount. |
@@ -85,12 +120,3 @@ One source-reported allocation method, ratio or supporting-basis record version.
 | `exempt_activity_indicator` | `VARCHAR` | Literal source flag for exempt activity. Interpret using the pinned layout definition; no automatic total eligibility. |
 | `direct_candidate_support_indicator` | `VARCHAR` | Literal source flag for direct candidate support. Interpret using the pinned layout definition; no automatic total eligibility. |
 | `ratio_code` | `VARCHAR` | Native allocation-ratio code, resolved only under the pinned layout definitions. |
-| `filing_association_status` | `VARCHAR` | The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing. |
-| `filing_association_policy` | `VARCHAR` | Version of the maintained filing association rule used for this decision. |
-| `filing_association_source_generation_pin` | `VARCHAR` | Exact selected source generation used for the filing association decision. |
-| `filing_association_target_generation_pin` | `VARCHAR` | Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases. |
-| `filing_association_record_id` | `VARCHAR` | Identity of the admitted association witness; null when source context or a singular header witness is unavailable. |
-| `filing_association_referenced_key` | `VARCHAR` | Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified. |
-| `filing_association_target_generation_scope` | `VARCHAR` | Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match. |
-| `filing_association_target_count` | `BIGINT` | Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest. |
-| `filing_association_target_record_ids` | `VARCHAR[]` | Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

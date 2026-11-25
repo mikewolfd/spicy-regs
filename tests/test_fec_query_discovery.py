@@ -5,7 +5,6 @@ from dataclasses import replace
 from typing import Any
 
 import pyarrow as pa
-from spicy_regs.subject_catalog import policies
 
 import duckdb
 import pytest
@@ -15,14 +14,21 @@ from tests.test_mcp_server import _listed, _records
 from spicy_regs import mcp_server
 from spicy_regs.data_dictionary import build_fec_child_metadata, expected_schemas, load_descriptions
 from spicy_regs.fec_query_catalog import child_column_descriptions
+from spicy_regs.fec_receipt_adapter import processing_declarations
 from spicy_regs.relationship_views import FEC_QUERY_VIEWS
 from spicy_regs.relationship_views.sql_views import annotate_views, install_sql_views
+
+
+def _declared_arrow_schema(table: str) -> pa.Schema:
+    import base64
+
+    return pa.ipc.read_schema(pa.BufferReader(base64.b64decode(processing_declarations()[table]["arrow_schema"])))
 
 
 def test_primary_and_necessary_children_share_discovery(monkeypatch):
     con: Any = duckdb.connect()
     table = "fec_filing_text_observations"
-    schema = policies()[table].subject_schema
+    schema = _declared_arrow_schema(table)
     values = {"record_id": "observation", "text_fragments": [{"field_position": 2, "text": "Narrative"}] * 2}
     con.register("fixture", pa.Table.from_pylist([values], schema=schema))
     con.execute(f"CREATE TABLE {table} AS SELECT * FROM fixture")
@@ -65,7 +71,7 @@ def test_role_is_explicit_and_installation_does_not_evaluate_rows():
     con.create_function("observe", observe, side_effects=True)
     spec = replace(next(s for s in FEC_QUERY_VIEWS if s.name == "fec_filing_text"), rule_version="future-version")
     table = "fec_filing_text_observations"
-    schema = policies()[table].subject_schema
+    schema = _declared_arrow_schema(table)
     con.register("empty", pa.Table.from_batches([], schema=schema))
     con.execute(f"CREATE VIEW {table} AS SELECT * REPLACE (observe(record_id) AS record_id) FROM empty")
     installed = install_sql_views(con, [table], [spec])

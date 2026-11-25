@@ -15,7 +15,6 @@ Records which saved files or snapshots a named selection policy chose. Selection
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `observation_ordinal` | `BIGINT` | Zero-based observation order within this dataset generation. Repeated observations remain separate; this is not a publisher record identifier. |
 | `record_id` | `VARCHAR` | Deterministic identity of this collection/member policy decision, binding the source generation and equivalence evidence; not a financial transaction key. |
 | `policy_version` | `VARCHAR` | Exact named/versioned selection or association policy responsible for this decision. |
 | `purpose` | `VARCHAR` | Named analytic purpose of this representation-selection policy: a retained reported snapshot, not a current or net money total. |

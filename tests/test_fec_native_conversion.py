@@ -9,11 +9,36 @@ import pytest
 from spicy_regs import native_conversion as conversion
 from spicy_regs.conversion_reads import ConversionReadOperation
 from spicy_regs.fec_native_conversion import (
-    REBUILT_TABLES, RETIRED_TABLES, build_retained_family, staged_snapshot, family_tables)
+    FEC_SCHEMA_PATH, REBUILT_TABLES, RETIRED_TABLES, build_retained_family, staged_snapshot, family_tables)
 from spicy_regs.generations import build_generation
 from spicy_regs.sources import publication
 from spicy_regs.transforms.build_fec_observations import RECORD_SCHEMA, COLLECTION_SCHEMA, RELATIONSHIP_SCHEMA
 from tests.test_native_conversion import bucket as _bucket, BASE, MAIN, WHEEL, STATE
+
+
+@pytest.fixture(autouse=True)
+def observations_on_its_receipt_route(monkeypatch):
+    """Exercise fec-observations and fec-query receipt routes inside converter tests after retirement/policy removal."""
+    from spicy_regs import subject_catalog
+    from spicy_regs.transforms.fec_identity_context_fields import REGISTRY as IDENTITY_REGISTRY
+    from spicy_regs.transforms.fec_identity_receipts import dataset_policy as identity_policy
+    from spicy_regs.transforms.fec_native_subjects import FIELD_RULES
+    from spicy_regs.transforms.fec_subject_receipts import dataset_policy as subject_policy
+
+    retired = subject_catalog.retired_receipt_datasets()
+    monkeypatch.setattr(
+        subject_catalog,
+        "retired_receipt_datasets",
+        lambda: retired - {"fec_collections", "fec_relationships", "fec_source_records"},
+    )
+    typed_schemas = json.loads(FEC_SCHEMA_PATH.read_text())["tables"]
+    converter_policies = dict(subject_catalog.policies())
+    for name in IDENTITY_REGISTRY:
+        converter_policies.setdefault(name, identity_policy(name))
+    for name in FIELD_RULES:
+        schema = pa.ipc.read_schema(pa.BufferReader(base64.b64decode(typed_schemas[name]["arrow_schema_ipc_base64"])))
+        converter_policies.setdefault(name, subject_policy(name, schema))
+    monkeypatch.setattr(subject_catalog, "policies", lambda: converter_policies)
 
 
 @pytest.fixture(autouse=True, name="fec_originals")
@@ -189,10 +214,15 @@ def test_changed_fec_policies_preserve_exact_earlier_admission():
     from spicy_regs.subject_catalog import policies
     from spicy_regs.etl_receipts import receipt_policies
     from dataclasses import replace
-    for name in ('fec_source_records', 'fec_receipts', 'fec_agency_mapping_dispositions'):
+    for name, expected in (
+        ('fec_source_records', ['3', '2', '1']),
+        ('fec_collections', ['2', '1']),
+        ('fec_receipts', ['3']),
+        ('fec_agency_mapping_dispositions', ['3']),
+    ):
         current = policies()[name]
         versions = receipt_policies(current)
-        assert [p.policy_version.rsplit('/', 1)[1] for p in versions] == ['3', '2', '1']
+        assert [p.policy_version.rsplit('/', 1)[1] for p in versions] == expected
         changed = replace(current, subject_schema=current.subject_schema.append(pa.field('unadmitted', pa.string())))
         assert receipt_policies(changed) == (changed,)
 

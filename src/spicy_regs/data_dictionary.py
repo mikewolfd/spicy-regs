@@ -535,6 +535,19 @@ FEC_TYPED_TABLES: tuple[str, ...] = (
     "fec_reference_source_pages",
 )
 
+# The 54 published fec-query tables (the 48 tables above plus the six research/retained tables).
+FEC_QUERY_TABLES: tuple[str, ...] = tuple(
+    name for name in FEC_TYPED_TABLES
+    if name not in {"fec_reference_filing_feed_items", "fec_reference_source_pages"}
+) + (
+    "fec_research_context_dispositions",
+    "fec_research_document_observations",
+    "fec_research_filing_feed_items",
+    "fec_research_response_outcomes",
+    "fec_research_source_pages",
+    "fec_retained_csv_observations",
+)
+
 
 # Display order for the dictionary. The first three are the core record types;
 # the rest are derived rollups. This is the full public R2 surface.
@@ -569,7 +582,7 @@ TABLES: tuple[str, ...] = (
     "fec_collections",
     "fec_source_records",
     "fec_relationships",
-    *FEC_TYPED_TABLES,
+    *FEC_QUERY_TABLES,
     "org_committee_links",
     "gao_reports",
     "crs_reports",
@@ -720,7 +733,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "fec_collections",
         "fec_source_records",
         "fec_relationships",
-        *FEC_TYPED_TABLES,
+        *FEC_QUERY_TABLES,
         "org_committee_links",
         "gao_reports",
         "crs_reports",
@@ -1014,11 +1027,30 @@ def fec_typed_schemas() -> dict[str, list[tuple[str, str]]]:
     return result
 
 
+def fec_query_schemas() -> dict[str, list[tuple[str, str]]]:
+    """Read the 54 published legacy fec-query schemas without importing its producers."""
+    path = DICTIONARY_INPUTS / "fec_historical_definitions.json"
+    document = json.loads(path.read_text(encoding="utf-8"))
+    tables = document.get("tables", {})
+    if not set(FEC_QUERY_TABLES) <= set(tables):
+        raise ValueError("Retained historical FEC declaration is missing published fec-query tables")
+    result = {}
+    for table in FEC_QUERY_TABLES:
+        columns = tables[table]["columns"]
+        if (not columns or any(not isinstance(pair, list) or len(pair) != 2
+                               or not all(isinstance(value, str) and value for value in pair) for pair in columns)
+                or len({pair[0] for pair in columns}) != len(columns)):
+            raise ValueError(f"Invalid historical FEC declared columns: {table}")
+        result[table] = [tuple(pair) for pair in columns]
+    return result
+
+
 def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]:
     """Return ``{table: [(column, type_label), ...]}`` for all tables (offline)."""
     schemas: dict[str, list[tuple[str, str]]] = {}
     from_contracts = contract_schemas()
     from_fec = fec_typed_schemas()
+    from_fec_query = fec_query_schemas()
     from spicy_regs.contract_types import described_schema
     from spicy_regs.transforms.build_cms_part_d import SCHEMA as CMS_PART_D_SCHEMA
     from spicy_regs.transforms.build_cms_medicaid import SCHEMA as CMS_MEDICAID_SCHEMA
@@ -1225,6 +1257,8 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
             schemas[name] = described_schema(builder_schemas[name])
         elif name in builder_pairs:
             schemas[name] = list(builder_pairs[name])
+        elif name in from_fec_query:
+            schemas[name] = from_fec_query[name]
         elif name in from_fec:
             schemas[name] = from_fec[name]
         elif name in from_contracts:

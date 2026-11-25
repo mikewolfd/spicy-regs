@@ -20,4 +20,4 @@ One distinct pinned source layout with its literal family, version and form. Fin
 | `version` | `VARCHAR` | Literal version of the source layout definition; distinct from the consumer mapping version. |
 | `form` | `VARCHAR` | Literal source form or schedule name identifying the retained layout definition. |
 | `workbook_sha256` | `VARCHAR` | Digest of the exact retained source workbook supplying this layout definition. |
-| `observation_ordinal` | `BIGINT` | Zero-based observation order within this dataset generation. Repeated observations remain separate; this is not a publisher record identifier. |
+| `layout_json` | `VARCHAR` | Ordered source field definitions with exact worksheet/cell addresses and available rules. This defines source layout, not a consumer policy or submission-conformance result. |

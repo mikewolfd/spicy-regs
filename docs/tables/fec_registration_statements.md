@@ -16,7 +16,22 @@ One source Form 1 or Form 2 registration observation. Makes filed committee/cand
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
+| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
+| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
+| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
+| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
+| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
+| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
+| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
+| `source_pointer` | `VARCHAR` | Exact pointer within the provider-owned native record to the mapped value or metadata object. |
+| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
+| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
 | `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
+| `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
+| `filing_link_status` | `VARCHAR` | Status of the relationship to a submitted filing version; unresolved references preserve the financial observation. |
+| `native_field_states_json` | `VARCHAR` | JSON map of field presence states such as source_missing, source_null, source_empty or reported. |
+| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
 | `committee_id` | `VARCHAR` | Literal FEC committee identifier as reported in this observation. Use cycle and source scope for historical joins. |
 | `committee_name` | `VARCHAR` | The committee's name as reported, without a name-based identity merge. |
 | `committee_street_1` | `VARCHAR` | The committee's first reported street-address line. |
@@ -45,26 +60,13 @@ One source Form 1 or Form 2 registration observation. Makes filed committee/cand
 | `candidate_city` | `VARCHAR` | The candidate's reported city. |
 | `candidate_state` | `VARCHAR` | The candidate's reported state value. |
 | `candidate_zip` | `VARCHAR` | The candidate's reported postal code, preserving leading zeroes. |
+| `election_year` | `VARCHAR` | Election year stated by the source, distinct from source cycle, fiscal year and capture time. |
+| `report_year` | `VARCHAR` | Year reported for the filing/report, preserved independently of cycle and transaction date. |
 | `form_type` | `VARCHAR` | Literal filing form or record-type code from the source layout; does not prove submission conformance. |
-| `receipt_date` | `DATE` | The day FEC received the statement, as the source states it. On a Form 2 (candidate) row the year must be the row's own `report_year`; on a Form 1 (committee) row, a two-digit year (FEC's file writes `31-DEC-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`24` is 2024). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; capture time is never substituted. |
-| `election_year` | `INTEGER` | Election year stated by the source, distinct from source cycle, fiscal year and capture time. |
-| `report_year` | `INTEGER` | Year reported for the filing/report, preserved independently of cycle and transaction date. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
-| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
-| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
-| `source_pointer` | `VARCHAR` | Exact pointer within the provider-owned native record to the mapped value or metadata object. |
 | `committee_id_status` | `VARCHAR` | State or syntax check of the reported committee ID; a valid shape is not a resolved identity. |
 | `candidate_id_status` | `VARCHAR` | State or syntax check of the reported candidate ID; a valid shape is not a resolved identity. |
 | `affiliation_status` | `VARCHAR` | Whether the affiliation is represented by a supported source identifier or only a literal name. |
+| `receipt_date_raw` | `VARCHAR` | Literal source value before conversion for receipt_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
 | `receipt_date_status` | `VARCHAR` | How `receipt_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `receipt_date`, or on a Form 2 row its `report_year`; a Form 2 date in another year reads `outside_selected_year_bounds`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `receipt_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every Form 1 receipt date in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
-| `election_year_status` | `VARCHAR` | Interpretation of source election_year: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `report_year_status` | `VARCHAR` | Whether the CSV source report year has an exact four-digit spelling, is missing, or is unsupported. |
+| `receipt_date` | `DATE` | The day FEC received the statement, as the source states it. On a Form 2 (candidate) row the year must be the row's own `report_year`; on a Form 1 (committee) row, a two-digit year (FEC's file writes `31-DEC-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`24` is 2024). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; capture time is never substituted. |

@@ -46,9 +46,9 @@ def test_generation_preserves_qualified_legacy_fec_meanings_and_processing_table
     for table in ("fec_collection_selection", "fec_filing_definition_evidence",
                   "fec_filing_header_associations", "fec_record_evidence"):
         assert generated[table]["columns"]
-    current = descriptions["fec_receipts"]["columns"]["filing_association_target_generation_pin"]
-    historical = legacy["tables"]["fec_receipts"]["filing_association_target_generation_pin"]
-    assert "self" in current and current != historical
+    current = descriptions["fec_candidate_history"]["columns"]["party"]
+    historical = legacy["tables"]["fec_candidate_history"]["party"]
+    assert "literal" in historical and "literal" not in current and current != historical
 
 
 def test_record_types_covered_by_expected_schemas():
@@ -916,10 +916,17 @@ def test_retained_court_legacy_declarations_preserve_native_and_refuse_drift(mon
     assert {table: dd.expected_schemas()[table] for table in live} == native
 
 
-def test_retained_fec_historical_definitions_keep_native_and_strict_drift():
+def test_retained_fec_historical_definitions_keep_native_and_strict_drift(monkeypatch):
     from copy import deepcopy
     from pathlib import Path
+    from spicy_regs import subject_catalog
 
+    retired = subject_catalog.retired_receipt_datasets()
+    monkeypatch.setattr(
+        subject_catalog,
+        "retired_receipt_datasets",
+        lambda: retired - {"fec_collections", "fec_relationships", "fec_source_records"},
+    )
     fixture = json.loads((Path(__file__).parent / "fixtures" /
                           "fec_selected_legacy_dictionary.json").read_text())
     index = fixture["index"]
@@ -947,14 +954,10 @@ def test_retained_fec_historical_definitions_keep_native_and_strict_drift():
         prose, selected = dd.selected_dictionary_definitions(routed, live, dd.DEFAULT_DESCRIPTIONS)
         assert selected == native_schemas
         assert prose == native_prose
-        # Retired tables (ss-j4vz B10) have no native declaration; only a receipt-free owner reads them.
-        # Retired (B10, Q2) or renamed (Q1) since that generation (ss-j4vz).
-        retired = {"fec_research_document_observations", "fec_retained_csv_observations",
-                   "fec_research_response_outcomes", "fec_research_context_dispositions",
-                   "fec_research_filing_feed_items", "fec_research_source_pages"}
-        assert live.keys() - selected.keys() == retired
-        current = {table: columns for table, columns in live.items() if table not in retired}
-        assert dd.check_schema_drift({table: selected[table] for table in current}, current)
+        # All 54 live fec-query tables (including fec_research_* / fec_retained_*) now match
+        # the current schema-mode dictionary declarations with zero unaligned tables.
+        assert live.keys() - selected.keys() == set()
+        assert dd.check_schema_drift({table: selected[table] for table in live}, live)
     prose, selected = dd.selected_dictionary_definitions({"families": {}}, live, dd.DEFAULT_DESCRIPTIONS)
     assert selected == native_schemas and prose == native_prose
 

@@ -330,7 +330,7 @@ def test_rollup_defaults_to_local_generation_and_publishes_complete_family(tmp_p
     index = publication.parse_index(store.objects[publication.INDEX_V2_KEY])
     family = index["families"]["fec-observations"]
     assert set(family["tables"]) == {"fec_relationships.parquet", "fec_collections.parquet", "fec_source_records.parquet"}
-    assert set(family["etlReceipts"]["datasets"]) == {"fec_source_records", "fec_collections", "fec_relationships"}
+    assert "etlReceipts" not in family
     assert store.writes[-1] == publication.INDEX_V2_KEY
     # The second run retains its own observation receipt; table bytes remain identical.
     assert local_generation.is_dir()

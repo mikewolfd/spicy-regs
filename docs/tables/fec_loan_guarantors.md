@@ -20,7 +20,9 @@ One source guarantor record associated with a reported loan state. Keeps each gu
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
 | `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
 | `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
+| `value_mapping_version` | `VARCHAR` | Version of the exact monetary and date conversion rules used for supported values. |
 | `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
+| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
 | `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
 | `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
 | `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
@@ -55,17 +57,13 @@ One source guarantor record associated with a reported loan state. Keeps each gu
 | `guarantor_zip` | `VARCHAR` | The loan guarantor's reported postal code, preserving leading zeroes. |
 | `employer` | `VARCHAR` | Employer name reported for the contributor or other named person; not an inferred organization identity. |
 | `occupation` | `VARCHAR` | Occupation reported by the source for the named person. |
+| `loan_link_status` | `VARCHAR` | Always `unresolved` in this table: set when the row is mapped, before any loan is looked up. The guarantor's loan is the `fec_loans` row with the same `collection_id` whose `transaction_id` is this row's `back_reference_transaction_id` (a declared join). |
+| `guaranteed_amount_raw` | `VARCHAR` | Literal source value before conversion for guaranteed_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `guaranteed_amount_status` | `VARCHAR` | Source-presence or conversion state for guaranteed_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `guaranteed_amount` | `DECIMAL(38,9)` | Exact decimal for the amount guaranteed by this source-named guarantor. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `definition_set_id` | `VARCHAR` | Key of the pinned source layout in fec_filing_definitions. Join its definition evidence for exact workbook cells; the layout does not validate the submission. |
+| `declared_format_version` | `VARCHAR` | Format version declared by the filing header, retained separately from the reviewed source layout version. |
 | `filing_header_record_id` | `VARCHAR` | Source-record key of the actual file header. Resolve with collection_id and filing_header_locator_json in the source generation. |
 | `filing_header_locator_json` | `VARCHAR` | Exact native coordinates of the file-header witness, separate from the financial row's own locator. |
-| `filing_association_status` | `VARCHAR` | The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing. |
-| `filing_association_policy` | `VARCHAR` | Version of the maintained filing association rule used for this decision. |
-| `filing_association_source_generation_pin` | `VARCHAR` | Exact selected source generation used for the filing association decision. |
-| `filing_association_target_generation_pin` | `VARCHAR` | Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases. |
-| `filing_association_record_id` | `VARCHAR` | Identity of the admitted association witness; null when source context or a singular header witness is unavailable. |
-| `filing_association_referenced_key` | `VARCHAR` | Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified. |
-| `filing_association_target_generation_scope` | `VARCHAR` | Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match. |
-| `filing_association_target_count` | `BIGINT` | Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest. |
-| `filing_association_target_record_ids` | `VARCHAR[]` | Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `submission_conformance_status` | `VARCHAR` | Explicit statement of whether submission conformance was established; successful field mapping alone does not establish it. |

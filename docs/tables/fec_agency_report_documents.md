@@ -25,7 +25,11 @@ One source link occurrence attached to one agency report observation. Find suppo
 | `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
 | `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
 | `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
+| `observed_at` | `VARCHAR` | Recorded capture time when supplied, distinct from the source's event, report and publication dates. |
+| `subrecord_pointer` | `VARCHAR` | Exact child pointer within the source-owned native record, retaining repeated occurrences. |
 | `report_id` | `VARCHAR` | Key of the associated agency report edition. It does not merge different captures or schema editions by title. |
 | `url` | `VARCHAR` | Source-reported document or reference URL; consult body_status before assuming retained readable content. |
 | `label` | `VARCHAR` | Literal text of the source's document/reference label. |
 | `relation_type` | `VARCHAR` | Source-supported directed relationship type between the identified records; not inferred from matching names. |
+| `body_status` | `VARCHAR` | Explicit body availability or processing status. A PDF link remains deferred; metadata does not imply extracted content. |
+| `native_location_json` | `VARCHAR` | Native XML, HTML or Word coordinates for the emitted text or link, retaining row, cell or element addresses. |

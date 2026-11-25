@@ -19,6 +19,7 @@ One native audit finding occurrence associated with a retained matter observatio
 | `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
 | `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
 | `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
+| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
 | `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
 | `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
 | `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
@@ -37,6 +38,8 @@ One native audit finding occurrence associated with a retained matter observatio
 | `category_name` | `VARCHAR` | Source name of the audit finding subcategory. |
 | `text` | `VARCHAR` | Literal supported source text at the stated locator, without inferring a legal conclusion or numerical measure. |
 | `disposition` | `VARCHAR` | Source-stated disposition or mapper classification at this table's grain; interpret with the adjacent reason or finding fields. |
+| `amount_raw` | `VARCHAR` | Literal source value before conversion for amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `amount_status` | `VARCHAR` | Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
 | `supporting_document_record_id` | `VARCHAR` | Typed legal-document observation explicitly supporting this audit finding. |
 | `amount` | `DECIMAL(38,9)` | Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |

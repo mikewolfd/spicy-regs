@@ -18,7 +18,9 @@ One group in a source-defined contribution population and period. Compare report
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
 | `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
 | `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
+| `value_mapping_version` | `VARCHAR` | Version of the exact monetary and date conversion rules used for supported values. |
 | `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
+| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
 | `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
 | `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
 | `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
@@ -34,8 +36,13 @@ One group in a source-defined contribution population and period. Compare report
 | `aggregate_type` | `VARCHAR` | Source-defined aggregation class, such as geographic bucket, contribution-size band or inaugural contributor group. |
 | `candidate_native_id` | `VARCHAR` | Literal candidate-like reference as reported. Aggregate codes or unresolved references do not establish a person. |
 | `candidate_name` | `VARCHAR` | The candidate's name as reported, without a name-based identity merge. |
+| `entity_reference_status` | `VARCHAR` | `source_identifier_unresolved` on every row that states an id: set when the row is mapped, before any candidate or committee is looked up, so it does not say whether an id names one. The ids are kept as the file states them, an empty string or a committee id in a candidate column included. The declared joins resolve them, each with its measured rate: `committee_native_id` to `fec_committees.committee_id` and `candidate_native_id` to `fec_candidate_history.candidate_id`. FEC's aggregate codes `P00000001` (all candidates), `P00000002` (Democrats) and `P00000003` (Republicans) name a group, not a candidate. |
 | `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
+| `amount_raw` | `VARCHAR` | Literal source value before conversion for amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `amount_status` | `VARCHAR` | Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
+| `dimensions_json` | `VARCHAR` | Exact source dimension values defining this measure/group; compare only matching populations and definitions. |
 | `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
+| `reported_count_status` | `VARCHAR` | Whether the source supplied a usable count; distinguishes unreported or refused values from zero. |
 | `period_basis` | `VARCHAR` | Evidence and source definition establishing the covered period; unknown or overlapping periods remain explicit. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `amount` | `DECIMAL(38,9)` | Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
@@ -46,16 +53,4 @@ One group in a source-defined contribution population and period. Compare report
 | `reported_cycle` | `VARCHAR` | Cycle exactly as reported in a native field; kept separate from the selection's source_cycle. |
 | `query_completeness` | `VARCHAR` | Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query. |
 | `observation_grain` | `VARCHAR` | Source-defined meaning of this retained row, including aggregate rather than individual-transaction grains. |
-| `size_of_contribution` | `VARCHAR` | Publisher contribution-size category for this aggregate. |
-| `contributor_state` | `VARCHAR` | Source contributor state qualifying this aggregate. |
-| `state_name` | `VARCHAR` | Publisher state name qualifying this aggregate. |
-| `zip_3` | `VARCHAR` | Three-digit postal prefix qualifying this aggregate. |
-| `filing_association_status` | `VARCHAR` | The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing. |
-| `filing_association_policy` | `VARCHAR` | Version of the maintained filing association rule used for this decision. |
-| `filing_association_source_generation_pin` | `VARCHAR` | Exact selected source generation used for the filing association decision. |
-| `filing_association_target_generation_pin` | `VARCHAR` | Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases. |
-| `filing_association_record_id` | `VARCHAR` | Identity of the admitted association witness; null when source context or a singular header witness is unavailable. |
-| `filing_association_referenced_key` | `VARCHAR` | Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified. |
-| `filing_association_target_generation_scope` | `VARCHAR` | Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match. |
-| `filing_association_target_count` | `BIGINT` | Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest. |
-| `filing_association_target_record_ids` | `VARCHAR[]` | Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `contributor_identity_status` | `VARCHAR` | Whether the source contributor reference resolves; name text alone is not a donor identity. |

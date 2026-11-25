@@ -25,7 +25,9 @@ One supported text observation at a native agency-report location. Read literal 
 | `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
 | `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
 | `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
+| `observed_at` | `VARCHAR` | Recorded capture time when supplied, distinct from the source's event, report and publication dates. |
+| `subrecord_pointer` | `VARCHAR` | Exact child pointer within the source-owned native record, retaining repeated occurrences. |
 | `report_id` | `VARCHAR` | Key of the associated agency report edition. It does not merge different captures or schema editions by title. |
 | `text_kind` | `VARCHAR` | Kind of retained source text, such as a Word paragraph or source narrative; not a metric classification. |
 | `text` | `VARCHAR` | Literal supported source text at the stated locator, without inferring a legal conclusion or numerical measure. |
-| `text_ordinal` | `BIGINT` | Original order of this text fragment within its report, preserving gaps and repetition. |
+| `native_location_json` | `VARCHAR` | Native XML, HTML or Word coordinates for the emitted text or link, retaining row, cell or element addresses. |

@@ -19,6 +19,7 @@ One party-role occurrence within a retained matter observation. Preserves report
 | `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
 | `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
 | `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
+| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
 | `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
 | `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
 | `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
@@ -30,8 +31,12 @@ One party-role occurrence within a retained matter observation. Preserves report
 | `matter_record_id` | `VARCHAR` | Exact fec_legal_matters.record_id observation supporting this child event, party, document or finding. |
 | `query_completeness` | `VARCHAR` | Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query. |
 | `role` | `VARCHAR` | Party role exactly as stated in the legal matter or supporting document; read role_status and identity_resolution_status before forming a relationship. |
+| `role_status` | `VARCHAR` | Presence/interpretation state of the source party role. |
 | `reported_name` | `VARCHAR` | Person or organization name exactly as reported in this legal party assertion. |
+| `reported_name_status` | `VARCHAR` | Source-presence state of the reported party name. |
 | `native_entity_id` | `VARCHAR` | Literal party identifier where the source reports one; names are not converted into IDs. |
+| `native_entity_id_status` | `VARCHAR` | State or syntax status of the native party identifier, distinct from resolved identity. |
 | `entity_namespace` | `VARCHAR` | Native identifier namespace of the reported party/entity. |
 | `entity_type` | `VARCHAR` | Source entity-type code or namespace-specific type expected for the reported party. |
+| `identity_resolution_status` | `VARCHAR` | Whether a supported entity identity has resolved; a source role or valid identifier shape alone is insufficient. |
 | `document_record_id` | `VARCHAR` | Exact typed legal-document observation cited by this party or other source assertion. |

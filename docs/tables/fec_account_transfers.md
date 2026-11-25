@@ -20,7 +20,9 @@ One source-reported account-transfer or allocated-activity record version. Keeps
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
 | `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
 | `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
+| `value_mapping_version` | `VARCHAR` | Version of the exact monetary and date conversion rules used for supported values. |
 | `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
+| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
 | `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
 | `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
 | `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
@@ -44,24 +46,60 @@ One source-reported account-transfer or allocated-activity record version. Keeps
 | `event_type` | `VARCHAR` | Source-defined event or activity type, interpreted within this table and source namespace. |
 | `source_amendment_code` | `VARCHAR` | Literal native amendment code; it does not establish replacement scope from the retained filing layout. |
 | `transaction_id` | `VARCHAR` | Literal transaction identifier within its source filing/layout scope; not a globally unique transaction or economic-event key. |
+| `source_undefined_11` | `VARCHAR` | Literal value at source position 11, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_12` | `VARCHAR` | Literal value at source position 12, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_13` | `VARCHAR` | Literal value at source position 13, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_14` | `VARCHAR` | Literal value at source position 14, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_15` | `VARCHAR` | Literal value at source position 15, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_16` | `VARCHAR` | Literal value at source position 16, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_17` | `VARCHAR` | Literal value at source position 17, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_18` | `VARCHAR` | Literal value at source position 18, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_19` | `VARCHAR` | Literal value at source position 19, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_20` | `VARCHAR` | Literal value at source position 20, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_21` | `VARCHAR` | Literal value at source position 21, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_22` | `VARCHAR` | Literal value at source position 22, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_23` | `VARCHAR` | Literal value at source position 23, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_24` | `VARCHAR` | Literal value at source position 24, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_25` | `VARCHAR` | Literal value at source position 25, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_26` | `VARCHAR` | Literal value at source position 26, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_27` | `VARCHAR` | Literal value at source position 27, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_28` | `VARCHAR` | Literal value at source position 28, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_29` | `VARCHAR` | Literal value at source position 29, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_30` | `VARCHAR` | Literal value at source position 30, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_31` | `VARCHAR` | Literal value at source position 31, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_32` | `VARCHAR` | Literal value at source position 32, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_33` | `VARCHAR` | Literal value at source position 33, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_34` | `VARCHAR` | Literal value at source position 34, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_35` | `VARCHAR` | Literal value at source position 35, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_36` | `VARCHAR` | Literal value at source position 36, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
+| `source_undefined_37` | `VARCHAR` | Literal value at source position 37, which the retained layout leaves undefined/reserved. Preserved without assigning a semantic measure. |
 | `financial_grain` | `VARCHAR` | Explicit financial row meaning selected for this layout, separating reported activity, balances, allocations and other observations. |
+| `aggregation_status` | `VARCHAR` | Declared limitation on adding this observation to other records; requires the relevant named financial policy before totals. |
+| `transferred_amount_raw` | `VARCHAR` | Literal source value before conversion for transferred_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `transferred_amount_status` | `VARCHAR` | Source-presence or conversion state for transferred_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
+| `total_amount_raw` | `VARCHAR` | Literal source value before conversion for total_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `total_amount_status` | `VARCHAR` | Source-presence or conversion state for total_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
+| `transaction_date_raw` | `VARCHAR` | Literal source value before conversion for transaction_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `transaction_date_status` | `VARCHAR` | Source-presence or conversion state for transaction_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `transferred_amount` | `DECIMAL(38,9)` | Exact decimal for the reported transfer between accounts. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `total_amount` | `DECIMAL(38,9)` | Exact decimal for the whole reported payment or allocation total. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `transaction_date` | `DATE` | Date parsed from the transaction date reported by the source. NULL requires the source value and conversion status; capture time is not substituted. |
 | `definition_set_id` | `VARCHAR` | Key of the pinned source layout in fec_filing_definitions. Join its definition evidence for exact workbook cells; the layout does not validate the submission. |
+| `declared_format_version` | `VARCHAR` | Format version declared by the filing header, retained separately from the reviewed source layout version. |
 | `filing_header_record_id` | `VARCHAR` | Source-record key of the actual file header. Resolve with collection_id and filing_header_locator_json in the source generation. |
 | `filing_header_locator_json` | `VARCHAR` | Exact native coordinates of the file-header witness, separate from the financial row's own locator. |
+| `submission_conformance_status` | `VARCHAR` | Explicit statement of whether submission conformance was established; successful field mapping alone does not establish it. |
+| `source_internal_use` | `VARCHAR` | Literal source field designated for internal use; retained without assigning an undocumented financial meaning. |
+| `voter_registration_amount_raw` | `VARCHAR` | Literal source value before conversion for voter_registration_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `voter_registration_amount_status` | `VARCHAR` | Source-presence or conversion state for voter_registration_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
+| `voter_id_amount_raw` | `VARCHAR` | Literal source value before conversion for voter_id_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `voter_id_amount_status` | `VARCHAR` | Source-presence or conversion state for voter_id_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
+| `gotv_amount_raw` | `VARCHAR` | Literal source value before conversion for gotv_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `gotv_amount_status` | `VARCHAR` | Source-presence or conversion state for gotv_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
+| `generic_campaign_amount_raw` | `VARCHAR` | Literal source value before conversion for generic_campaign_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `generic_campaign_amount_status` | `VARCHAR` | Source-presence or conversion state for generic_campaign_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `voter_registration_amount` | `DECIMAL(38,9)` | Exact decimal for reported voter-registration activity. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `voter_id_amount` | `DECIMAL(38,9)` | Exact decimal for reported voter-identification activity. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `gotv_amount` | `DECIMAL(38,9)` | Exact decimal for reported get-out-the-vote activity. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `generic_campaign_amount` | `DECIMAL(38,9)` | Exact decimal for reported generic campaign activity. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
-| `filing_association_status` | `VARCHAR` | The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing. |
-| `filing_association_policy` | `VARCHAR` | Version of the maintained filing association rule used for this decision. |
-| `filing_association_source_generation_pin` | `VARCHAR` | Exact selected source generation used for the filing association decision. |
-| `filing_association_target_generation_pin` | `VARCHAR` | Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases. |
-| `filing_association_record_id` | `VARCHAR` | Identity of the admitted association witness; null when source context or a singular header witness is unavailable. |
-| `filing_association_referenced_key` | `VARCHAR` | Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified. |
-| `filing_association_target_generation_scope` | `VARCHAR` | Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match. |
-| `filing_association_target_count` | `BIGINT` | Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest. |
-| `filing_association_target_record_ids` | `VARCHAR[]` | Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

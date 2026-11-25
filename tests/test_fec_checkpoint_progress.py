@@ -9,6 +9,9 @@ import pyarrow.parquet as pq
 import pytest
 from spicy_regs import fec_native_conversion as native
 from spicy_regs import fec_observation_segments as segments
+from tests.test_fec_native_conversion import (  # noqa: F401 (autouse fixture)
+    observations_on_its_receipt_route,
+)
 from tests.test_fec_observation_segments import (
     fixture_inputs as fixture_inputs,
     bucket_fixture as bucket_fixture,
