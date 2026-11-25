@@ -38,7 +38,16 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
-- **Selected Wave B batched reader provider** `spicy_docs-0.85.0+readers.20261125.1` is built from
+- **Selected OIRA + Wave B reader provider** `spicy_docs-0.85.0+readers.20261125.2` is built from
+  `74b725bd74482462af3ddb5a79745f314a26925b` (tree `87edfcd6571c07813b83126e2ad0210854c9f71d`,
+  branch `feat/oira-reader-20261125` on `fork/main`). It adds `spicy_docs.sources.oira` for
+  RegInfo.gov EO 12866 bulk XML reviews and meetings with raw-byte capture hooks, dynamic flags,
+  Cp1252/double-entity decoding, and strict XML/error-page validation.
+  See [the receipt](spicy_docs-0.85.0+readers.20261125.2.json) for source, wheel and RECORD identity.
+  The superseded `.20261125.1` wheel is recoverable from this adoption commit's parent;
+  its receipt remains.
+
+- **Prior Wave B batched reader provider** `spicy_docs-0.85.0+readers.20261125.1` is built from
   `bff71cc04c450012d5c907002e8d04e837a2c7fc` (tree `b918534c253cd640815538d5451f30015d33acee`). It
   adds `spicy_docs.sources.irs_527`, nationwide and congressional-district Census ACS profiles,
   Congress sessions and party divisions, streaming SEC EDGAR bulk ZIP readers, and multi-year

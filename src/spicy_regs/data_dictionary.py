@@ -552,6 +552,8 @@ TABLES: tuple[str, ...] = (
     "congress_bills",
     "bill_subjects",
     "unified_agenda",
+    "oira_reviews",
+    "oira_meetings",
     *RULEMAKING_TABLES,
     "sam_entities",
     "lobbying_filings",
@@ -690,6 +692,8 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "congress_bills",
         "bill_subjects",
         "unified_agenda",
+        "oira_reviews",
+        "oira_meetings",
         "federal_register",
         "sam_entities",
         "lobbying_filings",
@@ -1057,6 +1061,10 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     )
     from spicy_regs.transforms.build_cfr_sections import COLUMNS as CFR_SECTION_COLUMNS
     from spicy_regs.transforms.build_unified_agenda import COLUMNS as UNIFIED_AGENDA_COLUMNS
+    from spicy_regs.transforms.build_oira import (
+        MEETING_SCHEMA as OIRA_MEETING_SCHEMA,
+        REVIEW_SCHEMA as OIRA_REVIEW_SCHEMA,
+    )
     from spicy_regs.transforms.build_fec_committees import COLUMNS as FEC_COMMITTEE_COLUMNS
     # gao_reports types its three counts; its Arrow schema is the one declaration that says so.
     from spicy_regs.transforms.build_gao_reports import _SCHEMA as GAO_REPORT_SCHEMA
@@ -1163,6 +1171,8 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         "agency_lifecycle_stats": AGENCY_LIFECYCLE_STATS_SCHEMA,
         "gao_reports": GAO_REPORT_SCHEMA,
         "court_docket_groups": COURT_DOCKET_GROUP_SCHEMA,
+        "oira_reviews": OIRA_REVIEW_SCHEMA,
+        "oira_meetings": OIRA_MEETING_SCHEMA,
     }
     # Writers whose SQL states the DuckDB type itself, as (column, type) pairs.
     builder_pairs = {

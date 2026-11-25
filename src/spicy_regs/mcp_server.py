@@ -76,6 +76,8 @@ TABLES = (
     "congress_bills",
     "bill_subjects",
     "unified_agenda",
+    "oira_reviews",
+    "oira_meetings",
     "federal_register",
     # The materialized rulemaking dataset, read through its own snapshot pointer
     # (publication.SNAPSHOT_POINTER), not the publication index.

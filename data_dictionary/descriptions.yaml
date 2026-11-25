@@ -593,6 +593,78 @@ tables:
       next_action_date: "Second distinct calendar date derived from the timetable, or NULL when fewer than two dates are derivable. May be historical; it is not selected relative to today. Source month-only dates use day 01 here; timetable_json retains the literal dates."
       url: "URL of the entry's detail page on reginfo.gov."
       related_rins_json: "JSON array of the RINs the publisher lists as related to this entry, each with its stated relation (`rin`, `rin_relation`), in source order. Values are stripped of leading and trailing whitespace and otherwise kept as written: no RIN shape is checked, so self-references, repeated pairs, malformed RINs and the cut-off relations `Related t` and `Previously report` remain. NULL when the edition states no related-RIN list."
+  oira_reviews:
+    label: "OIRA EO 12866 reviews"
+    subject: rulemaking
+    coverage: >-
+      True range. RegInfo.gov bulk XML exports of EO 12866 reviews from 1981
+      through the current year-to-date file plus rules currently under review;
+      `source_file` names each XML export and `source_sha256` pins its retained
+      bytes. Rebuilt in full on each run because reviews carry no publisher ID
+      and reginfo.gov backfills `published_date` after review concludes.
+    measured_on: "2026-11-25"
+    summary: >-
+      One row per Executive Order 12866 regulatory review conducted by OMB's
+      Office of Information and Regulatory Affairs (OIRA), ingested from
+      reginfo.gov bulk XML exports via `spicy_docs.sources.oira` and
+      `build_oira_reviews`. Covers both concluded reviews and rules currently
+      pending at OIRA (`review_status = 'Under Review'`), filling the lifecycle
+      stage between agency drafting and Federal Register publication. Keyed by
+      `rin` (not unique: a rule may undergo multiple reviews across stages or
+      resubmissions) for joining to `unified_agenda`, `federal_register`, and
+      `oira_meetings`. Each downloaded XML original is retained once in the
+      shared raw archive and referenced by `source_sha256`.
+    columns:
+      rin: "Regulation Identifier Number of the rule reviewed. Join key to `unified_agenda`, `federal_register`, and `oira_meetings`."
+      agency_code: "Acronym of the agency that owns the RIN, matching `unified_agenda.agency_code`. Falls back to the numeric 4-digit agency code when the agency is absent from `AGY_AGENCY_LIST.xml` (such as defunct historical agencies)."
+      agency_name: "Full name of the agency that owns the RIN from reginfo.gov's agency list. Null when absent from the list."
+      title: "Title of the rule as submitted to OIRA."
+      stage: "Rulemaking stage reviewed (e.g. `Proposed Rule`, `Final Rule`, `Interim Final Rule`, `Prerule`, `Notice`). Pre-2000 files use some historical labels."
+      review_status: "`Concluded` for a completed review or `Under Review` for one still pending at OIRA on the build date."
+      received_date: "Date OIRA received the rule for review (ISO `YYYY-MM-DD`)."
+      concluded_date: "Date OIRA concluded review (ISO `YYYY-MM-DD`). Null while `Under Review`."
+      review_days: "Calendar days from `received_date` to `concluded_date`. Null while `Under Review`."
+      review_outcome: "OIRA's literal decision string as published (e.g. `Consistent with Change`, `Consistent without Change`, `Withdrawn`, or historical pre-2000 phrasing such as `Consistent w/no change`). Null while `Under Review`."
+      economically_significant: "`Yes`/`No`: whether designated economically significant under EO 12866 section 3(f)(1)."
+      major: "`Yes`/`No`: whether designated a major rule under the Congressional Review Act. Null when omitted or whitespace-only."
+      legal_deadline: "Whether the rule faced a deadline (`None`, `Statutory`, or `Judicial`)."
+      review_extended: "`Yes` when OIRA extended its review period; rarely populated."
+      published_date: "Date the rule appeared in the Federal Register after review (ISO `YYYY-MM-DD`), when recorded by reginfo.gov."
+      flags_json: "JSON object of additional review flag tags keyed by lower-cased XML tag name (e.g. `expedited_review`, `tcja`, `unfunded_mandates`, `federalism_implications`, `regulatory_flexibility_analysis`, `small_entities_affected`, `homeland_security`, `international_impacts`, `health_care_act`, `dodd_frank_act`, `pandemic_response`). Null when the source file carries none."
+      source_file: "RegInfo.gov XML export file name that supplied the row (e.g. `EO_RULE_COMPLETED_2025.xml`, `EO_RULE_COMPLETED_YTD.xml`, `EO_RULES_UNDER_REVIEW.xml`)."
+      source_sha256: "SHA-256 digest (`sha256:<hex>`) of the retained RegInfo.gov XML export that supplied the row."
+  oira_meetings:
+    label: "OIRA EO 12866 meetings"
+    subject: rulemaking
+    coverage: >-
+      Window. RegInfo.gov currently publishes EO 12866 meeting logs in bulk XML
+      only for the first and second halves of 2024 (`source_file` names the
+      export and `source_sha256` pins its retained bytes); other years exist
+      only in reginfo.gov's interactive HTML search. Rebuilt in full on each run.
+    measured_on: "2026-11-25"
+    summary: >-
+      OIRA's Executive Order 12866 meeting log: meetings OIRA held with outside
+      parties about rules under review, ingested from reginfo.gov bulk XML
+      exports via `spicy_docs.sources.oira` and `build_oira_meetings`. One row
+      per log entry (requesting organization and contact for a meeting on a
+      rule). Keyed by `rin` for joining to `oira_reviews`, `unified_agenda`,
+      and `federal_register`. Each downloaded Cp1252 XML original is retained
+      once in the shared raw archive and referenced by `source_sha256`.
+    columns:
+      meeting_id: "RegInfo.gov meeting identifier. Present on second-half 2024 rows; omitted (null) in the first-half 2024 export."
+      rin: "Regulation Identifier Number of the rule discussed. Join key to `oira_reviews`, `unified_agenda`, and `federal_register`."
+      agency_code: "Acronym of the agency that owns the RIN, matching `unified_agenda.agency_code`."
+      agency_name: "Full name of the agency that owns the RIN from reginfo.gov's agency list. Null when absent."
+      title: "Title of the rule discussed."
+      rule_stage: "Rulemaking stage at the time of the meeting (e.g. `Proposed Rule Stage`, `Final Rule Stage`)."
+      meeting_date: "Date of the meeting (ISO `YYYY-MM-DD`)."
+      meeting_status: "`Completed`, `Scheduled`, or `No Show`."
+      requestor_organization: "Organization that requested the meeting (HTML entities unescaped once; original bytes pinned by `source_sha256`)."
+      requestor_name: "Contact person for the requesting organization."
+      summary: "Meeting summary when OIRA recorded one; typically null in the bulk XML export."
+      source_file: "RegInfo.gov XML export file name that supplied the row (e.g. `EO_12866_Meeting_Data_First_Half_2024.xml`)."
+      source_sha256: "SHA-256 digest (`sha256:<hex>`) of the retained RegInfo.gov XML export that supplied the row."
+      url: "RegInfo.gov meeting detail page URL listing attendees and handout documents; null when `meeting_id` is null."
   # The materialized rulemaking dataset (`materialize-rulemaking`): eight tables that publish as one
   # snapshot under `materialized/rulemaking/latest.json`, not the publication index. Meanings follow
   # docs/ontology.md and each builder's docstring.
