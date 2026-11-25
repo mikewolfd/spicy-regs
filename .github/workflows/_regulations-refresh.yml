@@ -18,6 +18,12 @@ on:
       diagnostic_native_snapshot:
         type: string
         default: ''
+      debugger_mode:
+        type: string
+        default: 'off'
+      expected_gdb_sha256:
+        type: string
+        default: ''
       comments_original_pair:
         type: string
         default: ''
@@ -46,7 +52,7 @@ jobs:
   # (pipelines/docket_gaps.py). A failure here still lets the families publish
   # the served dockets; the refresh run shows the failure.
   docket-gaps:
-    if: ${{ !inputs.skip_upload && !inputs.promote_v1 && !inputs.comments_only }}
+    if: ${{ inputs.debugger_mode == 'off' && !inputs.skip_upload && !inputs.promote_v1 && !inputs.comments_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -73,7 +79,7 @@ jobs:
   # mirror captures base versions, so every dependent reads this sweep's snapshot.
   base-families:
     needs: docket-gaps
-    if: ${{ !cancelled() && !inputs.promote_v1 && !inputs.comments_only }}
+    if: ${{ !cancelled() && inputs.debugger_mode == 'off' && !inputs.promote_v1 && !inputs.comments_only }}
     strategy:
       fail-fast: false
       matrix:
@@ -104,7 +110,7 @@ jobs:
       free_disk: ${{ matrix.command == 'run-rollup-comment-attributes' }}
   mirror:
     needs: base-families
-    if: ${{ !cancelled() && (needs.base-families.result == 'success' || inputs.promote_v1 || inputs.comments_only) }}
+    if: ${{ !cancelled() && (needs.base-families.result == 'success' || inputs.promote_v1 || inputs.comments_only || inputs.debugger_mode != 'off') }}
     uses: ./.github/workflows/_comments-mirror.yml
     secrets: inherit
     with:
@@ -113,6 +119,8 @@ jobs:
       comments_only: ${{ inputs.comments_only }}
       comments_runner: ${{ inputs.comments_runner }}
       diagnostic_native_snapshot: ${{ inputs.diagnostic_native_snapshot }}
+      debugger_mode: ${{ inputs.debugger_mode }}
+      expected_gdb_sha256: ${{ inputs.expected_gdb_sha256 }}
       comments_original_pair: ${{ inputs.comments_original_pair }}
       comments_captured_input: ${{ inputs.comments_captured_input }}
       comments_captured_input_sha256: ${{ inputs.comments_captured_input_sha256 }}
@@ -120,7 +128,7 @@ jobs:
       comments_local_python_sha256: ${{ inputs.comments_local_python_sha256 }}
   derived:
     needs: mirror
-    if: ${{ !inputs.skip_upload && !inputs.comments_only }}
+    if: ${{ inputs.debugger_mode == 'off' && !inputs.skip_upload && !inputs.comments_only }}
     strategy:
       fail-fast: false
       matrix:
@@ -140,7 +148,7 @@ jobs:
   # reads upstream's copy, so the fork does not build one nobody reads.
   docket-search:
     needs: mirror
-    if: ${{ !inputs.skip_upload && !inputs.comments_only && vars.PUBLISH_DOCKET_SEARCH == 'true' }}
+    if: ${{ inputs.debugger_mode == 'off' && !inputs.skip_upload && !inputs.comments_only && vars.PUBLISH_DOCKET_SEARCH == 'true' }}
     uses: ./.github/workflows/_rollup.yml
     secrets: inherit
     with:
@@ -148,7 +156,7 @@ jobs:
       timeout_minutes: 60
   org-links:
     needs: mirror
-    if: ${{ !inputs.skip_upload && !inputs.comments_only }}
+    if: ${{ inputs.debugger_mode == 'off' && !inputs.skip_upload && !inputs.comments_only }}
     uses: ./.github/workflows/_rollup.yml
     secrets: inherit
     with:
@@ -156,12 +164,12 @@ jobs:
       timeout_minutes: 60
   rulemaking:
     needs: derived
-    if: ${{ !inputs.skip_upload && !inputs.comments_only }}
+    if: ${{ inputs.debugger_mode == 'off' && !inputs.skip_upload && !inputs.comments_only }}
     uses: ./.github/workflows/materialize-rulemaking.yml
     secrets: inherit
   verify:
     needs: [mirror, derived, docket-search, org-links, rulemaking]
-    if: ${{ always() && !inputs.skip_upload && needs.mirror.result == 'success' }}
+    if: ${{ always() && inputs.debugger_mode == 'off' && !inputs.skip_upload && needs.mirror.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
