@@ -513,7 +513,8 @@ def main() -> int:
         with publication.snapshot(args.base_url) as index:
             rows = read_freshness_rows(args.base_url, args.table)
         comment_counts = read_comment_counts(args.base_url) if args.table is None else None
-        rulemaking_snapshot = read_rulemaking_snapshot(args.base_url) if args.table is None else None
+        check_rulemaking = args.table is None and bool(index["families"])
+        rulemaking_snapshot = read_rulemaking_snapshot(args.base_url) if check_rulemaking else None
     except (duckdb.Error, httpx.HTTPError, publication.PublicationError) as exc:
         print(f"Freshness inputs could not be verified: {exc}", file=sys.stderr)
         return 1
@@ -525,7 +526,8 @@ def main() -> int:
     args.state_file.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
     if args.table is None:
         failures.extend(evaluate_family_ages(index["families"], rows, args.today))
-        failures.extend(evaluate_rulemaking_freshness(rulemaking_snapshot, args.today))
+        if check_rulemaking:
+            failures.extend(evaluate_rulemaking_freshness(rulemaking_snapshot, args.today))
 
     if args.table is None:
         for table, reason in SKIPPED.items():

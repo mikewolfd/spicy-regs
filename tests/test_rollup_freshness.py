@@ -447,4 +447,20 @@ def test_rulemaking_snapshot_pointer_freshness_and_lag_checks(tmp_path, monkeypa
     assert freshness.evaluate_rulemaking_freshness(loaded, date(2026, 11, 10)) == [
         f"rulemaking snapshot ({publication.SNAPSHOT_POINTER}) is 9d old (budget 4d)"
     ]
-    capsys.readouterr()
+    # main() checks SNAPSHOT_POINTER when a managed index has families.
+    from contextlib import nullcontext
+
+    monkeypatch.setattr(freshness, "DATE_CHECKS", ())
+    monkeypatch.setattr(freshness, "ROW_CHANGE_BUDGETS", {})
+    monkeypatch.setattr(freshness, "read_freshness_rows", lambda *a, **k: [])
+    monkeypatch.setattr(freshness, "read_comment_counts", lambda *a, **k: {})
+    index = publication.empty_index()
+    index["families"]["native-legal-references"] = _family("2026-11-09T00:00:00Z")
+    monkeypatch.setattr(publication, "snapshot", lambda _: nullcontext(index))
+    monkeypatch.setattr(freshness, "resolve_r2_base_url", lambda value: str(tmp_path))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["check-freshness", "--today", "2026-11-10", "--state-file", str(tmp_path / "state.json")],
+    )
+    assert freshness.main() == 1
+    assert f"rulemaking snapshot ({publication.SNAPSHOT_POINTER}) is 9d old (budget 4d)" in capsys.readouterr().out
