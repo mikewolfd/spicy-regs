@@ -7,7 +7,6 @@ from spicy_regs.court_receipts import write_court_rows
 from spicy_regs.generations import verify_generation
 
 CASES = [
-    ('court_opinion_clusters', 'CourtOpinionClustersRollup', {'court_opinion_clusters': {'cluster_id': '1'}}),
     ('courtlistener', 'CourtListenerRollup', {'court_dockets': {'cl_docket_id': '1', 'parties_json': '[]'}}),
 ]
 
@@ -42,7 +41,8 @@ def test_runner_admits_receipts_and_typed_subjects(tmp_path, monkeypatch, module
 
 
 @pytest.mark.parametrize('module_name,class_name', [('court_citations', 'CourtCitationsRollup'),
-                                                    ('court_opinions', 'CourtOpinionsRollup')])
+                                                    ('court_opinions', 'CourtOpinionsRollup'),
+                                                    ('court_opinion_clusters', 'CourtOpinionClustersRollup')])
 def test_the_bulk_runners_admit_their_tables_with_no_receipts(tmp_path, monkeypatch, module_name, class_name):
     """Their policies are marked retired (ss-vse3): a plain generation, evidence beside it, no receipt member."""
     import pyarrow as pa

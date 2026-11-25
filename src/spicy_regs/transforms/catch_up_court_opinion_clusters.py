@@ -11,13 +11,13 @@ account's quota on whole id windows above it (docs/court-search-recovery.md).
 
 from __future__ import annotations
 
-import json
 import os
 import time
 from collections.abc import Generator, Iterable, Mapping
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import date
+from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, cast
@@ -29,9 +29,9 @@ import pyarrow.parquet as pq
 from loguru import logger
 from rulespec_artifacts import publish_directory_no_replace
 
-from spicy_regs.court_receipts import finish_court_output, local_receipt_selection
-from spicy_regs.court_subjects import SUBJECT_SCHEMAS
-from spicy_regs.etl_receipts import combine_receipts
+from spicy_regs import court_bulk
+from spicy_regs.court_receipts import restore_processing_input
+from spicy_regs.court_subjects import SUBJECT_SCHEMAS, normalize_court_row
 from spicy_regs.selected_generations import SelectedInputs
 from spicy_regs.sources import publication
 from spicy_regs.sources.courtlistener import CourtListenerOpinionSearchReader, require_api_token
@@ -182,20 +182,24 @@ def catch_up_court_opinion_clusters(
     if not isinstance(source_edition, date) or not isinstance(search_budget, CourtListenerTraversalBudget):
         raise ValueError("Court catch-up requires an explicit source edition and traversal allocation")
     require_api_token("Court opinion-cluster search catch-up")
-    entry, members = _published_prior(evidence)
+    entry, (subject_member, receipt_member) = _published_prior(evidence)
     if entry["artifactDigest"] != expected_prior:
         raise ValueError("Court catch-up prior differs from the captured publication")
     prior = prior_directory / OUTPUT
-    receipts = prior_directory / entry["etlReceipts"]["key"]
+    receipts = prior_directory / entry["etlReceipts"]["key"] if receipt_member is not None else None
+    receipt_generation_id = entry["etlReceipts"]["generationId"] if receipt_member is not None else None
     output_dir.mkdir(parents=True, exist_ok=True)
     selected = SelectedInputs(output_dir, output_dir / ".catchup-pins", public_url="")
-    for path, member in zip((prior, receipts), members, strict=True):
+    pinned_members = [(prior, subject_member)]
+    if receipts is not None and receipt_member is not None:
+        pinned_members.append((receipts, receipt_member))
+    for path, member in pinned_members:
         if selected.member_pin(path) != {"sha256": member.sha256, "byteSize": member.byte_size}:
             raise ValueError("Court catch-up prior bytes differ from the captured publication")
     for path, digest in ((source_edition_evidence, source_edition_sha256), (courts_local_file, courts_sha256)):
         if selected.member_pin(path)["sha256"] != digest:
             raise ValueError("Court catch-up source edition evidence differs from its byte pin")
-    above = _native_ceiling(prior)
+    above = _native_ceiling(prior, allow_earlier_policy=receipts is not None)
     retained_search = None
     if retained_search_directory is not None:
         from spicy_regs.sources.courtlistener_resume import RetainedCourtSearch
@@ -238,13 +242,12 @@ def catch_up_court_opinion_clusters(
     )
     return _append_search_rows(
         output_dir, reader.iter_records(), prior=prior, receipts=receipts, selected=selected, scope=scope,
-        diagnostics={"source_edition": source_edition.isoformat(), "prior_generation": expected_prior,
-                     "above": above, "through": search_through},
+        generation_id=receipt_generation_id, evidence=evidence,
     )
 
 
-def _published_prior(evidence: CaptureEvidence) -> tuple[Mapping, tuple[publication.Member, publication.Member]]:
-    """The captured generation's entry and its subject and receipt members; a split or shared family refuses."""
+def _published_prior(evidence: CaptureEvidence) -> tuple[Mapping, tuple[publication.Member, publication.Member | None]]:
+    """The captured generation's entry, its subject member, and its receipt member when still on receipts."""
     snapshot = evidence.read_snapshot
     if snapshot is None or evidence.family != FAMILY:
         raise ValueError("Court catch-up requires the captured court publication snapshot")
@@ -252,24 +255,30 @@ def _published_prior(evidence: CaptureEvidence) -> tuple[Mapping, tuple[publicat
     if owner is None or owner[0] != FAMILY:
         raise ValueError("Court catch-up prior differs from the captured publication")
     entry = owner[1]
+    (subject_member,) = publication.table_members(snapshot, OUTPUT)
+    if "etlReceipts" not in entry:
+        return entry, (subject_member, None)
     if entry.get("etlReceipts", {}).get("datasets") != [DATASET]:
         raise ValueError("Court catch-up requires the selected single-dataset receipt family")
-    (subject_member,) = publication.table_members(snapshot, OUTPUT)
     (receipt_member,) = publication.receipt_members(snapshot, dataset=DATASET)
     return entry, (subject_member, receipt_member)
 
 
-def _native_ceiling(prior: Path) -> int:
-    if not pq.read_schema(prior).equals(SUBJECT_SCHEMAS[DATASET]):
-        raise ValueError("Court catch-up prior is not the native cluster schema")
+def _native_ceiling(prior: Path, *, allow_earlier_policy: bool = False) -> int:
+    schema = pq.read_schema(prior)
+    if not schema.equals(SUBJECT_SCHEMAS[DATASET]):
+        if not allow_earlier_policy or "cluster_id" not in schema.names:
+            raise ValueError("Court catch-up prior is not the native cluster schema")
     above = _highest_cluster_id([str(prior)])
     if above is None:
         raise ValueError("Court catch-up prior has no numeric cluster ceiling")
     return above
 
 
-def _append_search_rows(output_dir: Path, results: Iterable[dict], *, prior: Path, receipts: Path,
-                        selected: SelectedInputs, scope: CourtScope, diagnostics: dict) -> Path:
+def _append_search_rows(output_dir: Path, results: Iterable[dict], *, prior: Path, receipts: Path | None,
+                        selected: SelectedInputs, scope: CourtScope,
+                        generation_id: str | None = None,
+                        evidence: CaptureEvidence | None = None) -> Path:
     """Convert a completed selection's rows and append them to the prior; return the private complete candidate."""
     staged = output_dir / (".clusters-delta-" + uuid4().hex + ".parquet")
     writer = CourtListenerTableWriter(staged, schema=_SCHEMA, batch_size=BATCH_ROWS)
@@ -282,28 +291,44 @@ def _append_search_rows(output_dir: Path, results: Iterable[dict], *, prior: Pat
         writer.abort()
         raise
 
-    generation_id = uuid4().hex
-    delta = finish_court_output(
-        DATASET,
-        staged,
-        output_dir / ".court-delta" / generation_id,
-        generation_id=generation_id,
-        diagnostics={**diagnostics, "search_rows": writer.written},
-    )
-    delta_receipts, _ = local_receipt_selection(delta)
+    delta_dir = output_dir / ".court-delta" / uuid4().hex
+    delta_dir.mkdir(parents=True, exist_ok=True)
+    delta = delta_dir / OUTPUT
+    exceptions = output_dir / "court_opinion_clusters.exceptions.parquet"
+    exceptions.unlink(missing_ok=True)
+    try:
+        _, recorded_exceptions = court_bulk.write_table(
+            DATASET, staged, delta, constants={}, exceptions=exceptions,
+            attempt=partial(normalize_court_row, DATASET),
+        )
+    finally:
+        staged.unlink(missing_ok=True)
+    if evidence is not None and recorded_exceptions:
+        evidence.retain_file(exceptions, stage="courtlistener-export-exceptions", table=DATASET)
     selected.member_pin(delta)
-    selected.member_pin(delta_receipts)
     bundle = output_dir / ".court-etl" / uuid4().hex
     bundle.parent.mkdir(exist_ok=True)
     with TemporaryDirectory(prefix=".court-append-", dir=bundle.parent) as temporary:
         complete = Path(temporary) / "bundle"
         complete.mkdir()
-        _append_native(prior, delta, complete / OUTPUT, guard=selected.check)
-        combine_receipts([receipts, delta_receipts], complete / "etl_receipts.parquet")
+        native_prior = prior
+        if not pq.read_schema(prior).equals(SUBJECT_SCHEMAS[DATASET]):
+            if receipts is None:
+                raise ValueError("Court catch-up prior is not the native cluster schema")
+            restored = Path(temporary) / "restored-prior.parquet"
+            restore_processing_input(
+                prior, restored, dataset=DATASET, schema=_SCHEMA,
+                receipt_path=receipts, generation_id=generation_id,
+            )
+            native_prior = Path(temporary) / "native-prior.parquet"
+            court_bulk.write_table(
+                DATASET, restored, native_prior, constants={},
+                exceptions=Path(temporary) / "prior-exceptions.parquet",
+                attempt=partial(normalize_court_row, DATASET),
+            )
+            restored.unlink(missing_ok=True)
+        _append_native(native_prior, delta, complete / OUTPUT, guard=selected.check)
         selected.check()
-        (complete / "court-family.json").write_text(
-            json.dumps({"generation_id": generation_id, "datasets": [DATASET]}) + "\n"
-        )
         publish_directory_no_replace(complete, bundle)
     return bundle / OUTPUT
 
@@ -391,7 +416,7 @@ def daily_catch_up(output_dir: Path, *, evidence: CaptureEvidence, source_editio
     if type(wanted) is not int or not 2 <= wanted <= DAILY_REQUESTS:
         raise ValueError(f"Court daily catch-up takes 2 to {DAILY_REQUESTS} requests, not {wanted!r}")
     token = require_api_token("Court opinion-cluster search catch-up")
-    entry, members = _published_prior(evidence)
+    entry, (subject_member, receipt_member) = _published_prior(evidence)
     public_url = os.getenv("R2_PUBLIC_URL")
     if not public_url:
         raise ValueError("Court daily catch-up reads its prior from R2_PUBLIC_URL")
@@ -431,17 +456,22 @@ def daily_catch_up(output_dir: Path, *, evidence: CaptureEvidence, source_editio
     directory = output_dir / ".catchup-prior"
     directory.mkdir(parents=True, exist_ok=True)
     selected = SelectedInputs(output_dir, output_dir / ".catchup-pins", public_url="")
-    prior, receipts = directory / OUTPUT, directory / entry["etlReceipts"]["key"]
-    for path, member in zip((prior, receipts), members, strict=True):
+    prior = directory / OUTPUT
+    receipts = directory / entry["etlReceipts"]["key"] if receipt_member is not None else None
+    receipt_generation_id = entry["etlReceipts"]["generationId"] if receipt_member is not None else None
+    to_fetch = [(prior, subject_member)]
+    if receipts is not None and receipt_member is not None:
+        to_fetch.append((receipts, receipt_member))
+    for path, member in to_fetch:
         check_headroom(member.byte_size or 0, path=directory)
         downloaded = publication.fetch_member(public_url, member, path)
         if isinstance(downloaded, bool):
             raise ValueError("Court catch-up prior is not a pinned published member")
         selected.adopt_download(path, downloaded)
-    if _native_ceiling(prior) > above:
+    if _native_ceiling(prior, allow_earlier_policy=receipts is not None) > above:
         raise ValueError("Court published table holds a cluster above the id its journal says it reached")
     # Refuse now, not after the day's requests: the appended copy and the generation's copy each need this much.
-    check_headroom(2 * sum(member.byte_size or 0 for member in members), path=directory)
+    check_headroom(2 * sum(member.byte_size or 0 for _, member in to_fetch), path=directory)
     scope = CourtScope.for_courts(court_jurisdictions(dump_date=source_edition))
 
     records: list[dict] = []
@@ -510,10 +540,10 @@ def daily_catch_up(output_dir: Path, *, evidence: CaptureEvidence, source_editio
                 len(records), walked, spend.attempts, floor, max(backlog - len(records), 0))
     candidate = _append_search_rows(
         output_dir, records, prior=prior, receipts=receipts, selected=selected, scope=scope,
-        diagnostics={"source_edition": source_edition.isoformat(), "prior_generation": entry["artifactDigest"],
-                     "above": above, "through": floor},
+        generation_id=receipt_generation_id, evidence=evidence,
     )
     # The candidate holds every prior row; generation admission needs the disk more than a second copy.
     prior.unlink()
-    receipts.unlink()
+    if receipts is not None:
+        receipts.unlink()
     return candidate, fault

@@ -20774,12 +20774,50 @@
         "column_name": "date_blocked",
         "column_type": "VARCHAR",
         "description": "Source date of blocking when supplied."
+      },
+      {
+        "column_name": "source",
+        "column_type": "VARCHAR",
+        "description": "CourtListener's source value for the cluster; distinct from the ingest_source route."
+      },
+      {
+        "column_name": "slug",
+        "column_type": "VARCHAR",
+        "description": "Source URL slug; not a stable identity."
+      },
+      {
+        "column_name": "absolute_url",
+        "column_type": "VARCHAR",
+        "description": "CourtListener decision page URL, constructed from cluster ID/slug for bulk rows or supplied by search."
+      },
+      {
+        "column_name": "date_created",
+        "column_type": "VARCHAR",
+        "description": "Source record-creation timestamp when supplied by bulk data."
+      },
+      {
+        "column_name": "date_modified",
+        "column_type": "VARCHAR",
+        "description": "Source record-modification timestamp when supplied by bulk data."
+      },
+      {
+        "column_name": "ingest_source",
+        "column_type": "VARCHAR",
+        "description": "Route for the retained row: bulk or search. The table does not itself pin the original capture bytes."
       }
     ],
     "subject": "courts",
     "grain": "One CourtListener decision cluster per cluster_id; multiple opinion bodies can belong to it.",
     "identity_columns": [
       "cluster_id"
+    ],
+    "later_policy_columns": [
+      "source",
+      "slug",
+      "absolute_url",
+      "date_created",
+      "date_modified",
+      "ingest_source"
     ]
   },
   "court_citations": {
@@ -47792,25 +47830,6 @@
           "parties_json",
           "attorneys_json",
           "firms_json",
-          "conversion_inputs",
-          "raw_source_record",
-          "source_observation"
-        ]
-      },
-      {
-        "dataset": "court_opinion_clusters",
-        "receipt_only": false,
-        "policy_version": "courts/1",
-        "identity_columns": [
-          "cluster_id"
-        ],
-        "processing_fields": [
-          "source",
-          "slug",
-          "absolute_url",
-          "date_created",
-          "date_modified",
-          "ingest_source",
           "conversion_inputs",
           "raw_source_record",
           "source_observation"

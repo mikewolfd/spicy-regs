@@ -97,12 +97,15 @@ def test_only_a_declared_earlier_policy_of_a_family_with_receipts_is_recognised(
 #: The court tables whose fields left their receipts (ss-vse3), with the live generations' own roots (committed for
 #: the archive pins): the columns stay pending until each family publishes without receipts.
 COURT_ROOTS = {"court-citations": "7c2fc74c1b8096801f0f779baceb77e538e34047f234afbd9e56aa6515261d9d",
-               "court-opinions": "85589a33b63f22bfac522e5f2c41210eb69437b763b81380562eda1fd33ef298"}
+               "court-opinions": "85589a33b63f22bfac522e5f2c41210eb69437b763b81380562eda1fd33ef298",
+               "court-opinion-clusters": "d91e6fd95df6044367afebac29a261707d692106cd4f153188be698f11fb21cc"}
 COURT_PROMOTED = {"court_citations": ["date_created", "date_modified", "dump_date", "source_sha256"],
                   "court_citation_map": ["dump_date", "source_sha256"],
                   "court_parentheticals": ["dump_date", "source_sha256"],
                   "court_opinions": ["date_created", "date_modified", "dump_date", "extracted_by_ocr", "local_path",
-                                     "source_sha256"]}
+                                     "source_sha256"],
+                  "court_opinion_clusters": ["absolute_url", "date_created", "date_modified", "ingest_source",
+                                             "slug", "source"]}
 
 
 def test_the_court_promotions_are_notices_against_the_live_generations_own_roots():
