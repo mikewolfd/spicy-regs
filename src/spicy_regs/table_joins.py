@@ -215,6 +215,15 @@ JOINS: tuple[Join, ...] = (
     _join("bill_versions", "bill_id", _BILL, "bill_id", 38_230, 0),
     _join("bill_vote_references", "bill_id", _BILL, "bill_id", 7_513, 0),
     _join("cbo_cost_estimates", "bill_id", _BILL, "bill_id", 2_488, 0),
+    _join("cbo_estimate_cards", "publication_id", "cbo_feed_items", "publication_id", 0, 0, "empty",
+          "Each archived card comes from a CBO feed publication; the published bill-family generation contains no "
+          "card rows yet and public population is not yet baselined.",
+          expected_cardinality="one"),
+    _join("cbo_estimate_cards", "publication_id", "cbo_cost_estimates", "publication_id", 0, 0, "empty",
+          "Join publication_id to cbo_cost_estimates for source-stated bill links (multiple rows per publication "
+          "when a publication names several bills, or none when no bill link resolves); the published bill-family "
+          "generation contains no card rows yet.",
+          expected_cardinality="many"),
     _join("committee_reports", "bill_id", _BILL, "bill_id", 137, 0),
     _join("diff_summaries", "bill_id", _BILL, "bill_id", 0, 0, "empty", _MODEL_OUTPUT),
     _join("financial_changes", "bill_id", _BILL, "bill_id", 0, 0, "empty", _AMOUNT_PAIRING),

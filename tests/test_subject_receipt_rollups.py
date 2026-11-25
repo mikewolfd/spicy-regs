@@ -663,3 +663,189 @@ def test_historical_refusal_survives_a_nightly_then_success_resolves_it(tmp_path
         outcomes = pq.read_table(output / "etl_receipts.parquet")["outcome"].to_pylist()
         assert ("refused" in outcomes) is not corrected
         select_bundle(monkeypatch, output, pipeline)
+
+
+def test_bill_family_carries_unchanged_congress_partitions_without_resplitting(tmp_path, monkeypatch):
+    import pyarrow as pa
+    import pyarrow.dataset as ds
+    from spicy_docs.sources.congress.bill_status import BillIdentity, parse_bill_status
+    from spicy_regs import legislative_receipts
+    from spicy_regs.etl_receipts import select_pinned_receipts, validate_receipt_bundle
+    from spicy_regs.generations import build_generation, verify_generation
+    from spicy_regs.legislative_receipts import policy as legislative_policy
+    from spicy_regs.pipelines.rollups.bill_family import BillFamilyRollup
+    from spicy_regs.transforms.build_bill_family import build_bill_family
+    from tests.test_bill_family import (
+        FIXTURES,
+        StubBodyAcquirer,
+        StubBulkAcquirer,
+        _Archive,
+        _Member,
+        _Package,
+        _capture,
+        zip_entry,
+    )
+
+    def rewrite_118(xml: bytes) -> bytes:
+        text = xml.decode("utf-8")
+        for old, new in (("119th", "118th"), ("119", "118"), ("6028", "6027")):
+            text = text.replace(old, new)
+        return text.encode("utf-8")
+
+    class MultiBulk(StubBulkAcquirer):
+        def __init__(self, bump_119: bool = False):
+            super().__init__(
+                entry=lambda c, bt: zip_entry(c, bt, size=31_656_887 if (bump_119 and c == 119) else 31_656_886)
+            )
+            self.bump_119 = bump_119
+
+        def acquire(self, congress, bill_type, *, unchanged_since=None):
+            result = super().acquire(congress, bill_type, unchanged_since=unchanged_since)
+            if result.archive is None or bill_type != "hr":
+                return result
+            raw = (FIXTURES / "status-119hr6028.xml").read_bytes()
+            if congress == 118:
+                body = rewrite_118(raw)
+                result.archive = _Archive([_Member(parse_bill_status(body, identity=BillIdentity(118, "hr", 6027)))])
+            elif congress == 119 and self.bump_119:
+                extra_raw = (FIXTURES / "status-119hr5334.xml").read_bytes()
+                result.archive = _Archive([
+                    _Member(parse_bill_status(raw, identity=BillIdentity(119, "hr", 6028))),
+                    _Member(parse_bill_status(extra_raw, identity=BillIdentity(119, "hr", 5334))),
+                ])
+            return result
+
+    class MultiBody(StubBodyAcquirer):
+        def acquire(self, package_id, *, max_bytes=None):
+            self.requested.append(package_id)
+            if package_id in ("BILLS-118hr6027ih", "BILLS-118hr6027eh"):
+                suffix = package_id[-2:]
+                body = rewrite_118((FIXTURES / f"text-119hr6028{suffix}.xml").read_bytes())
+                url = f"https://www.govinfo.gov/content/pkg/{package_id}/xml/{package_id}.xml"
+                return _Package("xml", _capture(url, body))
+            if package_id in ("BILLS-119hr5334ih", "BILLS-119hr5334enr"):
+                suffix = package_id.removeprefix("BILLS-119hr5334")
+                body = (FIXTURES / f"text-119hr5334{suffix}.xml").read_bytes()
+                url = f"https://www.govinfo.gov/content/pkg/{package_id}/xml/{package_id}.xml"
+                return _Package("xml", _capture(url, body))
+            self.requested.pop()
+            return super().acquire(package_id, max_bytes=max_bytes)
+
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "118,119")
+    monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr")
+    for key in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "R2_PUBLIC_URL"):
+        monkeypatch.delenv(key, raising=False)
+
+    first_dir = tmp_path / "first"
+    first_dir.mkdir()
+    first = BillFamilyRollup()
+    first.build_receipts(first_dir, build_bill_family, bulk_acquirer=MultiBulk(), body_acquirer=MultiBody())
+    c118_dir = first_dir / "bill_sections" / "congress=118"
+    c119_dir = first_dir / "bill_sections" / "congress=119"
+    assert c118_dir.is_dir() and c119_dir.is_dir()
+    first_c118_bytes = {p.name: p.read_bytes() for p in sorted(c118_dir.glob("*.parquet"))}
+    first_c118_rows = pq.ParquetFile(next(c118_dir.glob("*.parquet"))).read().to_pylist()
+    assert first_c118_rows and all(row["congress"] == 118 for row in first_c118_rows)
+    first_c119_rows = pq.ParquetFile(next(c119_dir.glob("*.parquet"))).read().to_pylist()
+    assert {row["bill_id"] for row in first_c119_rows} == {"119-hr-6028"}
+
+    select_bundle(monkeypatch, first_dir, first)
+
+    download_calls: list[tuple[str, object]] = []
+    orig_download_members = SelectedPriors.download_members
+
+    def tracked_download_members(self, key, target, *, partitions=None):
+        download_calls.append((key, partitions))
+        return orig_download_members(self, key, target, partitions=partitions)
+
+    monkeypatch.setattr(SelectedPriors, "download_members", tracked_download_members)
+
+    restored_section_congresses: list[set[str]] = []
+    orig_restore_prior = legislative_receipts.restore_prior
+
+    def tracked_restore_prior(bundle, output_dir, *, bulk=True):
+        restored = orig_restore_prior(bundle, output_dir, bulk=bulk)
+        if "bill_sections" in restored:
+            table = pq.read_table(restored["bill_sections"])
+            restored_section_congresses.append(set(table["congress"].to_pylist()))
+        return restored
+
+    monkeypatch.setattr(legislative_receipts, "restore_prior", tracked_restore_prior)
+
+    split_section_congresses: set[int] = set()
+    orig_mapped_record = legislative_receipts.mapped_record
+
+    def tracked_mapped_record(dataset, row):
+        if dataset == "bill_sections":
+            split_section_congresses.add(row["congress"])
+        return orig_mapped_record(dataset, row)
+
+    monkeypatch.setattr(legislative_receipts, "mapped_record", tracked_mapped_record)
+
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    second_bulk, second_body = MultiBulk(bump_119=True), MultiBody()
+    second_dir = tmp_path / "second"
+    second_dir.mkdir()
+    second = BillFamilyRollup()
+    built_paths = second.build_receipts(
+        second_dir, build_bill_family, bulk_acquirer=second_bulk, body_acquirer=second_body
+    )
+
+    assert ("bill_sections.parquet", frozenset({"119"})) in download_calls
+    assert all(118 not in cset and "118" not in cset for cset in restored_section_congresses)
+    assert split_section_congresses == {"119"}
+    assert second_bulk.calls == [(119, "hr")]
+    assert {"BILLS-119hr5334ih", "BILLS-119hr5334enr"} <= set(second_body.requested)
+    assert all("118" not in pid for pid in second_body.requested)
+
+    generation_dir = tmp_path / "generation"
+    build_generation(
+        generation_dir,
+        family=second.name,
+        files=built_paths,
+        expected_keys=second.outputs,
+        schemas=second.generation_schemas(),
+        partitioned=second.partitioned,
+        receipt_path=second_dir / "etl_receipts.parquet",
+        receipt_policies=second.receipt_policies,
+        receipt_generation_id=second.receipt_generation_id,
+    )
+    artifact = verify_generation(generation_dir)
+    assert artifact.root["spec"]["tables"]["bill_sections.parquet"]["partitionColumns"] == ["congress"]
+
+    second_c118_dir = generation_dir / "bill_sections" / "congress=118"
+    second_c119_dir = generation_dir / "bill_sections" / "congress=119"
+    assert {p.name: p.read_bytes() for p in sorted(second_c118_dir.glob("*.parquet"))} == first_c118_bytes
+    second_c119_rows = pq.ParquetFile(next(second_c119_dir.glob("*.parquet"))).read().to_pylist()
+    assert {row["bill_id"] for row in second_c119_rows} == {"119-hr-6028", "119-hr-5334"}
+
+    bills = pq.read_table(generation_dir / "congress_bills.parquet")
+    assert set(bills["bill_id"].to_pylist()) == {"118-hr-6027", "119-hr-6028", "119-hr-5334"}
+
+    bundle_dir = next((second_dir / ".builds").glob("*/legislative-bundle"))
+    receipt_table = pq.read_table(generation_dir / "etl_receipts.parquet")
+    sec_receipts = receipt_table.filter(
+        (ds.field("dataset") == "bill_sections") & (ds.field("outcome") == "accepted")
+    )
+    assert sec_receipts.num_rows == len(first_c118_rows) + len(second_c119_rows)
+    scoped_sec_receipts = select_pinned_receipts(
+        generation_dir / "etl_receipts.parquet", tmp_path / "sec-receipts.parquet", dataset="bill_sections"
+    )
+    validate_receipt_bundle(
+        {"bill_sections": sorted((generation_dir / "bill_sections").rglob("*.parquet"))},
+        [scoped_sec_receipts],
+        [legislative_policy("bill_sections")],
+        generation_id=BillFamilyRollup().receipt_generation_id,
+    )
+
+    restored_final = orig_restore_prior(bundle_dir, tmp_path / "restored-final")
+    restored_final_sections = pa.concat_tables(
+        pq.ParquetFile(p).read() for p in sorted(restored_final["bill_sections"].rglob("*.parquet"))
+    )
+    assert set(restored_final_sections["congress"].to_pylist()) == {"118", "119"}
+    assert restored_final_sections.num_rows == len(first_c118_rows) + len(second_c119_rows)
+
+    outcome_rows = pq.read_table(generation_dir / "bill_family_document_file_outcomes.parquet").to_pylist()
+    section_outcomes = [row for row in outcome_rows if row["source_dataset"] == "bill_sections"]
+    assert {row["relative_path"].split("/")[0] for row in section_outcomes} == {"congress=118", "congress=119"}
+    assert sum(row["row_count"] for row in section_outcomes) == len(first_c118_rows) + len(second_c119_rows)

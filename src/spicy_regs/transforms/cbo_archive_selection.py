@@ -333,4 +333,6 @@ def merge_card_rows(output_dir, rows, *, download_prior, prior_present=None):
             new_file=new,
             out_file=output,
         )
+    for scratch in (prior, new):
+        scratch.unlink(missing_ok=True)
     return output

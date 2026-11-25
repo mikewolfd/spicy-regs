@@ -220,3 +220,42 @@ def test_native_receipt_round_trip_and_invalid_amount_rejection(tmp_path):
     )
     assert pq.read_metadata(rejected).num_rows == 0
     assert "refused" in pq.read_table(errors)["outcome"].to_pylist()
+
+
+def test_build_bill_family_preserves_prior_cbo_estimate_cards_when_manifest_unset(tmp_path, monkeypatch):
+    from spicy_regs.transforms.build_bill_family import build_bill_family
+    from tests.test_bill_family import StubBodyAcquirer, StubBulkAcquirer, _priors
+
+    manifest, raw = selection(tmp_path)
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr")
+    for key in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "R2_PUBLIC_URL"):
+        monkeypatch.delenv(key, raising=False)
+
+    monkeypatch.setenv("BILL_FAMILY_CBO_ARCHIVE_MANIFEST", str(manifest))
+    first = tmp_path / "first"
+    first.mkdir()
+    build_bill_family(
+        first,
+        bulk_acquirer=StubBulkAcquirer(),
+        body_acquirer=StubBodyAcquirer(),
+        max_version_fetches=10,
+        cbo_archive_root=raw,
+        **_priors(None),
+    )
+    seeded = pq.read_table(first / "cbo_estimate_cards.parquet").to_pylist()
+    assert {row["publication_id"] for row in seeded} == {"62720"}
+
+    monkeypatch.delenv("BILL_FAMILY_CBO_ARCHIVE_MANIFEST", raising=False)
+    second = tmp_path / "second"
+    second.mkdir()
+    build_bill_family(
+        second,
+        bulk_acquirer=StubBulkAcquirer(),
+        body_acquirer=StubBodyAcquirer(),
+        max_version_fetches=10,
+        **_priors(first),
+    )
+    preserved = pq.read_table(second / "cbo_estimate_cards.parquet").to_pylist()
+    assert preserved == seeded
+
