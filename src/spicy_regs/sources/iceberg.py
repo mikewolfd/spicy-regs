@@ -34,8 +34,9 @@ from dataclasses import dataclass
 from os import getenv
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Any, TypeVar
-from urllib.parse import urlparse
+from typing import TYPE_CHECKING, Any, TypeVar, cast
+from urllib.parse import urlparse, urlsplit
+from uuid import uuid4
 
 from loguru import logger
 
@@ -727,6 +728,330 @@ def _pinned_row_count(con, record_type: RecordType, snapshot: CatalogSnapshot, *
     return accepted[0], "its accepted receipts (the snapshot's summary states no usable count)"
 
 
+_BYTE_SIZE_UNITS = {
+    "B": 1,
+    "KB": 1000,
+    "KIB": 1024,
+    "MB": 1000**2,
+    "MIB": 1024**2,
+    "GB": 1000**3,
+    "GIB": 1024**3,
+    "TB": 1000**4,
+    "TIB": 1024**4,
+}
+_BYTE_SIZE_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([KMGT]?i?B)\s*$", re.IGNORECASE)
+
+
+def _parse_byte_size(raw: str) -> int:
+    match = _BYTE_SIZE_RE.fullmatch(raw)
+    if match is None:
+        raise ValueError(f"Invalid byte size: {raw!r}")
+    return max(1, int(float(match.group(1)) * _BYTE_SIZE_UNITS[match.group(2).upper()]))
+
+
+def _parse_s3_uri(uri: str, expected_bucket: str) -> str:
+    """Validate ``s3://<expected_bucket>/<key>`` with no query/fragment and return ``<key>``."""
+    parsed = urlsplit(uri)
+    key = parsed.path.lstrip("/")
+    if (
+        parsed.scheme != "s3"
+        or parsed.netloc != expected_bucket
+        or parsed.query
+        or parsed.fragment
+        or not key
+    ):
+        raise ValueError(f"Refusing Iceberg object path outside s3://{expected_bucket}/: {uri!r}")
+    return key
+
+
+def _align_array_to_type(
+    array: Any,
+    target_type: Any,
+    *,
+    path: str,
+    optional_struct_fields: frozenset[str] = frozenset(),
+) -> Any:
+    """Align a PyArrow array (preserving list offsets and parent null bitmaps) to ``target_type``."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+
+    if pa.types.is_list(target_type):
+        if not (pa.types.is_list(array.type) or pa.types.is_large_list(array.type)):
+            raise ValueError(f"{path}: expected list, got {array.type}")
+        if len(array) == 0:
+            _align_array_to_type(
+                array.values.slice(0, 0),
+                target_type.value_type,
+                path=f"{path}[]",
+                optional_struct_fields=optional_struct_fields,
+            )
+            return pa.array([], type=target_type)
+        offsets = array.offsets
+        start = offsets[0].as_py()
+        end = offsets[-1].as_py()
+        values = array.values.slice(start, end - start)
+        aligned_values = _align_array_to_type(
+            values,
+            target_type.value_type,
+            path=f"{path}[]",
+            optional_struct_fields=optional_struct_fields,
+        )
+        zeroed_offsets = cast(Any, pc).subtract(offsets, start).cast(pa.int32())
+        return pa.ListArray.from_arrays(
+            zeroed_offsets,
+            aligned_values,
+            type=target_type,
+            mask=cast(Any, pc).is_null(array),
+        )
+
+    if pa.types.is_struct(target_type):
+        if not pa.types.is_struct(array.type):
+            raise ValueError(f"{path}: expected struct, got {array.type}")
+        actual_names = [field.name for field in array.type]
+        if len(actual_names) != len(set(actual_names)):
+            raise ValueError(f"{path}: duplicate struct fields in Parquet batch")
+        target_names = {field.name for field in target_type}
+        if unexpected := set(actual_names) - target_names:
+            raise ValueError(f"{path}: unexpected struct fields {sorted(unexpected)}")
+        aligned_children = []
+        for field in target_type:
+            idx = array.type.get_field_index(field.name)
+            if idx >= 0:
+                aligned_children.append(
+                    _align_array_to_type(
+                        array.field(idx),
+                        field.type,
+                        path=f"{path}.{field.name}",
+                    )
+                )
+            else:
+                if not (field.nullable and field.name in optional_struct_fields):
+                    raise ValueError(f"{path}: missing required struct field {field.name!r}")
+                aligned_children.append(pa.nulls(len(array), type=field.type))
+        return pa.StructArray.from_arrays(
+            aligned_children,
+            fields=list(target_type),
+            mask=cast(Any, pc).is_null(array),
+        )
+
+    if array.type.equals(target_type):
+        return array
+    if pa.types.is_large_string(array.type) and pa.types.is_string(target_type):
+        return array.cast(target_type)
+    raise ValueError(f"{path}: incompatible column type {array.type} (expected {target_type})")
+
+
+def _align_comments_batch_to_schema(batch: Any, target_schema: Any) -> Any:
+    """Align a comments Parquet batch (schema_id 0 or 1) strictly to ``target_schema``."""
+    import pyarrow as pa
+    from spicy_regs.transforms.regulations_shape import COMMENT_ATTACHMENT_METADATA
+
+    actual_names = batch.schema.names
+    if len(actual_names) != len(set(actual_names)):
+        raise ValueError("Duplicate columns in comments Parquet batch")
+    target_names = set(target_schema.names)
+    if unexpected := set(actual_names) - target_names:
+        raise ValueError(f"Unexpected columns in comments Parquet batch: {sorted(unexpected)}")
+    if missing := [name for name in target_schema.names if name not in set(actual_names)]:
+        raise ValueError(f"Missing columns in comments Parquet batch: {missing}")
+
+    optional_attachment_fields = frozenset(name for _, name, _ in COMMENT_ATTACHMENT_METADATA)
+    aligned_columns = []
+    for field in target_schema:
+        col = batch.column(batch.schema.get_field_index(field.name))
+        aligned_columns.append(
+            _align_array_to_type(
+                col,
+                field.type,
+                path=field.name,
+                optional_struct_fields=optional_attachment_fields if field.name == "attachments" else frozenset(),
+            )
+        )
+    aligned = pa.RecordBatch.from_arrays(aligned_columns, schema=target_schema)
+    if not aligned.schema.equals(target_schema):
+        raise ValueError("Aligned comments batch schema differs from target schema")
+    return aligned
+
+
+def _read_position_deletes(
+    client: Any,
+    bucket: str,
+    delete_uris: Sequence[str],
+    planned_paths: set[str],
+    work_dir: Path,
+) -> dict[str, Any]:
+    """Download each unique position-delete Parquet file once, parse ``(file_path, pos)``, and unlink immediately."""
+    import numpy as np
+    import pyarrow.parquet as pq
+
+    grouped: dict[str, list[int]] = {}
+    for delete_uri in delete_uris:
+        key = _parse_s3_uri(delete_uri, bucket)
+        tmp_del = work_dir / f"delete-{uuid4().hex}.parquet"
+        try:
+            client.download_file(bucket, key, str(tmp_del))
+            pf = pq.ParquetFile(tmp_del)
+            col_names = set(pf.schema_arrow.names)
+            if not {"file_path", "pos"}.issubset(col_names):
+                raise ValueError(f"Position-delete file {delete_uri!r} lacks required (file_path, pos) columns")
+            for batch in pf.iter_batches(columns=["file_path", "pos"]):
+                paths_col = batch.column(0)
+                pos_col = batch.column(1)
+                if paths_col.null_count or pos_col.null_count:
+                    raise ValueError(f"Position-delete file {delete_uri!r} contains NULL entries")
+                for fp, pos in zip(paths_col.to_pylist(), pos_col.to_pylist(), strict=True):
+                    if not isinstance(fp, str) or not isinstance(pos, int) or pos < 0:
+                        raise ValueError(f"Position-delete file {delete_uri!r} contains invalid (file_path, pos)")
+                    if fp in planned_paths:
+                        grouped.setdefault(fp, []).append(pos)
+        finally:
+            tmp_del.unlink(missing_ok=True)
+    return {fp: np.unique(np.asarray(positions, dtype=np.int64)) for fp, positions in grouped.items()}
+
+
+def _copy_pinned_iceberg_snapshot(
+    record_type: RecordType,
+    current: CatalogSnapshot,
+    namespace: str,
+    subjects: Path,
+    *,
+    work_dir: Path,
+    resources: ExportResources,
+) -> Path:
+    """Export a pinned Iceberg snapshot via PyIceberg planning + direct R2 Parquet streaming.
+
+    Bypasses DuckDB 1.5.5's ``IcebergMultiFileReader`` crash across evolved nested struct
+    schemas (``schema_id: 0`` -> ``schema_id: 1``) while verifying table pin, S3 storage
+    boundaries, position-delete completeness, and strict schema alignment.
+    """
+    import numpy as np
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from pyiceberg.catalog.rest import RestCatalog
+    from pyiceberg.manifest import DataFileContent
+    from spicy_regs.transforms.regulations_receipts import policy
+    from . import r2
+
+    if not is_configured():
+        missing = [var for var in _REQUIRED_ENV if not getenv(var)]
+        raise RuntimeError("R2 Data Catalog is not configured; missing env var(s): " + ", ".join(missing))
+    bucket = getenv("R2_BUCKET_NAME", "")
+    if not bucket:
+        raise RuntimeError("R2_BUCKET_NAME is required for pinned Iceberg export")
+    missing_s3 = [var for var in _REQUIRED_S3_ENV if not getenv(var)]
+    if missing_s3:
+        raise RuntimeError("Missing R2 S3 env var(s): " + ", ".join(missing_s3))
+
+    catalog = RestCatalog(
+        "comments",
+        uri=getenv("R2_CATALOG_URI", ""),
+        warehouse=getenv("R2_CATALOG_WAREHOUSE", ""),
+        token=getenv("R2_CATALOG_TOKEN", ""),
+    )
+    table = catalog.load_table((namespace, record_type.name))
+    observed_pin = (
+        str(table.metadata.table_uuid),
+        table.metadata.current_snapshot_id,
+        table.metadata.current_schema_id,
+    )
+    expected_pin = (current.table_uuid, current.snapshot_id, current.schema_id)
+    if observed_pin != expected_pin:
+        raise RuntimeError(
+            f"Catalog snapshot changed before export (expected {expected_pin}, got {observed_pin}); retry"
+        )
+
+    tasks = list(table.scan(snapshot_id=current.snapshot_id).plan_files())
+    if not tasks:
+        raise RuntimeError(f"Iceberg snapshot {current.snapshot_id} planned zero data files; refusing empty scan")
+
+    data_paths: set[str] = set()
+    delete_paths: set[str] = set()
+    for task in tasks:
+        if task.file.content != DataFileContent.DATA:
+            raise ValueError(f"Refusing non-data Iceberg task content {task.file.content!r}: {task.file.file_path!r}")
+        _parse_s3_uri(task.file.file_path, bucket)
+        if task.file.file_path in data_paths:
+            raise ValueError(f"Duplicate data file in Iceberg scan plan: {task.file.file_path!r}")
+        data_paths.add(task.file.file_path)
+        for delete_file in task.delete_files:
+            if delete_file.content != DataFileContent.POSITION_DELETES:
+                raise ValueError(
+                    f"Refusing unsupported Iceberg delete file content {delete_file.content!r}: "
+                    f"{delete_file.file_path!r}"
+                )
+            _parse_s3_uri(delete_file.file_path, bucket)
+            delete_paths.add(delete_file.file_path)
+
+    tasks.sort(key=lambda t: t.file.file_path)
+    client = r2.get_r2_client()
+    deleted_by_file = (
+        _read_position_deletes(client, bucket, sorted(delete_paths), data_paths, work_dir)
+        if delete_paths
+        else {}
+    )
+
+    target_schema = policy(record_type.name).subject_schema
+    max_group_bytes = _parse_byte_size(resources.row_group_bytes)
+    read_batch_size = min(resources.row_group_rows, 2048)
+
+    with pq.ParquetWriter(subjects, target_schema, compression="zstd") as writer:
+        pending: list[Any] = []
+        pending_rows = 0
+        pending_bytes = 0
+
+        def flush() -> None:
+            nonlocal pending_rows, pending_bytes
+            if pending:
+                writer.write_table(
+                    pa.Table.from_batches(pending, schema=target_schema),
+                    row_group_size=resources.row_group_rows,
+                )
+                pending.clear()
+                pending_rows = 0
+                pending_bytes = 0
+
+        for task in tasks:
+            key = _parse_s3_uri(task.file.file_path, bucket)
+            deleted_positions = deleted_by_file.get(task.file.file_path)
+            tmp_data = work_dir / f"data-{uuid4().hex}.parquet"
+            try:
+                client.download_file(bucket, key, str(tmp_data))
+                pf = pq.ParquetFile(tmp_data)
+                expected_file_rows = getattr(task.file, "record_count", None)
+                if expected_file_rows is not None and expected_file_rows >= 0 and pf.metadata.num_rows != expected_file_rows:
+                    raise RuntimeError(
+                        f"Data file {task.file.file_path!r} holds {pf.metadata.num_rows} rows, "
+                        f"expected {expected_file_rows} from Iceberg manifest"
+                    )
+                offset = 0
+                for batch in pf.iter_batches(batch_size=read_batch_size):
+                    n = batch.num_rows
+                    if deleted_positions is not None and len(deleted_positions):
+                        lo = int(np.searchsorted(deleted_positions, offset, side="left"))
+                        hi = int(np.searchsorted(deleted_positions, offset + n, side="left"))
+                        if hi > lo:
+                            if hi - lo == n:
+                                offset += n
+                                continue
+                            keep = np.ones(n, dtype=bool)
+                            keep[deleted_positions[lo:hi] - offset] = False
+                            batch = batch.filter(pa.array(keep))
+                    offset += n
+                    if batch.num_rows == 0:
+                        continue
+                    aligned = _align_comments_batch_to_schema(batch, target_schema)
+                    pending.append(aligned)
+                    pending_rows += aligned.num_rows
+                    pending_bytes += aligned.nbytes
+                    if pending_rows >= resources.row_group_rows or pending_bytes >= max_group_bytes:
+                        flush()
+            finally:
+                tmp_data.unlink(missing_ok=True)
+        flush()
+
+    return subjects
+
+
 def export_public_comments(
     output_dir: Path, record_type: RecordType, *, memory_limit: str = ExportResources.memory,
     threads: int = ExportResources.threads,
@@ -781,7 +1106,12 @@ def export_public_comments(
                 if snapshot is not None and current.subject() != snapshot.subject():
                     raise RuntimeError("Catalog snapshot changed before export; retry")
                 logger.info("Comments export: copying the pinned table (snapshot {})", current.snapshot_id)
-                native._copy(con, f"SELECT * FROM {_qualified(record_type)}", subjects, resources=resources)
+                if native._remote_catalog(con) and is_configured():
+                    _copy_pinned_iceberg_snapshot(
+                        record_type, current, namespace, subjects, work_dir=work_dir, resources=resources
+                    )
+                else:
+                    native._copy(con, f"SELECT * FROM {_qualified(record_type)}", subjects, resources=resources)
                 copied = pq.ParquetFile(subjects).metadata.num_rows
                 expected, source = _pinned_row_count(con, record_type, current, namespace=namespace)
                 logger.info("Comments export: copied {:,} rows; snapshot {} holds {:,} by {}",

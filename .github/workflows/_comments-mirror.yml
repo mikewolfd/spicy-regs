@@ -131,7 +131,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: uv sync --frozen --extra operational-runner
+        run: uv sync --frozen --extra operational-runner --extra comments-reader
 
       - name: Validate debugger mode before credentialed steps
         env:
