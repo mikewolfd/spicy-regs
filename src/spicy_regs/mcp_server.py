@@ -3306,6 +3306,54 @@ def _tools() -> list[Tool]:
         _refuse_oversized_page(reply, page, result["occurrences"], offset)
         return reply
 
+    @tool
+    def resolve_usc_disposition(
+        former_title: Annotated[int | str, Field(description="Former U.S.C. title number (e.g. 42, 49, or '49A' for Appendix).")],
+        former_section: Annotated[str, Field(min_length=1, max_length=128)],
+        subsection: str | None = None,
+        section_end: str | None = None,
+        appendix: bool = False,
+    ) -> dict[str, Any]:
+        """Resolve a historical U.S.C. section via the pinned disposition tables.
+
+        Checks the 9 SHA-256-pinned statutory disposition tables for former
+        titles recodified into positive law (e.g. Title 49 Appendix or former
+        Title 42 provisions moved to Title 34). Pass former_title (42, 49, or
+        '49A' for Appendix), former_section, and optional subsection,
+        section_end, or appendix. Returns verdict, recodification, successors
+        with target_key, and provenance.
+        """
+        from spicy_regs.citation_resolution import resolve_usc_disposition as _resolve
+
+        return _resolve(former_title, former_section, subsection, section_end=section_end, appendix=appendix)
+
+    @tool
+    def resolve_act_citation(
+        text: Annotated[str | None, Field(min_length=1, max_length=512)] = None,
+        act_name: Annotated[str | None, Field(min_length=1, max_length=256)] = None,
+        section: Annotated[str | None, Field(min_length=1, max_length=64)] = None,
+        division: Annotated[str | None, Field(min_length=1, max_length=32)] = None,
+        enclosing_section: Annotated[str | None, Field(min_length=1, max_length=64)] = None,
+    ) -> dict[str, Any]:
+        """Resolve an Act-relative citation via pinned OLRC tables and source credits.
+
+        Resolves a named-Act citation either from a natural-language phrase in
+        text (e.g. 'section 107(a) of CERCLA') or from structured fields
+        (act_name and section, with optional division and enclosing_section).
+        Uses pinned OLRC Popular Names, Table III, and source-credit indexes;
+        returns target_key and provenance when unique, or an explicit refusal
+        with unresolved_reason.
+        """
+        from spicy_regs.citation_resolution import resolve_act_citation as _resolve
+
+        return _resolve(
+            text,
+            act_name=act_name,
+            section=section,
+            division=division,
+            enclosing_section=enclosing_section,
+        )
+
     async def connection_status() -> CallToolResult:
         """Read bounded active/recent phase timings without opening a connection or using a tool slot.
 

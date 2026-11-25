@@ -171,6 +171,19 @@ def test_refresh_publishes_the_families_before_the_mirror_captures_base_versions
     assert jobs["base-families"]["with"]["skip_upload"] == "${{ inputs.skip_upload }}"
     assert jobs["mirror"]["needs"] == "base-families"
     assert jobs["derived"]["needs"] == "mirror" and jobs["org-links"]["needs"] == "mirror"
+    assert jobs["derived"]["strategy"]["matrix"]["command"] == [
+        "run-rollup-feed-summary",
+        "run-rollup-agency-stats",
+    ]
+    assert jobs["derived-documents"]["needs"] == "base-families"
+    assert jobs["derived-documents"]["strategy"]["matrix"]["command"] == [
+        "run-rollup-agency-monthly-volume",
+        "run-rollup-discovery-signals",
+    ]
+    assert jobs["derived-documents"]["if"] == (
+        "${{ !cancelled() && inputs.debugger_mode == 'off' && !inputs.skip_upload && !inputs.comments_only && needs.base-families.result == 'success' }}"
+    )
+    assert jobs["verify"]["needs"] == ["mirror", "derived", "derived-documents", "docket-search", "org-links", "rulemaking"]
 
 
 @pytest.mark.parametrize("cancelled,promote_v1,comments_only,expected", [

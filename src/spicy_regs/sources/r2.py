@@ -299,6 +299,18 @@ def require_credentials(action: str) -> None:
         raise RuntimeError(f"{action} requires R2 credentials (R2_ACCESS_KEY_ID); skip the upload for a dry run")
 
 
+def _is_empty_discovery_signals(local_path: Path, remote_key: str) -> bool:
+    """Whether ``local_path`` is a legitimately 0-row ``discovery_signals.parquet``."""
+    if remote_key != "discovery_signals.parquet":
+        return False
+    import pyarrow.parquet as pq
+
+    if pq.read_metadata(local_path).num_rows != 0:
+        return False
+    documents = local_path.parent / "documents.parquet"
+    return not documents.exists() or pq.read_metadata(documents).num_rows > 0
+
+
 def preflight_uploads(output_dir: Path, files: list[Path]) -> None:
     """HEAD every planned object and run its size guard before the first byte lands.
 
@@ -327,7 +339,8 @@ def preflight_uploads(output_dir: Path, files: list[Path]) -> None:
         remote_key = _remote_key(output_dir, local_path)
         try:
             remote_size = _get_remote_size(client, bucket, remote_key)
-            _assert_upload_safe(local_path.stat().st_size, remote_size, remote_key)
+            floor = 0.0 if _is_empty_discovery_signals(local_path, remote_key) else None
+            _assert_upload_safe(local_path.stat().st_size, remote_size, remote_key, floor=floor)
         except Exception as error:
             failures.append((remote_key, error))
 
@@ -360,7 +373,8 @@ def upload_file(local_path: Path, remote_key: str | None = None, *, cache_contro
     logger.info("Uploading {} ({:.1f} MB) to R2...", local_path.name, file_size)
 
     remote_size = _get_remote_size(client, bucket, remote_key)
-    _assert_upload_safe(local_size_bytes, remote_size, remote_key)
+    floor = 0.0 if _is_empty_discovery_signals(local_path, remote_key) else None
+    _assert_upload_safe(local_size_bytes, remote_size, remote_key, floor=floor)
 
     # Cache-Control policy. Parquet must never be edge-cached: DuckDB (the MCP
     # server and the browser DuckDB-WASM UI) reads each file through many
