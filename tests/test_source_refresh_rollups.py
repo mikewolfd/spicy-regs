@@ -35,6 +35,7 @@ ROLLUPS = {
     "grants_opportunities_app": rollups.GrantsOpportunitiesRollup,
     "house_disbursements_app": rollups.HouseDisbursementsRollup,
     "fec_financial_profiles_app": rollups.FecFinancialProfilesRollup,
+    "congress_sessions_app": rollups.CongressSessionsRollup,
 }
 #: The refreshes whose hosted build path has passed a rehearsal, and the schedule each has run on since.
 SCHEDULED = {
@@ -484,3 +485,31 @@ def test_house_rebuilds_from_restored_originals_when_the_house_lists_a_quarter(t
     stages = {event.get("stage") for event in events}
     assert {"house-acquisition-journal", "house-csv-original"} <= stages
     assert sum(event.get("blob_store") == "central-raw" for event in events) == 4
+
+
+def test_congress_sessions_rollup_builds_and_skips_published_pages(tmp_path, monkeypatch):
+    from spicy_regs.pipelines import congress_sessions as cs_pipeline
+    from tests import test_congress_sessions as fixture
+
+    monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(tmp_path / "raw"))
+    monkeypatch.setattr(rollups.CongressSessionsRollup, "transport", fixture._transport())
+    rollups.CongressSessionsRollup(output_dir=tmp_path / "first").run()
+    generation, events = published(tmp_path / "first")
+    sessions = pq.read_table(generation / "congress_sessions.parquet").to_pylist()
+    controls = pq.read_table(generation / "congress_party_control.parquet").to_pylist()
+    assert len(sessions) == 6 and len(controls) == 10
+    expected_digests = {
+        event["sha256"]
+        for event in events
+        if event["event"] == "capture" and event.get("stage") == cs_pipeline.STAGE
+    }
+    assert len(expected_digests) == 3
+
+    publish_as_prior(
+        monkeypatch,
+        lambda event, fields: fields.get("stage") == cs_pipeline.STAGE and fields.get("sha256") in expected_digests,
+    )
+    rollups.CongressSessionsRollup(output_dir=tmp_path / "unchanged").run()
+    assert generations(tmp_path / "unchanged") == []
+    (outcome,) = (tmp_path / "unchanged").glob("source-evidence/*/run-outcome.json")
+    assert json.loads(outcome.read_bytes())["outcome"] == "complete"
