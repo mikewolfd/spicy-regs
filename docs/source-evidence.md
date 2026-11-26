@@ -373,6 +373,22 @@ append-only indexes at `source-evidence/indexes/regulations-mirrulations/*.parqu
 digest). The blob is `source-evidence/blobs/sha256/<sha256>`; its acquisition
 journal is `source-evidence/<artifact digest without sha256:>/journal.jsonl`.
 
+A Mirrulations object that returns zero bytes is rejected by the reader as
+`requested-empty` (`the mirror answered with zero bytes`), excluded from
+`manifest.parquet`, and recorded in the `regulatory-checkpoints` `failed_keys`
+checkpoint for retry on subsequent sweeps. Empty responses are never relabeled
+as successful reads, synthesized into comment rows, or added to the consumed
+manifest; if Mirrulations later replaces the object with valid JSON, the next
+sweep ingests it automatically. One persistent upstream zero-byte object is
+observed across sweeps:
+`raw-data/FWS/FWS-R8-ES-2014-0041/text-FWS-R8-ES-2014-0041/comments/FWS-R8-ES-2014-0041-0443.json`
+(`Content-Length: 0`, ETag `"d41d8cd98f00b204e9800998ecf8427e"`, empty-body
+SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`,
+`Last-Modified: 2025-04-14T06:11:05Z`, verified via live S3 `HEAD` on
+2026-11-26). It intentionally remains absent from `comments` and visible as
+`requested-empty` in `regulatory-checkpoints` until the upstream mirror
+publishes non-empty JSON.
+
 To locate published observations, follow the table artifact's `source-evidence`
 input to `source-evidence/<artifactDigest-without-sha256:>/artifact.json`,
 `members.json` and `journal.jsonl`. Each `retained-file` event identifies its URL,
