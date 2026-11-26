@@ -12,8 +12,8 @@ from os import getenv
 from pathlib import Path
 
 from spicy_regs.pipelines import (
-    administration_policy, executive_orders, fec_financial_profiles, grants_opportunities, house_disbursements, ofac,
-    treasury_fiscal,
+    administration_policy, congress_sessions, executive_orders, fec_financial_profiles, grants_opportunities,
+    house_disbursements, ofac, treasury_fiscal,
 )
 from spicy_regs.pipelines.raw_releases import (
     journal_snapshot_releases, published_before, restore_originals, snapshot_readers,
@@ -22,7 +22,8 @@ from spicy_regs.pipelines.rollups.base import RollupPipeline, Unchanged, make_ro
 from spicy_regs.schemas.house_disbursements import PARTITION_COLUMNS as HOUSE_PARTITIONS, TABLES as HOUSE_TABLES
 from spicy_regs.sources import r2, retained_collections
 from spicy_regs.transforms import (
-    build_executive_orders, build_fec_financial_profiles, build_grants_opportunities, build_ofac, build_treasury_fiscal,
+    build_congress_sessions, build_executive_orders, build_fec_financial_profiles, build_grants_opportunities,
+    build_ofac, build_treasury_fiscal,
 )
 
 #: How many days back a Grants.gov run looks for the newest daily export before it reports the source as stalled.
@@ -239,6 +240,25 @@ class FecFinancialProfilesRollup(SourceRefreshRollup):
         return fec_financial_profiles.profiles_table(evidence, captures, output_dir, published=published)
 
 
+class CongressSessionsRollup(SourceRefreshRollup):
+    """Publish reconciled House and Senate session dates and party control when any of the three pages changes."""
+
+    name = congress_sessions.FAMILY
+    outputs = tuple(f"{table}.parquet" for table in build_congress_sessions.SCHEMAS)
+
+    def build(self, output_dir: Path) -> tuple[Path, ...]:
+        evidence = self.evidence
+        selection = congress_sessions.capture(evidence, transport=self.transport)
+        if all(
+            published_before(evidence, congress_sessions.STAGE, source["sha256"])
+            for source in selection["sources"].values()
+        ):
+            raise Unchanged("all three official House and Senate history pages are the published ones")
+        return congress_sessions.build_tables_from_selection(
+            selection, output_dir, store=evidence.store, evidence=evidence, retain=False
+        )
+
+
 ofac_sanctions_app = make_rollup_app(OfacSanctionsRollup)
 grants_opportunities_app = make_rollup_app(GrantsOpportunitiesRollup)
 administration_policy_app = make_rollup_app(AdministrationPolicyRollup)
@@ -246,3 +266,4 @@ treasury_fiscal_app = make_rollup_app(TreasuryFiscalRollup)
 executive_orders_app = make_rollup_app(ExecutiveOrdersRollup)
 house_disbursements_app = make_rollup_app(HouseDisbursementsRollup)
 fec_financial_profiles_app = make_rollup_app(FecFinancialProfilesRollup)
+congress_sessions_app = make_rollup_app(CongressSessionsRollup)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import date
-import json
 
 import httpx
 import pyarrow.parquet as pq
@@ -123,18 +122,18 @@ def test_congress_sessions_acquire_build_and_local_dry_run(tmp_path, monkeypatch
     senate_119 = next(row for row in controls if row["chamber"] == "senate" and row["congress"] == 119)
     assert senate_119["effective_to"] is None and senate_119["vacancies"] is None
 
-    live = tmp_path / "live.json"
-    live.write_text(json.dumps(publication.empty_index()))
-    dry_out = tmp_path / "dry"
-    local_publication.main([
-        "--generation", str(out / "generation"),
-        "--family", pipeline.FAMILY,
-        "--evidence", str(evidence),
-        "--dry-run", "--scratch-raw",
-        "--live-index", str(live),
-        "--output", str(dry_out),
-    ])
-    assert json.loads((dry_out / "dry-run.json").read_text())["status"] == "dry_run_accepted"
+    assert "congress-sessions" not in local_publication.LOCAL_FAMILIES
+    from tests.generation_fakes import Store
+
+    store = Store()
+    published_index = publication.publish_generation(
+        out / "generation",
+        client=store,
+        bucket="fixture",
+        prior_index=publication.empty_index(),
+        evidence_directories=(evidence,),
+    )
+    assert published_index["families"][pipeline.FAMILY]["artifactDigest"] == artifact.pin.artifact_digest
 
 
 def test_corrupt_pin_refuses_without_generation(tmp_path, monkeypatch):

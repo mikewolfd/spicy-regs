@@ -14,6 +14,7 @@ from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.transforms.build_congress_sessions import PARTY_CONTROL, SCHEMAS, SESSIONS, build_congress_sessions
 
 FAMILY = "congress-sessions"
+STAGE = "congress-sessions-html"
 _REQUIRED_SOURCES = ("house_session_dates", "house_party_divisions", "senate_party_division")
 
 
@@ -29,17 +30,16 @@ def _source_context(evidence):
     )
 
 
-def acquire(
-    output_dir: Path,
+def capture(
+    evidence,
     *,
-    archive_root: Path | None = None,
     transport=None,
     max_requests: int = 6,
     max_bytes: int | None = None,
     timeout_seconds: float = 30.0,
     min_request_interval_seconds: float = 0.5,
 ) -> dict:
-    """Capture the three official House and Senate history pages into the raw archive."""
+    """Capture the three official House and Senate history pages into ``evidence``."""
     from spicy_docs.sources.congress.party_divisions import (
         DEFAULT_MAX_BYTES,
         PartyDivisionAcquirer,
@@ -53,44 +53,66 @@ def acquire(
         timeout_seconds=timeout_seconds,
         min_request_interval_seconds=min_request_interval_seconds,
     )
-    evidence = CaptureEvidence(Path(output_dir), FAMILY, archive_root=archive_root)
-    try:
-        owner = _source_context(evidence)
-        retained = owner.transport(transport, stage="congress-sessions-html", max_bytes=limit)
-        with PartyDivisionAcquirer(budget=budget, transport=retained) as acquirer:
-            house_sessions = acquirer.acquire_house_session_dates()
-            house_divisions = acquirer.acquire_house_divisions()
-            senate_division = acquirer.acquire_senate_division()
-        pages = {
-            "house_session_dates": house_sessions,
-            "house_party_divisions": house_divisions,
-            "senate_party_division": senate_division,
+    owner = _source_context(evidence)
+    retained = owner.transport(transport, stage=STAGE, max_bytes=limit)
+    with PartyDivisionAcquirer(budget=budget, transport=retained) as acquirer:
+        house_sessions = acquirer.acquire_house_session_dates()
+        house_divisions = acquirer.acquire_house_divisions()
+        senate_division = acquirer.acquire_senate_division()
+    pages = {
+        "house_session_dates": house_sessions,
+        "house_party_divisions": house_divisions,
+        "senate_party_division": senate_division,
+    }
+    sources = {}
+    for key, page in pages.items():
+        cap = page.capture
+        sources[key] = {
+            "url": cap.requested_url,
+            "sha256": cap.sha256,
+            "bytes": cap.byte_size,
+            "observed_at": cap.observed_at,
         }
-        sources = {}
-        for key, page in pages.items():
-            cap = page.capture
-            sources[key] = {
-                "url": cap.requested_url,
-                "sha256": cap.sha256,
-                "bytes": cap.byte_size,
-                "observed_at": cap.observed_at,
-            }
-            owner.event(
-                "congress-sessions-captured",
-                source_key=key,
-                source_url=cap.requested_url,
-                sha256=cap.sha256,
-                byte_size=cap.byte_size,
-            )
-    except BaseException as error:
-        evidence.finish(error)
-        raise
-    evidence.finish()
+        owner.event(
+            "congress-sessions-captured",
+            source_key=key,
+            source_url=cap.requested_url,
+            sha256=cap.sha256,
+            byte_size=cap.byte_size,
+        )
     return {
         "format": "spicy-congress-sessions-captures",
         "version": 1,
         "sources": sources,
     }
+
+
+def acquire(
+    output_dir: Path,
+    *,
+    archive_root: Path | None = None,
+    transport=None,
+    max_requests: int = 6,
+    max_bytes: int | None = None,
+    timeout_seconds: float = 30.0,
+    min_request_interval_seconds: float = 0.5,
+) -> dict:
+    """Capture the three official House and Senate history pages into the raw archive."""
+    evidence = CaptureEvidence(Path(output_dir), FAMILY, archive_root=archive_root)
+    try:
+        selection = capture(
+            evidence,
+            transport=transport,
+            max_requests=max_requests,
+            max_bytes=max_bytes,
+            timeout_seconds=timeout_seconds,
+            min_request_interval_seconds=min_request_interval_seconds,
+        )
+    except BaseException as error:
+        evidence.finish(error)
+        raise
+    evidence.finish()
+    return selection
 
 
 def _load_original(store, source: dict, expected_url: str, *, max_bytes: int) -> bytes:
@@ -106,14 +128,15 @@ def _load_original(store, source: dict, expected_url: str, *, max_bytes: int) ->
     return body
 
 
-def build(
+def build_tables_from_selection(
     selection: dict,
     output_dir: Path,
     *,
-    archive_root: Path | None = None,
-    read_index: Path | None = None,
-):
-    """Build an offline evidenced generation from pinned House and Senate history pages."""
+    store,
+    evidence=None,
+    retain: bool = True,
+) -> tuple[Path, Path]:
+    """Validate selected pages and write ``congress_sessions.parquet`` and ``congress_party_control.parquet``."""
     from spicy_docs.sources.congress.party_divisions import (
         HOUSE_PARTY_DIVISIONS_URL,
         HOUSE_SESSION_DATES_URL,
@@ -127,6 +150,51 @@ def build(
     if not isinstance(sources, dict) or set(sources) != set(_REQUIRED_SOURCES):
         raise ValueError("Congress sessions selection must name all three official history pages")
 
+    owner = _source_context(evidence) if retain and evidence is not None else None
+    if evidence is not None and retain:
+        control = output_dir.parent / "selection.json"
+        control.write_text(json.dumps(selection, sort_keys=True, separators=(",", ":")) + "\n")
+        evidence.retain_control(control, stage="congress-sessions-selection")
+
+    expected_urls = {
+        "house_session_dates": HOUSE_SESSION_DATES_URL,
+        "house_party_divisions": HOUSE_PARTY_DIVISIONS_URL,
+        "senate_party_division": SENATE_PARTY_DIVISION_URL,
+    }
+    bodies = {}
+    for key, url in expected_urls.items():
+        src = sources[key]
+        body = _load_original(store, src, url, max_bytes=MAX_PAGE_BYTES)
+        if owner is not None:
+            owner.retain_bytes(
+                body,
+                stage=STAGE,
+                raw_source=True,
+                original_location=url,
+                source_version=src["sha256"],
+                observed_at=src["observed_at"],
+            )
+        bodies[key] = body
+
+    return build_congress_sessions(
+        house_sessions_body=bodies["house_session_dates"],
+        house_divisions_body=bodies["house_party_divisions"],
+        senate_division_body=bodies["senate_party_division"],
+        house_sessions_source=sources["house_session_dates"],
+        house_divisions_source=sources["house_party_divisions"],
+        senate_division_source=sources["senate_party_division"],
+        output_dir=output_dir,
+    )
+
+
+def build(
+    selection: dict,
+    output_dir: Path,
+    *,
+    archive_root: Path | None = None,
+    read_index: Path | None = None,
+):
+    """Build an offline evidenced generation from pinned House and Senate history pages."""
     output_dir = Path(output_dir)
     if (output_dir / "candidate").exists() or (output_dir / "generation").exists():
         raise ValueError("Use fresh congress-sessions candidate output paths")
@@ -135,38 +203,8 @@ def build(
     evidence = CaptureEvidence(output_dir, FAMILY, archive_root=archive_root)
     try:
         snapshot = inherit_read_index(evidence, read_index)
-        owner = _source_context(evidence)
-        control = output_dir / "selection.json"
-        control.write_text(json.dumps(selection, sort_keys=True, separators=(",", ":")) + "\n")
-        evidence.retain_control(control, stage="congress-sessions-selection")
-
-        expected_urls = {
-            "house_session_dates": HOUSE_SESSION_DATES_URL,
-            "house_party_divisions": HOUSE_PARTY_DIVISIONS_URL,
-            "senate_party_division": SENATE_PARTY_DIVISION_URL,
-        }
-        bodies = {}
-        for key, url in expected_urls.items():
-            src = sources[key]
-            body = _load_original(store, src, url, max_bytes=MAX_PAGE_BYTES)
-            owner.retain_bytes(
-                body,
-                stage="congress-sessions-html",
-                raw_source=True,
-                original_location=url,
-                source_version=src["sha256"],
-                observed_at=src["observed_at"],
-            )
-            bodies[key] = body
-
-        sessions_path, control_path = build_congress_sessions(
-            house_sessions_body=bodies["house_session_dates"],
-            house_divisions_body=bodies["house_party_divisions"],
-            senate_division_body=bodies["senate_party_division"],
-            house_sessions_source=sources["house_session_dates"],
-            house_divisions_source=sources["house_party_divisions"],
-            senate_division_source=sources["senate_party_division"],
-            output_dir=output_dir / "candidate",
+        sessions_path, control_path = build_tables_from_selection(
+            selection, output_dir / "candidate", store=store, evidence=evidence, retain=True
         )
         artifact = build_generation(
             output_dir / "generation",

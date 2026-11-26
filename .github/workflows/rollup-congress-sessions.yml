@@ -1,0 +1,19 @@
+name: Rollup — congress_sessions, congress_party_control
+# Dispatch-only until a hosted rehearsal with skip_upload=true passes (the Senate history page can enforce bot checks
+# on hosted runner IPs). A run whose three captured history pages match the published generation exits green.
+on:
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Skip R2 upload (dry run)'
+        required: false
+        default: true
+        type: boolean
+jobs:
+  run:
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-congress-sessions
+      skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      timeout_minutes: 20
