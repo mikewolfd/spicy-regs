@@ -6,7 +6,7 @@
 
 One row per selected county and measure in an American Community Survey five-year vintage, with estimates, margins of error and exact source cells.
 
-**Coverage.** Sampled by design only; source coverage has not been measured. Planned scope is one explicit vintage, state and complete declared county set, with population and median household income. The date records this design statement, not a source measurement. Comparisons describe estimates, not statistically significant differences or individual households. *(measured 2026-10-20)*
+**Coverage.** Sampled. Explicit vintage, state and county scope only, with population and median household income. Comparisons describe estimates, not statistically significant differences or individual households. *(measured 2026-11-25)*
 
 - **Parquet file:** `census_acs_county_observations.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

@@ -23,7 +23,8 @@ Header and footer transmission metadata from the IRS PolOrgsFullData.zip Section
 | `footer_transmission_date_raw` | `VARCHAR` | Literal F-record footer transmission date string. |
 | `footer_transmission_time_raw` | `VARCHAR` | Literal F-record footer transmission time string. |
 | `footer_record_count` | `BIGINT` | Data record count stated in the F footer record. |
-| `observed_data_records` | `BIGINT` | Actual count of data records observed in the archive stream. |
+| `observed_data_records` | `BIGINT` | Count of valid parsed data records written across the seven record-type tables. |
+| `malformed_row_count` | `BIGINT` | Count of publisher-truncated data rows quarantined to source evidence (observed_data_records + malformed_row_count equals footer_record_count). |
 | `source_sha256` | `VARCHAR` | SHA-256 of the retained PolOrgsFullData.zip archive. |
 | `source_url` | `VARCHAR` | Official IRS Section 527 fullData download URL. |
 | `observed_at` | `VARCHAR` | UTC timestamp when PolOrgsFullData.zip was captured. |

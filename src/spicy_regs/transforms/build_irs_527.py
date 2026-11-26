@@ -8,8 +8,9 @@ parsed typed columns.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal, InvalidOperation, localcontext
+import json
 from pathlib import Path
 import re
 from tempfile import TemporaryDirectory
@@ -50,6 +51,7 @@ TRANSMISSIONS_SCHEMA = pa.schema([
     ("footer_transmission_time_raw", pa.string()),
     ("footer_record_count", pa.int64()),
     ("observed_data_records", pa.int64()),
+    ("malformed_row_count", pa.int64()),
     ("source_sha256", pa.string()),
     ("source_url", pa.string()),
     ("observed_at", pa.string()),
@@ -285,9 +287,9 @@ def _parse_date(raw: str) -> tuple[date | None, str]:
     text = raw.strip()
     if not text:
         return None, "blank"
-    if re.fullmatch(r"[0-9]{8}", text):
+    if len(text) == 8 and text.isascii() and text.isdigit():
         try:
-            return datetime.strptime(text, "%Y%m%d").date(), "parsed"
+            return date(int(text[0:4]), int(text[4:6]), int(text[6:8])), "parsed"
         except ValueError:
             return None, "unparsed"
     return None, "unparsed"
@@ -297,13 +299,17 @@ def _parse_amount(raw: str) -> tuple[Decimal | None, str]:
     text = raw.strip()
     if not text:
         return None, "blank"
-    cleaned = text.replace(",", "")
+    cleaned = text.replace(",", "") if "," in text else text
     if _DECIMAL_TEXT.fullmatch(cleaned) is None:
         return None, "unparsed"
     try:
         value = Decimal(cleaned)
     except InvalidOperation:
         return None, "unparsed"
+    tup = value.as_tuple()
+    exp = tup.exponent
+    if isinstance(exp, int) and -2 <= exp <= 0 and len(tup.digits) + exp <= 36:
+        return value, "parsed"
     with localcontext() as ctx:
         ctx.prec = 44
         if value != value.quantize(Decimal("0.01")):
@@ -422,6 +428,16 @@ _TABLE_DISPATCH = {
 }
 
 
+DEFAULT_BATCH_SIZE = 50_000
+DEFAULT_MAX_MALFORMED_ROWS = 500
+DEFAULT_MAX_MALFORMED_RATIO = 0.001
+_QUARANTINEABLE_TYPES = frozenset(_TABLE_DISPATCH)
+
+
+def _is_publisher_truncated(record) -> bool:
+    return record.record_type in _QUARANTINEABLE_TYPES and "is malformed or truncated" in record.reason
+
+
 def build_irs_527(
     archive_source: Path | str | BinaryIO | bytes,
     output_dir: Path,
@@ -429,19 +445,36 @@ def build_irs_527(
     source_sha256: str,
     source_url: str,
     observed_at: str,
-    batch_size: int = 2_000,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    malformed_out: Path | None = None,
+    max_malformed_rows: int = DEFAULT_MAX_MALFORMED_ROWS,
+    max_malformed_ratio: float = DEFAULT_MAX_MALFORMED_RATIO,
 ) -> tuple[Path, ...]:
-    """Stream ``PolOrgsFullData.zip`` into all 8 typed Parquet tables atomically."""
-    from spicy_docs.sources.irs_527 import Irs527MalformedRow, iter_archive_records
+    """Stream ``PolOrgsFullData.zip`` into all 8 typed Parquet tables atomically.
+
+    IRS's upstream ``isql`` export occasionally truncates individual lines mid-field
+    when a filing contains smart punctuation (observed 148 of 18.88M rows in Nov 2026).
+    Bounded publisher-truncated data rows (known record types, ``<= max_malformed_rows``
+    and ``<= max_malformed_ratio`` of total data records) are quarantined verbatim to
+    ``malformed_out`` and counted in ``irs527_transmissions.malformed_row_count`` so
+    ``observed_data_records + malformed_row_count == footer_record_count``. Any other
+    malformed row or exceedance refuses atomically via ``Irs527Error``.
+    """
+    from spicy_docs.sources.irs_527 import Irs527Error, Irs527MalformedRow, iter_archive_records
 
     if type(batch_size) is not int or batch_size <= 0:
         raise ValueError("batch_size must be a positive integer")
+    if type(max_malformed_rows) is not int or max_malformed_rows < 0:
+        raise ValueError("max_malformed_rows must be a non-negative integer")
+    if not isinstance(max_malformed_ratio, (int, float)) or isinstance(max_malformed_ratio, bool) or not 0.0 <= max_malformed_ratio <= 1.0:
+        raise ValueError("max_malformed_ratio must be between 0.0 and 1.0")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     header_fields: dict[str, str] | None = None
     footer_fields: dict[str, str] | None = None
     data_records = 0
+    malformed_rows: list[dict] = []
 
     with TemporaryDirectory(dir=output_dir) as scratch:
         scratch_dir = Path(scratch)
@@ -456,9 +489,23 @@ def build_irs_527(
                     writers[name].write_table(pa.Table.from_pylist(buffers[name], schema=SCHEMAS[name]))
                     buffers[name].clear()
 
-            for record in iter_archive_records(archive_source):
+            on_malformed = "yield_error" if max_malformed_rows > 0 else "raise"
+            for record in iter_archive_records(archive_source, on_malformed=on_malformed):
                 if isinstance(record, Irs527MalformedRow):
-                    raise ValueError(f"Malformed IRS 527 record at line {record.line_number}: {record.reason}")
+                    if not _is_publisher_truncated(record):
+                        raise Irs527Error(f"Malformed IRS 527 record at line {record.line_number}: {record.reason}")
+                    if len(malformed_rows) >= max_malformed_rows:
+                        raise Irs527Error(
+                            f"IRS 527 malformed or truncated row count exceeded limit ({max_malformed_rows}) "
+                            f"at line {record.line_number}: {record.reason}"
+                        )
+                    malformed_rows.append({
+                        "line_number": record.line_number,
+                        "record_type": record.record_type,
+                        "reason": record.reason,
+                        "raw_line": record.raw_line,
+                    })
+                    continue
                 if record.record_type == "H":
                     header_fields = record.fields
                     continue
@@ -479,6 +526,12 @@ def build_irs_527(
 
             if header_fields is None or footer_fields is None:
                 raise ValueError("IRS 527 archive omitted required H header or F footer")
+            total_records = data_records + len(malformed_rows)
+            if malformed_rows and (total_records == 0 or (len(malformed_rows) / total_records) > max_malformed_ratio):
+                raise Irs527Error(
+                    f"IRS 527 malformed or truncated row ratio ({len(malformed_rows)}/{total_records}) "
+                    f"exceeded max_malformed_ratio={max_malformed_ratio}"
+                )
             tx_date, tx_date_status = _parse_date(header_fields["transmission_date"])
             buffers[TRANSMISSIONS].append({
                 "transmission_date_raw": header_fields["transmission_date"],
@@ -490,6 +543,7 @@ def build_irs_527(
                 "footer_transmission_time_raw": footer_fields["transmission_time"],
                 "footer_record_count": int(footer_fields["record_count"]),
                 "observed_data_records": data_records,
+                "malformed_row_count": len(malformed_rows),
                 "source_sha256": source_sha256,
                 "source_url": source_url,
                 "observed_at": observed_at,
@@ -499,6 +553,33 @@ def build_irs_527(
         finally:
             for writer in writers.values():
                 writer.close()
+
+        if malformed_out is not None and malformed_rows:
+            by_type: dict[str, int] = {}
+            for row in malformed_rows:
+                rec_type = row.get("record_type") or "unknown"
+                by_type[rec_type] = by_type.get(rec_type, 0) + 1
+            malformed_tmp = scratch_dir / "malformed-rows.json"
+            malformed_tmp.write_text(
+                json.dumps(
+                    {
+                        "format": "spicy-irs-527-malformed-rows",
+                        "version": 1,
+                        "source_sha256": source_sha256,
+                        "count": len(malformed_rows),
+                        "by_record_type": dict(sorted(by_type.items())),
+                        "rows": malformed_rows,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            malformed_dest = Path(malformed_out)
+            malformed_dest.parent.mkdir(parents=True, exist_ok=True)
+            malformed_tmp.replace(malformed_dest)
 
         destinations = []
         for name in SCHEMAS:

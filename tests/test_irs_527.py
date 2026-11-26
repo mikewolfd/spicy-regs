@@ -101,7 +101,7 @@ def test_irs_527_acquire_build_preserves_literals_latin1_types_and_dry_run(tmp_p
 
     tx = pq.read_table(out / "generation" / f"{TRANSMISSIONS}.parquet").to_pylist()[0]
     assert tx["transmission_date"] == date(2026, 11, 24)
-    assert tx["footer_record_count"] == 7 and tx["observed_data_records"] == 7
+    assert tx["footer_record_count"] == 7 and tx["observed_data_records"] == 7 and tx["malformed_row_count"] == 0
 
     f1 = pq.read_table(out / "generation" / f"{FORM8871}.parquet").to_pylist()[0]
     assert f1["organization_name"] == "Café Action PAC"
@@ -160,6 +160,78 @@ def test_irs_527_oversized_amount_preserves_raw_with_exceeds_precision():
 
     value, status = _parse_amount("9" * 37 + ".00")
     assert value is None and status == "exceeds_precision"
+    assert _parse_amount("12.300") == (Decimal("12.300"), "parsed")
+    assert _parse_amount("12.345") == (None, "exceeds_scale")
+    assert _parse_amount("1,234.50") == (Decimal("1234.50"), "parsed")
+    assert _parse_amount("-42.25") == (Decimal("-42.25"), "parsed")
+
+
+def test_irs_527_bounded_publisher_truncated_rows_quarantined_and_non_truncation_refused(tmp_path, monkeypatch):
+    raw = tmp_path / "raw"
+    monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(raw))
+
+    def _build_large_zip(bad_lines: list[str]) -> bytes:
+        valid_e = [_pipe("E", "1001", str(i), f"DE-{i}", "DE") for i in range(1, 2001)]
+        lines = [
+            _pipe("H", "20261124", "0830", "F"),
+            *bad_lines,
+            *valid_e,
+            _pipe("F", "20261124", "0830", str(len(valid_e) + len(bad_lines))),
+            "(return status = 0)",
+        ]
+        buf = BytesIO()
+        with ZipFile(buf, "w", compression=ZIP_DEFLATED) as zf:
+            zf.writestr(FULL_DATA_MEMBER, ("\n".join(lines) + "\n").encode("latin-1"))
+        return buf.getvalue()
+
+    truncated_type1 = _pipe(
+        "1", "8871", "9623773", "0", "1", "0", "463735347", "Truncated PAC",
+        *([""] * 31), "Truncated purpose at smart quote",
+        trailing=False,
+    )
+    truncated_type_d = "D|9736261|242358|Vote PAC|991248053|Margaret O"
+    zip_bytes = _build_large_zip([truncated_type1, truncated_type_d])
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, stream=httpx.ByteStream(zip_bytes), headers={"content-type": "application/zip"})
+    )
+    selection = pipeline.acquire(tmp_path / "acq-trunc", archive_root=raw, transport=transport)
+    out = tmp_path / "build-trunc"
+    artifact, evidence = pipeline.build(selection, out, archive_root=raw)
+    assert artifact.pin.artifact_digest
+
+    tx = pq.read_table(out / "generation" / f"{TRANSMISSIONS}.parquet").to_pylist()[0]
+    assert tx["footer_record_count"] == 2002
+    assert tx["observed_data_records"] == 2000
+    assert tx["malformed_row_count"] == 2
+    assert pq.read_table(out / "generation" / f"{EAINS}.parquet").num_rows == 2000
+
+    quarantined = json.loads((out / "malformed-rows.json").read_text())
+    assert quarantined["count"] == 2
+    assert quarantined["by_record_type"] == {"1": 1, "D": 1}
+    assert [(r["line_number"], r["record_type"], r["raw_line"]) for r in quarantined["rows"]] == [
+        (2, "1", truncated_type1),
+        (3, "D", truncated_type_d),
+    ]
+
+    events = [json.loads(line) for line in (evidence / "journal.jsonl").read_text().splitlines()]
+    assert any(e.get("stage") == "irs-527-malformed-rows" for e in events)
+    assert any(
+        e.get("event") == "irs-527-malformed-rows-quarantined" and e.get("malformed_row_count") == 2
+        for e in events
+    )
+
+    # Non-truncation corruption (unknown record type) MUST still refuse even at <0.1% ratio.
+    unknown_type_zip = _build_large_zip(["Z|999|unexpected|"])
+    bad_transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200, stream=httpx.ByteStream(unknown_type_zip), headers={"content-type": "application/zip"}
+        )
+    )
+    bad_sel = pipeline.acquire(tmp_path / "acq-unknown", archive_root=raw, transport=bad_transport)
+    bad_out = tmp_path / "build-unknown"
+    with pytest.raises(Irs527Error, match="unknown record type"):
+        pipeline.build(bad_sel, bad_out, archive_root=raw)
+    assert not (bad_out / "generation").exists()
 
 
 def test_irs_527_acquire_uses_evidence_transport_custody_and_records_403_refusal(tmp_path, monkeypatch):

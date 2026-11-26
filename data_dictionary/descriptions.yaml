@@ -11000,9 +11000,13 @@ tables:
     label: ACS county population and household income
     subject: reference
     summary: One row per selected county and measure in an American Community Survey five-year vintage, with estimates, margins of error and exact source cells.
-    coverage: 'Sampled by design only; source coverage has not been measured. Planned scope is one explicit vintage, state and complete declared county set, with population and median household income. The date records this design statement, not a source measurement. Comparisons describe estimates, not statistically significant differences or individual households.'
-    measured_on: '2026-10-20'
+    coverage: 'Sampled. Explicit vintage, state and county scope only, with population and median household income. Comparisons describe estimates, not statistically significant differences or individual households.'
+    measured_on: '2026-11-25'
     grain: One selected vintage, county and measure.
+    identity_columns:
+    - vintage
+    - county_geoid
+    - measure
     columns:
       dataset: Census API dataset path, currently acs/acs5.
       vintage: Final year of the selected ACS five-year period; not acquisition time.
@@ -11149,7 +11153,8 @@ tables:
       footer_transmission_date_raw: Literal F-record footer transmission date string.
       footer_transmission_time_raw: Literal F-record footer transmission time string.
       footer_record_count: Data record count stated in the F footer record.
-      observed_data_records: Actual count of data records observed in the archive stream.
+      observed_data_records: Count of valid parsed data records written across the seven record-type tables.
+      malformed_row_count: Count of publisher-truncated data rows quarantined to source evidence (observed_data_records + malformed_row_count equals footer_record_count).
       source_sha256: SHA-256 of the retained PolOrgsFullData.zip archive.
       source_url: Official IRS Section 527 fullData download URL.
       observed_at: UTC timestamp when PolOrgsFullData.zip was captured.
@@ -11167,9 +11172,9 @@ tables:
     columns:
       form_type: IRS form type code (8871).
       form_id_number: IRS form filing identifier linking to directors, related entities, and EAIN records.
-      initial_report_indicator: Indicator flag (Y/N) for initial Form 8871 notice.
-      amended_report_indicator: Indicator flag (Y/N) for amended Form 8871 notice.
-      final_report_indicator: Indicator flag (Y/N) for final Form 8871 notice.
+      initial_report_indicator: Literal IRS indicator flag (1/0) for initial Form 8871 notice.
+      amended_report_indicator: Literal IRS indicator flag (1/0) for amended Form 8871 notice.
+      final_report_indicator: Literal IRS indicator flag (1/0) for final Form 8871 notice.
       ein: Employer Identification Number reported on the notice.
       organization_name: Political organization name preserving source ISO-8859-1 characters.
       mailing_address_1: Mailing street address line 1.
@@ -11202,9 +11207,9 @@ tables:
       business_address_state: Business address state code.
       business_address_zip_code: Business address ZIP code.
       business_address_zip_ext: Business address ZIP+4 extension.
-      exempt_8872_indicator: Indicator flag (Y/N) for claiming exemption from filing Form 8872.
+      exempt_8872_indicator: Literal IRS indicator flag (1/0, or blank on legacy notices) for claiming exemption from filing Form 8872.
       exempt_state: State in which the organization claims a qualified state/local political organization exemption.
-      exempt_990_indicator: Indicator flag (Y/N) for claiming exemption from filing Form 990.
+      exempt_990_indicator: Literal IRS indicator flag (1/0, or blank on legacy notices) for claiming exemption from filing Form 990.
       purpose: Stated purpose of the political organization.
       material_change_date_raw: Literal material change date string before parsing.
       material_change_date: Parsed material change date; null when blank or unparsed.
@@ -11236,10 +11241,10 @@ tables:
       period_end_date_raw: Literal reporting period end date string before parsing.
       period_end_date: Parsed reporting period end date; null when blank or unparsed.
       period_end_date_status: Parsed, blank, or unparsed status for period_end_date.
-      initial_report_indicator: Indicator flag (Y/N) for initial report.
-      amended_report_indicator: Indicator flag (Y/N) for amended report.
-      final_report_indicator: Indicator flag (Y/N) for final report.
-      change_of_address_indicator: Indicator flag (Y/N) for address change.
+      initial_report_indicator: Literal IRS indicator flag (1/0) for initial report.
+      amended_report_indicator: Literal IRS indicator flag (1/0) for amended report.
+      final_report_indicator: Literal IRS indicator flag (1/0) for final report.
+      change_of_address_indicator: Literal IRS indicator flag (1/0) for address change.
       organization_name: Political organization name preserving source ISO-8859-1 characters.
       ein: Employer Identification Number reported on the filing.
       mailing_address_1: Mailing street address line 1.
@@ -11279,11 +11284,11 @@ tables:
       pre_or_post_elect_date: Parsed election date; null when blank or unparsed.
       pre_or_post_elect_date_status: Parsed, blank, or unparsed status for pre_or_post_elect_date.
       pre_or_post_elect_state: Election state code for pre/post-election filings.
-      sched_a_ind: Indicator flag (Y/N) whether Schedule A contributions are attached.
+      sched_a_ind: Literal IRS indicator flag (1/0) whether Schedule A contributions are attached.
       total_sched_a_raw: Literal reported Schedule A total string before parsing.
       total_sched_a: Exact decimal Schedule A total reported on the form; null when blank, unparsed, or out of bounds.
       total_sched_a_status: Parsed, blank, unparsed, exceeds_scale, or exceeds_precision status for total_sched_a.
-      sched_b_ind: Indicator flag (Y/N) whether Schedule B expenditures are attached.
+      sched_b_ind: Literal IRS indicator flag (1/0) whether Schedule B expenditures are attached.
       total_sched_b_raw: Literal reported Schedule B total string before parsing.
       total_sched_b: Exact decimal Schedule B total reported on the form; null when blank, unparsed, or out of bounds.
       total_sched_b_status: Parsed, blank, unparsed, exceeds_scale, or exceeds_precision status for total_sched_b.
