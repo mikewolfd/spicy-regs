@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 import hashlib
 import json
@@ -21,6 +22,7 @@ from spicy_regs.scorecards.acquisition import MAX_BYTES, MAX_REQUESTS, Scorecard
 from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError
 from spicy_regs.sources import r2
 from spicy_regs.scorecards.etl import (
+    merge_family_slices,
     verify_family_readback,
     read_indexed_family,
     write_family,
@@ -29,7 +31,7 @@ from spicy_regs.scorecards.etl import (
     POLICIES,
     SOURCE_NAMES,
 )
-from spicy_regs.etl_receipts import write_dataset
+from spicy_regs.etl_receipts import RECEIPT_SCHEMA, write_dataset
 
 TABLE_NAMES = SOURCE_NAMES
 OUTPUTS = tuple(name + ".parquet" for name in TABLE_NAMES)
@@ -62,14 +64,30 @@ def _fatal(error: BaseException) -> None:
 
 
 
-def _prior_tables(
-    output_dir, evidence, contracts, download_prior, receipt_public_url=None, download_prior_receipts=None
+@dataclass(frozen=True)
+class PriorNativeBundle:
+    """Verified local staging of a current-policy native prior scorecard generation."""
+
+    directory: Path
+    receipt_path: Path
+    generation_id: str
+
+
+def _stage_prior(
+    output_dir,
+    evidence,
+    contracts,
+    download_prior,
+    receipt_public_url=None,
+    download_prior_receipts=None,
+    *,
+    materialize: bool = True,
 ):
-    """Verify legacy input explicitly or reconstruct a native generation with its receipts."""
+    """Verify legacy input explicitly or stage/reconstruct a native generation with its receipts."""
     snapshot = evidence.read_snapshot or {"families": {}}
     prior = snapshot["families"].get("scorecards")
     if prior is None:
-        return {name: [] for name in contracts}, {name: False for name in contracts}, None
+        return ({name: [] for name in contracts}, {name: False for name in contracts}, None) if materialize else None
     native = "etlReceipts" in prior
     if native:
         from spicy_regs.scorecards.etl import admitted_read_policies
@@ -77,6 +95,7 @@ def _prior_tables(
             Path(key).stem: value["columns"] for key, value in prior["tables"].items()})
         expected = {name + ".parquet" for name, policy in selected.items() if not policy.receipt_only}
     else:
+        selected = None
         expected = set(OUTPUTS)
     if set(prior["tables"]) != expected:
         raise ScorecardRefreshError("Prior scorecard family does not contain the complete frozen table set")
@@ -93,7 +112,15 @@ def _prior_tables(
             digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
         if pin.get("sha256") != digest or pin.get("byteSize") != path.stat().st_size:
             raise ScorecardRefreshError("Managed prior scorecard table differs from its immutable pin")
-        if not native:
+        if native:
+            assert selected is not None
+            name = path.stem
+            with pq.ParquetFile(path) as parquet:
+                if not parquet.schema_arrow.equals(selected[name].subject_schema):
+                    raise ScorecardRefreshError(f"Prior scorecard table {name} schema differs from admitted policy")
+                if "rows" in pin and parquet.metadata.num_rows != pin["rows"]:
+                    raise ScorecardRefreshError(f"Prior scorecard table {name} row count differs from pin")
+        else:
             result[path.stem] = pq.ParquetFile(path).read().to_pylist()
     if native:
         if download_prior_receipts is not None and not download_prior_receipts(directory / "etl_receipts.parquet"):
@@ -101,8 +128,36 @@ def _prior_tables(
         receipt = verified_receipt_download(
             snapshot, directory / "etl_receipts.parquet", public_url=receipt_public_url or getenv("R2_PUBLIC_URL")
         )
+        with pq.ParquetFile(receipt) as parquet:
+            if not parquet.schema_arrow.equals(RECEIPT_SCHEMA):
+                raise ScorecardRefreshError("Prior scorecard receipt schema differs from shared schema")
+            if "rows" in prior["etlReceipts"] and parquet.metadata.num_rows != prior["etlReceipts"]["rows"]:
+                raise ScorecardRefreshError("Prior scorecard receipt row count differs from pin")
+        assert selected is not None
+        all_current = all(selected[name] == POLICIES[name] for name in TABLE_NAMES)
+        if not materialize and all_current:
+            return PriorNativeBundle(
+                directory=directory,
+                receipt_path=receipt,
+                generation_id=prior["etlReceipts"]["generationId"],
+            )
         result = read_indexed_family(directory, TABLE_NAMES, prior, receipt_path=receipt)
     return result, {name: True for name in contracts}, receipt
+
+
+def _prior_tables(
+    output_dir, evidence, contracts, download_prior, receipt_public_url=None, download_prior_receipts=None
+):
+    """Verify legacy input explicitly or reconstruct a native generation with its receipts."""
+    return _stage_prior(
+        output_dir,
+        evidence,
+        contracts,
+        download_prior,
+        receipt_public_url=receipt_public_url,
+        download_prior_receipts=download_prior_receipts,
+        materialize=True,
+    )
 
 
 def _accept(result, edition, source, receipts, provider, parser_version):
@@ -223,11 +278,25 @@ def build_scorecards(
     if set(provider.contracts) != set(TABLE_NAMES):
         raise ScorecardRefreshError("Installed provider does not expose the frozen scorecard tables")
     output_dir.mkdir(parents=True, exist_ok=True)
-    prior_rows, present, prior_receipts = _prior_tables(
-        output_dir, evidence, provider.contracts, download_prior, receipt_public_url, download_prior_receipts
+    prior_state = _stage_prior(
+        output_dir,
+        evidence,
+        provider.contracts,
+        download_prior,
+        receipt_public_url,
+        download_prior_receipts,
+        materialize=validate_readback is not None,
     )
-    if any(present.values()):
-        provider.validate(prior_rows)
+    if isinstance(prior_state, PriorNativeBundle):
+        prior_rows, present, prior_receipts = None, None, None
+    elif prior_state is None:
+        prior_rows = {name: [] for name in provider.contracts}
+        present = {name: False for name in provider.contracts}
+        prior_receipts = None
+    else:
+        prior_rows, present, prior_receipts = prior_state
+        if any(present.values()):
+            provider.validate(prior_rows)
     accepted, failed, selected_editions = {}, [], set()
     failed_attempts = []
     generation_id = receipt_generation_id or "scorecard-build:" + uuid4().hex
@@ -364,37 +433,53 @@ def build_scorecards(
             else:
                 fresh[name].extend(rows)
     fresh["scorecard_publishers"] = list(publisher_rows.values())
-    merged = {}
-    for name, contract in provider.contracts.items():
-        scope_column = "publisher_id" if name == "scorecard_publishers" else "scorecard_id"
-        replaced = set(publisher_rows) if name == "scorecard_publishers" else set(accepted)
-        merged[name] = [row for row in prior_rows[name] if row[scope_column] not in replaced]
-        merged[name].extend(fresh[name])
-        current_keys = {contract.key(row) for row in fresh[name]}
-        removed = [
-            list(contract.key(row))
-            for row in prior_rows[name]
-            if row[scope_column] in replaced and contract.key(row) not in current_keys
-        ]
-        if removed:
-            evidence.event(
-                "rows-retired",
-                table=name,
-                key=list(contract.identity),
-                rows=removed,
-                reason="complete-scorecard-replacement",
-            )
-    provider.validate(merged)  # Duplicates/orphans fail before the merge helper can deduplicate them.
-    paths = write_family(
-        output_dir,
-        merged,
-        generation_id=generation_id,
-        attempt_failures=attempt_receipts,
-        prior_receipts=prior_receipts,
-    )
-    verify_family_readback(output_dir, merged)
-    if validate_readback is not None:
-        validate_readback(prior_rows, merged)
+    if isinstance(prior_state, PriorNativeBundle):
+        provider.validate(fresh)
+        paths = merge_family_slices(
+            output_dir,
+            prior_dir=prior_state.directory,
+            prior_receipts=prior_state.receipt_path,
+            fresh=fresh,
+            replaced_publishers=set(publisher_rows),
+            replaced_scorecards=set(accepted),
+            contracts=provider.contracts,
+            evidence=evidence,
+            generation_id=generation_id,
+            attempt_failures=attempt_receipts,
+        )
+    else:
+        assert prior_rows is not None
+        merged = {}
+        for name, contract in provider.contracts.items():
+            scope_column = "publisher_id" if name == "scorecard_publishers" else "scorecard_id"
+            replaced = set(publisher_rows) if name == "scorecard_publishers" else set(accepted)
+            merged[name] = [row for row in prior_rows[name] if row[scope_column] not in replaced]
+            merged[name].extend(fresh[name])
+            current_keys = {contract.key(row) for row in fresh[name]}
+            removed = [
+                list(contract.key(row))
+                for row in prior_rows[name]
+                if row[scope_column] in replaced and contract.key(row) not in current_keys
+            ]
+            if removed:
+                evidence.event(
+                    "rows-retired",
+                    table=name,
+                    key=list(contract.identity),
+                    rows=removed,
+                    reason="complete-scorecard-replacement",
+                )
+        provider.validate(merged)  # Duplicates/orphans fail before the merge helper can deduplicate them.
+        paths = write_family(
+            output_dir,
+            merged,
+            generation_id=generation_id,
+            attempt_failures=attempt_receipts,
+            prior_receipts=prior_receipts,
+        )
+        verify_family_readback(output_dir, merged)
+        if validate_readback is not None:
+            validate_readback(prior_rows, merged)
     evidence.event(
         "scorecard-refresh",
         accepted_scopes=sorted(accepted),
