@@ -7656,6 +7656,7 @@
         "footer_transmission_time_raw",
         "footer_record_count",
         "observed_data_records",
+        "malformed_row_count",
         "source_sha256",
         "source_url",
         "observed_at"
@@ -10050,9 +10051,9 @@
       "table": "census_acs_county_observations",
       "label": "ACS county population and household income",
       "summary": "One row per selected county and measure in an American Community Survey five-year vintage, with estimates, margins of error and exact source cells.",
-      "coverage": "Sampled by design only; source coverage has not been measured. Planned scope is one explicit vintage, state and complete declared county set, with population and median household income. The date records this design statement, not a source measurement. Comparisons describe estimates, not statistically significant differences or individual households.",
+      "coverage": "Sampled. Explicit vintage, state and county scope only, with population and median household income. Comparisons describe estimates, not statistically significant differences or individual households.",
       "kind": "sampled",
-      "measured_on": "2026-10-20",
+      "measured_on": "2026-11-25",
       "data_quality": null,
       "columns": [
         "dataset",

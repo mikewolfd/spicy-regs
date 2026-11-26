@@ -25359,7 +25359,12 @@
       {
         "column_name": "observed_data_records",
         "column_type": "BIGINT",
-        "description": "Actual count of data records observed in the archive stream."
+        "description": "Count of valid parsed data records written across the seven record-type tables."
+      },
+      {
+        "column_name": "malformed_row_count",
+        "column_type": "BIGINT",
+        "description": "Count of publisher-truncated data rows quarantined to source evidence (observed_data_records + malformed_row_count equals footer_record_count)."
       },
       {
         "column_name": "source_sha256",
@@ -25405,17 +25410,17 @@
       {
         "column_name": "initial_report_indicator",
         "column_type": "VARCHAR",
-        "description": "Indicator flag (Y/N) for initial Form 8871 notice."
+        "description": "Literal IRS indicator flag (1/0) for initial Form 8871 notice."
       },
       {
         "column_name": "amended_report_indicator",
         "column_type": "VARCHAR",
-        "description": "Indicator flag (Y/N) for amended Form 8871 notice."
+        "description": "Literal IRS indicator flag (1/0) for amended Form 8871 notice."
       },
       {
         "column_name": "final_report_indicator",
         "column_type": "VARCHAR",
-        "description": "Indicator flag (Y/N) for final Form 8871 notice."
+        "description": "Literal IRS indicator flag (1/0) for final Form 8871 notice."
       },
       {
         "column_name": "ein",
@@ -25580,7 +25585,7 @@
       {
         "column_name": "exempt_8872_indicator",
         "column_type": "VARCHAR",
-        "description": "Indicator flag (Y/N) for claiming exemption from filing Form 8872."
+        "description": "Literal IRS indicator flag (1/0, or blank on legacy notices) for claiming exemption from filing Form 8872."
       },
       {
         "column_name": "exempt_state",
@@ -25590,7 +25595,7 @@
       {
         "column_name": "exempt_990_indicator",
         "column_type": "VARCHAR",
-        "description": "Indicator flag (Y/N) for claiming exemption from filing Form 990."
+        "description": "Literal IRS indicator flag (1/0, or blank on legacy notices) for claiming exemption from filing Form 990."
       },
       {
         "column_name": "purpose",
@@ -25707,22 +25712,22 @@
       {
         "column_name": "initial_report_indicator",
         "column_type": "VARCHAR",
-        "description": "Indicator flag (Y/N) for initial report."
+        "description": "Literal IRS indicator flag (1/0) for initial report."
       },
       {
         "column_name": "amended_report_indicator",
         "column_type": "VARCHAR",
-        "description": "Indicator flag (Y/N) for amended report."
+        "description": "Literal IRS indicator flag (1/0) for amended report."
       },
       {
         "column_name": "final_report_indicator",
         "column_type": "VARCHAR",
-        "description": "Indicator flag (Y/N) for final report."
+        "description": "Literal IRS indicator flag (1/0) for final report."
       },
       {
         "column_name": "change_of_address_indicator",
         "column_type": "VARCHAR",
-        "description": "Indicator flag (Y/N) for address change."
+        "description": "Literal IRS indicator flag (1/0) for address change."
       },
       {
         "column_name": "organization_name",
@@ -25922,7 +25927,7 @@
       {
         "column_name": "sched_a_ind",
         "column_type": "VARCHAR",
-        "description": "Indicator flag (Y/N) whether Schedule A contributions are attached."
+        "description": "Literal IRS indicator flag (1/0) whether Schedule A contributions are attached."
       },
       {
         "column_name": "total_sched_a_raw",
@@ -25942,7 +25947,7 @@
       {
         "column_name": "sched_b_ind",
         "column_type": "VARCHAR",
-        "description": "Indicator flag (Y/N) whether Schedule B expenditures are attached."
+        "description": "Literal IRS indicator flag (1/0) whether Schedule B expenditures are attached."
       },
       {
         "column_name": "total_sched_b_raw",
@@ -34835,9 +34840,9 @@
     "table": "census_acs_county_observations",
     "label": "ACS county population and household income",
     "summary": "One row per selected county and measure in an American Community Survey five-year vintage, with estimates, margins of error and exact source cells.",
-    "coverage": "Sampled by design only; source coverage has not been measured. Planned scope is one explicit vintage, state and complete declared county set, with population and median household income. The date records this design statement, not a source measurement. Comparisons describe estimates, not statistically significant differences or individual households.",
+    "coverage": "Sampled. Explicit vintage, state and county scope only, with population and median household income. Comparisons describe estimates, not statistically significant differences or individual households.",
     "kind": "sampled",
-    "measured_on": "2026-10-20",
+    "measured_on": "2026-11-25",
     "data_quality": null,
     "columns": [
       {
@@ -34973,7 +34978,11 @@
     ],
     "subject": "reference",
     "grain": "One selected vintage, county and measure.",
-    "identity_columns": []
+    "identity_columns": [
+      "vintage",
+      "county_geoid",
+      "measure"
+    ]
   },
   "census_acs_congressional_district_observations": {
     "table": "census_acs_congressional_district_observations",

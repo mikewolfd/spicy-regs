@@ -110,13 +110,24 @@ def build(
             original_location=archive["url"],
             observed_at=archive["observed_at"],
         )
+        malformed_path = output_dir / "malformed-rows.json"
         tables = build_irs_527(
             archive_path,
             output_dir / "candidate",
             source_sha256=archive["sha256"],
             source_url=archive["url"],
             observed_at=archive["observed_at"],
+            malformed_out=malformed_path,
         )
+        if malformed_path.exists():
+            malformed_doc = json.loads(malformed_path.read_text(encoding="utf-8"))
+            evidence.retain_control(malformed_path, stage="irs-527-malformed-rows")
+            owner.event(
+                "irs-527-malformed-rows-quarantined",
+                malformed_row_count=malformed_doc["count"],
+                by_record_type=malformed_doc["by_record_type"],
+                source_sha256=archive["sha256"],
+            )
         artifact = build_generation(
             output_dir / "generation",
             family=FAMILY,
