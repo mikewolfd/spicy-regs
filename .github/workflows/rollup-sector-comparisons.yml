@@ -1,0 +1,20 @@
+name: Rollup — sector_financial_comparisons, sector_classification_evidence, lobbying_issue_financial_observations
+# Dispatch-only until a hosted rehearsal with skip_upload=true passes. A run whose live FEC profiles,
+# LDA quarterly profiles, LDA activities, and curated NAICS-2022 mapping match the published generation
+# exits green without publishing.
+on:
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Skip R2 upload (dry run)'
+        required: false
+        default: true
+        type: boolean
+jobs:
+  run:
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-sector-comparisons
+      skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      timeout_minutes: 20

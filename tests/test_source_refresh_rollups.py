@@ -36,6 +36,7 @@ ROLLUPS = {
     "house_disbursements_app": rollups.HouseDisbursementsRollup,
     "fec_financial_profiles_app": rollups.FecFinancialProfilesRollup,
     "congress_sessions_app": rollups.CongressSessionsRollup,
+    "sector_comparisons_app": rollups.SectorComparisonsRollup,
 }
 #: The refreshes whose hosted build path has passed a rehearsal, and the schedule each has run on since.
 SCHEDULED = {
@@ -513,3 +514,103 @@ def test_congress_sessions_rollup_builds_and_skips_published_pages(tmp_path, mon
     assert generations(tmp_path / "unchanged") == []
     (outcome,) = (tmp_path / "unchanged").glob("source-evidence/*/run-outcome.json")
     assert json.loads(outcome.read_bytes())["outcome"] == "complete"
+
+
+def test_sector_comparisons_rollup_builds_and_skips_unchanged_inputs(tmp_path, monkeypatch):
+    from datetime import date
+    import pyarrow as pa
+    from spicy_regs.pipelines import sector_comparisons as sc_pipeline
+    from spicy_regs.transforms import sector_comparisons as sc_transform
+    from tests.test_sector_comparisons import FIXTURE
+
+    monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(tmp_path / "raw"))
+    config = sc_pipeline.load_rollup_selection()
+
+    capture_bodies = {
+        item["sha256"].removeprefix("sha256:"): (
+            b"{" + b'"padding":"' + b"x" * (item["byte_size"] - 14) + b'"}'
+        )
+        for item in config["classification_captures"]
+    }
+    for item in config["classification_captures"]:
+        body = capture_bodies[item["sha256"].removeprefix("sha256:")]
+        assert len(body) == item["byte_size"]
+
+    # Build a deterministic config matching the synthetic capture digests while keeping the real NAICS mapping shape.
+    patched_config = json.loads(json.dumps(config))
+    for item in patched_config["classification_captures"]:
+        body = capture_bodies[item["sha256"].removeprefix("sha256:")]
+        new_sha = "sha256:" + hashlib.sha256(body).hexdigest()
+        capture_bodies[new_sha.removeprefix("sha256:")] = body
+        item["sha256"] = new_sha
+    # Use the synthetic fixture's mapping + entities so both FEC and LDA observations exercise real classification rows.
+    patched_config["mapping"] = FIXTURE["mapping"]
+    monkeypatch.setattr(sc_pipeline, "load_rollup_selection", lambda: patched_config)
+
+    def serve_captures(request):
+        sha = request.url.path.rsplit("/", 1)[-1]
+        if sha in capture_bodies:
+            return httpx.Response(200, content=capture_bodies[sha])
+        return httpx.Response(404)
+
+    monkeypatch.setattr(rollups.SectorComparisonsRollup, "transport", httpx.MockTransport(serve_captures))
+
+    def write_inputs(target: Path, *, extra_activity: bool = False):
+        target.mkdir(parents=True, exist_ok=True)
+        fec_rows = [
+            {
+                **{k: v for k, v in row.items() if k not in {"period_start", "period_end"}},
+                "period_start": date.fromisoformat(row["period_start"]),
+                "period_end": date.fromisoformat(row["period_end"]),
+            }
+            for row in FIXTURE["fec"]
+        ]
+        lda_rows = [
+            {
+                **{k: v for k, v in row.items() if k not in {"period_start", "period_end"}},
+                "period_start": date.fromisoformat(row["period_start"]),
+                "period_end": date.fromisoformat(row["period_end"]),
+            }
+            for row in FIXTURE["lda"]
+        ]
+        act_rows = list(FIXTURE["activities"])
+        if extra_activity:
+            act_rows.append({"filing_uuid": FIXTURE["lda"][0]["selected_filing_uuid"], "general_issue_code": "TAX"})
+        pq.write_table(pa.Table.from_pylist(fec_rows), target / "fec_financial_profiles.parquet")
+        pq.write_table(pa.Table.from_pylist(lda_rows), target / "lobbying_quarterly_profiles.parquet")
+        pq.write_table(pa.Table.from_pylist(act_rows), target / "lobbying_activities.parquet")
+
+    first_dir = tmp_path / "first"
+    write_inputs(first_dir)
+    rollups.SectorComparisonsRollup(output_dir=first_dir).run()
+    generation, events = published(first_dir)
+    comparisons = pq.read_table(generation / "sector_financial_comparisons.parquet").to_pylist()
+    evidence_rows = pq.read_table(generation / "sector_classification_evidence.parquet").to_pylist()
+    issues = pq.read_table(generation / "lobbying_issue_financial_observations.parquet").to_pylist()
+    assert len(comparisons) == 16 and len(evidence_rows) == 5
+    assert len(issues) == len(
+        sc_transform.issue_views(FIXTURE["lda"], FIXTURE["activities"], source_generation="sha256:x")
+    )
+    inputs_event = next(e for e in events if e["event"] == "sector-comparison-inputs")
+    assert sum(e.get("blob_store") == "central-raw" for e in events) == len(patched_config["classification_captures"])
+
+    unchanged_dir = tmp_path / "unchanged"
+    write_inputs(unchanged_dir)
+    publish_as_prior(
+        monkeypatch,
+        lambda event, fields: (
+            event == "sector-comparison-inputs"
+            and fields.get("selection_sha256") == inputs_event["selection_sha256"]
+            and fields.get("lda_activities_sha256") == inputs_event["lda_activities_sha256"]
+        ),
+    )
+    rollups.SectorComparisonsRollup(output_dir=unchanged_dir).run()
+    assert generations(unchanged_dir) == []
+    (outcome,) = unchanged_dir.glob("source-evidence/*/run-outcome.json")
+    assert json.loads(outcome.read_bytes())["outcome"] == "complete"
+
+    # Changing only lobbying_activities.parquet (without changing FEC or LDA profiles) must rebuild.
+    changed_act_dir = tmp_path / "changed-activities"
+    write_inputs(changed_act_dir, extra_activity=True)
+    rollups.SectorComparisonsRollup(output_dir=changed_act_dir).run()
+    assert len(generations(changed_act_dir)) == 1
