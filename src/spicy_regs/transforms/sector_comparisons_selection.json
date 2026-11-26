@@ -1,0 +1,159 @@
+{
+  "classification_captures": [
+    {
+      "byte_size": 52992,
+      "observed_at": "2026-11-13T12:14:40.784910+00:00",
+      "request_url": "https://www.michiganoilandgas.org/membership.html",
+      "sha256": "sha256:ecac5968062b64fc7b351ed28cfc035853e226e7238e722bdd2c5c761fe6b42c"
+    },
+    {
+      "byte_size": 65312,
+      "observed_at": "2026-11-13T12:15:09.534078+00:00",
+      "request_url": "https://atriumhealth.org/about-us/newsroom/news/2026/07/atrium-health-invests-238-billion-in-community-benefit",
+      "sha256": "sha256:3f5dc3f5b1e793b1a4ba639d4b45a05f72f7eb141317cb8e8bfcea5af247628d"
+    },
+    {
+      "byte_size": 1985,
+      "observed_at": "2026-11-13T12:14:39.138842+00:00",
+      "request_url": "https://api.open.fec.gov/v1/committee/C00083808/history/2026/?per_page=100",
+      "sha256": "sha256:8bb4d34d7a3437d94582560f578085078214d59b8f4da48b4d6e4ef2005c3c8e"
+    },
+    {
+      "byte_size": 1889,
+      "observed_at": "2026-11-13T12:14:40.773919+00:00",
+      "request_url": "https://api.open.fec.gov/v1/committee/C00423871/history/2026/?per_page=100",
+      "sha256": "sha256:a697662daf240b135b74635a7d55d498035732ad0d9c2a0a2ee1709310437ff4"
+    }
+  ],
+  "mapping": {
+    "assignments": [
+      {
+        "applicable_end": "2025-12-31",
+        "applicable_start": "2025-01-01",
+        "evidence": [
+          {
+            "locator": "/results/0/affiliated_committee_name",
+            "sha256": "sha256:a697662daf240b135b74635a7d55d498035732ad0d9c2a0a2ee1709310437ff4",
+            "url": "https://api.open.fec.gov/v1/committee/C00423871/history/2026/?per_page=100"
+          },
+          {
+            "locator": "Organization business description; Atrium article explicitly discusses 2025",
+            "sha256": "sha256:3f5dc3f5b1e793b1a4ba639d4b45a05f72f7eb141317cb8e8bfcea5af247628d",
+            "url": "https://atriumhealth.org/about-us/newsroom/news/2026/07/atrium-health-invests-238-billion-in-community-benefit"
+          }
+        ],
+        "method": "curated_disclosed_organization_and_primary_business_description",
+        "native_entity_id": "C00423871",
+        "observed_at": "2026-11-13",
+        "sector_codes": [
+          "62"
+        ],
+        "source_namespace": "fec_committee",
+        "status": "supported_context",
+        "uncertainty": "Broad curator assignment to disclosed organization context, not publisher-assigned NAICS. Filing/retrieval dates do not establish historical affiliation dates or ownership."
+      },
+      {
+        "applicable_end": "2025-12-31",
+        "applicable_start": "2025-01-01",
+        "evidence": [
+          {
+            "locator": "/results/0/affiliated_committee_name",
+            "sha256": "sha256:8bb4d34d7a3437d94582560f578085078214d59b8f4da48b4d6e4ef2005c3c8e",
+            "url": "https://api.open.fec.gov/v1/committee/C00083808/history/2026/?per_page=100"
+          },
+          {
+            "locator": "Membership services and trade-association business description",
+            "sha256": "sha256:ecac5968062b64fc7b351ed28cfc035853e226e7238e722bdd2c5c761fe6b42c",
+            "url": "https://www.michiganoilandgas.org/membership.html"
+          }
+        ],
+        "method": "curated_disclosed_organization_and_primary_business_description",
+        "native_entity_id": "C00083808",
+        "observed_at": "2026-11-13",
+        "sector_codes": [
+          "81"
+        ],
+        "source_namespace": "fec_committee",
+        "status": "supported_context",
+        "uncertainty": "Broad curator assignment to disclosed organization context, not publisher-assigned NAICS. Filing/retrieval dates do not establish historical affiliation dates or ownership."
+      },
+      {
+        "applicable_end": "2025-12-31",
+        "applicable_start": "2025-01-01",
+        "evidence": [
+          {
+            "client_id": "64160",
+            "field": "general_description",
+            "generation": "sha256:122272c4ef2e2e1be1240ad8d36b57e7923d82d8804227e06e21dc1f7c627998",
+            "registrant_id": "401106328",
+            "reported_business": "services for survivors of trafficking",
+            "table_sha256": "sha256:1a418e95ddf6d7cfc940038377c1a33f45277cc010498d7f06053ca87dd4e230",
+            "url": "https://lda.gov/api/v1/clients/64160/"
+          }
+        ],
+        "method": "curated_publisher_client_business_description",
+        "native_entity_id": "401106328/64160",
+        "observed_at": "2026-11-13",
+        "sector_codes": [
+          "62"
+        ],
+        "source_namespace": "lda_client",
+        "status": "supported_context",
+        "uncertainty": "Broad source-reported business context, not an official NAICS assignment; no cross-source organization identity link."
+      },
+      {
+        "applicable_end": "2025-12-31",
+        "applicable_start": "2025-01-01",
+        "evidence": [
+          {
+            "client_id": "57672",
+            "field": "general_description",
+            "generation": "sha256:122272c4ef2e2e1be1240ad8d36b57e7923d82d8804227e06e21dc1f7c627998",
+            "registrant_id": "401106328",
+            "reported_business": "Oversight and leadership guidance for camp and conference centers throughout the US.",
+            "table_sha256": "sha256:1a418e95ddf6d7cfc940038377c1a33f45277cc010498d7f06053ca87dd4e230",
+            "url": "https://lda.gov/api/v1/clients/57672/"
+          }
+        ],
+        "method": "curated_publisher_client_business_description",
+        "native_entity_id": "401106328/57672",
+        "observed_at": "2026-11-13",
+        "sector_codes": [
+          "81"
+        ],
+        "source_namespace": "lda_client",
+        "status": "supported_context",
+        "uncertainty": "Broad source-reported business context, not an official NAICS assignment; no cross-source organization identity link."
+      }
+    ],
+    "observed_at": "2026-11-13",
+    "scheme": "NAICS-2022",
+    "sectors": {
+      "62": "Health Care and Social Assistance",
+      "81": "Other Services (except Public Administration)"
+    },
+    "uncertain_associations": [
+      {
+        "left_id": "C00024869",
+        "left_namespace": "fec_committee",
+        "reason": "GE Aerospace PAC and General Electric client labels do not establish a same-organization bridge; this proposed association is not used for money.",
+        "right_id": "15997/121527",
+        "right_namespace": "lda_client",
+        "status": "unresolved"
+      }
+    ],
+    "version": "fec-lda-curated-naics2022-context-20261113/2",
+    "vocabulary": {
+      "definitions_url": "https://www.census.gov/programs-surveys/economic-census/year/2022/guidance/understanding-naics.html",
+      "owner": "RefSpec naics_psc_codes.NAICS_CODES_XLSX_SOURCE",
+      "source_url": "https://www.census.gov/naics/2022NAICS/2-6%20digit_2022_Codes.xlsx",
+      "vintage": "2022"
+    }
+  },
+  "period_end": "2025-12-31",
+  "period_start": "2025-01-01",
+  "populations": {
+    "fec": "Every held selected committee profile whose reported start/end are exactly calendar 2025; other periods excluded explicitly.",
+    "lda": "All observed 2025 quarterly profiles across all held native registrants; missing or competing quarters remain unresolved."
+  }
+}

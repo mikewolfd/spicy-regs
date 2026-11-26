@@ -228,3 +228,7 @@ def test_pipeline_streams_activities_beyond_64mib_cap_and_documents_explorer_tab
         "lobbying_quarterly_profiles",
         "lobbying_activities",
     ]
+
+    from spicy_regs import local_publication
+
+    assert "sector-comparisons" not in local_publication.LOCAL_FAMILIES

@@ -45,7 +45,6 @@ LOCAL_FAMILIES = frozenset({
     "fec-election-results",
     "fec-research-profiles",
     "lobbying-quarterly-profiles",
-    "sector-comparisons",
     "fara",
     "grants-status",
     "historical-vetoes",
@@ -144,9 +143,6 @@ def _family_schemas(family: str) -> dict | None:
         return {key: SCHEMAS[key] for key in (TABLES["opportunities"], SNAPSHOTS["opportunities"])}
     if family == "sec-edgar":
         from spicy_regs.transforms.build_sec_edgar import SCHEMAS
-        return SCHEMAS
-    if family == "sector-comparisons":
-        from spicy_regs.transforms.sector_comparisons import SCHEMAS
         return SCHEMAS
     if family == "usaspending-awards":
         from spicy_regs.transforms.build_usaspending_awards import SCHEMAS

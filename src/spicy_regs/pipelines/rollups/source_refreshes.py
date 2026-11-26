@@ -7,23 +7,25 @@ the published generation lacks raises :class:`Unchanged` and publishes nothing.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, date, datetime, timedelta
+import hashlib
 from os import getenv
 from pathlib import Path
 
 from spicy_regs.pipelines import (
-    administration_policy, congress_sessions, executive_orders, fec_financial_profiles, grants_opportunities,
-    house_disbursements, ofac, treasury_fiscal,
+    administration_policy, congress_sessions, executive_orders, fec_financial_profiles, fec_research_profiles,
+    grants_opportunities, house_disbursements, ofac, sector_comparisons, treasury_fiscal,
 )
 from spicy_regs.pipelines.raw_releases import (
     journal_snapshot_releases, published_before, restore_originals, snapshot_readers,
 )
 from spicy_regs.pipelines.rollups.base import RollupPipeline, Unchanged, make_rollup_app
 from spicy_regs.schemas.house_disbursements import PARTITION_COLUMNS as HOUSE_PARTITIONS, TABLES as HOUSE_TABLES
-from spicy_regs.sources import r2, retained_collections
+from spicy_regs.sources import publication, r2, retained_collections
 from spicy_regs.transforms import (
     build_congress_sessions, build_executive_orders, build_fec_financial_profiles, build_grants_opportunities,
-    build_ofac, build_treasury_fiscal,
+    build_ofac, build_treasury_fiscal, sector_comparisons as sector_comparisons_transform,
 )
 
 #: How many days back a Grants.gov run looks for the newest daily export before it reports the source as stalled.
@@ -259,6 +261,98 @@ class CongressSessionsRollup(SourceRefreshRollup):
         )
 
 
+class SectorComparisonsRollup(SourceRefreshRollup):
+    """Rebuild sector comparisons when published FEC profiles, LDA profiles, LDA activities, or mappings change."""
+
+    name = sector_comparisons.FAMILY
+    inputs = (
+        "fec_financial_profiles.parquet",
+        "lobbying_quarterly_profiles.parquet",
+        "lobbying_activities.parquet",
+    )
+    outputs = tuple(f"{table}.parquet" for table in sector_comparisons_transform.SCHEMAS)
+
+    def _prime(self, output_dir: Path, snapshot: Mapping | None = None) -> dict[str, dict]:
+        parents = super()._prime(output_dir, snapshot)
+        index = snapshot or publication.empty_index()
+        self._primed_parents = parents
+        self._primed_cutoffs = {
+            key: owner[1].get("publishedAt")
+            for key in self.inputs
+            if (owner := publication.table_owner(index, key)) is not None
+        }
+        return parents
+
+    def build(self, output_dir: Path) -> tuple[Path, ...]:
+        evidence = self.evidence
+        config = sector_comparisons.load_rollup_selection()
+        parents = getattr(self, "_primed_parents", None)
+        if parents is None:
+            raise RuntimeError("sector-comparisons: build requires primed upstream tables")
+        cutoffs = getattr(self, "_primed_cutoffs", {})
+        fec_pin = parents["fec_financial_profiles.parquet"]
+        lda_pin = parents["lobbying_quarterly_profiles.parquet"]
+        act_pin = parents["lobbying_activities.parquet"]
+        fallback_cutoff = f"{config['mapping']['observed_at']}T00:00:00Z"
+        scope = {
+            "fec": {
+                "cutoff": cutoffs.get("fec_financial_profiles.parquet") or fallback_cutoff,
+                "generation": fec_pin.get("artifactDigest") or fec_pin["sha256"],
+                "population": config["populations"]["fec"],
+                "table_sha256": fec_pin["sha256"],
+            },
+            "lda": {
+                "cutoff": cutoffs.get("lobbying_quarterly_profiles.parquet") or fallback_cutoff,
+                "generation": lda_pin.get("artifactDigest") or lda_pin["sha256"],
+                "population": config["populations"]["lda"],
+                "table_sha256": lda_pin["sha256"],
+            },
+            "period_start": config["period_start"],
+            "period_end": config["period_end"],
+        }
+        selection_bytes = sector_comparisons.json_bytes({"scope": scope, "mapping": config["mapping"]})
+        selection_sha256 = "sha256:" + hashlib.sha256(selection_bytes).hexdigest()
+        act_sha256 = act_pin["sha256"]
+        if evidence.inherited_event(
+            "sector-comparison-inputs",
+            selection_sha256=selection_sha256,
+            lda_activities_sha256=act_sha256,
+        ):
+            raise Unchanged(
+                "FEC profiles, LDA profiles, LDA activities, and curated sector mapping are the published ones"
+            )
+        restore_originals(
+            evidence.store,
+            [capture["sha256"] for capture in config["classification_captures"]],
+            getenv("R2_PUBLIC_URL", r2.VERIFIED_PUBLIC_URL),
+            max_bytes=fec_research_profiles.MAX_ORIGINAL_BYTES,
+            transport=self.transport,
+        )
+        evidence.event(
+            "sector-comparison-inputs",
+            selection_sha256=selection_sha256,
+            fec_generation=scope["fec"]["generation"],
+            fec_table_sha256=scope["fec"]["table_sha256"],
+            lda_generation=scope["lda"]["generation"],
+            lda_table_sha256=scope["lda"]["table_sha256"],
+            lda_activities_sha256=act_sha256,
+            mapping_version=config["mapping"]["version"],
+        )
+        return sector_comparisons.build_tables_from_paths(
+            evidence,
+            scope=scope,
+            mapping=config["mapping"],
+            classification_captures=config["classification_captures"],
+            fec_path=output_dir / "fec_financial_profiles.parquet",
+            lda_path=output_dir / "lobbying_quarterly_profiles.parquet",
+            lda_activities_path=output_dir / "lobbying_activities.parquet",
+            output_dir=output_dir,
+            fec_expected_hash=fec_pin["sha256"],
+            lda_expected_hash=lda_pin["sha256"],
+            lda_activities_expected_hash=act_sha256,
+        )
+
+
 ofac_sanctions_app = make_rollup_app(OfacSanctionsRollup)
 grants_opportunities_app = make_rollup_app(GrantsOpportunitiesRollup)
 administration_policy_app = make_rollup_app(AdministrationPolicyRollup)
@@ -267,3 +361,4 @@ executive_orders_app = make_rollup_app(ExecutiveOrdersRollup)
 house_disbursements_app = make_rollup_app(HouseDisbursementsRollup)
 fec_financial_profiles_app = make_rollup_app(FecFinancialProfilesRollup)
 congress_sessions_app = make_rollup_app(CongressSessionsRollup)
+sector_comparisons_app = make_rollup_app(SectorComparisonsRollup)
