@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 import json
 from typing import Any, Callable, Iterable, Mapping
 
+from spicy_regs.runtime_bounds import checkpoint
+
 from .core import literal, quoted
 from .lineage import column_lineage, table_columns
 
@@ -48,6 +50,8 @@ def install_sql_views(connection: Any, available_tables: Iterable[str], specs: I
     result: dict[str, dict[str, Any]] = {}
     schemas: dict[str, list[str]] = {} if _schemas is None else _schemas
     for spec in specs:
+        if bind:
+            checkpoint()
         missing_tables = sorted(set(spec.required) - available)
         missing_columns = []
         for table, required in spec.required.items():
@@ -96,6 +100,7 @@ def compatible_sql_variant(connection, available_tables, specs, publication=None
 
     available, failures = set(available_tables), []
     for spec in specs:
+        checkpoint()
         missing_tables = sorted(set(spec.required) - available)
         if missing_tables:
             failures.append(spec.rule_version + ": missing tables " + ", ".join(missing_tables))

@@ -665,3 +665,100 @@ def test_only_artifacts_the_manifest_marks_public_are_served(monkeypatch):
     assert set(snapshot["tables"]) == {f"{table}.parquet" for table in dd.RULEMAKING_TABLES[2:]}
     serve_documents(monkeypatch, {})
     assert pub.load_rulemaking_snapshot(mcp_server.R2_BASE_URL) is None
+
+
+LEGACY_UNPUBLISHED_MANAGED_ONLY = (
+    "senate_disclosure_reports",
+    "senate_disclosure_transactions",
+    "court_opinion_texts",
+    "crs_report_files",
+)
+
+
+def test_unpublished_legacy_managed_only_tables_avoid_cold_catalog_404_probes(tmp_path, monkeypatch):
+    """ss-ruw2: cold catalog_only connections issue zero 404 probes for unpublished managed-only tables."""
+    from spicy_regs.etl_policy_registry import installed_policies
+    from tests.test_mcp_server import _records, _tool_data
+
+    # Prepare all real generation fixtures before connection_fixture patches duckdb.connect.
+    base_root = tmp_path / "base"
+    base_root.mkdir()
+    directory, _ = build(base_root, keys=("a.parquet",))
+    base_index = publish(Store(), directory)
+
+    registered = installed_policies()
+    published_fixtures = {}
+    for table in LEGACY_UNPUBLISHED_MANAGED_ONLY:
+        table_root = tmp_path / f"published-{table}"
+        table_root.mkdir()
+        if table in registered:
+            _, pub_index, pub_locations = managed_release_fixture(table_root, table)
+        else:
+            pub_dir, _ = build(table_root, keys=(f"{table}.parquet",))
+            pub_index = publish(Store(), pub_dir)
+            pub_locations = {pub.single_member(pub_index, f"{table}.parquet").path: pub_dir / f"{table}.parquet"}
+        published_fixtures[table] = (pub_index, pub_locations)
+
+    # 1. Cold catalog_only discovery with only an unrelated managed table published: zero 404 probes.
+    monkeypatch.setattr(mcp_server, "DATA_DIR", None)
+    monkeypatch.setattr(mcp_server, "_bind_archive", lambda _: (None, None))
+    monkeypatch.setattr(mcp_server, "FEC_QUALIFIED_VIEWS", ())
+    monkeypatch.setattr(mcp_server, "load_public_http", lambda *args: pytest.fail("No HTTP probes expected in catalog_only"))
+    built = connection_fixture(
+        monkeypatch,
+        base_index,
+        {pub.single_member(base_index, "a.parquet").path: directory / "a.parquet"},
+        tables=("a", *LEGACY_UNPUBLISHED_MANAGED_ONLY),
+    )
+    mcp_server._reset_connection_cache()
+    try:
+        mcp = mcp_server.build_server()
+        listed = _tool_data(mcp, "list_sources", {})
+        assert any("a" in group["tables"] for group in listed["subjects"])
+        for table in LEGACY_UNPUBLISHED_MANAGED_ONLY:
+            described = _tool_data(mcp, "describe_table", {"table": table})
+            assert described["available"] is False
+        assert len(built) == 1
+        assert built[0].seen == []
+    finally:
+        for con in built:
+            if not con.closed:
+                con.close()
+        mcp_server._reset_connection_cache()
+
+    # 2. Once published in publication.v2.json, all 4 resolve in catalog_only discovery and query_sql.
+    monkeypatch.setattr(mcp_server, "load_public_http", lambda *args: None)
+    for table, (pub_index, pub_locations) in published_fixtures.items():
+        built_pub = connection_fixture(monkeypatch, pub_index, pub_locations, tables=(table,))
+        try:
+            mcp = mcp_server.build_server()
+            described = _tool_data(mcp, "describe_table", {"table": table})
+            assert described["available"] is True
+            assert described["schema_basis"] == "selected_publication"
+            reply = _tool_data(mcp, "query_sql", {"sql": f'SELECT count(*) AS n FROM "{table}"'})
+            assert _records(reply) == [{"n": 1}]
+            assert all(f"{mcp_server.R2_BASE_URL}/{table}.parquet" not in con.seen for con in built_pub)
+        finally:
+            for con in built_pub:
+                if not con.closed:
+                    con.close()
+            mcp_server._reset_connection_cache()
+
+    # 3. Once supplied locally in DATA_DIR, all 4 resolve without touching remote URLs.
+    local_dir = tmp_path / "local"
+    local_dir.mkdir()
+    for table in LEGACY_UNPUBLISHED_MANAGED_ONLY:
+        pq.write_table(pa.table({"id": [table]}), local_dir / f"{table}.parquet")
+    monkeypatch.setattr(mcp_server, "DATA_DIR", local_dir)
+    built_local = connection_fixture(monkeypatch, pub.empty_index(), {}, tables=LEGACY_UNPUBLISHED_MANAGED_ONLY)
+    try:
+        mcp = mcp_server.build_server()
+        for table in LEGACY_UNPUBLISHED_MANAGED_ONLY:
+            reply = _tool_data(mcp, "query_sql", {"sql": f'SELECT id FROM "{table}"'})
+            assert _records(reply) == [{"id": table}]
+        assert all(con.seen == [] for con in built_local)
+    finally:
+        for con in built_local:
+            if not con.closed:
+                con.close()
+        mcp_server._reset_connection_cache()

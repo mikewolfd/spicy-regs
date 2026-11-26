@@ -673,7 +673,7 @@ def test_remote_scoped_fec_query_still_restores_exact_receipt_inputs(tmp_path, m
     assert result["publication"][specs[0].view.name]["release_compatibility"]["status"] == "compatible"
 
 
-def test_explicit_remote_receipts_keep_all_families_and_catalog_queries_expand(scoped_remote, tmp_path):
+def test_explicit_remote_receipts_keep_all_families_and_metadata_queries_stay_scoped(scoped_remote, tmp_path):
     import duckdb
     from spicy_regs.sources.publication import file_identity
 
@@ -699,7 +699,234 @@ def test_explicit_remote_receipts_keep_all_families_and_catalog_queries_expand(s
     assert _records(result) == [{"dataset": "fixture"}, {"dataset": "second"}]
     assert set(result["publication"]["etl_receipts"]["families"]) == {"fixture", "second"}
     assert "other_rows" not in admitted
-    result = _tool_data(mcp, "query_sql", {"sql": "SHOW TABLES"})
-    assert "other_rows" in {row["name"] for row in _records(result)}
-    connection = server._cached_connection
-    assert connection is not None and server._pinned_record(connection, "_spicy_query_scope") is None
+    warm = server._cached_connection
+    assert warm is not None
+    before_admitted = list(admitted)
+    for sql in (
+        "SHOW TABLES",
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'",
+        "SELECT 1 AS one",
+    ):
+        meta = _tool_data(mcp, "query_sql", {"sql": sql})
+        assert meta["rows"]
+    assert admitted == before_admitted
+    assert "other_rows" not in admitted
+    assert server._cached_connection is warm
+    scope = server._pinned_record(warm, "_spicy_query_scope")
+    assert scope is not None and set(scope["relations"]) == {"etl_receipts", "lobbying_activities"}
+
+
+def test_metadata_queries_do_not_trigger_deferred_fec_receipt_admission(tmp_path, monkeypatch):
+    """ss-axvj: information_schema, SELECT 1, SHOW TABLES, and PRAGMA stay metadata-only (no FEC OOM)."""
+    from spicy_regs.fec_receipt_adapter import ReceiptAdapter
+    from spicy_regs.sources import publication
+    from tests.test_mcp_fec_release import configure
+
+    specs, index, *_ = configure(tmp_path, monkeypatch)
+    bucket = tmp_path / "bucket"
+    for entry in index["families"].values():
+        for key in entry["tables"]:
+            for member in publication.table_members(index, key):
+                target = bucket / member.path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                publication.fetch_member("fixture", member, target)
+    admitted = _remote_fixture(bucket, monkeypatch, index)
+
+    validate_calls = []
+    orig_validate = etl_bulk.validate_bundle
+
+    def tracked_validate(*args, **kwargs):
+        validate_calls.append((args, kwargs))
+        return orig_validate(*args, **kwargs)
+
+    restored = []
+    orig_restore = ReceiptAdapter.restore_originals
+
+    def tracked_restore(self, table, *args, **kwargs):
+        restored.append(table)
+        return orig_restore(self, table, *args, **kwargs)
+
+    monkeypatch.setattr(etl_bulk, "validate_bundle", tracked_validate)
+    monkeypatch.setattr(ReceiptAdapter, "restore_originals", tracked_restore)
+    mcp = server.build_server()
+
+    # Cold metadata/literal queries must not open source tables or admit deferred FEC views.
+    assert _records(_tool_data(mcp, "query_sql", {"sql": "SELECT 1 AS one"})) == [{"one": 1}]
+    cold_info = _tool_data(
+        mcp,
+        "query_sql",
+        {"sql": "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main' ORDER BY table_name"},
+    )
+    assert cold_info["columns"] == ["table_name"]
+    assert admitted == []
+    assert validate_calls == []
+    assert restored == []
+    assert server._cached_connection is not None
+    assert server._pinned_record(server._cached_connection, "_spicy_query_scope") == {"relations": []}
+
+    # Warm scoped connection: metadata queries must reuse the connection without flipping to unscoped.
+    assert _records(_tool_data(mcp, "query_sql", {"sql": "SELECT record_id FROM fec_filings"})) == [{"record_id": "row-1"}]
+    warm = server._cached_connection
+    assert warm is not None
+    assert admitted == ["fec_filings"]
+    for sql in (
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main' ORDER BY table_name",
+        "SELECT 1 AS one",
+        "SHOW TABLES",
+        "PRAGMA version",
+    ):
+        reply = _tool_data(mcp, "query_sql", {"sql": sql})
+        assert reply["rows"]
+    assert server._cached_connection is warm
+    assert admitted == ["fec_filings"]
+    assert validate_calls == []
+    assert restored == []
+
+    # Named FEC qualified view still expands and admits cleanly afterward.
+    qualified = _tool_data(mcp, "query_sql", {"sql": f"SELECT * FROM {specs[0].view.name}"})
+    assert _records(qualified) == [{"id": 1}]
+    assert set(restored) == {"fec_receipts", "fec_filings"}
+
+
+def test_slow_relationship_expansion_does_not_starve_concurrent_queries_or_discovery(tmp_path, monkeypatch):
+    """ss-nybl: slow relationship_binding runs outside _connection_lock and honors RequestBound deadlines."""
+    from concurrent.futures import ThreadPoolExecutor
+    from starlette.testclient import TestClient
+
+    from spicy_regs import archive_release
+    from tests.test_mcp_archive_release import FULL_FIXTURE_ROWS, _write_custom_release
+    from tests.test_mcp_query_results import call
+
+    origin = tmp_path / "archive"
+    release_id = _write_custom_release(origin, FULL_FIXTURE_ROWS)
+    monkeypatch.setattr(archive_release, "ORIGIN", str(origin))
+    monkeypatch.setattr(
+        archive_release,
+        "load_pins",
+        lambda: {"version": 1, "updated_at": "x", "bound": release_id, "releases": [release_id]},
+    )
+    monkeypatch.setattr(server, "DATA_DIR", None)
+    monkeypatch.setattr(server, "TABLES", ())
+    monkeypatch.setattr(server, "R2_BASE_URL", str(tmp_path / "r2"))
+    monkeypatch.setattr(server, "_resolve_catalog_config", lambda: None)
+    monkeypatch.setattr(server, "load_public_http", lambda *args: None)
+    monkeypatch.setattr(server, "INTERACTIVE_HTTP_RETRIES", {})
+    monkeypatch.setattr(server, "FEC_QUALIFIED_VIEWS", ())
+    monkeypatch.setattr(server, "_read_publication", lambda: server._Publication({"families": {}}, None, None))
+    monkeypatch.setattr(server, "TOOL_CONCURRENCY", 2)
+
+    entered, stopped = Event(), Event()
+    lock_held_during_expansion = []
+    original_install = server._install_relationship_views
+
+    def stalling_install(con):
+        requested = server._requested_relations.get()
+        if requested and "archive_meeting_documents" in requested:
+            lock_held_during_expansion.append(server._connection_lock.locked())
+            entered.set()
+            try:
+                while True:
+                    sleep(0.005)
+                    checkpoint()
+            finally:
+                stopped.set()
+        return original_install(con)
+
+    monkeypatch.setattr(server, "_install_relationship_views", stalling_install)
+
+    with TestClient(server.build_app()) as http:
+        # Warm the query connection with archive_meetings already bound.
+        warm_reply = call(http, "query_sql", {"sql": "SELECT event_id FROM archive_meetings ORDER BY event_id"})
+        assert warm_reply["isError"] is False
+        assert _records(warm_reply["structuredContent"]) == [{"event_id": 112474}, {"event_id": 321961}]
+        warm_con = server._cached_connection
+        assert warm_con is not None
+
+        # Bound the stalled expansion tightly so it fails promptly under RequestBound.
+        monkeypatch.setattr(server, "STATEMENT_TIMEOUT_SECONDS", 0.5)
+        monkeypatch.setattr(server, "STATEMENT_TIMEOUT", "0.5s")
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            slow_started = monotonic()
+            slow_future = pool.submit(
+                call,
+                http,
+                "query_sql",
+                {"sql": "SELECT event_id FROM archive_meeting_documents LIMIT 1"},
+            )
+            assert entered.wait(5), "slow expansion did not enter relationship_binding"
+            assert lock_held_during_expansion == [False]
+            assert not server._connection_lock.locked()
+
+            # Concurrent queries on already-bound archive_meetings and discovery calls finish immediately.
+            concurrent_started = monotonic()
+            q_future = pool.submit(
+                call,
+                http,
+                "query_sql",
+                {"sql": "SELECT event_id FROM archive_meetings ORDER BY event_id"},
+            )
+            d_future = pool.submit(call, http, "describe_table", {"table": "archive_meetings"})
+            l_future = pool.submit(call, http, "list_sources", {})
+
+            q_reply = q_future.result(5)
+            d_reply = d_future.result(5)
+            l_reply = l_future.result(5)
+            concurrent_elapsed = monotonic() - concurrent_started
+
+            assert q_reply["isError"] is False
+            assert _records(q_reply["structuredContent"]) == [{"event_id": 112474}, {"event_id": 321961}]
+            assert d_reply["isError"] is False
+            assert d_reply["structuredContent"]["available"] is True
+            assert l_reply["isError"] is False
+            assert concurrent_elapsed < 0.45
+
+            slow_reply = slow_future.result(5)
+            slow_elapsed = monotonic() - slow_started
+
+        assert stopped.wait(2)
+        assert slow_reply["isError"] is True
+        assert "timeout, including input admission" in slow_reply["content"][0]["text"]
+        assert slow_elapsed < 2.0
+        assert server._cached_connection is warm_con
+
+
+def test_saturated_query_workers_do_not_starve_discovery_tools(tmp_path, monkeypatch):
+    """Discovery tools use their own limiter so saturated slow queries cannot starve describe_table/list_sources."""
+    from concurrent.futures import ThreadPoolExecutor
+    from starlette.testclient import TestClient
+
+    from tests.test_mcp_query_results import call
+    from tests.test_mcp_server import _make_local_connection
+
+    _make_local_connection(monkeypatch, server)
+    monkeypatch.setattr(server, "TOOL_CONCURRENCY", 1)
+    monkeypatch.setattr(server, "STATEMENT_TIMEOUT_SECONDS", 5.0)
+    monkeypatch.setattr(server, "STATEMENT_TIMEOUT", "5s")
+
+    entered, release = Event(), Event()
+    original_get = server._get_connection
+
+    def blocking_query_connection():
+        if not server._discovery_only.get():
+            entered.set()
+            while not release.is_set():
+                sleep(0.005)
+                checkpoint()
+        return original_get()
+
+    monkeypatch.setattr(server, "_get_connection", blocking_query_connection)
+
+    with TestClient(server.build_app()) as http, ThreadPoolExecutor(max_workers=3) as pool:
+        slow_query = pool.submit(call, http, "query_sql", {"sql": "SELECT docket_count FROM agency_stats"})
+        assert entered.wait(5)
+        try:
+            describe = pool.submit(call, http, "describe_table", {"table": "agency_stats"}).result(5)
+            listed = pool.submit(call, http, "list_sources", {}).result(5)
+            assert describe["isError"] is False and describe["structuredContent"]["available"] is True
+            assert listed["isError"] is False and listed["structuredContent"]["subjects"]
+            assert not slow_query.done()
+        finally:
+            release.set()
+        slow_reply = slow_query.result(5)
+        assert slow_reply["isError"] is False

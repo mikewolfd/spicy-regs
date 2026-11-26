@@ -17,6 +17,8 @@ from pathlib import Path
 import re
 from typing import Any, Mapping, Sequence
 
+from .runtime_bounds import checkpoint
+
 FORMAT = "spicy-regs-fec-release"
 VERSION = 1
 LIMIT = 1024 * 1024
@@ -183,9 +185,12 @@ class QualifiedView:
 def capture_configuration(specs, *, receipt_digest, image_digest, base_url, local_path=None,
                           local_mode=False, publication=None, consumer=None) -> dict:
     """Capture inputs once for a new connection; all returned content is JSON data."""
+    checkpoint()
     consumer_error = None
     try:
         running = consumer if consumer is not None else runtime_consumer(image_digest)
+    except TimeoutError:
+        raise
     except Exception as exc:
         running = {}
         consumer_error = f"consumer_measurement_unavailable: {type(exc).__name__}: {exc}"
@@ -198,6 +203,8 @@ def capture_configuration(specs, *, receipt_digest, image_digest, base_url, loca
             if local_mode and local_path is None:
                 raise ValueError("Local serving requires a local receipt path")
             config["receipt"] = load_receipt(receipt_digest, base_url, local_path=local_path)
+        except TimeoutError:
+            raise
         except Exception as exc:
             config["receipt_error"] = f"receipt_unavailable_or_invalid: {type(exc).__name__}: {exc}"
     # Repeated views share installed interpretation files. Reuse each digest
@@ -211,6 +218,7 @@ def capture_configuration(specs, *, receipt_digest, image_digest, base_url, loca
         return file_digests[path]
 
     for spec in specs:
+        checkpoint()
         name = spec.view.name
         if name in config["views"]:
             raise ValueError(f"Repeated qualified application view: {name}")
@@ -229,6 +237,8 @@ def capture_configuration(specs, *, receipt_digest, image_digest, base_url, loca
             state.update(sql=sql, sql_sha256=sha256(sql.encode()), interpretation={
                 "mapping_version": spec.mapping_version, "identity_version": spec.identity_version, **files,
             }, population=spec.population, as_of=spec.as_of, evidence_generations=evidence_generations)
+        except TimeoutError:
+            raise
         except Exception as exc:
             state["error"] = f"application_identity_unavailable: {type(exc).__name__}: {exc}"
         config["views"][name] = state
@@ -377,6 +387,7 @@ def install_views(connection, specs, configuration, index, available_tables, pub
     unchanged_adapter = (type(owner) is ReceiptAdapter and owner.connection is connection
                          and getattr(prepare, "__func__", None) is ReceiptAdapter.prepare_qualified)
     for spec in specs:
+        checkpoint()
         release = check_view(spec, configuration, index, available_tables)
         if release["status"] == "compatible":
             sql = configuration["views"][spec.view.name]["sql"]
@@ -386,6 +397,8 @@ def install_views(connection, specs, configuration, index, available_tables, pub
                     release["reasons"].append(dict(path="sql", reason="registered_sql_must_be_one_select", expected=None, actual=None))
                 elif read_tables(connection, sql) != set(spec.view.required):
                     release["reasons"].append(dict(path="dependencies", reason="registered_sql_dependency_set_differs", expected=None, actual=None))
+            except TimeoutError:
+                raise
             except Exception as exc:
                 release["reasons"].append(dict(path="sql", reason=f"registered_sql_invalid: {exc}", expected=None, actual=None))
             if release["reasons"]:
