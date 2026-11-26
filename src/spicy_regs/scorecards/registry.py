@@ -15,6 +15,12 @@ REGISTRY = Path(__file__).with_name("sources.yaml")
 LIVE_QUALIFICATIONS = Path(__file__).with_name("live_qualifications.json")
 ADAPTERS = frozenset(ADAPTER_PUBLISHERS.values())
 CADENCES = {"daily": timedelta(days=1), "weekly": timedelta(days=7), "monthly": timedelta(days=30)}
+# Bounded early-arrival tolerance absorbs routine scheduled cron jitter without allowing accidental same-day reruns.
+CADENCE_TOLERANCES = {
+    "daily": timedelta(hours=2),
+    "weekly": timedelta(hours=6),
+    "monthly": timedelta(hours=6),
+}
 
 
 class RegistryError(ValueError):
@@ -41,7 +47,7 @@ class ScorecardSource:
         observed = datetime.fromisoformat(last_attempt.replace("Z", "+00:00"))
         if observed.tzinfo is None or now.tzinfo is None:
             raise RegistryError("Cadence requires timezone-aware observation times")
-        return now >= observed + CADENCES[self.cadence]
+        return now >= observed + CADENCES[self.cadence] - CADENCE_TOLERANCES[self.cadence]
 
 
 def load_registry(path: Path = REGISTRY) -> tuple[ScorecardSource, ...]:

@@ -41,6 +41,8 @@ jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    outputs:
+      outcome: ${{ steps.outcome.outputs.outcome }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -102,6 +104,26 @@ jobs:
           if [[ "$SCORECARD_HISTORY" == 'true' ]]; then ARGS+=(--historical-backfill); fi
           if [[ "$SCORECARD_FORCE" == 'true' ]]; then ARGS+=(--force); fi
           uv run --frozen run-rollup-scorecards "${ARGS[@]}"
+      - name: Record scorecard refresh outcome
+        id: outcome
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          artifacts = sorted(Path('output/source-evidence').glob('*/artifact/artifact.json'))
+          if len(artifacts) != 1:
+              raise SystemExit(f'Expected 1 scorecard source-evidence artifact, found {len(artifacts)}')
+          root = json.loads(artifacts[0].read_text())
+          spec = root.get('spec') if isinstance(root, dict) else None
+          if not isinstance(spec, dict) or spec.get('family') != 'scorecards':
+              raise SystemExit('Unexpected source-evidence artifact family')
+          outcome = spec.get('outcome')
+          if outcome not in {'build-complete', 'no-op'}:
+              raise SystemExit(f'Unexpected scorecard refresh outcome: {outcome!r}')
+          with Path(os.environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as stream:
+              stream.write(f'outcome={outcome}\n')
+          PY
       - name: Retain invocation and permitted evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -124,7 +146,7 @@ jobs:
 
   analysis:
     needs: run
-    if: github.event_name == 'schedule' || inputs.skip_upload == false
+    if: (github.event_name == 'schedule' && needs.run.outputs.outcome == 'build-complete') || (github.event_name == 'workflow_dispatch' && inputs.skip_upload == false)
     uses: ./.github/workflows/_rollup.yml
     secrets: inherit
     with:
