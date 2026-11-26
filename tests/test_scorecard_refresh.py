@@ -2,11 +2,14 @@
 
 from contextlib import contextmanager
 from copy import deepcopy
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -18,7 +21,7 @@ import yaml
 from spicy_regs.pipelines.rollups.scorecards import ScorecardsRollup
 from spicy_regs.scorecards.etl import SOURCE_NAMES, read_family
 from spicy_regs.scorecards.registry import (
-    LIVE_QUALIFICATIONS, REGISTRY, RegistryError, load_registry, select_sources,
+    CADENCES, CADENCE_TOLERANCES, LIVE_QUALIFICATIONS, REGISTRY, RegistryError, load_registry, select_sources,
 )
 from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError
 from spicy_regs.transforms.build_scorecards import NoScorecardsDue, ScorecardRefreshError, build_scorecards
@@ -505,7 +508,6 @@ def test_weekly_workflow_preserves_manual_build_only_and_quotes_selectors():
 
 @pytest.mark.parametrize("status", [401, 403])
 def test_credential_http_refusal_aborts_before_next_publisher(tmp_path, status):
-    from dataclasses import replace
     from spicy_docs.transport.credentials import CredentialRefusedError
 
     path = registry(tmp_path)
@@ -541,3 +543,233 @@ def test_credential_http_refusal_aborts_before_next_publisher(tmp_path, status):
     assert selected == ["lcv"]
     assert not list((tmp_path / "build").glob("score*.parquet"))
     assert all(b"PRIVATE SOURCE PAYLOAD" not in f.read_bytes() for f in e.directory.rglob("*") if f.is_file())
+
+
+def test_cadence_due_absorbs_cron_jitter_while_blocking_same_day_reruns():
+    assert set(CADENCE_TOLERANCES) == set(CADENCES)
+    for name, cadence in CADENCES.items():
+        assert timedelta(0) <= CADENCE_TOLERANCES[name] < cadence
+
+    weekly = next(source for source in load_registry() if source.publisher_id == "lcv")
+    assert weekly.cadence == "weekly"
+
+    # Matches live runs 43818223394 (2026-11-16T06:39:23Z) -> 45125140288 (2026-11-23T06:35:48Z, 3m35s early).
+    monday_one = datetime(2026, 11, 16, 6, 39, 23, tzinfo=UTC)
+    monday_two_early = datetime(2026, 11, 23, 6, 35, 48, tzinfo=UTC)
+    assert weekly.due(monday_two_early, monday_one.isoformat())
+    assert weekly.due(monday_one + timedelta(days=7) - timedelta(hours=2), monday_one.isoformat())
+    assert weekly.due(monday_one + timedelta(days=7) - CADENCE_TOLERANCES["weekly"], monday_one.isoformat())
+    assert not weekly.due(
+        monday_one + timedelta(days=7) - CADENCE_TOLERANCES["weekly"] - timedelta(seconds=1),
+        monday_one.isoformat(),
+    )
+
+    # Accidental same-day reruns and day-before triggers remain blocked unless forced.
+    assert not weekly.due(monday_one, monday_one.isoformat())
+    assert not weekly.due(monday_one + timedelta(hours=2), monday_one.isoformat())
+    assert not weekly.due(monday_one + timedelta(hours=12), monday_one.isoformat())
+    assert not weekly.due(monday_one + timedelta(days=6), monday_one.isoformat())
+    assert weekly.due(monday_one + timedelta(hours=2), monday_one.isoformat(), force=True)
+    assert not replace(weekly, enabled=False).due(monday_one + timedelta(days=8), monday_one.isoformat(), force=True)
+
+    # Other supported periodic cadences also absorb bounded jitter while blocking same-day reruns.
+    for cadence_name in ("daily", "monthly"):
+        source = replace(weekly, cadence=cadence_name)
+        threshold = CADENCES[cadence_name] - CADENCE_TOLERANCES[cadence_name]
+        assert source.due(monday_one + threshold, monday_one.isoformat())
+        assert not source.due(monday_one + threshold - timedelta(seconds=1), monday_one.isoformat())
+        assert not source.due(monday_one + timedelta(hours=2), monday_one.isoformat())
+
+
+def test_consecutive_scheduled_monday_runs_acquire_due_publishers_and_block_same_day_rerun(tmp_path, monkeypatch):
+    document = yaml.safe_load(REGISTRY.read_text())
+    selected_sources = []
+    for publisher_id in ("lcv", "afscme"):
+        entry = deepcopy(next(row for row in document["sources"] if row["publisher_id"] == publisher_id))
+        entry.update(enabled=True, qualification_id=f"synthetic-qualified-{publisher_id}-v1")
+        selected_sources.append(entry)
+    reg_path = tmp_path / "sources.yaml"
+    reg_path.write_text(yaml.safe_dump(dict(version=1, sources=selected_sources)))
+
+    editions_by_publisher = {
+        "lcv": edition("2025", publisher="lcv"),
+        "afscme": edition("2025-2026", publisher="afscme"),
+    }
+    base_provider = provider([], {})
+
+    def make_provider():
+        acquired_publishers = []
+
+        class PublisherAdapter:
+            parser_version = "test-v1"
+
+            def __init__(self, publisher_id):
+                self.publisher_id = publisher_id
+
+            def list_scorecards(self, context):
+                return [editions_by_publisher[self.publisher_id]]
+
+            def acquire_scorecard(self, selected, context):
+                acquired_publishers.append(self.publisher_id)
+                receipt = context.capture(capture(b"PRIVATE SOURCE PAYLOAD"), stage="test")
+                rows = tables(selected, receipt["capture_id"])
+                return SimpleNamespace(
+                    scorecard_id=selected.scorecard_id,
+                    snapshot_id=rows["scorecard_snapshots"][0]["snapshot_id"],
+                    tables=rows,
+                    capture_ids=(receipt["capture_id"],),
+                    completeness_rule="Synthetic complete member table",
+                )
+
+        return SimpleNamespace(
+            contracts=base_provider.contracts,
+            get_adapter=lambda name: PublisherAdapter(name),
+            validate=base_provider.validate,
+            context=base_provider.context,
+            refusal=base_provider.refusal,
+        ), acquired_publishers
+
+    def attach_prior_journal(target_evidence, prior_events):
+        def inherited_event(event_name, **match):
+            found = [
+                row
+                for row in prior_events
+                if row.get("event") == event_name and all(row.get(k) == v for k, v in match.items())
+            ]
+            return found[-1] if found else None
+
+        monkeypatch.setattr(target_evidence, "inherited_event", inherited_event)
+
+    monday_one = datetime(2026, 11, 16, 6, 39, 23, tzinfo=UTC)
+    run_one_evidence = CaptureEvidence(tmp_path / "run1", "scorecards")
+    p1, acquired_one = make_provider()
+    build_scorecards(
+        tmp_path / "run1/build",
+        evidence=run_one_evidence,
+        registry=reg_path,
+        provider=p1,
+        fetch_factory=no_fetch,
+        download_prior=lambda *args: False,
+        now=monday_one,
+    )
+    assert acquired_one == ["lcv", "afscme"]
+    run_one_journal = journal(run_one_evidence)
+
+    # Next Monday arrives 3m35s early (routine GitHub Actions cron jitter); both publishers are still due.
+    monday_two = datetime(2026, 11, 23, 6, 35, 48, tzinfo=UTC)
+    run_two_evidence = CaptureEvidence(tmp_path / "run2", "scorecards")
+    attach_prior_journal(run_two_evidence, run_one_journal)
+    p2, acquired_two = make_provider()
+    build_scorecards(
+        tmp_path / "run2/build",
+        evidence=run_two_evidence,
+        registry=reg_path,
+        provider=p2,
+        fetch_factory=no_fetch,
+        download_prior=lambda *args: False,
+        now=monday_two,
+    )
+    assert acquired_two == ["lcv", "afscme"]
+    run_two_journal = journal(run_two_evidence)
+
+    # Accidental same-day rerun 2h later is blocked without --force.
+    same_day_rerun = monday_two + timedelta(hours=2)
+    run_three_evidence = CaptureEvidence(tmp_path / "run3", "scorecards")
+    attach_prior_journal(run_three_evidence, run_two_journal)
+    p3, acquired_three = make_provider()
+    with pytest.raises(NoScorecardsDue):
+        build_scorecards(
+            tmp_path / "run3/build",
+            evidence=run_three_evidence,
+            registry=reg_path,
+            provider=p3,
+            fetch_factory=no_fetch,
+            download_prior=lambda *args: False,
+            now=same_day_rerun,
+        )
+    assert acquired_three == []
+    assert not (tmp_path / "run3/build").exists()
+    assert any(
+        row["event"] == "scorecard-no-op" and row["reason_code"] == "no_sources_due"
+        for row in journal(run_three_evidence)
+    )
+
+
+def test_weekly_workflow_skips_analysis_on_scheduled_noop_and_records_outcome(tmp_path, monkeypatch):
+    import spicy_regs.data_dictionary as dictionary
+    from spicy_regs.contract_types import described_schema
+    from spicy_regs.scorecards.etl import POLICIES
+
+    workflow = yaml.safe_load((ROOT / ".github/workflows/rollup-scorecards.yml").read_text())
+    run_job = workflow["jobs"]["run"]
+    assert run_job["outputs"] == {"outcome": "${{ steps.outcome.outputs.outcome }}"}
+    outcome_step = next(
+        step for step in run_job["steps"] if step.get("name") == "Record scorecard refresh outcome"
+    )
+    assert outcome_step["id"] == "outcome"
+
+    analysis_job = workflow["jobs"]["analysis"]
+    assert analysis_job["needs"] == "run"
+    assert analysis_job["if"] == (
+        "(github.event_name == 'schedule' && needs.run.outputs.outcome == 'build-complete') "
+        "|| (github.event_name == 'workflow_dispatch' && inputs.skip_upload == false)"
+    )
+
+    def run_outcome_step(work_dir: Path) -> subprocess.CompletedProcess[str]:
+        github_output = work_dir / "github_output.txt"
+        github_output.write_text("", encoding="utf-8")
+        return subprocess.run(
+            ["bash", "-e", "-o", "pipefail", "-c", outcome_step["run"]],
+            cwd=work_dir,
+            env={**os.environ, "GITHUB_OUTPUT": str(github_output)},
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+
+    # 1. No-op run emits outcome=no-op so scheduled analysis is skipped.
+    noop_work = tmp_path / "noop"
+    noop_work.mkdir()
+    noop_registry = registry(noop_work)
+    noop_doc = yaml.safe_load(noop_registry.read_text())
+    noop_doc["sources"][0]["enabled"] = False
+    noop_registry.write_text(yaml.safe_dump(noop_doc))
+    noop_pipeline = ScorecardsRollup(output_dir=noop_work / "output", registry=noop_registry)
+    noop_pipeline.run()
+    assert noop_pipeline.no_op
+    noop_result = run_outcome_step(noop_work)
+    assert noop_result.returncode == 0, noop_result.stderr
+    assert (noop_work / "github_output.txt").read_text(encoding="utf-8").splitlines() == ["outcome=no-op"]
+
+    # 2. Successful build run emits outcome=build-complete so scheduled analysis runs.
+    monkeypatch.setattr(
+        dictionary,
+        "expected_schemas",
+        lambda: {
+            name: described_schema(POLICIES[name].subject_schema)
+            for name in SOURCE_NAMES
+            if not POLICIES[name].receipt_only
+        },
+    )
+    built_work = tmp_path / "built"
+    built_work.mkdir()
+    a = edition("2025")
+    built_pipeline = ScorecardsRollup(
+        output_dir=built_work / "output",
+        registry=registry(built_work),
+        provider=provider([a], {a.scorecard_id: tables}),
+        fetch_factory=no_fetch,
+    )
+    built_pipeline.run()
+    assert not built_pipeline.no_op
+    built_result = run_outcome_step(built_work)
+    assert built_result.returncode == 0, built_result.stderr
+    assert (built_work / "github_output.txt").read_text(encoding="utf-8").splitlines() == ["outcome=build-complete"]
+
+    # 3. Missing evidence fails closed rather than silently gating.
+    empty_work = tmp_path / "empty"
+    (empty_work / "output").mkdir(parents=True)
+    empty_result = run_outcome_step(empty_work)
+    assert empty_result.returncode != 0
