@@ -744,6 +744,9 @@ def _admit_remote_source_view(cursor, source: _RemoteSourceView) -> bool:
             if source.columns is not None and [[row[0], row[1]] for row in actual] != source.columns:
                 raise RuntimeError(f"Published schema differs from admitted generation: {source.name}")
     except duckdb.Error as exc:
+        if isinstance(exc, duckdb.InterruptException):
+            raise
+        checkpoint()
         if source.degrade:
             logger.warning("source %s unreadable at %s; skipping view: %s", source.name, source.urls, exc)
             return False
@@ -924,10 +927,13 @@ _DISCOVERY_CATALOG = "_spicy_discovery_catalog"
 def _remote_query_scope(con, available_names):
     """Resolve requested remote SQL inputs from declarations before opening source files."""
     requested = _requested_relations.get()
-    # No named relations can mean SHOW/catalog introspection. Preserve its
-    # complete catalog rather than infer dependencies from arbitrary SQL.
-    if DATA_DIR is not None or _discovery_only.get() or not requested:
+    # Unscoped callers (requested is None) keep the full catalog; queries naming
+    # zero main relations (requested == set(), e.g. SELECT 1, information_schema.*)
+    # stay empty so metadata/literal SQL never opens every remote table.
+    if DATA_DIR is not None or _discovery_only.get() or requested is None:
         return None
+    if not requested:
+        return set()
     from spicy_regs.relationship_views import describe_relationship_views
 
     relationships = describe_relationship_views(con, available_names)
@@ -975,6 +981,8 @@ def _bind_archive(query_scope):
                                 "a local reader never falls back to the network."}
     try:
         binding = archive_release.bind(release, origin, hash_files=DATA_DIR is not None)
+    except TimeoutError:
+        raise
     except (PublicationError, httpx.HTTPError, OSError, ValueError, KeyError, TypeError) as exc:
         if query_scope is not None or DATA_DIR is not None:
             raise RuntimeError(f"Archive release {release[:8]} unavailable: {exc}") from exc
@@ -1078,7 +1086,7 @@ def _build_connection_inputs(con, publication):
         "cms_medicaid_drug_spending",
         "cms_part_b_drug_spending",
         "cms_medicare_provider",
-    "cms_open_payments_summaries",
+        "cms_open_payments_summaries",
         "hospital_cost_reports", "hospital_cost_report_cells", "hospital_cost_report_measures",
         "treasury_debt_observations", "treasury_statement_periods", "treasury_statement_classification_cells",
         "grants_opportunity_observations",
@@ -1141,6 +1149,10 @@ def _build_connection_inputs(con, publication):
         "white_house_action_versions",
         "ecfr_snapshot_sections", "ecfr_snapshots", "federal_register_issues",
         "table3_historical_records", "uscode_edition_structure", "uscode_editions", "uscode_edition_sections",
+        "senate_disclosure_reports",
+        "senate_disclosure_transactions",
+        "court_opinion_texts",
+        "crs_report_files",
     }
     managed_names = [
         key.removesuffix(".parquet") for e in publication_index["families"].values() for key in e["tables"]
@@ -1414,6 +1426,7 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
     """Bind trusted definitions and verify selected FEC receipt inputs before locking."""
     from spicy_regs.relationship_views import describe_relationship_views, install_relationship_views
 
+    checkpoint()
     status = _publication_status(con)
     from spicy_regs.fec_receipt_adapter import ReceiptAdapter, receipt_owner
     from spicy_regs.relationship_views.fec import FEC_VIEWS
@@ -1446,7 +1459,7 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
         relationships = describe_relationship_views(con, status["tables"], publication=status["publication"])
     else:
         relationships = {}
-    if not _discovery_only.get():
+    if not _discovery_only.get() and (selected is None or selected):
         if selected is not None:
             while True:
                 parents = {parent for name in selected if name in relationships
@@ -1456,11 +1469,13 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
                 if not added:
                     break
                 selected.update(added)
+        checkpoint()
         relationships.update(install_relationship_views(
             con, status["tables"] if selected is None else set(status["tables"]) & selected,
             publication=status["publication"], selected_names=selected,
         ))
     for spec in adapted:
+        checkpoint()
         if _discovery_only.get() or selected is not None and spec.name not in selected:
             relationships[spec.name] = {
                 "status": "deferred", "reason": "Exact receipt row admission is deferred until a query connection is requested.",
@@ -1476,19 +1491,20 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
         item["metadata"]["input_publications"] = {table: status["publication"].get(table) for table in spec.required}
         item["metadata"]["availability_basis"] = "Pinned subject and receipt bytes and exact row-version joins validated before binding."
         relationships[spec.name] = item
-    selected = _fec_release_configuration(con, status["publication"])
-    if selected is not None:
+    checkpoint()
+    release_config = _fec_release_configuration(con, status["publication"])
+    if release_config is not None:
         from spicy_regs.fec_release import install_views
 
         if any(spec.view.name in {*status["tables"], *relationships} for spec in FEC_QUALIFIED_VIEWS):
             raise ValueError("Qualified FEC view collides with an existing table or relationship view")
         relationships.update(install_views(
-            con, _selected_fec_views(con), selected, index, set(status["tables"]) | processing, status["publication"],
+            con, _selected_fec_views(con), release_config, index, set(status["tables"]) | processing, status["publication"],
             read_tables=_tables_named, prepare=adapter.prepare_qualified, defer_admission=_discovery_only.get(),
             admit_names=requested,
         ))
         con.execute("CREATE TABLE _spicy_fec_release (snapshot VARCHAR)")
-        con.execute("INSERT INTO _spicy_fec_release VALUES (?)", [json.dumps(selected)])
+        con.execute("INSERT INTO _spicy_fec_release VALUES (?)", [json.dumps(release_config)])
     con.execute("CREATE TABLE _spicy_relationships (snapshot VARCHAR)")
     con.execute("INSERT INTO _spicy_relationships VALUES (?)", [json.dumps(relationships)])
 
@@ -1866,6 +1882,7 @@ _refreshing = False
 _discovery_lock = threading.Lock()
 _cached_discovery_connection = None
 _cached_discovery_at = 0.0
+_discovery_refreshing = False
 # Explicit discovery and missing declared tables may check before the normal
 # TTL. Both caches share one refresh owner and cooldown, including failures.
 _EARLY_REFRESH_COOLDOWN_SECONDS = 5.0
@@ -1884,32 +1901,33 @@ def _bounded_lock(lock):
         lock.release()
 
 
-def _refresh_discovery(current, at):
-    checkpoint()
-    if current is None:
-        return _build_connection(), _monotonic(), None
-    timeout = None
-    if _claim_pointer_refresh(current, at):
-        try:
-            current = _refreshed(current)
-        except TimeoutError as exc:
-            timeout = exc
-        except Exception:
-            logger.exception("discovery refresh failed; keeping its pinned schemas")
-        finally:
-            at = _finish_pointer_refresh()
-    return current, at, timeout
-
-
 def _get_discovery_connection():
     """The catalog-metadata connection, cached apart from the query connection."""
-    global _cached_discovery_connection, _cached_discovery_at
+    global _cached_discovery_connection, _cached_discovery_at, _discovery_refreshing
+    checkpoint()
     with _bounded_lock(_discovery_lock):
-        current, _cached_discovery_at, timeout = _refresh_discovery(_cached_discovery_connection, _cached_discovery_at)
-        _cached_discovery_connection = current
-    if timeout is not None:
-        raise timeout
-    return current
+        if _cached_discovery_connection is None:
+            _cached_discovery_connection, _cached_discovery_at = _build_connection(), _monotonic()
+            return _cached_discovery_connection
+        current = _cached_discovery_connection
+        if _discovery_refreshing or not _claim_pointer_refresh(current, _cached_discovery_at):
+            return current
+        _discovery_refreshing = True
+    replacement = current
+    try:
+        replacement = _refreshed(current)
+    except TimeoutError:
+        raise
+    except Exception:
+        logger.exception("discovery refresh failed; keeping its pinned schemas")
+    finally:
+        with _discovery_lock:
+            _cached_discovery_connection, _cached_discovery_at, _discovery_refreshing = (
+                replacement,
+                _finish_pointer_refresh(),
+                False,
+            )
+    return replacement
 
 
 def _claim_pointer_refresh(current, cached_at: float) -> bool:
@@ -1949,6 +1967,7 @@ def _finish_pointer_refresh() -> float:
 
 def _expand_query_connection(current: duckdb.DuckDBPyConnection) -> duckdb.DuckDBPyConnection:
     """Rebuild locked connections with additional trusted views using the same pinned publication."""
+    checkpoint()
     with current.cursor() as cursor:
         registry = _connection_relationships(cursor)
         publication = _pinned_publication(cursor)
@@ -1957,7 +1976,12 @@ def _expand_query_connection(current: duckdb.DuckDBPyConnection) -> duckdb.DuckD
         scope = _pinned_record(cursor, "_spicy_query_scope")
     pending = {name for name, entry in registry.items() if entry['status'] == 'deferred'}
     requested = _requested_relations.get()
-    missing_sources = scope is not None and (not requested or not requested <= set(scope["relations"]))
+    # Queries naming zero main relations (requested == set(), e.g. SELECT 1,
+    # information_schema.tables, SHOW TABLES) must stay metadata-only and never
+    # flip to None (unscoped), which would eagerly admit deferred FEC receipt views.
+    missing_sources = scope is not None and (
+        requested is None or not requested <= set(scope["relations"])
+    )
     if not missing_sources and not (pending if requested is None else pending & requested):
         return current
     if DATA_DIR is not None and local is None:
@@ -1969,7 +1993,7 @@ def _expand_query_connection(current: duckdb.DuckDBPyConnection) -> duckdb.DuckD
         from spicy_regs.local_data import assert_local_members_unchanged
 
         assert_local_members_unchanged(local['signatures'])
-    token = _requested_relations.set(None if not requested else installed | requested)
+    token = _requested_relations.set(None if requested is None else installed | requested)
     try:
         replacement = _build_connection(publication)
         try:
@@ -1985,13 +2009,28 @@ def _expand_query_connection(current: duckdb.DuckDBPyConnection) -> duckdb.DuckD
         _requested_relations.reset(token)
 
 
+def _publish_expanded_connection(
+    base: duckdb.DuckDBPyConnection,
+    expanded: duckdb.DuckDBPyConnection,
+) -> duckdb.DuckDBPyConnection:
+    """Install ``expanded`` into the shared cache only if the cache still holds ``base``."""
+    global _cached_connection
+    if expanded is base:
+        return base
+    with _diagnostic_phase("connection_lock"), _connection_lock:
+        if _cached_connection is base and not _refreshing:
+            _cached_connection = expanded
+    return expanded
+
+
 @_diagnostic_phase('connection_access')
 def _get_connection() -> duckdb.DuckDBPyConnection:
     """Return the shared connection, refreshing at expiry or for a bounded missing-table check.
 
     Callers run their statements on ``.cursor()`` of the returned connection, so
     concurrent calls do not share a statement and a timeout interrupt stays
-    scoped to one call.
+    scoped to one call. Warm view expansions run outside ``_connection_lock`` so
+    slow relationship or receipt admission cannot starve concurrent callers.
     """
     if _discovery_only.get():
         return _get_discovery_connection()
@@ -2000,23 +2039,45 @@ def _get_connection() -> duckdb.DuckDBPyConnection:
         if _cached_connection is None:  # cold start: concurrent callers wait for this one build
             _cached_connection, _cached_connection_at = _build_connection(), _monotonic()
             return _cached_connection
+        current = _cached_connection
+        cached_at = _cached_connection_at
         if _refreshing:
-            # An in-flight refresh owns publication of its replacement. A caller
-            # needing more views gets its own pinned replacement, never mutates
-            # the locked connection or overwrites the refresh's cache entry.
-            return _expand_query_connection(_cached_connection)
-        expired = _monotonic() - _cached_connection_at >= _CONNECTION_TTL_SECONDS
-        if not expired:
-            # Additional scoped views are admitted from the existing pins
-            # before deciding whether a missing table warrants a pointer read.
-            _cached_connection = _expand_query_connection(_cached_connection)
-        if not _claim_pointer_refresh(_cached_connection, _cached_connection_at):
-            if expired:
-                # Discovery may own the shared pointer check; query admission
-                # can still expand from this cache's existing snapshot.
-                _cached_connection = _expand_query_connection(_cached_connection)
-            return _cached_connection
-        current, _refreshing = _cached_connection, True
+            refreshing = True
+            expired = False
+            claimed_refresh = False
+        else:
+            refreshing = False
+            expired = _monotonic() - cached_at >= _CONNECTION_TTL_SECONDS
+            if expired and _claim_pointer_refresh(current, cached_at):
+                _refreshing = True
+                claimed_refresh = True
+            else:
+                claimed_refresh = False
+
+    if refreshing:
+        # An in-flight refresh owns publication of its replacement. A caller
+        # needing more views builds its own pinned replacement outside the lock,
+        # never mutating the locked connection or overwriting the cache entry.
+        return _expand_query_connection(current)
+
+    if not claimed_refresh:
+        # Additional scoped views are admitted from the existing pins outside
+        # _connection_lock before deciding whether a missing table warrants a pointer read.
+        expanded = _expand_query_connection(current)
+        expanded = _publish_expanded_connection(current, expanded)
+        if expired:
+            # Discovery may own the shared pointer check; query admission
+            # already expanded from this cache's existing snapshot.
+            return expanded
+        with _diagnostic_phase("connection_lock"), _bounded_lock(_connection_lock):
+            if (
+                _refreshing
+                or _cached_connection is None
+                or not _claim_pointer_refresh(expanded, _cached_connection_at)
+            ):
+                return expanded
+            current, _refreshing = _cached_connection, True
+
     replacement = current
     try:
         replacement = _expand_query_connection(_refreshed(current))
@@ -2054,12 +2115,13 @@ def _refreshed(current: duckdb.DuckDBPyConnection) -> duckdb.DuckDBPyConnection:
 
 def _reset_connection_cache() -> None:
     """Forget the cached connection so the next call rebuilds. For tests."""
-    global _cached_connection, _cached_connection_at, _refreshing, _cached_discovery_connection, _cached_discovery_at
+    global _cached_connection, _cached_connection_at, _refreshing
+    global _cached_discovery_connection, _cached_discovery_at, _discovery_refreshing
     global _last_pointer_refresh_at
     with _connection_lock:
         _cached_connection, _cached_connection_at, _refreshing = None, 0.0, False
     with _discovery_lock:
-        _cached_discovery_connection, _cached_discovery_at = None, 0.0
+        _cached_discovery_connection, _cached_discovery_at, _discovery_refreshing = None, 0.0, False
     _last_pointer_refresh_at = None
 
 
@@ -2764,8 +2826,9 @@ def _run_observed_tool(fn, arguments):
 
 
 def _tools() -> list[Tool]:
-    """Data tools share a worker limiter; connection_status reads bounded phase metadata directly."""
+    """Data tools share a worker limiter; discovery tools keep their own so slow queries cannot starve them."""
     limiter = anyio.CapacityLimiter(TOOL_CONCURRENCY)
+    discovery_limiter = anyio.CapacityLimiter(TOOL_CONCURRENCY)
     tools: list[Tool] = []
 
     def tool(fn: Callable[..., dict[str, Any]]) -> Callable[..., Any]:
@@ -2814,9 +2877,10 @@ def _tools() -> list[Tool]:
                     if requested_token is not None:
                         _requested_relations.reset(requested_token)
                     _discovery_only.reset(token)
+            active_limiter = discovery_limiter if name in ("list_sources", "describe_table") else limiter
             try:
                 with anyio.fail_after(timeout):
-                    result = await anyio.to_thread.run_sync(run, limiter=limiter, abandon_on_cancel=True)
+                    result = await anyio.to_thread.run_sync(run, limiter=active_limiter, abandon_on_cancel=True)
             except TimeoutError as exc:
                 raise ToolError(bound.label) from exc
             except Exception as exc:
