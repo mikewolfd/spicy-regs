@@ -1690,6 +1690,10 @@ def _clone_into(source: Path, target: Path, size: int | None) -> None:
 #: a writer's layout change alone left 0.392 (0.295 had it been one row group); within one layout, every value
 #: but the key nulled leaves 0.163, and every string but the key emptied leaves 0.371, above this floor.
 _KEPT_ROWS_MIN_RATIO = 0.2
+#: Byte floor for the single transition publish of a recorded policy migration that retires columns while
+#: keeping every partition's rows and every surviving column's type (e.g. ss-ewbj dropping bulky repeated JSON
+#: columns cut scorecard_item_links from 4.2 MB to 0.8 MB, ratio 0.189, with all 47,419 rows preserved).
+_RETIRED_COLUMNS_MIN_RATIO = 0.05
 
 
 def _generation_scoped_tables() -> frozenset[str]:
@@ -1780,6 +1784,8 @@ def _stage_verified_generation(
             old_size = prior["byteSize"] if prior else _get_remote_size(client, bucket, key)
             if _is_legitimately_empty_discovery_signals(key, table, artifact, index):
                 floor = 0.0
+            elif prior is not None and _is_declared_column_retirement_keeping_rows(key, table, prior, artifact):
+                floor = _RETIRED_COLUMNS_MIN_RATIO
             else:
                 kept = prior is not None and _keeps_rows_and_columns(table, prior)
                 floor = _KEPT_ROWS_MIN_RATIO if kept else None
@@ -2249,6 +2255,50 @@ def _keeps_rows_and_columns(table: Mapping, prior: Mapping) -> bool:
     kept = _partition_rows(table)
     return (table["columns"] == prior["columns"]
             and all(kept.get(partition, -1) >= rows for partition, rows in _partition_rows(prior).items()))
+
+
+def _is_declared_column_retirement_keeping_rows(
+    key: str, table: Mapping, prior: Mapping, artifact,
+) -> bool:
+    """Whether ``table`` kept every partition's rows across a recorded policy migration that retired columns.
+
+    Dropping bulky repeated JSON columns under an explicit ``policy_migrations.json`` upgrade can legitimately
+    shrink a Parquet file below 0.2x with zero rows lost. Admitted only on the exact transition from a recorded
+    earlier policy's schema to the installed policy's schema while keeping every partition's row count and
+    surviving column types intact; subsequent publishes under the same policy have no dropped columns and fall
+    back to the ordinary guard automatically.
+    """
+    if not key.endswith(".parquet") or not table.get("rows"):
+        return False
+    kept = _partition_rows(table)
+    if not all(kept.get(partition, -1) >= rows for partition, rows in _partition_rows(prior).items()):
+        return False
+    prior_cols = {name: typ for name, typ in prior["columns"]}
+    curr_cols = {name: typ for name, typ in table["columns"]}
+    if not (set(prior_cols) - set(curr_cols)):
+        return False
+    if not all(curr_cols[name] == prior_cols[name] for name in set(prior_cols) & set(curr_cols)):
+        return False
+    dataset = key[:-len(".parquet")]
+    from spicy_regs.etl_policy_registry import installed_policies
+    from spicy_regs.etl_receipts import DatasetPolicy
+    from spicy_regs.policy_migrations import _recorded, descriptor_digest
+    from spicy_regs.subject_catalog import descriptor_of
+
+    installed_digest, earlier_entries = _recorded(dataset)
+    curr_policy = installed_policies().get(dataset)
+    if not installed_digest or not earlier_entries or curr_policy is None:
+        return False
+    if descriptor_digest(curr_policy) != installed_digest:
+        return False
+    policies = artifact.root["spec"].get("etlReceipts", {}).get("policies", ())
+    receipt_descriptor = next((p for p in policies if p.get("dataset") == dataset), None)
+    if (receipt_descriptor is not None
+            and descriptor_digest(DatasetPolicy.from_descriptor(descriptor_of(receipt_descriptor))) != installed_digest):
+        return False
+    if set(curr_policy.subject_schema.names) != set(curr_cols):
+        return False
+    return any(set(entry.policy.subject_schema.names) == set(prior_cols) for entry in earlier_entries)
 
 
 def _instant(seconds: float | None = None) -> str:
