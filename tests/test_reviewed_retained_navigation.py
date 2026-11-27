@@ -34,7 +34,7 @@ def test_declarations_use_only_explicit_main_fields_and_are_independent():
     specs = declarations()
     validate_navigation(specs)
     assert len({s["id"] for s in specs}) == len(specs)
-    assert all(not s["receiptFields"] for s in specs)
+    assert all("receipt" not in key.lower() for s in specs for key in s)
     assert all(not t["table"].startswith("@receipt:") for s in specs for t in s["targets"])
     specs[0]["targets"][0]["keys"].clear()
     assert declarations()[0]["targets"][0]["keys"]

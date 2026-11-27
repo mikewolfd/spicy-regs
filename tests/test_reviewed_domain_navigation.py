@@ -32,7 +32,7 @@ def reverse(name, target, sources):
 def test_domain_registry_uses_only_main_rows_and_has_no_duplicate_affiliation_route():
     specs = validate_navigation(declarations())
     assert len(specs) == len({s["id"] for s in specs}) == 13
-    assert all(s["mode"] == "row" and s["receiptFields"] == [] and s["fields"] == [] for s in specs)
+    assert all(s["mode"] == "row" and s["fields"] == [] and all("receipt" not in key.lower() for key in s) for s in specs)
     assert all(p["from"] == "row" for s in specs for t in s["targets"] for k in t["keys"] for p in k["parts"])
     assert not any(s["source"] == "member_party_affiliations" for s in specs)
 

@@ -135,9 +135,8 @@ def test_court_current_tuple_lookup_preserves_missing_and_reverse_outcomes(tmp_p
     assert proof['reverse']['maximumDistinctSourceRecordsPerTarget'] == 1
 
 
-def test_old_court_schema_cannot_borrow_parent_or_capture_guards_from_receipts():
+def test_old_court_schema_cannot_borrow_parent_or_capture_guards():
     s = recipe('court_captured_opinion')
-    s['receiptFields'] = list(captured())
     result = published_navigation([s], {
         'court_opinion_pdf_extractions': [('opinion_id', 'VARCHAR'), ('cluster_id', 'VARCHAR')],
         'court_opinions': [(c, 'VARCHAR') for c in s['targets'][0]['columns']],
