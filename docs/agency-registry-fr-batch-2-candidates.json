@@ -1,0 +1,1750 @@
+{
+  "assertion_policy": "No sameEntityAs or succession assertion is emitted here. Every row requires an explicit owner decision (urn:ref:reviewer:refspec-owner) before entering a RefSpec release.",
+  "baseline": {
+    "federal_register_table": {
+      "byte_size": 283187469,
+      "path": "generations/federal-register/65f6683e52de50a53fddc902e2346c7555b1fa71c7692e9f66a5f8e0ec023f3b/federal_register.parquet",
+      "rows": 1013492,
+      "sha256": "sha256:1e438d61d04e747e773075ea59ee50a5e64f72c9600eb348b1940cdecf3dff87"
+    },
+    "refspec_release_key": "agency-registry-2026-09-26",
+    "refspec_view_manifest_sha256": "sha256:c89935debe320e35aaf748ea0519457c1618b49e13d79ddb33cbc30051b5a118",
+    "refspec_view_schema_version": "1.4",
+    "roster_releases": {
+      "ecfr-agencies-roster-2026-08-15": "sha256:c7e3d18f2f61acdbcee1e3acdc45c3334146ffa26af8cb895600652026887709",
+      "federal-hierarchy-orgs-complete-2026-08-15": "sha256:d55eedf7a4e37107481e318af3d1fc97f929b0b1e348210942a77cf061e51579",
+      "federal-register-agencies-roster-2026-08-15": "sha256:0ab874f045462fa665b9a2ef48aa34f373570dc710bcc8fb1b63db0ad8c7b5e6",
+      "opm-ehri-agency-subelement-2026-08-04": "sha256:dadb1b6a23b99e459daab9a3d123dfb4a98940b91eaf041e793905bfaf3d5a00",
+      "regulations-gov-agencies-roster-2026-08-16": "sha256:ee37934d80f947f7d2d30b3e5bcd50eed753d6ed9b6144e7c26f163d78ae5b83"
+    }
+  },
+  "candidates": [
+    {
+      "candidate_id": "batch2:fr588",
+      "category": "same-entity-bridge-candidate",
+      "content_digest": "sha256:e580a2bb53d6a89304fa26dac693d67c04b841120c28cdca1dcfdc55532785f9",
+      "held_roster_counterparts": [
+        {
+          "found_by": "exactSlug",
+          "parent": {
+            "publisher_name": "National Foundation on the Arts and the Humanities",
+            "resource_iri": "urn:ref:ecfr-agency:national-foundation-on-the-arts-and-the-humanities"
+          },
+          "publisher_name": "National Endowment for the Arts",
+          "regulations_gov_codes": [],
+          "release_key": "ecfr-agencies-roster-2026-08-15",
+          "resource_iri": "urn:ref:ecfr-agency:national-endowment-for-the-arts",
+          "roster": "ecfr-agencies",
+          "short_name": "NEA",
+          "slug": "national-endowment-for-the-arts"
+        },
+        {
+          "fhorgtype": "Department/Ind. Agency",
+          "found_by": "nameKey",
+          "parent": null,
+          "publisher_name": "NATIONAL ENDOWMENT FOR THE ARTS",
+          "regulations_gov_codes": [],
+          "release_key": "federal-hierarchy-orgs-complete-2026-08-15",
+          "resource_iri": "urn:ref:federal-hierarchy-org:100241110",
+          "roster": "federal-hierarchy-organizations"
+        },
+        {
+          "fhorgtype": "Sub-Tier",
+          "found_by": "nameKey",
+          "parent": {
+            "publisher_name": "NATIONAL ENDOWMENT FOR THE ARTS",
+            "resource_iri": "urn:ref:federal-hierarchy-org:100241110"
+          },
+          "publisher_name": "NATIONAL ENDOWMENT FOR THE ARTS",
+          "regulations_gov_codes": [],
+          "release_key": "federal-hierarchy-orgs-complete-2026-08-15",
+          "resource_iri": "urn:ref:federal-hierarchy-org:300000252",
+          "roster": "federal-hierarchy-organizations"
+        },
+        {
+          "code": "AH01",
+          "found_by": "nameKey",
+          "from_date": "2005-02-01",
+          "publisher_name": "NATIONAL ENDOWMENT FOR THE ARTS",
+          "regulations_gov_codes": [],
+          "release_key": "opm-ehri-agency-subelement-2026-08-04",
+          "resource_iri": "urn:ref:opm-ehri-agency-subelement:AH01",
+          "roster": "opm-ehri-agency-subelement",
+          "through_date": "PRESENT"
+        }
+      ],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": true,
+        "cumulative_unbridged_mentions_pct": 10.64,
+        "documents": 480,
+        "first_publication_date": "1994-02-08",
+        "last_publication_date": "2026-11-23",
+        "mentions": 480,
+        "share_of_unbridged_mentions_pct": 10.64
+      },
+      "owner_question": "Adjudicate FR 588 (National Endowment for the Arts) against 4 held-roster counterpart(s) (urn:ref:ecfr-agency:national-endowment-for-the-arts, urn:ref:federal-hierarchy-org:100241110, urn:ref:federal-hierarchy-org:300000252, urn:ref:opm-ehri-agency-subelement:AH01): accept sameEntityAs bridge, hold, or keep FR-only?",
+      "proposed_action": "adjudicate_sameEntityAs_bridge",
+      "proposed_basis": "exactPublisherNameEquality",
+      "rank": 1,
+      "source": {
+        "agency_url": "http://arts.gov/",
+        "description": "Established by Congress in 1965, the NEA is the independent federal agency whose funding and support gives Americans the opportunity to participate in the arts, exercise their imaginations, and develop their creative capacities. Through partnerships with state arts agencies, local leaders, other federal agencies, and the philanthropic sector, the NEA supports arts learning, affirms and celebrates America\u2019s rich and diverse cultural heritage, and extends its work to promote equal access to the arts in every community across America.",
+        "fr_url": "https://www.federalregister.gov/agencies/national-endowment-for-the-arts",
+        "id": 588,
+        "parent": {
+          "publisher_name": "National Foundation on the Arts and the Humanities",
+          "resource_iri": "urn:ref:federal-register-agency:342"
+        },
+        "publisher_name": "National Endowment for the Arts",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:588",
+        "roster": "federal-register-agencies",
+        "short_name": "NEA",
+        "slug": "national-endowment-for-the-arts"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr223",
+      "category": "register-only-no-held-counterpart",
+      "content_digest": "sha256:7891f496615be89bf2778d5b72f7dc2266e73e541f1490c43ab91f2404df1d0e",
+      "held_roster_counterparts": [],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": false,
+        "cumulative_unbridged_mentions_pct": 17.45,
+        "documents": 307,
+        "first_publication_date": "1994-01-11",
+        "last_publication_date": "2017-06-02",
+        "mentions": 307,
+        "share_of_unbridged_mentions_pct": 6.81
+      },
+      "owner_question": "FR 223 (Hearings and Appeals Office, Interior Department) has no exact counterpart in RefSpec's held eCFR, Federal Hierarchy, or OPM rosters. Confirm keeping FR-only (or flag a manual counterpart / non-emission)?",
+      "proposed_action": "retain_fr_only_or_check_parent",
+      "proposed_basis": null,
+      "rank": 2,
+      "source": {
+        "agency_url": "http://www.oha.doi.gov/",
+        "description": "The Office of Hearings and Appeals (OHA) exercises the delegated authority of the Secretary of the Interior to conduct hearings and decide appeals from decisions of the bureaus and offices of the Department of the Interior.\r\n\r\nOHA provides an impartial forum for parties who are affected by the decisions of the Department's bureaus and offices to obtain independent review of those decisions.\r\n\r\nOHA also handles the probating of Indian trust estates, ensuring that individual Indian interests in allotted lands, their proceeds, and other trust assets are conveyed to the decedents' rightful heirs and beneficiaries.",
+        "fr_url": "https://www.federalregister.gov/agencies/hearings-and-appeals-office-interior-department",
+        "id": 223,
+        "parent": {
+          "publisher_name": "Interior Department",
+          "resource_iri": "urn:ref:federal-register-agency:253"
+        },
+        "publisher_name": "Hearings and Appeals Office, Interior Department",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:223",
+        "roster": "federal-register-agencies",
+        "short_name": "DOI OHA",
+        "slug": "hearings-and-appeals-office-interior-department"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr196",
+      "category": "same-entity-bridge-candidate",
+      "content_digest": "sha256:390dd1f26ba22ca8ed9807130923b954d073099fef6f4c31afc0d4c7e0b6155e",
+      "held_roster_counterparts": [
+        {
+          "found_by": "exactSlug",
+          "parent": {
+            "publisher_name": "Department of Treasury",
+            "resource_iri": "urn:ref:ecfr-agency:treasury-department"
+          },
+          "publisher_name": "Bureau of the Fiscal Service",
+          "regulations_gov_codes": [],
+          "release_key": "ecfr-agencies-roster-2026-08-15",
+          "resource_iri": "urn:ref:ecfr-agency:bureau-of-the-fiscal-service",
+          "roster": "ecfr-agencies",
+          "short_name": null,
+          "slug": "bureau-of-the-fiscal-service"
+        },
+        {
+          "fhorgtype": "Sub-Tier",
+          "found_by": "nameKey",
+          "parent": {
+            "publisher_name": "TREASURY, DEPARTMENT OF THE",
+            "resource_iri": "urn:ref:federal-hierarchy-org:100013311"
+          },
+          "publisher_name": "BUREAU OF THE FISCAL SERVICE",
+          "regulations_gov_codes": [],
+          "release_key": "federal-hierarchy-orgs-complete-2026-08-15",
+          "resource_iri": "urn:ref:federal-hierarchy-org:100076578",
+          "roster": "federal-hierarchy-organizations"
+        },
+        {
+          "code": "TRFD",
+          "found_by": "nameKey",
+          "from_date": "2013-10-01",
+          "publisher_name": "BUREAU OF THE FISCAL SERVICE",
+          "regulations_gov_codes": [],
+          "release_key": "opm-ehri-agency-subelement-2026-08-04",
+          "resource_iri": "urn:ref:opm-ehri-agency-subelement:TRFD",
+          "roster": "opm-ehri-agency-subelement",
+          "through_date": "PRESENT"
+        }
+      ],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": true,
+        "cumulative_unbridged_mentions_pct": 24.24,
+        "documents": 306,
+        "first_publication_date": "2001-09-28",
+        "last_publication_date": "2026-08-17",
+        "mentions": 306,
+        "share_of_unbridged_mentions_pct": 6.78
+      },
+      "owner_question": "Adjudicate FR 196 (Bureau of the Fiscal Service) against 3 held-roster counterpart(s) (urn:ref:ecfr-agency:bureau-of-the-fiscal-service, urn:ref:federal-hierarchy-org:100076578, urn:ref:opm-ehri-agency-subelement:TRFD): accept sameEntityAs bridge, hold, or keep FR-only?",
+      "proposed_action": "adjudicate_sameEntityAs_bridge",
+      "proposed_basis": "exactPublisherNameEquality",
+      "rank": 3,
+      "source": {
+        "agency_url": "https://home.treasury.gov/about/offices/domestic-finance/fiscal-service",
+        "description": "The Office of Fiscal Service helps formulate policy and develop systems for the collection, disbursement, management and security of public monies in the United States and abroad, and related government-wide accounting and reporting for those funds. Programs of interest in the Fiscal Service are cash and debt management and forecasting, accounting policy, and the Bureau of the Fiscal Service. The Fiscal Assistant Secretary leads this office.",
+        "fr_url": "https://www.federalregister.gov/agencies/bureau-of-the-fiscal-service",
+        "id": 196,
+        "parent": {
+          "publisher_name": "Treasury Department",
+          "resource_iri": "urn:ref:federal-register-agency:497"
+        },
+        "publisher_name": "Bureau of the Fiscal Service",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:196",
+        "roster": "federal-register-agencies",
+        "short_name": null,
+        "slug": "bureau-of-the-fiscal-service"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr591",
+      "category": "same-entity-bridge-candidate",
+      "content_digest": "sha256:4da51fd24c3a9d5440e4bbb38744731b01141442b4d8a74729c123fffeebc72c",
+      "held_roster_counterparts": [
+        {
+          "found_by": "exactSlug",
+          "parent": {
+            "publisher_name": "National Foundation on the Arts and the Humanities",
+            "resource_iri": "urn:ref:ecfr-agency:national-foundation-on-the-arts-and-the-humanities"
+          },
+          "publisher_name": "Institute of Museum and Library Services",
+          "regulations_gov_codes": [],
+          "release_key": "ecfr-agencies-roster-2026-08-15",
+          "resource_iri": "urn:ref:ecfr-agency:institute-of-museum-and-library-services",
+          "roster": "ecfr-agencies",
+          "short_name": null,
+          "slug": "institute-of-museum-and-library-services"
+        },
+        {
+          "fhorgtype": "Department/Ind. Agency",
+          "found_by": "nameKey",
+          "parent": null,
+          "publisher_name": "THE INSTITUTE OF MUSEUM AND LIBRARY SERVICES",
+          "regulations_gov_codes": [],
+          "release_key": "federal-hierarchy-orgs-complete-2026-08-15",
+          "resource_iri": "urn:ref:federal-hierarchy-org:300000036",
+          "roster": "federal-hierarchy-organizations"
+        },
+        {
+          "fhorgtype": "Sub-Tier",
+          "found_by": "nameKey",
+          "parent": {
+            "publisher_name": "THE INSTITUTE OF MUSEUM AND LIBRARY SERVICES",
+            "resource_iri": "urn:ref:federal-hierarchy-org:300000036"
+          },
+          "publisher_name": "THE INSTITUTE OF MUSEUM AND LIBRARY SERVICES",
+          "regulations_gov_codes": [],
+          "release_key": "federal-hierarchy-orgs-complete-2026-08-15",
+          "resource_iri": "urn:ref:federal-hierarchy-org:300000248",
+          "roster": "federal-hierarchy-organizations"
+        },
+        {
+          "code": "AH03",
+          "found_by": "nameKey",
+          "from_date": "2005-02-01",
+          "publisher_name": "INSTITUTE OF MUSEUM AND LIBRARY SERVICES",
+          "regulations_gov_codes": [],
+          "release_key": "opm-ehri-agency-subelement-2026-08-04",
+          "resource_iri": "urn:ref:opm-ehri-agency-subelement:AH03",
+          "roster": "opm-ehri-agency-subelement",
+          "through_date": "PRESENT"
+        }
+      ],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": true,
+        "cumulative_unbridged_mentions_pct": 30.93,
+        "documents": 302,
+        "first_publication_date": "1997-08-29",
+        "last_publication_date": "2026-11-02",
+        "mentions": 302,
+        "share_of_unbridged_mentions_pct": 6.7
+      },
+      "owner_question": "Adjudicate FR 591 (Institute of Museum and Library Services) against 4 held-roster counterpart(s) (urn:ref:ecfr-agency:institute-of-museum-and-library-services, urn:ref:federal-hierarchy-org:300000036, urn:ref:federal-hierarchy-org:300000248, urn:ref:opm-ehri-agency-subelement:AH03): accept sameEntityAs bridge, hold, or keep FR-only?",
+      "proposed_action": "adjudicate_sameEntityAs_bridge",
+      "proposed_basis": "exactPublisherNameEquality",
+      "rank": 4,
+      "source": {
+        "agency_url": "",
+        "description": "",
+        "fr_url": "https://www.federalregister.gov/agencies/institute-of-museum-and-library-services",
+        "id": 591,
+        "parent": {
+          "publisher_name": "National Foundation on the Arts and the Humanities",
+          "resource_iri": "urn:ref:federal-register-agency:342"
+        },
+        "publisher_name": "Institute of Museum and Library Services",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:591",
+        "roster": "federal-register-agencies",
+        "short_name": null,
+        "slug": "institute-of-museum-and-library-services"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr495",
+      "category": "register-only-no-held-counterpart",
+      "content_digest": "sha256:02cdfd67942beefd12809a7f577fba5a652348b035b953ac3e194172f8a0f2f4",
+      "held_roster_counterparts": [],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": true,
+        "cumulative_unbridged_mentions_pct": 36.32,
+        "documents": 243,
+        "first_publication_date": "1995-06-20",
+        "last_publication_date": "2026-11-18",
+        "mentions": 243,
+        "share_of_unbridged_mentions_pct": 5.39
+      },
+      "owner_question": "FR 495 (Transportation Statistics Bureau) has no exact counterpart in RefSpec's held eCFR, Federal Hierarchy, or OPM rosters. Confirm keeping FR-only (or flag a manual counterpart / non-emission)?",
+      "proposed_action": "retain_fr_only_or_check_parent",
+      "proposed_basis": null,
+      "rank": 5,
+      "source": {
+        "agency_url": null,
+        "description": "The Bureau of Transportation Statistics (BTS) was established as a statistical agency in 1992. The Intermodal Surface Transportation Efficiency Act (ISTEA) of 1991 created BTS to administer data collection, analysis, and reporting and to ensure the most cost-effective use of transportation-monitoring resources. BTS brings a greater degree of coordination, comparability, and quality standards to transportation data, and facilitates in the closing of important data gaps.\r\rOn February 20, 2005, BTS became a part of the Research and Innovative Technology Administration (RITA). RITA is composed of BTS, the former Research Office of the Research and Special Programs Administration (RSPA), Volpe National Transportation Systems Center (formerly with RSPA), Transportation Safety Institute (formerly with RSPA), and Office of Intermodalism (formerly with the Office of the Secretary). BTS is headed by a Director, appointed by the Secretary of Transportation, and the Director reports to the RITA Administrator.\r\rBTS' basic authorizing legislation is the Safe, Accountable, Flexible, Efficient Transportation Equity Act: A Legacy for Users (SAFETEA-LU), which authorizes $27 million each year for a five year period (2005-2009). This funding comes from the Highway Trust Fund, and is administered within the Research and Development account under the Federal Highway Administration. \r\rBTS' data collection program for aviation is authorized under separate legislation enacted when the Civil Aeronautics Board (CAB) was terminated. This program is a mandatory data collection. The Wendell Ford Aviation Investment Reform Act (AIR-21) authorized funding for the airline information program from the Airport and Airways Trust Fund (AATF), but to date no funding has been appropriated.",
+        "fr_url": "https://www.federalregister.gov/agencies/transportation-statistics-bureau",
+        "id": 495,
+        "parent": {
+          "publisher_name": "Transportation Department",
+          "resource_iri": "urn:ref:federal-register-agency:492"
+        },
+        "publisher_name": "Transportation Statistics Bureau",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:495",
+        "roster": "federal-register-agencies",
+        "short_name": "BTS",
+        "slug": "transportation-statistics-bureau"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr589",
+      "category": "same-entity-bridge-candidate",
+      "content_digest": "sha256:6784cbe3950b7b60a506383f0ee44dd9f4af67074c0d6417bba3191339527b56",
+      "held_roster_counterparts": [
+        {
+          "found_by": "exactSlug",
+          "parent": {
+            "publisher_name": "National Foundation on the Arts and the Humanities",
+            "resource_iri": "urn:ref:ecfr-agency:national-foundation-on-the-arts-and-the-humanities"
+          },
+          "publisher_name": "National Endowment for the Humanities",
+          "regulations_gov_codes": [],
+          "release_key": "ecfr-agencies-roster-2026-08-15",
+          "resource_iri": "urn:ref:ecfr-agency:national-endowment-for-the-humanities",
+          "roster": "ecfr-agencies",
+          "short_name": null,
+          "slug": "national-endowment-for-the-humanities"
+        },
+        {
+          "fhorgtype": "Department/Ind. Agency",
+          "found_by": "nameKey",
+          "parent": null,
+          "publisher_name": "NATIONAL ENDOWMENT FOR THE HUMANITIES",
+          "regulations_gov_codes": [],
+          "release_key": "federal-hierarchy-orgs-complete-2026-08-15",
+          "resource_iri": "urn:ref:federal-hierarchy-org:100171765",
+          "roster": "federal-hierarchy-organizations"
+        },
+        {
+          "fhorgtype": "Sub-Tier",
+          "found_by": "nameKey",
+          "parent": {
+            "publisher_name": "NATIONAL ENDOWMENT FOR THE HUMANITIES",
+            "resource_iri": "urn:ref:federal-hierarchy-org:100171765"
+          },
+          "publisher_name": "NATIONAL ENDOWMENT FOR THE HUMANITIES",
+          "regulations_gov_codes": [],
+          "release_key": "federal-hierarchy-orgs-complete-2026-08-15",
+          "resource_iri": "urn:ref:federal-hierarchy-org:300000253",
+          "roster": "federal-hierarchy-organizations"
+        },
+        {
+          "code": "AH02",
+          "found_by": "nameKey",
+          "from_date": "2005-02-01",
+          "publisher_name": "NATIONAL ENDOWMENT FOR THE HUMANITIES",
+          "regulations_gov_codes": [],
+          "release_key": "opm-ehri-agency-subelement-2026-08-04",
+          "resource_iri": "urn:ref:opm-ehri-agency-subelement:AH02",
+          "roster": "opm-ehri-agency-subelement",
+          "through_date": "PRESENT"
+        }
+      ],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": true,
+        "cumulative_unbridged_mentions_pct": 40.64,
+        "documents": 195,
+        "first_publication_date": "1994-06-02",
+        "last_publication_date": "2026-11-03",
+        "mentions": 195,
+        "share_of_unbridged_mentions_pct": 4.32
+      },
+      "owner_question": "Adjudicate FR 589 (National Endowment for the Humanities) against 4 held-roster counterpart(s) (urn:ref:ecfr-agency:national-endowment-for-the-humanities, urn:ref:federal-hierarchy-org:100171765, urn:ref:federal-hierarchy-org:300000253, urn:ref:opm-ehri-agency-subelement:AH02): accept sameEntityAs bridge, hold, or keep FR-only?",
+      "proposed_action": "adjudicate_sameEntityAs_bridge",
+      "proposed_basis": "exactPublisherNameEquality",
+      "rank": 6,
+      "source": {
+        "agency_url": "http://www.neh.gov/",
+        "description": "",
+        "fr_url": "https://www.federalregister.gov/agencies/national-endowment-for-the-humanities",
+        "id": 589,
+        "parent": {
+          "publisher_name": "National Foundation on the Arts and the Humanities",
+          "resource_iri": "urn:ref:federal-register-agency:342"
+        },
+        "publisher_name": "National Endowment for the Humanities",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:589",
+        "roster": "federal-register-agencies",
+        "short_name": null,
+        "slug": "national-endowment-for-the-humanities"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr609",
+      "category": "same-entity-bridge-candidate",
+      "content_digest": "sha256:4750729309c901031721e8f448474fe67ff310b810b4600a0f120874a1a52a64",
+      "held_roster_counterparts": [
+        {
+          "found_by": "exactSlug",
+          "parent": {
+            "publisher_name": "Department of Transportation",
+            "resource_iri": "urn:ref:ecfr-agency:transportation-department"
+          },
+          "publisher_name": "Great Lakes St. Lawrence Seaway Development Corporation",
+          "regulations_gov_codes": [],
+          "release_key": "ecfr-agencies-roster-2026-08-15",
+          "resource_iri": "urn:ref:ecfr-agency:great-lakes-st-lawrence-seaway-development-corporation",
+          "roster": "ecfr-agencies",
+          "short_name": "SAINT",
+          "slug": "great-lakes-st-lawrence-seaway-development-corporation"
+        },
+        {
+          "fhorgtype": "Sub-Tier",
+          "found_by": "nameKey",
+          "parent": {
+            "publisher_name": "TRANSPORTATION, DEPARTMENT OF",
+            "resource_iri": "urn:ref:federal-hierarchy-org:100000136"
+          },
+          "publisher_name": "GREAT LAKES ST. LAWRENCE SEAWAY DEVELOPMENT CORPORATION",
+          "regulations_gov_codes": [],
+          "release_key": "federal-hierarchy-orgs-complete-2026-08-15",
+          "resource_iri": "urn:ref:federal-hierarchy-org:100159874",
+          "roster": "federal-hierarchy-organizations"
+        }
+      ],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": true,
+        "cumulative_unbridged_mentions_pct": 44.55,
+        "documents": 176,
+        "first_publication_date": "1994-01-20",
+        "last_publication_date": "2026-11-19",
+        "mentions": 176,
+        "share_of_unbridged_mentions_pct": 3.9
+      },
+      "owner_question": "Adjudicate FR 609 (Great Lakes St. Lawrence Seaway Development Corporation) against 2 held-roster counterpart(s) (urn:ref:ecfr-agency:great-lakes-st-lawrence-seaway-development-corporation, urn:ref:federal-hierarchy-org:100159874): accept sameEntityAs bridge, hold, or keep FR-only?",
+      "proposed_action": "adjudicate_sameEntityAs_bridge",
+      "proposed_basis": "exactPublisherNameEquality",
+      "rank": 7,
+      "source": {
+        "agency_url": "https://www.seaway.dot.gov/",
+        "description": "The Great Lakes St. Lawrence Seaway Development Corporation (GLS) is a wholly owned government corporation created by statute May 13, 1954, to construct, operate and maintain that part of the St. Lawrence Seaway between the Port of Montreal and Lake Erie, within the territorial limits of the United States.\r\n\r\nThe mission of the Corporation is to serve the U.S. intermodal and international transportation system by improving the operation and maintenance of a safe, reliable, efficient, and environmentally responsible deep-draft waterway, in cooperation with its Canadian counterpart. The GLS also encourages the development of trade through the Great Lakes Seaway System, which contributes to the comprehensive economic and environmental development of the entire Great Lakes region.\r\n\r\nThe Great Lakes St. Lawrence Seaway Development Corporation was formerly the St. Lawrence Seaway Development Corporation (See Pub. L. 116-260).",
+        "fr_url": "https://www.federalregister.gov/agencies/great-lakes-st-lawrence-seaway-development-corporation",
+        "id": 609,
+        "parent": {
+          "publisher_name": "Transportation Department",
+          "resource_iri": "urn:ref:federal-register-agency:492"
+        },
+        "publisher_name": "Great Lakes St. Lawrence Seaway Development Corporation",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:609",
+        "roster": "federal-register-agencies",
+        "short_name": "SAINT",
+        "slug": "great-lakes-st-lawrence-seaway-development-corporation"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr601",
+      "category": "register-only-no-held-counterpart",
+      "content_digest": "sha256:d892bcc60917312031d7805f58137eb6a01221a7441e9881b08327efff4223f8",
+      "held_roster_counterparts": [],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": true,
+        "cumulative_unbridged_mentions_pct": 48.23,
+        "documents": 166,
+        "first_publication_date": "2019-05-20",
+        "last_publication_date": "2026-11-02",
+        "mentions": 166,
+        "share_of_unbridged_mentions_pct": 3.68
+      },
+      "owner_question": "FR 601 (Unified Carrier Registration Plan) has no exact counterpart in RefSpec's held eCFR, Federal Hierarchy, or OPM rosters. Confirm keeping FR-only (or flag a manual counterpart / non-emission)?",
+      "proposed_action": "retain_fr_only_or_check_parent",
+      "proposed_basis": null,
+      "rank": 8,
+      "source": {
+        "agency_url": "https://www.fmcsa.dot.gov/faq/what-unified-carrier-registration-ucr-system-and-how-do-i-sign",
+        "description": "Created by the Unified Carrier Registration Act of 2005 (UCR Act - 49 United States Code (USC) section 14504a), the Unified Carrier Registration Plan replaces the former system for registering and collecting fees from the operators of vehicles engaged in interstate travel \u2013 the Single State Registration System (SSRS).",
+        "fr_url": "https://www.federalregister.gov/agencies/unified-carrier-registration-plan",
+        "id": 601,
+        "parent": null,
+        "publisher_name": "Unified Carrier Registration Plan",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:601",
+        "roster": "federal-register-agencies",
+        "short_name": "UCR",
+        "slug": "unified-carrier-registration-plan"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr198",
+      "category": "defunct-succession-candidate",
+      "content_digest": "sha256:14fb1de7172587c73773938d23b20951de555eefa833cfc4bcd7c0267c1d4b31",
+      "held_roster_counterparts": [],
+      "later_succession_evidence": {
+        "evidence_kind": "publisherRoster",
+        "note": "Roster: renamed the Food and Nutrition Service again, 63 FR 9721 (1998-02-26).",
+        "proposed_successors": [
+          {
+            "id": 200,
+            "publisher_name": "Food and Nutrition Service",
+            "resource_iri": "urn:ref:federal-register-agency:200"
+          }
+        ]
+      },
+      "measured_live": {
+        "active_since_2024": false,
+        "cumulative_unbridged_mentions_pct": 51.77,
+        "documents": 160,
+        "first_publication_date": "1994-11-22",
+        "last_publication_date": "1998-02-26",
+        "mentions": 160,
+        "share_of_unbridged_mentions_pct": 3.55
+      },
+      "owner_question": "FR 198 (Food and Consumer Service) is flagged in RefSpec later_succession_batch (Roster: renamed the Food and Nutrition Service again, 63 FR 9721 (1998-02-26).). Confirm deferring to a dated succession event rather than a sameEntityAs bridge?",
+      "proposed_action": "defer_to_succession_batch",
+      "proposed_basis": null,
+      "rank": 9,
+      "source": {
+        "agency_url": "",
+        "description": "The Food and Consumer Service (FCS) was originally named the Food and Nutrition Service as established under Reorganization Plan No. 2 of 1953 by the Secretary of Agriculture. The Food and Nutrition Service was abolished by the Secretary\u2019s Memorandum 1010-1 dated Oct. 20, 1994. The functions of which were assumed by Food and Consumer Service. In 1998, the Food and Consumer Service was again renamed the Food and Nutrition Service as per the regulation published in the Federal Register of Feb. 26, 1998 (63 FR 9721).\r\n\r\nThe duties of the Food and Consumer and Food and Nutrition Services as stated in the US Government Manual were to administer programs (Food Stamp Program, Special Nutrition Programs, Food Distribution Programs, Supplemental Food Programs, Commodity Supplemental Food Programs, and Nutrition, Education and Training Programs) to make food assistance available to people who need it. \r\n\r\nThese programs were operated in cooperation with State and local governments. \r\n\r\nFor further information on the functions, organization, and activities applicable to the current Food and Nutrition Service, please click on the agency description via this site, or visit the FNS webpage at http://www.fns.usda.gov/fns/about.htm.\r\n\r\n__________\r\nSource:\r\nInformation taken from U.S. Government Manual, 1996/97 and 2009/2010 editions",
+        "fr_url": "https://www.federalregister.gov/agencies/food-and-consumer-service",
+        "id": 198,
+        "parent": {
+          "publisher_name": "Agriculture Department",
+          "resource_iri": "urn:ref:federal-register-agency:12"
+        },
+        "publisher_name": "Food and Consumer Service",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:198",
+        "roster": "federal-register-agencies",
+        "short_name": "FCS",
+        "slug": "food-and-consumer-service"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr258",
+      "category": "defunct-succession-candidate",
+      "content_digest": "sha256:e6a5319a9924ebed4aa393c3cf7a23a9ead848177921397644c8a2b430a37c09",
+      "held_roster_counterparts": [
+        {
+          "found_by": "nameKey",
+          "parent": null,
+          "publisher_name": "United States International Development Cooperation Agency",
+          "regulations_gov_codes": [],
+          "release_key": "ecfr-agencies-roster-2026-08-15",
+          "resource_iri": "urn:ref:ecfr-agency:united-states-international-development-cooperation-agency",
+          "roster": "ecfr-agencies",
+          "short_name": null,
+          "slug": "united-states-international-development-cooperation-agency"
+        }
+      ],
+      "later_succession_evidence": {
+        "evidence_kind": "statute",
+        "note": "FARRA secs. 1401, 1411-1412 and the roster: abolished, functions to State, USAID and OPIC -- a split.",
+        "proposed_successors": [
+          {
+            "id": 476,
+            "publisher_name": "State Department",
+            "resource_iri": "urn:ref:federal-register-agency:476"
+          },
+          {
+            "id": 6,
+            "publisher_name": "Agency for International Development",
+            "resource_iri": "urn:ref:federal-register-agency:6"
+          },
+          {
+            "id": 397,
+            "publisher_name": "Overseas Private Investment Corporation",
+            "resource_iri": "urn:ref:federal-register-agency:397"
+          }
+        ]
+      },
+      "measured_live": {
+        "active_since_2024": false,
+        "cumulative_unbridged_mentions_pct": 55.06,
+        "documents": 148,
+        "first_publication_date": "1994-01-06",
+        "last_publication_date": "1999-12-28",
+        "mentions": 148,
+        "share_of_unbridged_mentions_pct": 3.28
+      },
+      "owner_question": "FR 258 (International Development Cooperation Agency) is flagged in RefSpec later_succession_batch (FARRA secs. 1401, 1411-1412 and the roster: abolished, functions to State, USAID and OPIC -- a split.). Confirm deferring to a dated succession event rather than a sameEntityAs bridge?",
+      "proposed_action": "defer_to_succession_batch",
+      "proposed_basis": null,
+      "rank": 10,
+      "source": {
+        "agency_url": "",
+        "description": "The International Development Cooperation Agency (IDCA) was established by Executive Order in September, 1979.\r\n\r\nAs an attempt to reorganize the foreign assistance management structure, the IDCA was envisioned by Senator Hubert Humphrey in 1978,  to coordinate foreign assistance activities as they related to bilateral programs administered by USAID, multilateral programs of international lending institutions then under the purview of the Department of the Treasury, voluntary contributions to United Nations agencies then administered by the Department of State, food programs then administered by USAID, and the activities of OPIC. An International Development Institute would be established within IDCA to address, among other things, private and voluntary organizations and with one of the Institute's constituent parts being the Peace Corps. \r\n\r\nAs established under Reorganization Plan No. 2 of 1979, the only entity it actually coordinated was USAID and, since it was staffed with fewer than 75 people, could make only a marginal impact on overall bilateral and multilateral assistance policy. In the Reagan Administration, no staff were provided to IDCA and, functionally, it faded quickly from the scene. The Executive Order creating IDCA remained intact, however, defining some of the lines of authority in the administration of foreign assistance. Some of the other coordinating functions that had been expected to be exercised by IDCA (but not contained in the Executive Order) were initially exercised instead by USAID, but over time the functions fell into disuse. \r\n\r\nThe IDCA was abolished by act of Oct. 2, 1998 (112 Stat. 2681-790) and its functions transferred to the Department of State, U.S. Agency for International Development, and overseas Private Investment Corporation.\r\n\r\n__________\r\nSources:\r\nU.S. Government Manual, (2009/2010 ed.), p. 612.\r\nhttp://www.usaid.gov/about_usaid/usaidhist.html",
+        "fr_url": "https://www.federalregister.gov/agencies/international-development-cooperation-agency",
+        "id": 258,
+        "parent": {
+          "publisher_name": "Agency for International Development",
+          "resource_iri": "urn:ref:federal-register-agency:6"
+        },
+        "publisher_name": "International Development Cooperation Agency",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:258",
+        "roster": "federal-register-agencies",
+        "short_name": "IDCA",
+        "slug": "international-development-cooperation-agency"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr351",
+      "category": "register-only-no-held-counterpart",
+      "content_digest": "sha256:9b3762f9c5279a743e0d72cf277d1e2f23a7b0a30fbe88864a2238a87e13b7af",
+      "held_roster_counterparts": [],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": true,
+        "cumulative_unbridged_mentions_pct": 57.87,
+        "documents": 127,
+        "first_publication_date": "1994-04-06",
+        "last_publication_date": "2025-01-21",
+        "mentions": 127,
+        "share_of_unbridged_mentions_pct": 2.82
+      },
+      "owner_question": "FR 351 (National Institute of Justice) has no exact counterpart in RefSpec's held eCFR, Federal Hierarchy, or OPM rosters. Confirm keeping FR-only (or flag a manual counterpart / non-emission)?",
+      "proposed_action": "retain_fr_only_or_check_parent",
+      "proposed_basis": null,
+      "rank": 11,
+      "source": {
+        "agency_url": "http://nij.gov/",
+        "description": "NIJ was created in 1969 by the Omnibus Crime Control and Safe Streets Act as the National Institute of Law Enforcement and Criminal Justice with the purpose of monitoring and supporting federally funded criminal justice research to assist State and local governments to improve police, courts and corrections issues. Renamed National Institute of Justice in 1978, NIJ currently functions as the research, development and evaluation agency of the U.S. Department of Justice.",
+        "fr_url": "https://www.federalregister.gov/agencies/national-institute-of-justice",
+        "id": 351,
+        "parent": {
+          "publisher_name": "Justice Department",
+          "resource_iri": "urn:ref:federal-register-agency:268"
+        },
+        "publisher_name": "National Institute of Justice",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:351",
+        "roster": "federal-register-agencies",
+        "short_name": "NIJ",
+        "slug": "national-institute-of-justice"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr140",
+      "category": "defunct-succession-candidate",
+      "content_digest": "sha256:90371c3960d0811a0e304adfb9318a1c926379d1df1ee34b4d610f33307f4ff8",
+      "held_roster_counterparts": [],
+      "later_succession_evidence": {
+        "evidence_kind": "recordNotYetRead",
+        "note": "Renamed the Office of Science in 1998 (not in the held FR roster).",
+        "proposed_successors": []
+      },
+      "measured_live": {
+        "active_since_2024": false,
+        "cumulative_unbridged_mentions_pct": 60.44,
+        "documents": 116,
+        "first_publication_date": "1994-01-07",
+        "last_publication_date": "1999-01-13",
+        "mentions": 116,
+        "share_of_unbridged_mentions_pct": 2.57
+      },
+      "owner_question": "FR 140 (Energy Research Office) is flagged in RefSpec later_succession_batch (Renamed the Office of Science in 1998 (not in the held FR roster).). Confirm deferring to a dated succession event rather than a sameEntityAs bridge?",
+      "proposed_action": "defer_to_succession_batch",
+      "proposed_basis": null,
+      "rank": 12,
+      "source": {
+        "agency_url": null,
+        "description": "",
+        "fr_url": "https://www.federalregister.gov/agencies/energy-research-office",
+        "id": 140,
+        "parent": {
+          "publisher_name": "Energy Department",
+          "resource_iri": "urn:ref:federal-register-agency:136"
+        },
+        "publisher_name": "Energy Research Office",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:140",
+        "roster": "federal-register-agencies",
+        "short_name": "OER",
+        "slug": "energy-research-office"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr33",
+      "category": "register-only-no-held-counterpart",
+      "content_digest": "sha256:407a9050318ff02be4531c0c14ac05516e1b5a231aaf4bfda0135d38a23f455b",
+      "held_roster_counterparts": [],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": false,
+        "cumulative_unbridged_mentions_pct": 62.84,
+        "documents": 108,
+        "first_publication_date": "1995-01-09",
+        "last_publication_date": "1998-10-06",
+        "mentions": 108,
+        "share_of_unbridged_mentions_pct": 2.39
+      },
+      "owner_question": "FR 33 (Assassination Records Review Board) has no exact counterpart in RefSpec's held eCFR, Federal Hierarchy, or OPM rosters. Confirm keeping FR-only (or flag a manual counterpart / non-emission)?",
+      "proposed_action": "retain_fr_only_or_check_parent",
+      "proposed_basis": null,
+      "rank": 13,
+      "source": {
+        "agency_url": "",
+        "description": "The Assassination Records Review Board was an independent federal agency created to oversee the identification and release of records related to the assassination of President John F. Kennedy. \r\nThe Review Board was established by the President John F. Kennedy Assassination Records Collection act of 1992 (PL 102-526), and was signed into law by George Bush. The five members of the Board were appointed by President Clinton, confirmed by the United States Senate, and sworn in on April 11, 1994. \r\nHaving until October 1, 1996 to fulfill its mandate, plus an additional year at the Board's discretion to complete its responsibilities, the Board was terminated in September of 1998 following the issuance of its Final Report. [http://mcadams.posc.mu.edu/arrb/]",
+        "fr_url": "https://www.federalregister.gov/agencies/assassination-records-review-board",
+        "id": 33,
+        "parent": null,
+        "publisher_name": "Assassination Records Review Board",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:33",
+        "roster": "federal-register-agencies",
+        "short_name": null,
+        "slug": "assassination-records-review-board"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr597",
+      "category": "register-only-no-held-counterpart",
+      "content_digest": "sha256:d3969cd565d2174ee926d3ab7f64cc8f69499d1d199e0b1163d2bd90a9f4f65a",
+      "held_roster_counterparts": [],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": true,
+        "cumulative_unbridged_mentions_pct": 64.97,
+        "documents": 96,
+        "first_publication_date": "2018-09-06",
+        "last_publication_date": "2026-10-01",
+        "mentions": 96,
+        "share_of_unbridged_mentions_pct": 2.13
+      },
+      "owner_question": "FR 597 (U.S. Codex Office) has no exact counterpart in RefSpec's held eCFR, Federal Hierarchy, or OPM rosters. Confirm keeping FR-only (or flag a manual counterpart / non-emission)?",
+      "proposed_action": "retain_fr_only_or_check_parent",
+      "proposed_basis": null,
+      "rank": 14,
+      "source": {
+        "agency_url": "https://www.usda.gov/codex",
+        "description": "The U.S. Codex Office is an interagency partnership that engages stakeholders in the development and advancement of science-based food standards for the benefit of the United States and the worldwide community.",
+        "fr_url": "https://www.federalregister.gov/agencies/us-codex-office",
+        "id": 597,
+        "parent": {
+          "publisher_name": "Agriculture Department",
+          "resource_iri": "urn:ref:federal-register-agency:12"
+        },
+        "publisher_name": "U.S. Codex Office",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:597",
+        "roster": "federal-register-agencies",
+        "short_name": "CODEX",
+        "slug": "us-codex-office"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr372",
+      "category": "same-entity-bridge-candidate",
+      "content_digest": "sha256:98ebfe5830f4fdc45bfebf1daf949e9aa5c1d5d9510d4c29d670285502c81b1e",
+      "held_roster_counterparts": [
+        {
+          "found_by": "exactSlug",
+          "parent": {
+            "publisher_name": "Department of Commerce",
+            "resource_iri": "urn:ref:ecfr-agency:commerce-department"
+          },
+          "publisher_name": "National Technical Information Service",
+          "regulations_gov_codes": [],
+          "release_key": "ecfr-agencies-roster-2026-08-15",
+          "resource_iri": "urn:ref:ecfr-agency:national-technical-information-service",
+          "roster": "ecfr-agencies",
+          "short_name": "NTIS",
+          "slug": "national-technical-information-service"
+        },
+        {
+          "fhorgtype": "Sub-Tier",
+          "found_by": "nameKey",
+          "parent": {
+            "publisher_name": "COMMERCE, DEPARTMENT OF",
+            "resource_iri": "urn:ref:federal-hierarchy-org:100035122"
+          },
+          "publisher_name": "NATIONAL TECHNICAL INFORMATION SERVICE",
+          "regulations_gov_codes": [],
+          "release_key": "federal-hierarchy-orgs-complete-2026-08-15",
+          "resource_iri": "urn:ref:federal-hierarchy-org:100196017",
+          "roster": "federal-hierarchy-organizations"
+        },
+        {
+          "code": "CM62",
+          "found_by": "nameKey",
+          "from_date": "2005-02-01",
+          "publisher_name": "NATIONAL TECHNICAL INFORMATION SERVICE",
+          "regulations_gov_codes": [],
+          "release_key": "opm-ehri-agency-subelement-2026-08-04",
+          "resource_iri": "urn:ref:opm-ehri-agency-subelement:CM62",
+          "roster": "opm-ehri-agency-subelement",
+          "through_date": "PRESENT"
+        }
+      ],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": true,
+        "cumulative_unbridged_mentions_pct": 67.05,
+        "documents": 94,
+        "first_publication_date": "1994-01-03",
+        "last_publication_date": "2026-09-30",
+        "mentions": 94,
+        "share_of_unbridged_mentions_pct": 2.08
+      },
+      "owner_question": "Adjudicate FR 372 (National Technical Information Service) against 3 held-roster counterpart(s) (urn:ref:ecfr-agency:national-technical-information-service, urn:ref:federal-hierarchy-org:100196017, urn:ref:opm-ehri-agency-subelement:CM62): accept sameEntityAs bridge, hold, or keep FR-only?",
+      "proposed_action": "adjudicate_sameEntityAs_bridge",
+      "proposed_basis": "exactPublisherNameEquality",
+      "rank": 15,
+      "source": {
+        "agency_url": null,
+        "description": "The National Technical Information Service (NTIS) operates a central clearinghouse of scientific and technical information that is useful to U.S. business and industry. NTIS collects scientific and technical information; catalogs, abstracts, indexes, and permanently archives the information; disseminates products in the forms and formats most useful to its customers; develops electronic and other media to disseminate information; and provides information processing services to other Federal agencies. NTIS receives no appropriations. Its revenue comes from two sources: the sale of technical reports to business and industry, schools and universities, State and local government offices, and the public at large and from services to Federal agencies that help them communicate more effectively with their employees and constituents.\r\rThe NTIS collection of approximately 2.5 million works covers a broad array of subjects and includes reports on the results of research and development and scientific studies on manufacturing processes, current events, and foreign and domestic trade; business and management studies; social, economic, and trade statistics; computer software and databases; health care reports, manuals, and data; environmental handbooks, regulations, economic studies, and applied technologies; directories to Federal laboratory and technical resources; and global competitive intelligence. The collection also includes audiovisual training materials in such areas as foreign languages, workplace safety and health, law enforcement, and fire services.",
+        "fr_url": "https://www.federalregister.gov/agencies/national-technical-information-service",
+        "id": 372,
+        "parent": {
+          "publisher_name": "Commerce Department",
+          "resource_iri": "urn:ref:federal-register-agency:54"
+        },
+        "publisher_name": "National Technical Information Service",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:372",
+        "roster": "federal-register-agencies",
+        "short_name": "NTIS",
+        "slug": "national-technical-information-service"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr568",
+      "category": "defunct-succession-candidate",
+      "content_digest": "sha256:491e949b271637e25274ccd3fa274d8a0a8547f7179a308c2bd795dbf4b09a2c",
+      "held_roster_counterparts": [
+        {
+          "code": "IN23",
+          "found_by": "wordOrderKey",
+          "from_date": "2010-06-01",
+          "publisher_name": "BUREAU OF OCEAN ENERGY MANAGEMENT, REGULATION, AND ENFORCEMENT",
+          "regulations_gov_codes": [],
+          "release_key": "opm-ehri-agency-subelement-2026-08-04",
+          "resource_iri": "urn:ref:opm-ehri-agency-subelement:IN23",
+          "roster": "opm-ehri-agency-subelement",
+          "through_date": "PRESENT"
+        }
+      ],
+      "later_succession_evidence": {
+        "evidence_kind": "publisherRoster",
+        "note": "Roster: divided into BOEM and BSEE on 2011-10-01 (ONRR, FR 586, split off 2010-10-01) -- a split.",
+        "proposed_successors": [
+          {
+            "id": 575,
+            "publisher_name": "Ocean Energy Management Bureau",
+            "resource_iri": "urn:ref:federal-register-agency:575"
+          },
+          {
+            "id": 576,
+            "publisher_name": "Safety and Environmental Enforcement Bureau",
+            "resource_iri": "urn:ref:federal-register-agency:576"
+          }
+        ]
+      },
+      "measured_live": {
+        "active_since_2024": false,
+        "cumulative_unbridged_mentions_pct": 69.14,
+        "documents": 93,
+        "first_publication_date": "2010-09-03",
+        "last_publication_date": "2011-09-30",
+        "mentions": 94,
+        "share_of_unbridged_mentions_pct": 2.08
+      },
+      "owner_question": "FR 568 (Ocean Energy Management, Regulation, and Enforcement Bureau) is flagged in RefSpec later_succession_batch (Roster: divided into BOEM and BSEE on 2011-10-01 (ONRR, FR 586, split off 2010-10-01) -- a split.). Confirm deferring to a dated succession event rather than a sameEntityAs bridge?",
+      "proposed_action": "defer_to_succession_batch",
+      "proposed_basis": null,
+      "rank": 16,
+      "source": {
+        "agency_url": "https://www.boem.gov/",
+        "description": "On May 19, 2010 the Minerals Management Service was renamed the Bureau of Ocean Energy Management, Regulation and Enforcement (BOEMRE). On Oct. 1, 2010 the Office of Natural Resource Revenues (ONRR) split from BOEMRE and on Oct. 1, 2011 BOEMRE was divided into the Bureau of Ocean Energy Management (BOEM) and the Bureau of Safety and Environmental Enforcement (BSEE).",
+        "fr_url": "https://www.federalregister.gov/agencies/ocean-energy-management-regulation-and-enforcement-bureau",
+        "id": 568,
+        "parent": {
+          "publisher_name": "Interior Department",
+          "resource_iri": "urn:ref:federal-register-agency:253"
+        },
+        "publisher_name": "Ocean Energy Management, Regulation, and Enforcement Bureau",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:568",
+        "roster": "federal-register-agencies",
+        "short_name": "BOEMRE",
+        "slug": "ocean-energy-management-regulation-and-enforcement-bureau"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr380",
+      "category": "register-only-no-held-counterpart",
+      "content_digest": "sha256:96952faabbd039865ee0528d7a4c946e41db250f87caba8a484747c6fe57654c",
+      "held_roster_counterparts": [],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": false,
+        "cumulative_unbridged_mentions_pct": 71.0,
+        "documents": 84,
+        "first_publication_date": "1996-12-13",
+        "last_publication_date": "2002-05-08",
+        "mentions": 84,
+        "share_of_unbridged_mentions_pct": 1.86
+      },
+      "owner_question": "FR 380 (Northeast Dairy Compact Commission) has no exact counterpart in RefSpec's held eCFR, Federal Hierarchy, or OPM rosters. Confirm keeping FR-only (or flag a manual counterpart / non-emission)?",
+      "proposed_action": "retain_fr_only_or_check_parent",
+      "proposed_basis": null,
+      "rank": 17,
+      "source": {
+        "agency_url": "",
+        "description": "The Northeast Dairy Compact was an interstate compact between six New England States, which passed uniform legislation joining the Compact and the governors of each state signed the legislation into law. Under the Compact Clause (Article 1, section 10, clause 3) of the United States Constitution, Congress must approve interstate compacts. The Compact language was included in the 1996 Farm Bill (Federal Agricultural Improvement and Reform Act) and was passed by Congress on March 28, 1996. This required support from Congressional members outside of New England. The President signed the legislation into law on April 4, 1996. \r\n\r\nThe Northeast Dairy Compact was established in an effort to restore the authority of the six New England states to set prices for Class 1 fluid milk sold in the region. Recognizing the regional character of the northeast dairy industry, the Compact serves several major functions. These functions include assuring the region of an adequate supply of milk, recognizing the cultural and economic benefits of a viable dairy industry in the region and facilitating the Constitutional rights of individual states to act collectively in order to regulate milk prices..\r\n\r\nFor further information on the Northeast Dairy Compact and its activities, please visit their website at http://www.dairycompact.org/.\r\n\r\n___________ \r\nSource:\r\nhttp://www.dairycompact.org/comfacts.htm.",
+        "fr_url": "https://www.federalregister.gov/agencies/northeast-dairy-compact-commission",
+        "id": 380,
+        "parent": null,
+        "publisher_name": "Northeast Dairy Compact Commission",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:380",
+        "roster": "federal-register-agencies",
+        "short_name": null,
+        "slug": "northeast-dairy-compact-commission"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr448",
+      "category": "same-entity-bridge-candidate",
+      "content_digest": "sha256:771af08c7edcba0220a3eef0260e8669bcaf371d43786bcdfacc1b31d7c35f75",
+      "held_roster_counterparts": [
+        {
+          "found_by": "exactSlug",
+          "parent": {
+            "publisher_name": "Department of Health and Human Services",
+            "resource_iri": "urn:ref:ecfr-agency:health-and-human-services-department"
+          },
+          "publisher_name": "Office of Administration for Children and Families Refugee Resettlement",
+          "regulations_gov_codes": [],
+          "release_key": "ecfr-agencies-roster-2026-08-15",
+          "resource_iri": "urn:ref:ecfr-agency:refugee-resettlement-office",
+          "roster": "ecfr-agencies",
+          "short_name": "ORR",
+          "slug": "refugee-resettlement-office"
+        }
+      ],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": true,
+        "cumulative_unbridged_mentions_pct": 72.62,
+        "documents": 73,
+        "first_publication_date": "1994-03-14",
+        "last_publication_date": "2026-10-01",
+        "mentions": 73,
+        "share_of_unbridged_mentions_pct": 1.62
+      },
+      "owner_question": "Adjudicate FR 448 (Refugee Resettlement Office) against 1 held-roster counterpart(s) (urn:ref:ecfr-agency:refugee-resettlement-office): accept sameEntityAs bridge, hold, or keep FR-only?",
+      "proposed_action": "adjudicate_sameEntityAs_bridge",
+      "proposed_basis": "obviousPublisherNameVariant",
+      "rank": 18,
+      "source": {
+        "agency_url": "",
+        "description": "The Office of Refugee Resettlement (ORR) was established by Congress under The Refugee Act of 1980. This Act incorporates the definition of \"refugee\" used in the U.N. Protocol, and makes provision for regular flow as well as emergency admission of refugees, and authorizes federal assistance for the resettlement of refugees.\r\n\r\nIndividuals granted refugee status overseas by the U.S. Department of Homeland Security are brought to the United States for resettlement by the U.S. Department of State. Voluntary agencies and ORR through their programs assist with their resettlement and integration into the U.S. Refugees are eligible to receive ORR benefits and services from the first day they arrive in the U.S. \r\n\r\nFounded on the belief that newly arriving populations have inherent capabilities when given opportunities, the goal of the ORR is to provide people in need with critical resources to assist them in becoming integrated members of American society.",
+        "fr_url": "https://www.federalregister.gov/agencies/refugee-resettlement-office",
+        "id": 448,
+        "parent": {
+          "publisher_name": "Health and Human Services Department",
+          "resource_iri": "urn:ref:federal-register-agency:221"
+        },
+        "publisher_name": "Refugee Resettlement Office",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:448",
+        "roster": "federal-register-agencies",
+        "short_name": "ORR",
+        "slug": "refugee-resettlement-office"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr598",
+      "category": "register-only-no-held-counterpart",
+      "content_digest": "sha256:6b2a094bc0e0956e8f883a6bd35bc24c547f512e56413b95ef6bea4df5aef960",
+      "held_roster_counterparts": [],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": true,
+        "cumulative_unbridged_mentions_pct": 73.77,
+        "documents": 52,
+        "first_publication_date": "1995-07-06",
+        "last_publication_date": "2026-10-15",
+        "mentions": 52,
+        "share_of_unbridged_mentions_pct": 1.15
+      },
+      "owner_question": "FR 598 (Federal Council on the Arts and the Humanities) has no exact counterpart in RefSpec's held eCFR, Federal Hierarchy, or OPM rosters. Confirm keeping FR-only (or flag a manual counterpart / non-emission)?",
+      "proposed_action": "retain_fr_only_or_check_parent",
+      "proposed_basis": null,
+      "rank": 19,
+      "source": {
+        "agency_url": "",
+        "description": "The Federal Council on the Arts and the Humanities is composed of the Chairman of the National Endowment for the Arts, the Chairman of the National Endowment for the Humanities, the Secretary of Education, the Director of the National Science Foundation, the Librarian of Congress, the Chairman of the Commission of Fine Arts, the Archivist of the United States, the Commissioner, Public Buildings Service, General Services Administration, the Administrator of the General Services Administration, the Director of the United States Information Agency, the Secretary of the Interior, the Secretary of Commerce, the Secretary of Transportation, the Chairman of the National Museum Services Board, the Director of the Institute of Museum and Library Services, the Secretary of Housing and Urban Development, the Secretary of Labor, the Secretary of Veterans Affairs, and the Commissioner of the Administration on Aging.",
+        "fr_url": "https://www.federalregister.gov/agencies/federal-council-on-the-arts-and-the-humanities",
+        "id": 598,
+        "parent": {
+          "publisher_name": "National Foundation on the Arts and the Humanities",
+          "resource_iri": "urn:ref:federal-register-agency:342"
+        },
+        "publisher_name": "Federal Council on the Arts and the Humanities",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:598",
+        "roster": "federal-register-agencies",
+        "short_name": "FCAH",
+        "slug": "federal-council-on-the-arts-and-the-humanities"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr600",
+      "category": "same-entity-bridge-candidate",
+      "content_digest": "sha256:09283a92c9e9484d5129c834c8b9f0b4d60c4e6deff49808a5057a0b93b9325e",
+      "held_roster_counterparts": [
+        {
+          "fhorgtype": "Sub-Tier",
+          "found_by": "nameKey",
+          "parent": {
+            "publisher_name": "EDUCATION, DEPARTMENT OF",
+            "resource_iri": "urn:ref:federal-hierarchy-org:100001616"
+          },
+          "publisher_name": "NATIONAL ASSESSMENT GOVERNING BOARD",
+          "regulations_gov_codes": [],
+          "release_key": "federal-hierarchy-orgs-complete-2026-08-15",
+          "resource_iri": "urn:ref:federal-hierarchy-org:100525883",
+          "roster": "federal-hierarchy-organizations"
+        },
+        {
+          "fhorgtype": "Sub-Tier",
+          "found_by": "nameKey",
+          "parent": {
+            "publisher_name": "EDUCATION, DEPARTMENT OF",
+            "resource_iri": "urn:ref:federal-hierarchy-org:100001616"
+          },
+          "publisher_name": "NATIONAL ASSESSMENT GOVERNING BOARD",
+          "regulations_gov_codes": [],
+          "release_key": "federal-hierarchy-orgs-complete-2026-08-15",
+          "resource_iri": "urn:ref:federal-hierarchy-org:100525304",
+          "roster": "federal-hierarchy-organizations"
+        },
+        {
+          "code": "EDEZ",
+          "found_by": "nameKey",
+          "from_date": "2005-02-01",
+          "publisher_name": "NATIONAL ASSESSMENT GOVERNING BOARD",
+          "regulations_gov_codes": [],
+          "release_key": "opm-ehri-agency-subelement-2026-08-04",
+          "resource_iri": "urn:ref:opm-ehri-agency-subelement:EDEZ",
+          "roster": "opm-ehri-agency-subelement",
+          "through_date": "PRESENT"
+        }
+      ],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": true,
+        "cumulative_unbridged_mentions_pct": 74.88,
+        "documents": 50,
+        "first_publication_date": "1998-09-15",
+        "last_publication_date": "2026-11-12",
+        "mentions": 50,
+        "share_of_unbridged_mentions_pct": 1.11
+      },
+      "owner_question": "Adjudicate FR 600 (National Assessment Governing Board) against 3 held-roster counterpart(s) (urn:ref:federal-hierarchy-org:100525883, urn:ref:federal-hierarchy-org:100525304, urn:ref:opm-ehri-agency-subelement:EDEZ): accept sameEntityAs bridge, hold, or keep FR-only?",
+      "proposed_action": "adjudicate_sameEntityAs_bridge",
+      "proposed_basis": "obviousPublisherNameVariant",
+      "rank": 20,
+      "source": {
+        "agency_url": "https://www.nagb.gov",
+        "description": "The National Assessment Governing Board was created by Congress in 1988 as an independent, nonpartisan board to set policy for the National Assessment of Educational Progress (NAEP), also known as The Nation\u2019s Report Card.\r\n\r\nIn overseeing The Nation\u2019s Report Card, the Governing Board identifies subjects to be tested, determines the content and achievement levels for each assessment, approves all test questions, and takes steps to improve the reporting of results. The Governing Board is responsible for communicating NAEP results to a wide range of audiences.",
+        "fr_url": "https://www.federalregister.gov/agencies/national-assessment-governing-board",
+        "id": 600,
+        "parent": {
+          "publisher_name": "Education Department",
+          "resource_iri": "urn:ref:federal-register-agency:126"
+        },
+        "publisher_name": "National Assessment Governing Board",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:600",
+        "roster": "federal-register-agencies",
+        "short_name": "NAGB",
+        "slug": "national-assessment-governing-board"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr143",
+      "category": "same-entity-bridge-candidate",
+      "content_digest": "sha256:1b1bfbe621cb3a32030d4bc95e9ca4db84b01b177340e122aa873a54f0eb3b80",
+      "held_roster_counterparts": [
+        {
+          "found_by": "exactSlug",
+          "parent": {
+            "publisher_name": "Department of Treasury",
+            "resource_iri": "urn:ref:ecfr-agency:treasury-department"
+          },
+          "publisher_name": "Bureau of Engraving and Printing",
+          "regulations_gov_codes": [],
+          "release_key": "ecfr-agencies-roster-2026-08-15",
+          "resource_iri": "urn:ref:ecfr-agency:engraving-and-printing-bureau",
+          "roster": "ecfr-agencies",
+          "short_name": "BEP",
+          "slug": "engraving-and-printing-bureau"
+        },
+        {
+          "fhorgtype": "Sub-Tier",
+          "found_by": "wordOrderKey",
+          "parent": {
+            "publisher_name": "TREASURY, DEPARTMENT OF THE",
+            "resource_iri": "urn:ref:federal-hierarchy-org:100013311"
+          },
+          "publisher_name": "BUREAU OF ENGRAVING AND PRINTING",
+          "regulations_gov_codes": [],
+          "release_key": "federal-hierarchy-orgs-complete-2026-08-15",
+          "resource_iri": "urn:ref:federal-hierarchy-org:100126434",
+          "roster": "federal-hierarchy-organizations"
+        },
+        {
+          "code": "TRAI",
+          "found_by": "wordOrderKey",
+          "from_date": "2005-02-01",
+          "publisher_name": "BUREAU OF ENGRAVING AND PRINTING",
+          "regulations_gov_codes": [],
+          "release_key": "opm-ehri-agency-subelement-2026-08-04",
+          "resource_iri": "urn:ref:opm-ehri-agency-subelement:TRAI",
+          "roster": "opm-ehri-agency-subelement",
+          "through_date": "PRESENT"
+        }
+      ],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": false,
+        "cumulative_unbridged_mentions_pct": 75.94,
+        "documents": 48,
+        "first_publication_date": "1994-05-04",
+        "last_publication_date": "2023-07-06",
+        "mentions": 48,
+        "share_of_unbridged_mentions_pct": 1.06
+      },
+      "owner_question": "Adjudicate FR 143 (Engraving and Printing Bureau) against 3 held-roster counterpart(s) (urn:ref:ecfr-agency:engraving-and-printing-bureau, urn:ref:federal-hierarchy-org:100126434, urn:ref:opm-ehri-agency-subelement:TRAI): accept sameEntityAs bridge, hold, or keep FR-only?",
+      "proposed_action": "adjudicate_sameEntityAs_bridge",
+      "proposed_basis": "obviousPublisherNameVariant",
+      "rank": 21,
+      "source": {
+        "agency_url": "http://www.moneyfactory.gov/",
+        "description": "The Bureau of Engraving and Printing operates on basic authorities conferred by act of July 11, 1862 (31 U.S.C. 303), and additional authorities contained in past appropriations made to the Bureau that are still in force. Operations are financed by a revolving fund established in 1950 in accordance with Public Law 81-656. The Bureau is headed by a Director who is selected by the Secretary of the Treasury.\r\n\r\nThe Bureau designs, prints, and finishes all of the Nation's paper currency and many other security documents, including White House invitations and military identification cards. It also is responsible for advising and assisting Federal agencies in the design and production of other Government documents that, because of their innate value or for other reasons, require security or counterfeit-deterrence characteristics.",
+        "fr_url": "https://www.federalregister.gov/agencies/engraving-and-printing-bureau",
+        "id": 143,
+        "parent": {
+          "publisher_name": "Treasury Department",
+          "resource_iri": "urn:ref:federal-register-agency:497"
+        },
+        "publisher_name": "Engraving and Printing Bureau",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:143",
+        "roster": "federal-register-agencies",
+        "short_name": "BEP",
+        "slug": "engraving-and-printing-bureau"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr618",
+      "category": "register-only-no-held-counterpart",
+      "content_digest": "sha256:77e37fc05ab9ed26ace10d67343600abc143d9a76b03cda07a7091436b0b0814",
+      "held_roster_counterparts": [],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": true,
+        "cumulative_unbridged_mentions_pct": 76.98,
+        "documents": 47,
+        "first_publication_date": "2024-10-07",
+        "last_publication_date": "2026-11-09",
+        "mentions": 47,
+        "share_of_unbridged_mentions_pct": 1.04
+      },
+      "owner_question": "FR 618 (Civil Rights Cold Case Records Review Board) has no exact counterpart in RefSpec's held eCFR, Federal Hierarchy, or OPM rosters. Confirm keeping FR-only (or flag a manual counterpart / non-emission)?",
+      "proposed_action": "retain_fr_only_or_check_parent",
+      "proposed_basis": null,
+      "rank": 22,
+      "source": {
+        "agency_url": "",
+        "description": "",
+        "fr_url": "https://www.federalregister.gov/agencies/civil-rights-cold-case-records-review-board",
+        "id": 618,
+        "parent": null,
+        "publisher_name": "Civil Rights Cold Case Records Review Board",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:618",
+        "roster": "federal-register-agencies",
+        "short_name": "CRCCRRB",
+        "slug": "civil-rights-cold-case-records-review-board"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr509",
+      "category": "register-only-no-held-counterpart",
+      "content_digest": "sha256:26a0be27e73784cd7744fe15246eb41475914639e6b9aa67b90eb490353412ec",
+      "held_roster_counterparts": [],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": false,
+        "cumulative_unbridged_mentions_pct": 77.96,
+        "documents": 44,
+        "first_publication_date": "1994-02-25",
+        "last_publication_date": "1998-08-07",
+        "mentions": 44,
+        "share_of_unbridged_mentions_pct": 0.98
+      },
+      "owner_question": "FR 509 (United States Enrichment Corporation) has no exact counterpart in RefSpec's held eCFR, Federal Hierarchy, or OPM rosters. Confirm keeping FR-only (or flag a manual counterpart / non-emission)?",
+      "proposed_action": "retain_fr_only_or_check_parent",
+      "proposed_basis": null,
+      "rank": 23,
+      "source": {
+        "agency_url": "",
+        "description": "The United States Enrichment Corporation (USEC) was established under the Energy Policy Act of 1992 (EPACT) as an initial step in transferring to the private sector the uranium enrichment activities formerly held by the U.S. Department of Energy (DOE).\r\n \r\nUSEC began operating as a business on July 1, 1993. It manages the operation of gaseous diffusion plants for uranium enrichment in Paducah, Kentucky, and Portsmouth, Ohio. USEC also demonstrated the commercial application of the Atomic Vapor Laser Isotope Separation (AVLIS) technology for uranium enrichment. USEC\u2019s privatization was completed on July 28, 1998 through an initial public offering of USEC stock. The U.S. government received about three billion dollars for USEC.\r\n\r\nSource: http://www.usec.com/quickfacts.htm",
+        "fr_url": "https://www.federalregister.gov/agencies/united-states-enrichment-corporation",
+        "id": 509,
+        "parent": null,
+        "publisher_name": "United States Enrichment Corporation",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:509",
+        "roster": "federal-register-agencies",
+        "short_name": "USEC",
+        "slug": "united-states-enrichment-corporation"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr452",
+      "category": "defunct-succession-candidate",
+      "content_digest": "sha256:9ff7b3f33bb6cdc34ea0f8b1985ada3427f7d7129831b8b7fafbb2ae7bdeab85",
+      "held_roster_counterparts": [],
+      "later_succession_evidence": {
+        "evidence_kind": "recordNotYetRead",
+        "note": "Remaining functions to the FDIC at its 1995 termination; the roster says only 'terminated'.",
+        "proposed_successors": [
+          {
+            "id": 164,
+            "publisher_name": "Federal Deposit Insurance Corporation",
+            "resource_iri": "urn:ref:federal-register-agency:164"
+          }
+        ]
+      },
+      "measured_live": {
+        "active_since_2024": false,
+        "cumulative_unbridged_mentions_pct": 78.91,
+        "documents": 43,
+        "first_publication_date": "1994-01-19",
+        "last_publication_date": "1995-12-27",
+        "mentions": 43,
+        "share_of_unbridged_mentions_pct": 0.95
+      },
+      "owner_question": "FR 452 (Resolution Trust Corporation) is flagged in RefSpec later_succession_batch (Remaining functions to the FDIC at its 1995 termination; the roster says only 'terminated'.). Confirm deferring to a dated succession event rather than a sameEntityAs bridge?",
+      "proposed_action": "defer_to_succession_batch",
+      "proposed_basis": null,
+      "rank": 24,
+      "source": {
+        "agency_url": null,
+        "description": "The Resolution Trust Corporation was established on August 9, 1989, by the Financial Institutions Reform, Recovery, and Enforcement Act of1989 (12 U.S.C. 1441a). The duties of the Corporation were:\r\r(1) the managing and resolving all cases involving depository institutions, the accounts of which were insured by the former Federal Savings and Loan Insurance Corporation prior to August 9, 1989;\r(2) conducting the operations of the Corporation in such a way as to maximize the return of value from the sale or other disposition of depository institutions or their assets, while minimizing the impact on real estate and financial markets and minimize losses to the Government; and\r(3) maximizing the availability and affordability of residential real property for low- and moderate-income individuals.\r\rThe Resolution Trust Corporation was abolished by act of Dec. 12, 1991 (105 Stat. 1769). Corporation functions terminated pursuant to act of Dec. 17, 1993. (107 Stat. 2369).",
+        "fr_url": "https://www.federalregister.gov/agencies/resolution-trust-corporation",
+        "id": 452,
+        "parent": null,
+        "publisher_name": "Resolution Trust Corporation",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:452",
+        "roster": "federal-register-agencies",
+        "short_name": "RTC",
+        "slug": "resolution-trust-corporation"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr31",
+      "category": "defunct-succession-candidate",
+      "content_digest": "sha256:4b112a11700ef88d389db59f41b8369734b02a249081e3ead4bbbdf53aaccff5",
+      "held_roster_counterparts": [],
+      "later_succession_evidence": {
+        "evidence_kind": "statute",
+        "note": "FARRA secs. 1201, 1211-1212: abolished, all functions to the Secretary of State (earlier of 1999-04-01 or the plan date).",
+        "proposed_successors": [
+          {
+            "id": 476,
+            "publisher_name": "State Department",
+            "resource_iri": "urn:ref:federal-register-agency:476"
+          }
+        ]
+      },
+      "measured_live": {
+        "active_since_2024": false,
+        "cumulative_unbridged_mentions_pct": 79.84,
+        "documents": 42,
+        "first_publication_date": "1994-02-22",
+        "last_publication_date": "1999-04-01",
+        "mentions": 42,
+        "share_of_unbridged_mentions_pct": 0.93
+      },
+      "owner_question": "FR 31 (Arms Control and Disarmament Agency) is flagged in RefSpec later_succession_batch (FARRA secs. 1201, 1211-1212: abolished, all functions to the Secretary of State (earlier of 1999-04-01 or the plan date).). Confirm deferring to a dated succession event rather than a sameEntityAs bridge?",
+      "proposed_action": "defer_to_succession_batch",
+      "proposed_basis": null,
+      "rank": 25,
+      "source": {
+        "agency_url": "",
+        "description": "The mission of the United States Arms Control and Disarmament Agency is to strengthen the national security of the United States by formulating, advocating, negotiating, implementing and verifying effective arms control, nonproliferation, and disarmament policies, strategies, and agreements. In so doing, ACDA ensures that arms control is fully integrated into the development and conduct of United States national security policy.",
+        "fr_url": "https://www.federalregister.gov/agencies/arms-control-and-disarmament-agency",
+        "id": 31,
+        "parent": null,
+        "publisher_name": "Arms Control and Disarmament Agency",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:31",
+        "roster": "federal-register-agencies",
+        "short_name": "ACDA",
+        "slug": "arms-control-and-disarmament-agency"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr400",
+      "category": "register-only-no-held-counterpart",
+      "content_digest": "sha256:998320cdd5e997f0749ad7e479250d18033cc16e75af40ad107192002294e11f",
+      "held_roster_counterparts": [],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": false,
+        "cumulative_unbridged_mentions_pct": 80.78,
+        "documents": 42,
+        "first_publication_date": "1994-02-25",
+        "last_publication_date": "2004-12-16",
+        "mentions": 42,
+        "share_of_unbridged_mentions_pct": 0.93
+      },
+      "owner_question": "FR 400 (Panama Canal Commission) has no exact counterpart in RefSpec's held eCFR, Federal Hierarchy, or OPM rosters. Confirm keeping FR-only (or flag a manual counterpart / non-emission)?",
+      "proposed_action": "retain_fr_only_or_check_parent",
+      "proposed_basis": null,
+      "rank": 26,
+      "source": {
+        "agency_url": "",
+        "description": "The Panama Canal Commission was established by Pub. Law 96-70 (the Panama Canal Act of 1979) and began operations on October 1, 1979.\r\n\r\nThe Commission functioned as an independent agency with the primary purposed of operating and maintaining the Panama Canal and associated facilities in cooperation with the Republic of Panama. On December 31, 1999, the Commission\u2019s duties and sovereignty over the canal were transferred to the Republic of Panama, upon the termination of the Panama Canal Treaty of 1977.",
+        "fr_url": "https://www.federalregister.gov/agencies/panama-canal-commission",
+        "id": 400,
+        "parent": null,
+        "publisher_name": "Panama Canal Commission",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:400",
+        "roster": "federal-register-agencies",
+        "short_name": null,
+        "slug": "panama-canal-commission"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr290",
+      "category": "defunct-succession-candidate",
+      "content_digest": "sha256:b82bcb47d1500fb17b297bf8b09fda026fa538d7a72152a704e4e058dd6e99e9",
+      "held_roster_counterparts": [],
+      "later_succession_evidence": {
+        "evidence_kind": "publisherRoster",
+        "note": "Roster: terminated 1996 (110 Stat. 32); certain functions to the Secretary of Energy (110 Stat. 1321-167) -- a split.",
+        "proposed_successors": [
+          {
+            "id": 136,
+            "publisher_name": "Energy Department",
+            "resource_iri": "urn:ref:federal-register-agency:136"
+          }
+        ]
+      },
+      "measured_live": {
+        "active_since_2024": false,
+        "cumulative_unbridged_mentions_pct": 81.66,
+        "documents": 40,
+        "first_publication_date": "1994-02-15",
+        "last_publication_date": "2002-05-08",
+        "mentions": 40,
+        "share_of_unbridged_mentions_pct": 0.89
+      },
+      "owner_question": "FR 290 (Mines Bureau) is flagged in RefSpec later_succession_batch (Roster: terminated 1996 (110 Stat. 32); certain functions to the Secretary of Energy (110 Stat. 1321-167) -- a split.). Confirm deferring to a dated succession event rather than a sameEntityAs bridge?",
+      "proposed_action": "defer_to_succession_batch",
+      "proposed_basis": null,
+      "rank": 27,
+      "source": {
+        "agency_url": "",
+        "description": "The United States Bureau of Mines (USBM) was established July 1, 1910, in the Department of the Interior by the organic Act of May 16, 1910, as amended (30 U.S.C. 1, 3, 5-7).\r\n\r\nThe USBM was primarily a research and fact-finding agency. Its goal was to help ensure that the Nation had adequate supplies of nonfuel minerals for security and other needs. Research was conducted to provide the technology for the extraction, processing, use, and recycling of the Nation\u2019s nonfuel mineral resources at a reasonable cost without harm to the environment or the workers involved. \r\n\r\nThe Bureau also collected, compiled, analyzed, and published statistical and economic information on all phases of nonfuel mineral resource development, including exploration, production, shipments, demand, stocks, prices, imports and exports.\r\n\r\nThe United States Bureau of Mines was terminated pursuant to act of Jan. 26, 1996 (110 Stat. 32). Certain functions were transferred to the Secretary of Energy by act of April 26, 1996 (110 Stat. 1321-167).\r\n\r\n__________\r\nSource:\r\nU.S. Government Manual (1992/1993 Edition), p. 359\r\nU.S. Government Manual (2009/2010 Edition), p. 616.",
+        "fr_url": "https://www.federalregister.gov/agencies/mines-bureau",
+        "id": 290,
+        "parent": {
+          "publisher_name": "Interior Department",
+          "resource_iri": "urn:ref:federal-register-agency:253"
+        },
+        "publisher_name": "Mines Bureau",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:290",
+        "roster": "federal-register-agencies",
+        "short_name": "USBM",
+        "slug": "mines-bureau"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr592",
+      "category": "register-only-no-held-counterpart",
+      "content_digest": "sha256:5bf36a91d40f7f9bd0c404c790f755c0b9bdfbf422ea43859521199ce900ed69",
+      "held_roster_counterparts": [],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": true,
+        "cumulative_unbridged_mentions_pct": 82.46,
+        "documents": 36,
+        "first_publication_date": "2016-03-22",
+        "last_publication_date": "2026-10-06",
+        "mentions": 36,
+        "share_of_unbridged_mentions_pct": 0.8
+      },
+      "owner_question": "FR 592 (Office of Government Information Services) has no exact counterpart in RefSpec's held eCFR, Federal Hierarchy, or OPM rosters. Confirm keeping FR-only (or flag a manual counterpart / non-emission)?",
+      "proposed_action": "retain_fr_only_or_check_parent",
+      "proposed_basis": null,
+      "rank": 28,
+      "source": {
+        "agency_url": "https://www.archives.gov/ogis",
+        "description": "The Office of Government Information Services (OGIS) is a Freedom of Information Act (FOIA) resource for the public and the government. Its duties include reviewing FOIA policies, procedures and compliance of Federal agencies and recommending changes to FOIA based on information gathered. Duties also include resolving FOIA disputes between Federal agencies and requesters.",
+        "fr_url": "https://www.federalregister.gov/agencies/office-of-government-information-services",
+        "id": 592,
+        "parent": {
+          "publisher_name": "National Archives and Records Administration",
+          "resource_iri": "urn:ref:federal-register-agency:304"
+        },
+        "publisher_name": "Office of Government Information Services",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:592",
+        "roster": "federal-register-agencies",
+        "short_name": "OGIS",
+        "slug": "office-of-government-information-services"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr604",
+      "category": "same-entity-bridge-candidate",
+      "content_digest": "sha256:1225e7b1b8a7e4e62802fcb4131ef008b85eb6f796cf8b3d23fd5452510c5bce",
+      "held_roster_counterparts": [
+        {
+          "code": "AGAO",
+          "found_by": "wordOrderKey",
+          "from_date": "2020-04-01",
+          "publisher_name": "OFFICE OF PARTNERSHIPS AND PUBLIC ENGAGEMENT",
+          "regulations_gov_codes": [],
+          "release_key": "opm-ehri-agency-subelement-2026-08-04",
+          "resource_iri": "urn:ref:opm-ehri-agency-subelement:AGAO",
+          "roster": "opm-ehri-agency-subelement",
+          "through_date": "PRESENT"
+        }
+      ],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": true,
+        "cumulative_unbridged_mentions_pct": 83.19,
+        "documents": 33,
+        "first_publication_date": "2019-10-25",
+        "last_publication_date": "2024-07-10",
+        "mentions": 33,
+        "share_of_unbridged_mentions_pct": 0.73
+      },
+      "owner_question": "Adjudicate FR 604 (Partnerships and Public Engagement Office) against 1 held-roster counterpart(s) (urn:ref:opm-ehri-agency-subelement:AGAO): accept sameEntityAs bridge, hold, or keep FR-only?",
+      "proposed_action": "adjudicate_sameEntityAs_bridge",
+      "proposed_basis": "obviousPublisherNameVariant",
+      "rank": 29,
+      "source": {
+        "agency_url": "",
+        "description": "The Secretary established the Office of Partnerships and Public Engagement (OPPE) to rapidly expand outreach to America\u2019s agricultural community and facilitate greater access to USDA programs. Additionally, OPPE serves as the lead agent for USDA partnership and outreach activities with tasking and reporting authority to direct, coordinate and control all target programs. Programs include all components of the Office of Advocacy and Outreach including Small Farms and Beginning Farmer/Rancher and youth outreach and integration into workforce diversity 2030, Office of Tribal Relations, Military Veterans Agricultural Liaison and supporting Veterans Program Initiative, The Center for Faith-Based and Neighborhood Partnerships, and any other such programs the Secretary deems essential to serve the interest of USDA.",
+        "fr_url": "https://www.federalregister.gov/agencies/partnerships-and-public-engagement-office",
+        "id": 604,
+        "parent": {
+          "publisher_name": "Agriculture Department",
+          "resource_iri": "urn:ref:federal-register-agency:12"
+        },
+        "publisher_name": "Partnerships and Public Engagement Office",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:604",
+        "roster": "federal-register-agencies",
+        "short_name": "OPPE",
+        "slug": "partnerships-and-public-engagement-office"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    },
+    {
+      "candidate_id": "batch2:fr581",
+      "category": "same-entity-bridge-candidate",
+      "content_digest": "sha256:3608b5db0cbc498f45bd3ff69e4c0a5421f7633f54441991b244f83b10fbff47",
+      "held_roster_counterparts": [
+        {
+          "found_by": "exactSlug",
+          "parent": {
+            "publisher_name": "Department of Agriculture",
+            "resource_iri": "urn:ref:ecfr-agency:agriculture-department"
+          },
+          "publisher_name": "Office of Advocacy and Outreach",
+          "regulations_gov_codes": [],
+          "release_key": "ecfr-agencies-roster-2026-08-15",
+          "resource_iri": "urn:ref:ecfr-agency:advocacy-and-outreach-office",
+          "roster": "ecfr-agencies",
+          "short_name": "OAO",
+          "slug": "advocacy-and-outreach-office"
+        }
+      ],
+      "later_succession_evidence": null,
+      "measured_live": {
+        "active_since_2024": false,
+        "cumulative_unbridged_mentions_pct": 83.9,
+        "documents": 32,
+        "first_publication_date": "2011-10-26",
+        "last_publication_date": "2018-03-26",
+        "mentions": 32,
+        "share_of_unbridged_mentions_pct": 0.71
+      },
+      "owner_question": "Adjudicate FR 581 (Advocacy and Outreach Office) against 1 held-roster counterpart(s) (urn:ref:ecfr-agency:advocacy-and-outreach-office): accept sameEntityAs bridge, hold, or keep FR-only?",
+      "proposed_action": "adjudicate_sameEntityAs_bridge",
+      "proposed_basis": "obviousPublisherNameVariant",
+      "rank": 30,
+      "source": {
+        "agency_url": "http://www.outreach.usda.gov/index.htm",
+        "description": "USDA\u2019s Office of Advocacy and Outreach was established by the 2008 Farm Bill to improve access to USDA programs and to improve the viability and profitability of small farms and ranches, beginning farmers and ranchers, and socially disadvantaged farmers or ranchers. As such, OAO is split into five key program areas: Socially disadvantaged farmers, small and beginning farmers and ranchers, Higher education institutions program, farm worker coordination, and community engagement.",
+        "fr_url": "https://www.federalregister.gov/agencies/advocacy-and-outreach-office",
+        "id": 581,
+        "parent": {
+          "publisher_name": "Agriculture Department",
+          "resource_iri": "urn:ref:federal-register-agency:12"
+        },
+        "publisher_name": "Advocacy and Outreach Office",
+        "release_key": "federal-register-agencies-roster-2026-08-15",
+        "resource_iri": "urn:ref:federal-register-agency:581",
+        "roster": "federal-register-agencies",
+        "short_name": "OAO",
+        "slug": "advocacy-and-outreach-office"
+      },
+      "status": "candidate-pending-owner-adjudication"
+    }
+  ],
+  "coverage_summary": {
+    "batch_2_candidate_count": 30,
+    "batch_2_top_20_mentions": 3377,
+    "batch_2_top_20_pct_of_unbridged": 74.88,
+    "batch_2_top_25_mentions": 3601,
+    "batch_2_top_25_pct_of_unbridged": 79.84,
+    "batch_2_top_30_mentions": 3784,
+    "batch_2_top_30_pct_of_unbridged": 83.9,
+    "category_counts": {
+      "defunct-succession-candidate": 7,
+      "register-only-no-held-counterpart": 12,
+      "same-entity-bridge-candidate": 11
+    },
+    "counterparts_with_regulations_gov_codes": 0,
+    "covered_by_view_14_mentions": 1558260,
+    "covered_by_view_14_pct_of_id_bearing": 99.711,
+    "distinct_fr_ids_in_live_data": 449,
+    "id_bearing_mentions": 1562770,
+    "total_agency_mentions": 1593417,
+    "unbridged_fr_ids_total": 131,
+    "unbridged_mentions_total": 4510,
+    "unbridged_pct_of_all_mentions": 0.283,
+    "unbridged_pct_of_id_bearing": 0.289
+  },
+  "out_of_scope_sources": [
+    {
+      "disposition": "outside-agency-id-scope",
+      "has_agency_id_column": false,
+      "identifier_columns": [
+        "uei",
+        "entity_eft_indicator",
+        "cage_code"
+      ],
+      "live_rows": 796614,
+      "reason": "SAM.gov entity registrations identify federal award/contract recipients (vendors, grantees, organizations) by UEI and CAGE code, not federal rulemaking agencies. Never map recipient UEIs onto the agency registry.",
+      "table": "sam_entities"
+    },
+    {
+      "disposition": "outside-agency-id-scope",
+      "has_agency_id_column": false,
+      "identifier_columns": [
+        "recipient_id",
+        "uei",
+        "duns"
+      ],
+      "live_rows": 247439,
+      "reason": "USAspending recipient records identify spending recipients by recipient_id/UEI/DUNS, not awarding federal agencies. Awarding-agency identifiers (CGAC / TOPT_AGENCY / FH) belong to separate award/account tables if later scoped.",
+      "table": "usaspending_recipients"
+    }
+  ],
+  "schema_version": "spicy-regs-fr-agency-batch-2-candidates/1",
+  "separate_gap_idless_mentions": {
+    "idless_mentions_total": 30647,
+    "pct_of_all_mentions": 1.923,
+    "ratio_to_unbridged_id_mentions": 6.8,
+    "reason": "Federal Register agency entries without a numeric id cannot be bridged via sameEntityAs over FR agency IDs; most are generic department-level headings (e.g. 'Office of the Secretary', 24,015 mentions) or malformed pre-2001 OCR/heading fragments ('Rule', 'Proposed Rule', 'Development') that require document/parent-context disambiguation rather than ID-keyed identity bridges.",
+    "status": "explicit-separate-gap",
+    "top_raw_names": [
+      {
+        "first_publication_date": "1994-01-03",
+        "last_publication_date": "2026-11-25",
+        "mentions": 24015,
+        "name": null,
+        "raw_name": "Office of the Secretary"
+      },
+      {
+        "first_publication_date": "1994-01-27",
+        "last_publication_date": "2026-09-11",
+        "mentions": 407,
+        "name": null,
+        "raw_name": "Office of Inspector General"
+      },
+      {
+        "first_publication_date": "1994-01-04",
+        "last_publication_date": "2008-08-13",
+        "mentions": 223,
+        "name": null,
+        "raw_name": "Office Of Fossil Energy"
+      },
+      {
+        "first_publication_date": "1994-01-07",
+        "last_publication_date": "1999-11-08",
+        "mentions": 191,
+        "name": null,
+        "raw_name": "Office of the Assistant Secretary for Community Planning and"
+      },
+      {
+        "first_publication_date": "1994-01-07",
+        "last_publication_date": "1999-11-08",
+        "mentions": 189,
+        "name": null,
+        "raw_name": "Development"
+      },
+      {
+        "first_publication_date": "1994-01-31",
+        "last_publication_date": "2000-01-12",
+        "mentions": 172,
+        "name": null,
+        "raw_name": "Rule"
+      },
+      {
+        "first_publication_date": "1994-01-11",
+        "last_publication_date": "2000-03-09",
+        "mentions": 172,
+        "name": null,
+        "raw_name": "Commissioner"
+      },
+      {
+        "first_publication_date": "1994-01-27",
+        "last_publication_date": "2000-01-05",
+        "mentions": 163,
+        "name": null,
+        "raw_name": "Proposed Rule"
+      },
+      {
+        "first_publication_date": "1994-01-07",
+        "last_publication_date": "2000-12-26",
+        "mentions": 161,
+        "name": null,
+        "raw_name": "Office of the Assistant Secretary for Public and Indian Housing"
+      },
+      {
+        "first_publication_date": "1994-02-25",
+        "last_publication_date": "2004-09-03",
+        "mentions": 134,
+        "name": null,
+        "raw_name": "Employment Standards Administration, Wage and Hour Division"
+      },
+      {
+        "first_publication_date": "1994-03-28",
+        "last_publication_date": "1999-12-27",
+        "mentions": 110,
+        "name": null,
+        "raw_name": "Final Rule"
+      },
+      {
+        "first_publication_date": "1994-01-03",
+        "last_publication_date": "2026-09-25",
+        "mentions": 110,
+        "name": null,
+        "raw_name": "Office of the Attorney General"
+      },
+      {
+        "first_publication_date": "2000-03-07",
+        "last_publication_date": "2017-05-22",
+        "mentions": 107,
+        "name": null,
+        "raw_name": "Centers for Disease Control and Prevention (CDC)"
+      },
+      {
+        "first_publication_date": "1994-01-07",
+        "last_publication_date": "2005-09-09",
+        "mentions": 93,
+        "name": null,
+        "raw_name": "Employment Standards Administration Wage and Hour Division"
+      },
+      {
+        "first_publication_date": "2003-04-01",
+        "last_publication_date": "2005-11-01",
+        "mentions": 75,
+        "name": null,
+        "raw_name": "Bureau of Citizenship and Immigration Services"
+      }
+    ]
+  },
+  "status": "candidate-pending-owner-adjudication"
+}

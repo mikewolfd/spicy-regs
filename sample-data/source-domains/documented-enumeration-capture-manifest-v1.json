@@ -61,6 +61,18 @@
       "states": "the LDA filing type constants (value and name)"
     },
     {
+      "byte_length": 13891,
+      "bytes_digest": "sha256:044ed01ef94d79b0f71751c0cbc543bd61256b7668603e8a602d345af7a1d9f0",
+      "key": "lda-government-entities",
+      "media_type": "application/json",
+      "observed_at": "2026-11-27T14:02:59Z",
+      "path": "lda-government-entities-2026-11-27.json",
+      "publisher": "senate-lda",
+      "publisher_revision": "LDA API interface 1.0.0",
+      "source_url": "https://lda.gov/api/v1/constants/filing/governmententities/",
+      "states": "the LDA covered government entity constants (integer id and name)"
+    },
+    {
       "byte_length": 29343,
       "bytes_digest": "sha256:dda49be2e360d39bb1b7dcbc53239e627109a26fbaefe172688aca84abc4ff66",
       "key": "fec-committee-master-file",

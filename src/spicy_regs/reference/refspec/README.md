@@ -11,97 +11,78 @@ re-vendored with new byte pins only after its logical digest is shown equal to
 the one recorded here. A changed logical digest is a new release, which needs
 its own review.
 
-## REF-038 agency projection
+## Agency registry view (REF-072 / REF-075 / REF-077, `agency-registry-view/`)
 
-Vendored from RefSpec (`spicy-stack/RefSpec`, directory `output/parquet-view/`, which is
-gitignored).
+The release `agency-registry-2026-09-26` unifies REF-038 and four owner-decided batches into one
+digest-pinned directory (`schemaVersion` 1.4, `docs/decisions.md#ref-072`, `#ref-075`, `#ref-077`):
 
-- Built 2026-08-21 by RefSpec's parquet-view (implementation 3.2, pyarrow 23.0.0) from the
-  REF-038 inputs.
-- Build identity (`view-manifest.json` `input`): `distributionId`
-  `urn:ref:atlas:distribution:3.1-full-development:3310ba015fc7f8ff19ce0ac45e236f8ff7d05e5c2b1486984515cb9214a98b95`,
-  `manifestSha256` `sha256:f6f0f6fc2dcf901228ed8ba7cfc69d35e9189364b89ce95198dac4589cd853ae`.
-- REF-038 landed at RefSpec 6535f570 (2026-08-16). The RefSpec owner states that every
-  later commit yields the same rows. At dev21 (41e2bf9d) the two tables rebuild as
-  `9b0296b6…` and `7aa01a44…`, with identical rows and schemas: RefSpec's lock moved
-  pyarrow from 23.0.0 to 25.0.1 (workspace status note of 2026-09-26). Only the writer
-  moved, so this copy stays.
-- RefSpec 0.1.0.dev19 (739a3b3c) publishes the same reverse rule as
-  `reverse_agency_projection()`.
+- REF-038 agency projection (derived inside View 1.4, row-for-row and schema-for-schema equal to
+  the retired standalone Oct 3 / Aug 21 copy): 321 resolved Regulations.gov codes and 10 documented
+  abstentions (`agencyProjectionDigest`
+  `sha256:0dd32dd5320a0d1553f10818a7a31e95e2c3b9b6567df224dd359a8038e14db4`);
+- batch 1 (2026-09-26, 26 decisions): 13 identity bridges from Federal Register agencies to eCFR or
+  Federal Hierarchy organizations; 9 dated successions (5 renames and 4 splits, 14 event rows);
+  4 recorded non-emissions;
+- succession batch (2026-10-03, 1 decision): Food and Nutrition Service (FR 200) renamed Food and
+  Nutrition Administration (FR 625), effective 2026-06-24;
+- alias batch 1 (2026-11-08, REF-075, 70 decisions): 63 adopted aliases + 7 rejected aliases
+  (`aliasRejectedByOwner` non-emissions);
+- alias batch 2 (2026-11-25, REF-077, 94 decisions): 94 adopted federal sub-unit and statutory name
+  aliases, bringing total adopted aliases to 157 across 191 decided items;
+- derived tables rebuilt and checked by RefSpec's verifier: `current-successors` (15 rows),
+  `organizations` (all 472 pinned Federal Register agencies), and REF-038's `projection` (321 rows)
+  and `projection-unresolved` (10 rows).
 
-Decision: REF-038 — a reviewed one-way projection from Regulations.gov agency
-codes onto organizations in the Federal Register, eCFR and Federal Hierarchy
-rosters.
-
-| File | Bytes | sha256 |
-| --- | ---: | --- |
-| `agency-projection.parquet` | 66,304 | `c9ec0fde1bf5fda17402983880bc091e9caa417845178f232214606e264c049f` |
-| `agency-projection-unresolved.parquet` | 6,631 | `e32e814c3c7489d82df6dbdbc00fd6e16694628c08e7300a9473bcaa0659b065` |
-| `view-manifest.json` | 6,442 | `991acd29368b17fb66eea770f36c71385c5faee1a368008a4240281e4c8536d8` |
-
-Provenance, from `view-manifest.json`:
-
-- `agencyProjection.digest`: `sha256:0dd32dd5320a0d1553f10818a7a31e95e2c3b9b6567df224dd359a8038e14db4`
-- `agencyProjection.decision`: `REF-038` (status `emitted`)
-- `canonicalPayloadDigest`: `sha256:52e5b82ca208f1eae79a1190faaa5e981e14c504e5f9358e1644293e063389a5`
-
-## Agency registry view (REF-072, `agency-registry-view/`)
-
-The release `agency-registry-2026-09-26` records two batches the owner decided (decision record
-`docs/decisions.md#ref-072`):
-
-- batch 1, 26 decisions: 13 identity bridges from Federal Register agencies to eCFR or Federal
-  Hierarchy organizations; 9 dated successions (5 renames and 4 splits, one event row per result);
-  4 recorded non-emissions, which add nothing;
-- the succession batch (2026-10-03): the Food and Nutrition Service (FR 200) renamed the Food and
-  Nutrition Administration (FR 625).
-
-That is 13 bridges, 10 successions in 15 event rows, and 4 non-emissions. Schema 1.2 adds the
-current-successors table: each original's results that no later event replaced, sealed by RefSpec,
-15 rows, so spicy-regs reads it instead of walking the events itself.
-
-Vendored from RefSpec `f1c23b91` (branch `chaos/2026-10-03-fns-fna-succession`, view `schemaVersion`
-1.2), as built by `uv run --frozen python tools/build_agency_registry_view.py --output <dir>` on
-RefSpec's own frozen lock (pyarrow 25.0.1, as the manifest's `construction` names). Its manifest is
-the pin that tool names. To check a copy, run that tool with `--verify <dir>
---expected-manifest-sha256 sha256:<pin>`: it checks members, schemas, counts and bytes against the
-manifest, recomputes the logical digest from the rows, and compares the view with the release it
-rebuilds from RefSpec's pinned rosters.
-
-It replaced the `cd78e476` 1.1 copy (manifest `c7dc9310…`, events `72f35636…`, 14 rows, logical
-digest `777c6100…`); the bridges and non-emissions kept their bytes. Schema 1.1 had added
-`original_parents` to the events table, replacing the dev21 (`41e2bf9d`) 1.0 copy (manifest
-`77b357cc…`).
+Vendored from RefSpec `main` (REF-077, `a3e7f5a6` / PR #2 `96c62e00`, `schemaVersion` 1.4), built
+and verified with `uv run --frozen python tools/build_agency_registry_view.py --verify <dir>
+--expected-manifest-sha256 sha256:c89935debe320e35aaf748ea0519457c1618b49e13d79ddb33cbc30051b5a118`
+on RefSpec's frozen lock (pyarrow 25.0.1). It replaced both the Oct 3 `f1c23b91` schema 1.2 view
+(manifest `0b39812d…`) and the three separate legacy standalone REF-038 files
+(`agency-projection.parquet` `c9ec0fde…`, `agency-projection-unresolved.parquet` `e32e814c…`, and
+top-level `view-manifest.json` `991acd29…`). The two REF-038 tables inside View 1.4 have identical
+rows and schemas to the retired standalone files (bytes moved only from pyarrow 23.0.0 to 25.0.1).
 
 | File | Bytes | Rows | sha256 |
 | --- | ---: | ---: | --- |
-| `view-manifest.json` (the pin RefSpec's build tool names) | 2,630 | | `0b39812de31930f267dea2d7d51039d71b0a1852606387d5aba64aa75d25ec17` |
+| `view-manifest.json` (the single pin RefSpec's build tool names) | 4,578 | | `c89935debe320e35aaf748ea0519457c1618b49e13d79ddb33cbc30051b5a118` |
 | `tables/agency-registry-bridges.parquet` | 10,541 | 13 | `2e33905b475c6a1adf27960ecf170a1b4c82df2baf20ac13df9307bb687dd898` |
 | `tables/agency-registry-events.parquet` | 22,251 | 15 | `fce2b80a184fd0de98e2d15ba2d3a68d47f84eb9b9ba1c2678bc8787af3e0c07` |
-| `tables/agency-registry-non-emissions.parquet` | 9,500 | 4 | `da863e467f00f16a6b7a9ff1a3e1182fb8e7488f8b7d33f0d7f0c403a0663e24` |
+| `tables/agency-registry-non-emissions.parquet` | 10,995 | 11 | `7819b99bd132cd48a08f4c918e8faf20ae78cac8c0ec9ad41a6cb6327b8f2f3e` |
 | `tables/agency-registry-current-successors.parquet` | 1,126 | 15 | `857abd0ca7c42a50bab7225d1036df2e498d91e1840a2007440fd10acdf97160` |
+| `tables/agency-registry-aliases.parquet` | 50,011 | 157 | `74bba3bdccaf3e2b6111b8320d695f74c777d3a405de73e04a0475c28df834a9` |
+| `tables/agency-registry-organizations.parquet` | 21,892 | 472 | `426f3082277f07f8b75d3e154d3065d6f478f09de789393ecdcd647116d76177` |
+| `tables/agency-projection.parquet` | 66,304 | 321 | `9b0296b69a8d009199607929841fe8dc9a20f528319988e8d70eaaeab88c5303` |
+| `tables/agency-projection-unresolved.parquet` | 6,631 | 10 | `7aa01a441ba254575aac427d72f0c593ace5a1f3d177b6bc8f927c1967a43ca6` |
 
-Provenance, from `view-manifest.json`:
+Provenance, from `agency-registry-view/view-manifest.json`:
 
+- `viewId`: `urn:ref:agency-registry-view:b23e3bb6b673608095358cb947b70a97c67a25c43642319fa892046ebb052ca3`
 - `digest` (logical content, the one compared across lock changes):
-  `sha256:05a360a409418313a3df9c24b644e9e4f24e1a69eea9942d5e7b143473c512e5`
-- `release.candidatesDigests` (the candidates the owner decided on, one digest per batch's
-  candidates file; until schema 1.2 a single `candidatesDigest`):
+  `sha256:d66455a02bb32730e509075c0c9d9556bd574b226f453d4a1beeeecce7235ab8`
+- `release.agencyProjectionDigest`: `sha256:0dd32dd5320a0d1553f10818a7a31e95e2c3b9b6567df224dd359a8038e14db4`
+- `release.frRosterReleaseDigest`: `sha256:0ab874f045462fa665b9a2ef48aa34f373570dc710bcc8fb1b63db0ad8c7b5e6`
+- `release.nameKeyVersion`: `"1"`
+- `release.candidatesDigests`:
   `plans/agency-registry-batch-1-candidates.json` `sha256:7fe88a9167a9363f5c2bfdcd3911953b7323abe1564d40586991c9612f95f4bc`,
-  `plans/agency-registry-succession-batch-candidates.json` `sha256:4d29ffd7c936159dbff13d9b228845e50d134a567a8ff6b60a3d9e2f7f7921cc`
-- `release.sourceReleaseDigest`: `sha256:dc639b30526052a4cf1fa9162a201bce6476d82ec67f581e2053091a25aa367b`
-- `canonicalPayloadDigest`: `sha256:410f55073ee99652644099a4e6cbd56095b8d8998a60a2b45d00d39c37f3cdba`
+  `plans/agency-registry-succession-batch-candidates.json` `sha256:4d29ffd7c936159dbff13d9b228845e50d134a567a8ff6b60a3d9e2f7f7921cc`,
+  `plans/agency-registry-alias-batch-candidates.json` `sha256:f27a8b66b414ed8c75153340997623b589c5fe1820d75e60ec73953d361c0b82`,
+  `plans/agency-registry-alias-batch-2-candidates.json` `sha256:0cb4bfbf239d4b2f8bb555f944484b4c47ad18d9df1dd6a1d505ff442953766d`
+- `release.sourceReleaseDigest`: `sha256:2ae595b91e4c722da61b5fd90b435d0e0b534a4b9321723be7817c8f52007801`
+- `canonicalPayloadDigest`: `sha256:25613f36e96b15212201fb54150f326377422fa37b9216779bc1d6a90f305abd`
 
 `lookup_agency` replies carry this identity in `registry_evidence.publication`: `view_id`,
-`manifest_sha256`, `release` (the manifest's object as written, so `candidatesDigests`, a map from
-candidates file to digest, where replies before schema 1.2 had `candidatesDigest`), `digest`, and
-`table_sha256` (one entry per table, `current-successors` included).
+`schema_version`, `manifest_sha256`, `release`, `digest`, `counts`, and `table_sha256` (all eight
+tables). Under `namespace="name"`, free-text strings are keyed with RefSpec's published `name_key`
+(`version "1"`) and matched strictly against the 157 adopted aliases and 472 pinned FR
+organizations; owner-rejected aliases return `unmatched` with their `aliasRejectedByOwner`
+non-emission row.
 
 `agency_code_for_fr_agencies` reads the bridges, the current successors and the events'
 stated parents, but not the events' effective dates: every document takes today's lineage,
 whatever its own date. A current successor's code wins over the original's own (the owner's rule,
 round 5): FR 200, which REF-038 codes FNS, is FNA. It never reads the non-emissions: the
-Export-Import Bank, Udall Foundation, IBWC and CISA items leave REF-038's codes as they are.
+Export-Import Bank, Udall Foundation, IBWC, CISA, and rejected-alias items leave REF-038's codes as
+they are.
 
 ## U.S. Code section oracle and Table III act sections (`usc-section-oracle/`, `usc-act-index/`)
 

@@ -49,10 +49,20 @@ IBWC_ID = 255  # International Boundary and Water Commission: its bridge was wit
 #: RefSpec dev19's published ambiguous pairs: both codes of each pair project onto one org.
 DEV19_AMBIGUOUS_PAIRS = (("FR", "OFR"), ("FPPO", "OFPP"), ("ACHP", "HPAC"), ("CDFI", "CDFIF"), ("CNCS", "CORP"))
 REGISTRY_TABLES = {
-    "bridges": agencies.AGENCY_REGISTRY_BRIDGES_SHA256,
-    "events": agencies.AGENCY_REGISTRY_EVENTS_SHA256,
-    "non-emissions": agencies.AGENCY_REGISTRY_NON_EMISSIONS_SHA256,
-    "current-successors": agencies.AGENCY_REGISTRY_CURRENT_SUCCESSORS_SHA256,
+    "bridges": ("tables/agency-registry-bridges.parquet", agencies.AGENCY_REGISTRY_BRIDGES_SHA256),
+    "events": ("tables/agency-registry-events.parquet", agencies.AGENCY_REGISTRY_EVENTS_SHA256),
+    "non-emissions": ("tables/agency-registry-non-emissions.parquet", agencies.AGENCY_REGISTRY_NON_EMISSIONS_SHA256),
+    "current-successors": (
+        "tables/agency-registry-current-successors.parquet",
+        agencies.AGENCY_REGISTRY_CURRENT_SUCCESSORS_SHA256,
+    ),
+    "aliases": ("tables/agency-registry-aliases.parquet", agencies.AGENCY_REGISTRY_ALIASES_SHA256),
+    "organizations": ("tables/agency-registry-organizations.parquet", agencies.AGENCY_REGISTRY_ORGANIZATIONS_SHA256),
+    "projection": ("tables/agency-projection.parquet", agencies.AGENCY_PROJECTION_SHA256),
+    "projection-unresolved": (
+        "tables/agency-projection-unresolved.parquet",
+        agencies.AGENCY_PROJECTION_UNRESOLVED_SHA256,
+    ),
 }
 FR = "urn:ref:federal-register-agency:"
 
@@ -106,11 +116,13 @@ def test_several_codes_projecting_onto_one_org_resolve_to_none():
 
 
 def test_tampered_projection_bytes_are_refused(tmp_path, monkeypatch):
-    tampered = tmp_path / "agency-projection.parquet"
-    data = bytearray(agencies.AGENCY_PROJECTION_PATH.read_bytes())
+    view = tmp_path / "agency-registry-view"
+    shutil.copytree(Path(str(agencies.AGENCY_REGISTRY_VIEW_PATH)), view)
+    tampered = view / "tables/agency-projection.parquet"
+    data = bytearray(tampered.read_bytes())
     data[len(data) // 2] ^= 1
     tampered.write_bytes(data)
-    monkeypatch.setattr(agencies, "AGENCY_PROJECTION_PATH", tampered)
+    monkeypatch.setattr(agencies, "AGENCY_REGISTRY_VIEW_PATH", view)
     with pytest.raises(ValueError, match="is not RefSpec's file"):
         agencies.projection_rows()
 
@@ -119,7 +131,8 @@ def test_tampered_projection_bytes_are_refused(tmp_path, monkeypatch):
 def test_tampered_registry_bytes_are_refused(tmp_path, monkeypatch, table):
     view = tmp_path / "agency-registry-view"
     shutil.copytree(Path(str(agencies.AGENCY_REGISTRY_VIEW_PATH)), view)
-    tampered = view / f"tables/agency-registry-{table}.parquet"
+    relpath, _ = REGISTRY_TABLES[table]
+    tampered = view / relpath
     data = bytearray(tampered.read_bytes())
     data[len(data) // 2] ^= 1
     tampered.write_bytes(data)
@@ -424,6 +437,13 @@ def test_a_bridge_stating_another_parent_is_refused():
 def test_non_emissions_add_nothing():
     items = {row["item_id"] for row in agencies.registry_rows("non-emissions")}
     assert items == {
+        "alias:education",
+        "alias:energy",
+        "alias:federal-bureau-of-investigations",
+        "alias:federal-energy-regulatory-commision",
+        "alias:labor",
+        "alias:national-institute-of-health",
+        "alias:veterans-benefit-administration",
         "no-fr-bridge:regs:CISA",
         "same:fr151:ecfr:export-import-bank",
         "same:fr255:ecfr:international-boundary-and-water-commission-united-states-and-mexico",
@@ -434,23 +454,50 @@ def test_non_emissions_add_nothing():
     assert agencies.fr_agency_code(IBWC_ID) is None
 
 
-def test_vendored_companions_match_the_readmes_pinned_digests():
+def test_legacy_standalone_ref038_files_are_retired():
     base = files("spicy_regs").joinpath("reference/refspec")
-    unresolved = base.joinpath("agency-projection-unresolved.parquet").read_bytes()
-    manifest = base.joinpath("view-manifest.json").read_bytes()
-    assert hashlib.sha256(unresolved).hexdigest() == agencies.AGENCY_PROJECTION_UNRESOLVED_SHA256
-    assert hashlib.sha256(manifest).hexdigest() == agencies.VIEW_MANIFEST_SHA256
+    for retired in ("agency-projection.parquet", "agency-projection-unresolved.parquet", "view-manifest.json"):
+        assert not base.joinpath(retired).is_file(), retired
 
 
 def test_registry_manifest_is_the_pin_and_names_each_vendored_table():
     data = agencies.AGENCY_REGISTRY_VIEW_PATH.joinpath("view-manifest.json").read_bytes()
     assert hashlib.sha256(data).hexdigest() == agencies.AGENCY_REGISTRY_MANIFEST_SHA256
-    members = {member["path"]: member for member in json.loads(data)["members"]}
-    assert set(members) == {f"tables/agency-registry-{table}.parquet" for table in REGISTRY_TABLES}
-    for table, sha256 in REGISTRY_TABLES.items():
-        member = members[f"tables/agency-registry-{table}.parquet"]
+    manifest = json.loads(data)
+    assert manifest["schemaVersion"] == "1.4"
+    assert manifest["coverage"] == {
+        "aliasCount": 157,
+        "bridgeCount": 13,
+        "decidedItemCount": 191,
+        "eventCount": 10,
+        "eventResultRowCount": 15,
+        "nonEmissionCount": 11,
+    }
+    members = {member["path"]: member for member in manifest["members"]}
+    assert set(members) == {relpath for relpath, _ in REGISTRY_TABLES.values()}
+    for table, (relpath, sha256) in REGISTRY_TABLES.items():
+        member = members[relpath]
         assert member["sha256"] == f"sha256:{sha256}"
         assert member["rowCount"] == len(agencies.registry_rows(table))
+
+
+def test_view_14_aliases_and_organizations_load_and_key_deterministically():
+    assert agencies.NAME_KEY_VERSION == "1"
+    assert agencies.name_key("U. S. Fish & Wildlife Service") == "fish and wildlife service"
+    assert agencies.name_key("The Department of Defense (DoD)") == "department of defense"
+    aliases = agencies.alias_rows()
+    orgs = agencies.organization_rows()
+    assert len(aliases) == 157
+    assert len(orgs) == 472
+    assert len({row["name_key"] for row in aliases}) == 157
+    assert len({agencies.name_key(row["name"]) for row in orgs}) == 472
+    blm = agencies.lookup_alias("Bureau of Land Management")
+    assert blm is not None and blm["fr_resource"] == f"{FR}275" and blm["fr_relation"] == "same"
+    marine = agencies.lookup_alias("2nd Marine Division")
+    assert marine is not None and marine["fr_resource"] == f"{FR}378" and marine["fr_relation"] == "partOf"
+    epa = agencies.organization_by_fr_id(EPA_ID)
+    assert epa is not None and epa["name"] == "Environmental Protection Agency"
+    assert agencies.organization_by_name("U.S. Environmental Protection Agency") == epa
 
 
 def test_refspec_dev19_ambiguity_agrees_with_the_reverse_lookup():
