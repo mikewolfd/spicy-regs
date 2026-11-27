@@ -86,12 +86,13 @@ NATIVE_TARGET_SNAPSHOT = pa.struct([(name, S) for name in (
     "status", "sha256", "family", "artifact_digest", "generation_id", "receipt_sha256",
 )])
 NATIVE_CANDIDATE_FIELDS = [
-    (name, INT if name in {"candidate_ordinal", "span_start", "span_end", "match_count"}
+    (name, INT if name in {"candidate_ordinal", "span_start", "span_end", "rendition_span_start", "rendition_span_end", "match_count"}
      else pa.bool_() if name == "target_resolved"
      else NATIVE_TARGET_KEYS if name == "candidate_keys"
      else NATIVE_TARGET_SNAPSHOT if name == "target_snapshot" else S)
     for name in (
         "candidate_ordinal", "cite_kind", "normalized_key", "matched_text", "span_start", "span_end",
+        "rendition_span_start", "rendition_span_end",
         "target_kind", "target_key", "target_grain", "candidate_keys", "derivation_rule", "derivation_version",
         "document_key", "document_kind", "expected_cardinality", "match_count", "occurrence_key", "reason",
         "resolution_rule", "source_record_key", "source_status", "target_resolved", "target_snapshot",
@@ -99,7 +100,7 @@ NATIVE_CANDIDATE_FIELDS = [
     )
 ]
 # The registry uses this reviewed type name; Arrow carries the complete nested schema.
-NATIVE_CANDIDATE_TYPE = "list<native-legal-target/3>"
+NATIVE_CANDIDATE_TYPE = "list<native-legal-target/4>"
 _struct_list(NATIVE_CANDIDATE_TYPE, NATIVE_CANDIDATE_FIELDS)
 
 
@@ -387,10 +388,20 @@ def _earlier_legislative_schema(dataset: str) -> pa.Schema | None:
 
 
 @cache
-def _earlier_native_schema(policy_version: str = "legislative-documents/1") -> pa.Schema:
+def _earlier_native_schema(dataset: str, version: str) -> pa.Schema:
     from spicy_regs.policy_migrations import earlier_policy
 
-    return earlier_policy("native_legal_references", policy_version).subject_schema
+    return earlier_policy(dataset, version).subject_schema
+
+
+def _project_historical_value(value: Any, dtype: pa.DataType) -> Any:
+    if value is None:
+        return None
+    if pa.types.is_list(dtype):
+        return [_project_historical_value(item, dtype.value_type) for item in value]
+    if pa.types.is_struct(dtype):
+        return {f.name: _project_historical_value(value.get(f.name), f.type) for f in dtype}
+    return value
 
 
 def recorded_subject(dataset: str, raw: Mapping[str, Any], subject: Mapping[str, Any], *,
@@ -433,34 +444,38 @@ def recorded_subject(dataset: str, raw: Mapping[str, Any], subject: Mapping[str,
     if mapped is not None and dataset == "native_legal_references":
         # Earlier native observations (/1 omitted recorded main fields and nested
         # diagnostics; /2 predated release-point usc_title/usc_section_key candidate
-        # keys). Verify against that exact reviewed shape, while preserving the
-        # original receipt and selected public values unchanged.
+        # keys and /004 span columns; /3 added release-point candidate keys before
+        # /004 top-level/rendition spans). Verify against that exact reviewed shape,
+        # while preserving the original receipt and selected public values unchanged.
         earlier: pa.Schema | None = None
-        if policy_version in {"legislative-documents/1", "legislative-documents/2"}:
-            earlier = _earlier_native_schema(policy_version)
+        if policy_version in {"legislative-documents/1", "legislative-documents/2", "legislative-documents/3"}:
+            earlier = _earlier_native_schema(dataset, policy_version)
         elif policy_version is None:
-            v1 = _earlier_native_schema("legislative-documents/1")
-            if set(subject) - {"raw_source_row"} == set(v1.names):
+            subject_cols = set(subject) - {"raw_source_row"}
+            v1 = _earlier_native_schema(dataset, "legislative-documents/1")
+            if subject_cols == set(v1.names):
                 earlier = v1
             else:
-                v2 = _earlier_native_schema("legislative-documents/2")
-                candidates = subject.get("target_candidates") or ()
-                sample_keys = [
-                    k for cand in candidates if isinstance(cand, Mapping)
-                    for k in (cand.get("candidate_keys") or ()) if isinstance(k, Mapping)
-                ]
-                if sample_keys and not ({"usc_title", "usc_section_key"} & set(sample_keys[0])):
-                    earlier = v2
+                v2 = _earlier_native_schema(dataset, "legislative-documents/2")
+                if subject_cols == set(v2.names):
+                    candidates = subject.get("target_candidates") or ()
+                    sample_keys = [
+                        k for cand in candidates if isinstance(cand, Mapping)
+                        for k in (cand.get("candidate_keys") or ()) if isinstance(k, Mapping)
+                    ]
+                    if sample_keys and ({"usc_title", "usc_section_key"} & set(sample_keys[0])):
+                        earlier = _earlier_native_schema(dataset, "legislative-documents/3")
+                    else:
+                        earlier = v2
         if earlier is not None:
-            def historical(value, dtype):
-                if value is None:
-                    return None
-                if pa.types.is_list(dtype):
-                    return [historical(item, dtype.value_type) for item in value]
-                if pa.types.is_struct(dtype):
-                    return {f.name: historical(value.get(f.name), f.type) for f in dtype}
-                return value
-            mapped = {f.name: historical(mapped.get(f.name), f.type) for f in earlier}
+            mapped = {f.name: _project_historical_value(mapped.get(f.name), f.type) for f in earlier}
+    if mapped is not None and dataset == "native_legal_reference_reads":
+        earlier = _earlier_native_schema(dataset, "legislative-documents/2")
+        subject_cols = set(subject) - {"raw_source_row"}
+        if policy_version == "legislative-documents/2" or (
+            policy_version is None and subject_cols == set(earlier.names)
+        ):
+            mapped = {f.name: mapped[f.name] for f in earlier}
     if mapped is not None and dataset == "hearing_transcripts" and policy_version == "legislative-documents/3":
         from spicy_regs.policy_migrations import earlier_policy
 

@@ -4452,18 +4452,19 @@ tables:
       input_sha256: "SHA-256 of the `source_table` file the read was pinned to; NULL when its pin named none."
 
   native_legal_references:
-    measured_on: "2026-09-27"
+    measured_on: "2026-11-27"
     label: "Native legal-reference observations"
     subject: reference
     coverage: >-
-      Sampled. Selected retained U.S. Code and eCFR XML inputs only.
-      Read scopes state the edition, input digest and forms checked;
+      Sampled. Selected retained U.S. Code, eCFR, bill, law and Statutes at Large XML inputs only.
+      Read scopes state the edition, input digest, text rendition and forms checked;
       they do not establish source-wide completeness.
     summary: >-
-      Original legal references and source passages with recorded target matches.
+      Original legal references and source passages with character-offset spans in readable text
+      beside positional XPath and recorded target matches.
       Inspect every candidate's complete keys, target pin, match count and reason.
       Found, missing, ambiguous, unsupported and not-checked remain separate.
-      Source paths and interpretation rules stay visible. A complete read replaces
+      Source paths, rendition offsets and interpretation rules stay visible. A complete read replaces
       its selected source/edition scope, including a successful empty correction.
       U.S. Code section matches identify held OLRC release-point sections or range stubs
       under selected-target-lookup/2 (or legacy classification rows on carried /1 scopes),

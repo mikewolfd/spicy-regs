@@ -1522,7 +1522,7 @@
       {
         "dataset": "native_legal_reference_reads",
         "receipt_only": false,
-        "policy_version": "legislative-documents/2",
+        "policy_version": "legislative-documents/3",
         "identity_columns": [
           "scope_id"
         ],
@@ -1533,7 +1533,7 @@
       {
         "dataset": "native_legal_references",
         "receipt_only": false,
-        "policy_version": "legislative-documents/3",
+        "policy_version": "legislative-documents/4",
         "identity_columns": [
           "scope_id",
           "body_version_id",
@@ -12714,10 +12714,10 @@
     {
       "table": "native_legal_references",
       "label": "Native legal-reference observations",
-      "summary": "Original legal references and source passages with recorded target matches. Inspect every candidate's complete keys, target pin, match count and reason. Found, missing, ambiguous, unsupported and not-checked remain separate. Source paths and interpretation rules stay visible. A complete read replaces its selected source/edition scope, including a successful empty correction. U.S. Code section matches identify held OLRC release-point sections or range stubs under selected-target-lookup/2 (or legacy classification rows on carried /1 scopes), not Code text or current legal applicability.",
-      "coverage": "Sampled. Selected retained U.S. Code and eCFR XML inputs only. Read scopes state the edition, input digest and forms checked; they do not establish source-wide completeness.",
+      "summary": "Original legal references and source passages with character-offset spans in readable text beside positional XPath and recorded target matches. Inspect every candidate's complete keys, target pin, match count and reason. Found, missing, ambiguous, unsupported and not-checked remain separate. Source paths, rendition offsets and interpretation rules stay visible. A complete read replaces its selected source/edition scope, including a successful empty correction. U.S. Code section matches identify held OLRC release-point sections or range stubs under selected-target-lookup/2 (or legacy classification rows on carried /1 scopes), not Code text or current legal applicability.",
+      "coverage": "Sampled. Selected retained U.S. Code, eCFR, bill, law and Statutes at Large XML inputs only. Read scopes state the edition, input digest, text rendition and forms checked; they do not establish source-wide completeness.",
       "kind": "sampled",
-      "measured_on": "2026-09-27",
+      "measured_on": "2026-11-27",
       "data_quality": null,
       "columns": [
         "scope_id",
@@ -12738,6 +12738,12 @@
         "interpretation_status",
         "target_candidates",
         "rule_version",
+        "text_rendition",
+        "text_offset_unit",
+        "text_rendition_sha256",
+        "text_span_start",
+        "text_span_end",
+        "span_text",
         "native_element_id",
         "native_idref",
         "native_class"
@@ -12767,6 +12773,9 @@
         "unsupported_shapes",
         "manifest_sha256",
         "rule_version",
+        "text_rendition",
+        "text_offset_unit",
+        "text_rendition_sha256",
         "body_version_id"
       ]
     },

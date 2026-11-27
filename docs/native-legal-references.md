@@ -2,7 +2,7 @@
 
 `NativeLegalReferencesRollup` builds `native_legal_references.parquet` and
 `native_legal_reference_reads.parquet` from an explicit local manifest. It uses
-SpicyDocs' CFR, U.S. Code, bill and law scanners and the ordinary rollup generation and
+SpicyDocs' CFR, U.S. Code, bill, law and Statutes at Large scanners and the ordinary rollup generation and
 source-evidence lifecycle. It makes no acquisition requests.
 
 ```sh
@@ -24,8 +24,10 @@ row shapers, and the reading of each observation
 and reads a note's text with the shared citation rules). Its
 `docs/decisions.md` entry "The native legal-reference tables have contracts"
 states the reading, the measurements and what an importer changes. Both tables
-name that rule, `native-legal-reference/003`; rows this repository read before
-the reading moved name `/002`.
+currently name rule `native-legal-reference/004` (adding named readable-text
+renditions, `unicode_code_points` character-offset spans beside positional
+XPaths, and `statute` extraction); prior builds read before `ss-tdf4` name
+`/003`, and rows this repository read before the reading moved name `/002`.
 
 This repository keeps the manifest, the input pins, the source evidence, the
 qualification of complete inputs, the scan loop and the target lookup. The
@@ -38,7 +40,7 @@ their contracts, replacing each scope a complete read covers.
 ## Input selection and evidence
 
 Each `sources` entry requires a local `path`, exact `sha256:` digest,
-`source_family` (`ecfr`, `uscode`, `bill` or `law`), `source_record_key`, `source_locator`, and
+`source_family` (`ecfr`, `uscode`, `bill`, `law` or `statute`), `source_record_key`, `source_locator`, and
 `edition` (a literal or explicit JSON null). Relative paths resolve against the
 manifest directory. The manifest, exact XML bytes and optional target bytes
 enter the existing `CaptureEvidence` blob store and journal. Events say
@@ -305,10 +307,105 @@ attribute extraction and `usc_place` separation against retained originals:
     `usc-release-point-verdict-v3` with `usc_oracle_*` legal-status and
     1994–2024 annual-presence enrichment, cross-title and `nt new` negative
     controls, and explicit non-support for automatic letter-suffix repair.
-    `NATIVE_LEGAL_REFERENCE_RULE` remains `native-legal-reference/003`.
-  - **`ss-tdf4` (Wave 4):** Adds character-offset spans and surrounding text
-    context beside XPath `source_path`, extends native scanning to Statutes at
-    Large (`STATUTE-*.xml`), and bumps past `native-legal-reference/003`.
+  - **`ss-tdf4` (delivered):** Adds character-offset spans (`text_rendition`,
+    `text_offset_unit`, `text_rendition_sha256`, `text_span_start`,
+    `text_span_end`, `span_text`, plus per-candidate `rendition_span_start` and
+    `rendition_span_end`) beside positional XPath `source_path`, extends native
+    scanning and qualification to Statutes at Large (`STATUTE-*.xml`,
+    `source_family = 'statute'`, `qualification.kind = 'statute-native-xml'`),
+    bumps `NATIVE_LEGAL_REFERENCE_RULE` to `native-legal-reference/004`, and
+    advances `native_legal_references` to `legislative-documents/4`
+    (`list<native-legal-target/4>`) and `native_legal_reference_reads` to
+    `legislative-documents/3` while preserving exact backward-compatible
+    restoration of `legislative-documents/1`, `/2`, and `/3` XPath-only bundles.
   - **`ss-2sor` (Wave 4):** Upgrades `document_citations` extraction with
     proposed-section and enclosing-section grammar while maintaining parity
     between `document_citations` and `native_legal_references`.
+
+## Character-offset spans and Statutes at Large (`ss-tdf4`, `native-legal-reference/004`)
+
+### Rendition and offset contract
+
+Every `/004` read and observation records character-offset coordinates in a
+named readable-text rendition produced by `spicy_docs.reading.xml_text`
+(ported from RefSpec `xml_text` with byte-for-byte parity on USLM 1.0 and
+eCFR profiles, and extended to GPO USLM 2.x and Congressional Bill DTD):
+
+- **Offset unit:** `text_offset_unit = 'unicode_code_points'` — 0-based,
+  half-open `[start, end)` Python `str` code-point indices into the complete
+  decoded rendition string (never UTF-8 byte offsets and never UTF-16 code
+  units).
+- **Named renditions (`text_rendition`):**
+  - `uslm-block-boundaries/1`: U.S. Code (`uscode`), Public/Private Laws
+    (`law`), Statutes at Large (`statute`), and USLM bills.
+  - `ecfr-block-boundaries/1`: eCFR (`ecfr`).
+  - `bill-dtd-block-boundaries/1`: Congressional Bill DTD (`bill`).
+- **Traceability beside positional XPath:** `source_path` retains its exact
+  namespace-independent positional XPath (`/*[1]/*[2]`), never a byte offset.
+  `text_rendition_sha256` binds `[text_span_start, text_span_end)` to the exact
+  UTF-8 rendition string, `span_text` records the exact slice
+  `rendition_text[text_span_start:text_span_end]`, and each typed candidate in
+  `target_candidates` carries `rendition_span_start` / `rendition_span_end`
+  projected through `source_map` (so multi-block eCFR `<AUTH>`/`<SOURCE>` notes
+  with inserted `\n\n` boundaries still slice the exact cited text). Empty or
+  self-closing elements carry NULL offsets/slice text while preserving
+  `source_path` and rendition metadata.
+- **Backward compatibility:** Earlier `/002` and `/003` XPath-only generations
+  (`legislative-documents/1` and `/2`) restore cleanly through
+  `policy_migrations.json` and `recorded_subject`, and incremental scope merges
+  NULL-fill the appended span columns for untouched prior scopes without
+  mutating their `source_path` or `rule_version`.
+
+### Statutes at Large (`STATUTE-*.xml`) workflow & qualification
+
+- `source_family = 'statute'` scans GPO USLM `<statutesAtLarge>` bulkdata XML
+  (`https://www.govinfo.gov/bulkdata/STATUTE/{volume}/STATUTE-{volume}.xml`) via
+  `spicy_docs.sources.govinfo.native_references.scan_statute_references`.
+- `qualification.kind = 'statute-native-xml'` validates the requested integer
+  `volume` against root `<statutesAtLarge><meta><volume>` via
+  `validate_statutes_at_large_xml` (supporting multi-Congress early volumes
+  such as Volume 1), requires `source_record_key = 'STATUTE-{volume}'`,
+  `source_locator = statutes_at_large_xml_locator(...)`, and `edition = null`.
+- Missing volumes (`404`/`410`), wrong volumes (`UslmIdentityError`), wrong
+  roots, malformed XML, internal DTD entities, and byte/observation overruns
+  refuse fail-closed without touching prior scopes.
+
+### Raw visual review & independent span oracle (2026-11-27)
+
+Verified three complete GovInfo bulkdata volumes spanning 1789, 1951, and 2023
+(7,454 observations total) against an independent ElementTree positional XPath
+walk and code-point slice check (**0 mismatches** across all 7,454 rows):
+
+- **`STATUTE-1.xml`** (`5,416,088` bytes, UTF-8 BOM + CRLF, Last-Modified
+  `2026-04-09 19:35:25 GMT`, `sha256:3493b9f7feafe4fd8e4791a450d5dd3dd4fe1b4dfa798ec75242673e825482c6`,
+  Congresses 1–5, 776 `<page>` identifiers): `3,657,547` code points
+  (`text_rendition_sha256 = sha256:340f621a...`); `209` `<ref class="footnoteRef">`
+  observations (0 with `href`; all `unsupported_href`, e.g., `idx=0`
+  `xpath=/*[1]/*[3]/*[1]/*[3]/*[1]/*[2]/*[2]/*[3]`, `span=(158958, 158961)`,
+  `span_text='(a)'`).
+- **`STATUTE-65.xml`** (`9,962,266` bytes, UTF-8 BOM + CRLF, Last-Modified
+  `2026-02-11 17:58:02 GMT`, `sha256:d6c73bf6470d2ecee9e6fa2867afae0218495021051248af38c36c59b0c6ee66`,
+  82nd Congress, 1,069 `<page>` identifiers): `4,420,767` code points
+  (`text_rendition_sha256 = sha256:13425cec...`); `4,261` observations (`1,761`
+  `native_statute_href`, `945` `native_section_href`, `1,555` `unsupported_href`):
+  - L923 byte 289812 (`idx=2`, `native_statute_href` -> `63-612`): `span=(103381, 103393)`, `span_text='63 Stat. 612'`.
+  - L923 (`idx=3`, `native_section_href` -> `50-847`, Unicode `§`): `span=(103396, 103428)`, `span_text='50 U. S. C., Sup. IV. app. § 847'`.
+  - L1380 byte 325320 (`idx=39`, nested `<i>et seq</i>`, `unsupported_href` `/us/usc/t46/s1245/1111`): `span=(123013, 123055)`, `span_text='46 U. S. C. § 1245; Sup. IV, § 1111 et seq'`.
+- **`STATUTE-137.xml`** (`12,487,295` bytes, Last-Modified `2026-04-15 18:47:51 GMT`,
+  `sha256:ef857f483fbf65abda953d041266bfb6c697fba2defad05c5c6e54c7f2592f5f`,
+  118th Congress, 1,439 `<page>` identifiers): `4,190,536` code points
+  (`text_rendition_sha256 = sha256:0c9e0b92...`); `2,984` observations (`1,269`
+  `native_section_href`, `308` `native_public_law_href`, `206`
+  `native_statute_href`, `1,201` `unsupported_href`):
+  - L1509 byte 118393 (`idx=7`, body `native_section_href` -> `50-1622`): `span=(25504, 25518)`, `span_text='50 U.S.C. 1622'`.
+  - L2114 (`idx=29`, Unicode en-dash `–`, `native_public_law_href` -> `117-public-159`): `span=(52184, 52202)`, `span_text='Public Law 117–159'`.
+  - L2672 byte 424210 (`idx=218`, `native_statute_href` -> `72-1263`): `span=(146805, 146818)`, `span_text='72 Stat. 1263'`.
+  - Repeated identical citation in the same `<content>` element (`15 U.S.C. 18a`, L12667+): `idx=1212` `span=(965454, 965467)` and `idx=1213` `span=(965605, 965618)` retain distinct XPaths and exact disjoint offsets.
+  - Sidenote note-label visibility (`idx=3`, `href='/us/usc/t50/s3161'`): `span=(21992, 22008)`, `span_text='50 USC 3161 note'` now exposes the literal `note` text alongside `ancestors_json`.
+- **Sample limits & offline test fixtures:** Declared coverage covers these
+  three verified volumes (and offline bounded excerpts `statute-65-excerpt.xml`
+  and `statute-137-excerpt.xml` pinned in `spicy-docs` / `spicy-regs` test
+  fixtures); Volumes 139+ are not yet published in GovInfo STATUTE bulkdata
+  (returning HTTP 404 -> `UslmSourceUnavailableError`), and volumes exceeding
+  the 16 MiB per-XML manifest cap (such as `STATUTE-135.xml` at 22.1 MiB)
+  refuse cleanly unless bounds are explicitly raised.

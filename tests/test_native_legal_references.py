@@ -345,7 +345,7 @@ def test_wave1_declared_cohort_manifest_respects_bounds_and_publish_hygiene():
     from spicy_regs.source_evidence import _LOCAL_PATH_BYTES
 
     assert NATIVE_RESOLUTION_RULE == "selected-target-lookup/2"
-    assert NATIVE_LEGAL_REFERENCE_RULE == "native-legal-reference/003"
+    assert NATIVE_LEGAL_REFERENCE_RULE == "native-legal-reference/004"
 
     manifest_path = Path(__file__).resolve().parents[1] / "manifests/native_legal_wave1.json"
     raw = manifest_path.read_bytes()
@@ -382,3 +382,189 @@ def test_wave1_declared_cohort_manifest_respects_bounds_and_publish_hygiene():
             assert entry["edition"] is None
             assert entry["source_record_key"] == f"{qual['congress']}-{qual['law_kind']}-{qual['number']}"
     assert families["bill"] >= 15 and families["law"] >= 15
+
+
+def test_statute_replay_emits_verified_spans_and_merges_over_legacy_xpath_only_prior(tmp_path):
+    from spicy_docs.reading.xml_text import TEXT_OFFSET_UNIT, USLM_RENDITION, read_xml_text_index
+    from spicy_docs.schemas.native_reference_rows import (
+        NATIVE_LEGAL_REFERENCE_READS,
+        NATIVE_LEGAL_REFERENCE_RULE,
+        NATIVE_LEGAL_REFERENCES,
+    )
+    from spicy_regs.legislative_receipts import FILE_POLICY, policy, write_legislative_outputs
+    from spicy_regs.native_types import described_schema
+
+    # 1. Stage a legacy XPath-only (/003) prior lacking the 6/3 appended character-offset span columns.
+    prior_dir = tmp_path / "legacy-prior"
+    prior_dir.mkdir()
+    legacy_ref_cols = [
+        c
+        for c in NATIVE_LEGAL_REFERENCES.columns
+        if c not in {"text_rendition", "text_offset_unit", "text_rendition_sha256", "text_span_start", "text_span_end", "span_text"}
+    ]
+    legacy_read_cols = [
+        c
+        for c in NATIVE_LEGAL_REFERENCE_READS.columns
+        if c not in {"text_rendition", "text_offset_unit", "text_rendition_sha256"}
+    ]
+    legacy_scope = "sha256:" + "1" * 64
+    legacy_input = "sha256:" + "2" * 64
+    pq.write_table(
+        pa.Table.from_pylist(
+            [
+                {
+                    "scope_id": legacy_scope,
+                    "source_family": "uscode",
+                    "source_record_key": "/us/usc/t1",
+                    "edition": "119-103",
+                    "input_sha256": legacy_input,
+                    "source_locator": "retained:legacy",
+                    "occurrence_index": "0",
+                    "source_path": "/*[1]/*[2]/*[1]",
+                    "element_tag": "{http://xml.house.gov/schemas/uslm/1.0}ref",
+                    "attributes_json": '{"href":"/us/usc/t1/s1"}',
+                    "ancestors_json": "[]",
+                    "observation_kind": "native_reference",
+                    "href": "/us/usc/t1/s1",
+                    "text": None,
+                    "text_runs_json": None,
+                    "cfr_title": None,
+                    "cfr_part": None,
+                    "interpretation_status": "native_section_href",
+                    "target_candidates_json": "[]",
+                    "rule_version": "native-legal-reference/003",
+                }
+            ],
+            schema=pa.schema([(c, pa.string()) for c in legacy_ref_cols]),
+        ),
+        prior_dir / "native_legal_references.parquet",
+    )
+    pq.write_table(
+        pa.Table.from_pylist(
+            [
+                {
+                    "scope_id": legacy_scope,
+                    "source_family": "uscode",
+                    "source_record_key": "/us/usc/t1",
+                    "edition": "119-103",
+                    "input_sha256": legacy_input,
+                    "source_locator": "retained:legacy",
+                    "source_bytes": "123",
+                    "occurrence_count": "1",
+                    "read_status": "complete_selected_shapes",
+                    "selected_shapes_json": '["href","sourceCredit"]',
+                    "unsupported_shapes_json": "[]",
+                    "manifest_sha256": "sha256:" + "3" * 64,
+                    "rule_version": "native-legal-reference/003",
+                }
+            ],
+            schema=pa.schema([(c, pa.string()) for c in legacy_read_cols]),
+        ),
+        prior_dir / "native_legal_reference_reads.parquet",
+    )
+
+    # 2. Replay real STATUTE-137 excerpt with native volume qualification and a pinned target table.
+    statute_body = (FIXTURES / "statute-137-excerpt.xml").read_bytes()
+    statute_dir = tmp_path / "statute-input"
+    statute_dir.mkdir()
+    (statute_dir / "STATUTE-137.xml").write_bytes(statute_body)
+    target = statute_dir / "usc_release_point_sections.parquet"
+    pq.write_table(
+        pa.table({"usc_title": ["50"], "usc_section_key": ["1622"]}),
+        target,
+    )
+    manifest_path = statute_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "sources": [
+                    {
+                        "path": "STATUTE-137.xml",
+                        "sha256": digest(statute_body),
+                        "source_family": "statute",
+                        "source_record_key": "STATUTE-137",
+                        "edition": None,
+                        "source_locator": "https://www.govinfo.gov/bulkdata/STATUTE/137/STATUTE-137.xml",
+                        "qualification": {"kind": "statute-native-xml", "volume": 137},
+                    }
+                ],
+                "targets": {
+                    "usc_release_point_sections": {"path": target.name, "sha256": digest(target.read_bytes())},
+                },
+            }
+        )
+    )
+
+    files, evidence = run(manifest_path, tmp_path / "out", prior=prior_dir)
+    rows = pq.read_table(files[0]).to_pylist()
+    reads = pq.read_table(files[1]).to_pylist()
+    assert len(reads) == 2
+    legacy_rows = [r for r in rows if r["scope_id"] == legacy_scope]
+    statute_rows = [r for r in rows if r["source_family"] == "statute"]
+    assert len(legacy_rows) == 1 and len(statute_rows) == 28
+
+    # Untouched legacy XPath-only prior survives with intact XPath and NULL span columns.
+    assert legacy_rows[0]["source_path"] == "/*[1]/*[2]/*[1]"
+    assert legacy_rows[0]["rule_version"] == "native-legal-reference/003"
+    assert legacy_rows[0]["text_rendition"] is None and legacy_rows[0]["text_span_start"] is None
+
+    # Every fresh STATUTE row slices the exact cited text in uslm-block-boundaries/1 beside source_path.
+    text_index = read_xml_text_index(statute_body, source_family="statute")
+    statute_read = next(r for r in reads if r["source_family"] == "statute")
+    assert statute_read["rule_version"] == NATIVE_LEGAL_REFERENCE_RULE
+    assert statute_read["text_rendition"] == USLM_RENDITION
+    assert statute_read["text_offset_unit"] == TEXT_OFFSET_UNIT
+    assert statute_read["text_rendition_sha256"] == text_index.rendition_sha256
+    assert statute_read["occurrence_count"] == "28"
+
+    for row in statute_rows:
+        assert row["source_path"].startswith("/*[1]")
+        assert row["rule_version"] == NATIVE_LEGAL_REFERENCE_RULE
+        assert row["text_rendition"] == USLM_RENDITION
+        assert row["text_offset_unit"] == TEXT_OFFSET_UNIT
+        assert row["text_rendition_sha256"] == text_index.rendition_sha256
+        s, e = int(row["text_span_start"]), int(row["text_span_end"])
+        assert text_index.text[s:e] == row["span_text"]
+        for cand in json.loads(row["target_candidates_json"]):
+            assert (cand["rendition_span_start"], cand["rendition_span_end"]) == (s, e)
+            assert text_index.text[cand["rendition_span_start"] : cand["rendition_span_end"]] == row["span_text"]
+
+    # Repeated identical citations retain distinct XPaths and strictly ordered spans.
+    repeated = sorted(
+        [r for r in statute_rows if r["span_text"] == "38 USC 1114 note"],
+        key=lambda r: int(r["text_span_start"]),
+    )
+    assert len(repeated) == 3
+    assert len({r["source_path"] for r in repeated}) == 3
+    assert int(repeated[0]["text_span_end"]) < int(repeated[1]["text_span_start"])
+    assert int(repeated[1]["text_span_end"]) < int(repeated[2]["text_span_start"])
+
+    # Resolved USC section check on 50 U.S.C. 1622.
+    s1622 = next(r for r in statute_rows if r["href"] == "/us/usc/t50/s1622")
+    assert s1622["span_text"] == "50 U.S.C. 1622"
+    [cand1622] = json.loads(s1622["target_candidates_json"])
+    assert cand1622["target_status"] == "found" and cand1622["normalized_key"] == "50-1622"
+
+    # Seal under legislative-documents/4 (refs) and /3 (reads) and verify native Arrow span columns and integrity.
+    bundle = tmp_path / "sealed-bundle"
+    write_legislative_outputs(files, bundle, generation_id="statute-v4-test")
+    sealed_refs = pq.read_table(bundle / "native_legal_references.parquet")
+    assert pa.types.is_int64(sealed_refs.schema.field("text_span_start").type)
+    assert pa.types.is_int64(sealed_refs.schema.field("text_span_end").type)
+    assert pa.types.is_string(sealed_refs.schema.field("span_text").type)
+    assert policy("native_legal_references").policy_version == "legislative-documents/4"
+    assert policy("native_legal_reference_reads").policy_version == "legislative-documents/3"
+    artifact = build_generation(
+        tmp_path / "candidate",
+        family="native-legal-references",
+        files=[bundle / "native_legal_references.parquet", bundle / "native_legal_reference_reads.parquet"],
+        expected_keys=list(OUTPUTS),
+        schemas={name: described_schema(policy(name).subject_schema) for name in (
+            "native_legal_references", "native_legal_reference_reads")},
+        inputs=evidence.inputs(),
+        receipt_path=bundle / "etl_receipts.parquet",
+        receipt_policies=[policy("native_legal_references"), policy("native_legal_reference_reads"), FILE_POLICY],
+        receipt_generation_id="statute-v4-test",
+    )
+    verify_generation(tmp_path / "candidate", expected_pin=artifact.pin)
+    verify_evidence(evidence.artifact_dir, expected_pin=evidence.artifact.pin)

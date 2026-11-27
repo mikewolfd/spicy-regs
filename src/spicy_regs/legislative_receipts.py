@@ -65,11 +65,20 @@ def policy(dataset: str) -> DatasetPolicy:
         # GovInfo /3 defines dated keys for fresh builds; no implicit prior-key migration.
         # Senate /2 preserves funding designations as source strings, including X and 0509.
         # native_legal_references/3 adds release-point usc_title/usc_section_key
-        # candidate keys for selected-target-lookup/2 while keeping /1 and /2 priors readable (ss-xpyk).
-        policy_version="legislative-documents/4" if dataset == "hearing_transcripts" else "legislative-documents/3" if dataset in DATED_TABLES or dataset in {"bill_publisher_summaries", "native_legal_references"} else "legislative-documents/2" if dataset in {
-            "native_legal_reference_reads", "document_citations",
-            "bill_versions", "senate_expenditures",
-        } else "legislative-documents/1",
+        # candidate keys for selected-target-lookup/2 (ss-xpyk); /4 appends /004
+        # character-offset spans and rendition_span_start/end (ss-tdf4) while
+        # keeping /1, /2 and /3 priors readable. native_legal_reference_reads/3
+        # adds text_rendition/text_offset_unit/text_rendition_sha256 (ss-tdf4).
+        policy_version=(
+            "legislative-documents/4"
+            if dataset in {"hearing_transcripts", "native_legal_references"}
+            else "legislative-documents/3"
+            if dataset in DATED_TABLES
+            or dataset in {"bill_publisher_summaries", "native_legal_reference_reads"}
+            else "legislative-documents/2"
+            if dataset in {"document_citations", "bill_versions", "senate_expenditures"}
+            else "legislative-documents/1"
+        ),
         receipt_only=spec["processing_only"],
     )
 
@@ -87,9 +96,11 @@ def input_policy(dataset: str, subjects: Sequence[Path]) -> DatasetPolicy:
 
 
 def _processor(dataset: str) -> str:
-    if dataset in {"hearing_transcripts", "native_legal_references"}:
+    if dataset == "native_legal_references":
+        return "legislative-documents/5"
+    if dataset in {"hearing_transcripts", "native_legal_reference_reads"}:
         return "legislative-documents/4"
-    if dataset in {"native_legal_reference_reads", "bill_publisher_summaries"}:
+    if dataset == "bill_publisher_summaries":
         return "legislative-documents/3"
     if dataset == "senate_expenditures":
         return "legislative-documents/2"

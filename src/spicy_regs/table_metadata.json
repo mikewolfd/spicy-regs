@@ -47301,10 +47301,10 @@
   "native_legal_references": {
     "table": "native_legal_references",
     "label": "Native legal-reference observations",
-    "summary": "Original legal references and source passages with recorded target matches. Inspect every candidate's complete keys, target pin, match count and reason. Found, missing, ambiguous, unsupported and not-checked remain separate. Source paths and interpretation rules stay visible. A complete read replaces its selected source/edition scope, including a successful empty correction. U.S. Code section matches identify held OLRC release-point sections or range stubs under selected-target-lookup/2 (or legacy classification rows on carried /1 scopes), not Code text or current legal applicability.",
-    "coverage": "Sampled. Selected retained U.S. Code and eCFR XML inputs only. Read scopes state the edition, input digest and forms checked; they do not establish source-wide completeness.",
+    "summary": "Original legal references and source passages with character-offset spans in readable text beside positional XPath and recorded target matches. Inspect every candidate's complete keys, target pin, match count and reason. Found, missing, ambiguous, unsupported and not-checked remain separate. Source paths, rendition offsets and interpretation rules stay visible. A complete read replaces its selected source/edition scope, including a successful empty correction. U.S. Code section matches identify held OLRC release-point sections or range stubs under selected-target-lookup/2 (or legacy classification rows on carried /1 scopes), not Code text or current legal applicability.",
+    "coverage": "Sampled. Selected retained U.S. Code, eCFR, bill, law and Statutes at Large XML inputs only. Read scopes state the edition, input digest, text rendition and forms checked; they do not establish source-wide completeness.",
     "kind": "sampled",
-    "measured_on": "2026-09-27",
+    "measured_on": "2026-11-27",
     "data_quality": null,
     "columns": [
       {
@@ -47315,7 +47315,7 @@
       {
         "column_name": "source_family",
         "column_type": "VARCHAR",
-        "description": "The scanner family that read the input: `uscode`, `ecfr`, `bill` or `law`, fixed by the shaper."
+        "description": "The scanner family that read the input: `uscode`, `ecfr`, `bill`, `law` or `statute`, fixed by the shaper."
       },
       {
         "column_name": "source_record_key",
@@ -47355,7 +47355,7 @@
       {
         "column_name": "observation_kind",
         "column_type": "VARCHAR",
-        "description": "`native_reference` for a bill or law observation, `native_reference` or `source_credit` for a U.S. Code observation, `authority` (AUTH) or `source_note` (SOURCE) for an eCFR note."
+        "description": "`native_reference` for a bill, law or Statutes at Large observation, `native_reference` or `source_credit` for a U.S. Code observation, `authority` (AUTH) or `source_note` (SOURCE) for an eCFR note."
       },
       {
         "column_name": "href",
@@ -47389,13 +47389,43 @@
       },
       {
         "column_name": "target_candidates",
-        "column_type": "STRUCT(candidate_ordinal BIGINT, cite_kind VARCHAR, normalized_key VARCHAR, matched_text VARCHAR, span_start BIGINT, span_end BIGINT, target_kind VARCHAR, target_key VARCHAR, target_grain VARCHAR, candidate_keys STRUCT(target_key_ordinal BIGINT, bill_id VARCHAR, congress VARCHAR, law_type VARCHAR, number VARCHAR, \"session\" VARCHAR, seq VARCHAR, usc_title VARCHAR, usc_section_key VARCHAR, package_id VARCHAR, granule_id VARCHAR, document_number VARCHAR, publication_date VARCHAR, rin VARCHAR, agenda_edition VARCHAR, report_id VARCHAR, docket_id VARCHAR, system_code VARCHAR, cluster_id VARCHAR)[], derivation_rule VARCHAR, derivation_version VARCHAR, document_key VARCHAR, document_kind VARCHAR, expected_cardinality VARCHAR, match_count BIGINT, occurrence_key VARCHAR, reason VARCHAR, resolution_rule VARCHAR, source_record_key VARCHAR, source_status VARCHAR, target_resolved BOOLEAN, target_snapshot STRUCT(status VARCHAR, sha256 VARCHAR, \"family\" VARCHAR, artifact_digest VARCHAR, generation_id VARCHAR, receipt_sha256 VARCHAR), target_status VARCHAR, target_table_selected VARCHAR, text_sha256 VARCHAR, match_basis VARCHAR, error_type VARCHAR)[]",
+        "column_type": "STRUCT(candidate_ordinal BIGINT, cite_kind VARCHAR, normalized_key VARCHAR, matched_text VARCHAR, span_start BIGINT, span_end BIGINT, rendition_span_start BIGINT, rendition_span_end BIGINT, target_kind VARCHAR, target_key VARCHAR, target_grain VARCHAR, candidate_keys STRUCT(target_key_ordinal BIGINT, bill_id VARCHAR, congress VARCHAR, law_type VARCHAR, number VARCHAR, \"session\" VARCHAR, seq VARCHAR, usc_title VARCHAR, usc_section_key VARCHAR, package_id VARCHAR, granule_id VARCHAR, document_number VARCHAR, publication_date VARCHAR, rin VARCHAR, agenda_edition VARCHAR, report_id VARCHAR, docket_id VARCHAR, system_code VARCHAR, cluster_id VARCHAR)[], derivation_rule VARCHAR, derivation_version VARCHAR, document_key VARCHAR, document_kind VARCHAR, expected_cardinality VARCHAR, match_count BIGINT, occurrence_key VARCHAR, reason VARCHAR, resolution_rule VARCHAR, source_record_key VARCHAR, source_status VARCHAR, target_resolved BOOLEAN, target_snapshot STRUCT(status VARCHAR, sha256 VARCHAR, \"family\" VARCHAR, artifact_digest VARCHAR, generation_id VARCHAR, receipt_sha256 VARCHAR), target_status VARCHAR, target_table_selected VARCHAR, text_sha256 VARCHAR, match_basis VARCHAR, error_type VARCHAR)[]",
         "description": "The typed targets the reading found, as a Native list in reading order, each with the outcome of the host's lookup in the target tables it selected; several targets in one note stay one row, and an unsupported href has none. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
         "column_name": "rule_version",
         "column_type": "VARCHAR",
-        "description": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the scanners' selected shapes and the reading this row was produced under, comparable for equality only."
+        "description": "`native-legal-reference/004` (`NATIVE_LEGAL_REFERENCE_RULE`): the scanners' selected shapes and the reading this row was produced under, comparable for equality only."
+      },
+      {
+        "column_name": "text_rendition",
+        "column_type": "VARCHAR",
+        "description": "The named readable-text rendition into which text_span_start and text_span_end index (`uslm-block-boundaries/1`, `ecfr-block-boundaries/1`, or `bill-dtd-block-boundaries/1`); NULL when no text map was produced."
+      },
+      {
+        "column_name": "text_offset_unit",
+        "column_type": "VARCHAR",
+        "description": "The offset unit of text_span_start and text_span_end: `unicode_code_points` (0-based half-open code-point indices in text_rendition); NULL when text_rendition is NULL."
+      },
+      {
+        "column_name": "text_rendition_sha256",
+        "column_type": "VARCHAR",
+        "description": "`sha256:` digest of the UTF-8 encoding of the complete text_rendition string, binding the offsets to the exact rendition beside input_sha256 and source_path; NULL when text_rendition is NULL."
+      },
+      {
+        "column_name": "text_span_start",
+        "column_type": "BIGINT",
+        "description": "Inclusive 0-based start offset of the observed element's text in text_rendition, as decimal text in text_offset_unit; NULL when the element carries no text or no text map was produced."
+      },
+      {
+        "column_name": "text_span_end",
+        "column_type": "BIGINT",
+        "description": "Exclusive 0-based end offset of the observed element's text in text_rendition, as decimal text in text_offset_unit, so slicing text_rendition yields span_text; NULL when text_span_start is NULL."
+      },
+      {
+        "column_name": "span_text",
+        "column_type": "VARCHAR",
+        "description": "The exact slice of text_rendition at [text_span_start:text_span_end] for this element; NULL when text_span_start is NULL."
       },
       {
         "column_name": "native_element_id",
@@ -47414,7 +47444,7 @@
       }
     ],
     "subject": "reference",
-    "grain": "One scanner observation in one pinned U.S. Code, eCFR, bill or law XML input: a native href or source credit, or an AUTH or SOURCE note, with every target read from it nested rather than multiplied.",
+    "grain": "One scanner observation in one pinned U.S. Code, eCFR, bill, law or Statutes at Large XML input: a native href or source credit, or an AUTH or SOURCE note, with every target read from it nested rather than multiplied.",
     "identity_columns": [
       "scope_id",
       "body_version_id",
@@ -47425,7 +47455,13 @@
       "source_path",
       "element_tag",
       "interpretation_status",
-      "rule_version"
+      "rule_version",
+      "text_rendition",
+      "text_offset_unit",
+      "text_rendition_sha256",
+      "text_span_start",
+      "text_span_end",
+      "span_text"
     ]
   },
   "native_legal_reference_reads": {
@@ -47447,7 +47483,7 @@
       {
         "column_name": "source_family",
         "column_type": "VARCHAR",
-        "description": "The scanner family that read the input: `uscode`, `ecfr`, `bill` or `law`."
+        "description": "The scanner family that read the input: `uscode`, `ecfr`, `bill`, `law` or `statute`."
       },
       {
         "column_name": "source_record_key",
@@ -47487,7 +47523,7 @@
       {
         "column_name": "selected_shapes",
         "column_type": "VARCHAR[]",
-        "description": "The source shapes this read selected, as a Native list: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        "description": "The source shapes this read selected, as a Native list: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code; `href`, `ref` and `external-xref` for bills; `href` and `ref` for laws and Statutes at Large. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
         "column_name": "unsupported_shapes",
@@ -47502,7 +47538,22 @@
       {
         "column_name": "rule_version",
         "column_type": "VARCHAR",
-        "description": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only."
+        "description": "`native-legal-reference/004` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only."
+      },
+      {
+        "column_name": "text_rendition",
+        "column_type": "VARCHAR",
+        "description": "The named readable-text rendition produced for this input (`uslm-block-boundaries/1`, `ecfr-block-boundaries/1`, or `bill-dtd-block-boundaries/1`); NULL when no text rendition was produced."
+      },
+      {
+        "column_name": "text_offset_unit",
+        "column_type": "VARCHAR",
+        "description": "The offset unit of character spans in text_rendition: `unicode_code_points` (0-based half-open code-point indices); NULL when text_rendition is NULL."
+      },
+      {
+        "column_name": "text_rendition_sha256",
+        "column_type": "VARCHAR",
+        "description": "`sha256:` digest of the UTF-8 encoding of the complete text_rendition string; NULL when text_rendition is NULL."
       },
       {
         "column_name": "body_version_id",
@@ -47514,6 +47565,11 @@
     "grain": "One row per input scope: its latest complete read of the selected shapes, including a read that found none.",
     "identity_columns": [
       "scope_id"
+    ],
+    "later_policy_columns": [
+      "text_rendition",
+      "text_offset_unit",
+      "text_rendition_sha256"
     ]
   },
   "gao_recommendations": {
@@ -51397,7 +51453,7 @@
       {
         "dataset": "native_legal_reference_reads",
         "receipt_only": false,
-        "policy_version": "legislative-documents/2",
+        "policy_version": "legislative-documents/3",
         "identity_columns": [
           "scope_id"
         ],
@@ -51408,7 +51464,7 @@
       {
         "dataset": "native_legal_references",
         "receipt_only": false,
-        "policy_version": "legislative-documents/3",
+        "policy_version": "legislative-documents/4",
         "identity_columns": [
           "scope_id",
           "body_version_id",
