@@ -126,6 +126,45 @@ def test_agenda_related_rins_resolve_each_occurrence_against_held_editions():
         assert 'DELIM_JOIN' not in planned[1]
 
 
+def test_agenda_related_rins_preserves_internal_whitespace_and_flags_malformed():
+    """End-to-end whitespace contract (ss-cdaa): edge whitespace is stripped before view resolution while internal
+    whitespace stays verbatim so malformed RINs and drifted relation spellings are never silently rewritten.
+    """
+    from spicy_regs.sources.unified_agenda import normalize_retained_edition
+    from spicy_regs.transforms.build_unified_agenda import _shape
+    from spicy_regs.transforms.regulations_shape import shape_record
+
+    xml = (
+        b"<REGINFO_RIN_DATA>"
+        b"<RIN_INFO><RIN>2060-AV12</RIN><PUBLICATION><PUBLICATION_ID>202004</PUBLICATION_ID></PUBLICATION>"
+        b"<RELATED_RIN_LIST>"
+        b"<RELATED_RIN><RIN>0938-  AV01</RIN><RIN_RELATION>Related  to</RIN_RELATION></RELATED_RIN>"
+        b"<RELATED_RIN><RIN> 1234-AB56\t\n</RIN><RIN_RELATION>\n  Previously\t\nreported as  </RIN_RELATION></RELATED_RIN>"
+        b"</RELATED_RIN_LIST></RIN_INFO>"
+        b"<RIN_INFO><RIN>1234-AB56</RIN><PUBLICATION><PUBLICATION_ID>202004</PUBLICATION_ID></PUBLICATION></RIN_INFO>"
+        b"</REGINFO_RIN_DATA>"
+    )
+    shaped = [shape_record("unified_agenda", _shape(row)) for row in normalize_retained_edition(xml, edition="202004")]
+    view = {spec.name: spec for spec in native_regulations_views(["unified_agenda"])}["agenda_related_rins"]
+    with duckdb.connect() as con:
+        con.execute(
+            "CREATE TABLE unified_agenda(rin VARCHAR, agenda_edition VARCHAR, "
+            "related_rins STRUCT(rin VARCHAR, rin_relation VARCHAR)[])"
+        )
+        con.executemany(
+            "INSERT INTO unified_agenda VALUES (?, ?, ?)",
+            [(row["rin"], row["agenda_edition"], row["related_rins"]) for row in shaped],
+        )
+        con.execute("CREATE VIEW agenda_related_rins AS " + view.query({}))
+        assert con.execute(
+            "SELECT rin, source_ordinal, related_rin, rin_relation, self_reference, resolution_status "
+            "FROM agenda_related_rins ORDER BY source_ordinal"
+        ).fetchall() == [
+            ("2060-AV12", 0, "0938-  AV01", "Related  to", False, "malformed"),
+            ("2060-AV12", 1, "1234-AB56", "Previously\t\nreported as", False, "same_edition"),
+        ]
+
+
 def test_agenda_related_rins_is_unsupported_without_the_column():
     from spicy_regs.relationship_views.sql_views import install_sql_views
 

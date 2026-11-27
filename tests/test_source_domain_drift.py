@@ -633,14 +633,19 @@ def test_the_nullable_domains_are_the_measured_ones(snapshot):
     }
 
 
-def test_the_agenda_snapshot_observes_the_whole_table_of_an_unpublished_build(agenda_snapshot):
+def test_the_agenda_snapshot_observes_the_published_table(agenda_snapshot):
     """unified_agenda is observed over all 60 retained editions (241,726 rows), RIN_RELATION over its list elements.
 
-    The RIN_RELATION counts equal the independent lxml parse in work/agenda-related-rins-20261030 (28,720
-    related RINs); the scalar columns equal the live table's, since the build equals live on every one of
-    them. The build is not published yet, so no publisher URL is recorded; re-pin once it is.
+    Re-pinned to the live published unified_agenda generation on data.spicygov.ai (ss-cdaa). The RIN_RELATION
+    counts reconcile 0/0 to the 60 retained XML originals (28,720 related RINs) and the live hosted
+    agenda_related_rins view, while retaining the undocumented 'Section 3(f)(1) Significant' priority_category
+    finding (833 rows) and the four accepted RIN_RELATION findings.
     """
 
+    assert agenda_snapshot.observed_at == "2026-11-27T08:46:36Z"
+    assert agenda_snapshot.producer_revision == (
+        "publication.v2.json sha256:adb9ff83a000194201be1aef00bb360d574fb9b3ef7e867c71781848faf0875f"
+    )
     assert sorted(agenda_snapshot.domains) == [key for key in sorted(DOMAIN_KEYS) if key.startswith("unified-agenda-")]
     relation = agenda_snapshot.domains["unified-agenda-rin-relation"]
     assert relation.column == "related_rins.rin_relation"
@@ -658,8 +663,15 @@ def test_the_agenda_snapshot_observes_the_whole_table_of_an_unpublished_build(ag
         "Section 3(f)(1) Significant"] == 833
     assert "No Stage" not in dict(agenda_snapshot.domains["unified-agenda-rule-stage"].value_counts)
     [source] = agenda_snapshot.sources
-    assert source["publisher_url"] is None and source["table"] == "unified_agenda"
-    assert source["row_count"] == 241_726 and str(source["bytes_digest"]).startswith("sha256:")
+    assert source["table"] == "unified_agenda"
+    assert source["publisher_url"] == (
+        f"{FORK_PUBLIC_URL}/generations/unified-agenda/"
+        "56b8d3a11f93b072570a23fa89783bd95f64df26368093c3843b251f359e28a8/unified_agenda.parquet"
+    )
+    assert source["digest_basis"] == "publication-index"
+    assert source["bytes_digest"] == "sha256:2c12c63a5a365a820b2e80760dedbcc8ed8f73e93dac40c1c5d3d8a05391ad57"
+    assert source["byte_length"] == 66_496_140
+    assert source["row_count"] == 241_726
 
 
 def test_a_list_member_domain_is_observed_over_its_elements(tmp_path, documented):

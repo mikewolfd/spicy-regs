@@ -190,22 +190,22 @@ someone re-observes.
 
 `observed-domain-snapshot-2026-10-30-unified-agenda.json` observes
 `unified_agenda` whole: its five domains, `RIN_RELATION` included, over all 60
-retained editions (241,726 rows). A `related_rins.rin_relation` domain counts
+published editions (241,726 rows). A `related_rins.rin_relation` domain counts
 the 28,720 list elements, so its `row_count` is elements and its source's
-`row_count` table rows. It was observed from the source-only replay built on the
-branch that added the column, before that generation was published, so it
-records no publisher URL (`--unpublished`); its digest names that local build,
-whose other columns equal the live table's both ways. Its `producer_revision`
-names the rebased commit; the build ran at the pre-rebase `ad3fc0e7`, whose tree
-differs only in generation-retention files. The pin holds only if that exact
-replay (two builds, byte-identical) is what ships; an incremental rollup writes
-different bytes and counts. Nothing in the gate re-reads published bytes, so
-re-pin it as part of publishing whichever generation ships:
+`row_count` table rows. Re-pinned on 2026-11-27 against the live published
+`unified_agenda` generation at `https://data.spicygov.ai` (publication index
+`sha256:adb9ff83a000194201be1aef00bb360d574fb9b3ef7e867c71781848faf0875f`,
+generation `56b8d3a11f93b072570a23fa89783bd95f64df26368093c3843b251f359e28a8`,
+member `sha256:2c12c63a5a365a820b2e80760dedbcc8ed8f73e93dac40c1c5d3d8a05391ad57`,
+`"digest_basis": "publication-index"`), replacing the earlier unpublished
+2026-10-31 local candidate pin with identical value counts across all five
+domains. Re-pin after a future Unified Agenda generation change with:
 
 ```
-scripts/check_source_domain_drift.py --observe --data-dir <dir with unified_agenda.parquet> \
+SPICY_REGS_R2_URL=https://data.spicygov.ai \
+uv run --frozen python scripts/check_source_domain_drift.py --observe \
     --snapshot observed-domain-snapshot-2026-10-30-unified-agenda.json \
-    --observed-at <ISO-8601> --producer-revision <sha> --write-snapshot
+    --observed-at <ISO-8601> --producer-revision "publication.v2.json sha256:<index digest>" --write-snapshot
 ```
 
 Each domain lives in exactly one dated file; the check refuses a domain two

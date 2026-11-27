@@ -110,14 +110,20 @@ def normalize_retained_edition(
 ) -> list[dict]:
     """Read an exact retained edition offline using the maintained source checks.
 
-    The table keeps its strip-only normalization. Historical repair is shared
-    with acquisition, qualified by the full original digest, and receipted.
+    The table keeps its strip-only normalization across every column (leading
+    and trailing whitespace is stripped; internal whitespace is preserved
+    verbatim). Historical repair is shared with acquisition, qualified by the
+    full original digest, and receipted.
     ``related_rins`` is None when the record states no ``RELATED_RIN_LIST``;
-    each entry's RIN and relation are stripped, never shape-checked, so
-    self-references, repeats and cut-off values ("Related t") stay as stated.
-    SpicyDocs' projection collapses internal whitespace instead; the two agree
-    on all 28,720 related RINs of the 60 retained editions only because none
-    holds an internal whitespace run.
+    each entry's RIN and relation are edge-stripped only and never
+    shape-checked, so self-references, repeats, malformed values, cut-off
+    values ("Related t"), and any internal whitespace stay verbatim for
+    ``agenda_related_rins`` and the domain-drift gate (owner Q15, ss-cdaa).
+    SpicyDocs' ``project_unified_agenda_edition`` intentionally collapses
+    internal whitespace runs instead (RefSpec citation-box normalization);
+    the two agree on all 28,720 related RINs of the 60 retained editions
+    because none holds an internal whitespace run, and intentionally diverge
+    on internal whitespace runs.
     No rows or success receipt escape a failed whole-edition scan.
     """
     import hashlib

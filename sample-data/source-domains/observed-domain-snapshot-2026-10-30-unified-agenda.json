@@ -139,13 +139,14 @@
     }
   ],
   "format_version": "spicyregs-source-domains/observed-v1",
-  "observed_at": "2026-10-31T01:30:00Z",
-  "producer_revision": "2546c1c9463c0177748cf61a8b98be93f04a7fae",
+  "observed_at": "2026-11-27T08:46:36Z",
+  "producer_revision": "publication.v2.json sha256:adb9ff83a000194201be1aef00bb360d574fb9b3ef7e867c71781848faf0875f",
   "sources": [
     {
-      "byte_length": 66495631,
-      "bytes_digest": "sha256:e92f34f72f934b438d667a78790d14aaca77ff9de0eb8f510d54cfdbfc5f35de",
-      "publisher_url": null,
+      "byte_length": 66496140,
+      "bytes_digest": "sha256:2c12c63a5a365a820b2e80760dedbcc8ed8f73e93dac40c1c5d3d8a05391ad57",
+      "digest_basis": "publication-index",
+      "publisher_url": "https://data.spicygov.ai/generations/unified-agenda/56b8d3a11f93b072570a23fa89783bd95f64df26368093c3843b251f359e28a8/unified_agenda.parquet",
       "row_count": 241726,
       "table": "unified_agenda"
     }
