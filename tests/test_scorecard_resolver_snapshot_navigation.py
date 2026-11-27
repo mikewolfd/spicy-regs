@@ -1,6 +1,4 @@
 """Resolver source snapshots remain distinct from current business entities."""
-from copy import deepcopy
-
 import pytest
 
 from spicy_regs.explorer_navigation import declarations, published_navigation, target_keys
@@ -61,15 +59,13 @@ def test_resolver_snapshot_is_edition_qualified_in_both_directions(tmp_path, sou
     ('source', 'source_snapshot_id'), ('source', 'scorecard_id'),
     ('target', 'snapshot_id'), ('target', 'scorecard_id'),
 ])
-def test_old_main_schema_cannot_borrow_snapshot_context_from_receipts(source, table, field):
+def test_old_main_schema_cannot_drop_snapshot_context_fields(source, table, field):
     spec = next(s for s in declarations(RETIRED_PROCESSING_JOINS)
                 if s['id'] == 'recorded_snapshot_' + source + '_scorecard_snapshots')
     schemas = {source: [('source_snapshot_id', 'VARCHAR'), ('scorecard_id', 'VARCHAR')],
                'scorecard_snapshots': [('snapshot_id', 'VARCHAR'), ('scorecard_id', 'VARCHAR')]}
     owner = source if table == 'source' else 'scorecard_snapshots'
     schemas[owner] = [c for c in schemas[owner] if c[0] != field]
-    spec = deepcopy(spec)
-    spec['receiptFields'] = ['source_snapshot_id', 'snapshot_id', 'scorecard_id']
     target = published_navigation([spec], schemas)[0]['targets'][0]
     assert not target['directions']['forward']['available']
     assert not target['directions']['reverse']['available']

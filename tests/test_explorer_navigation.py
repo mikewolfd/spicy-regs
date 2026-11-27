@@ -128,7 +128,7 @@ def test_fcc_proceedings_require_name_and_native_id_and_document_urls_are_offers
     assert target_keys(t,{'name':'26-189','id_proceeding':'1784669453334'}, {}) == ['26-189','1784669453334']
     assert target_keys(t,{'name':'26-189','id_proceeding':None}, {}) is None
     document_recipe=recipe('fcc_filing_documents')
-    assert document_recipe['receiptFields'] == []
+    assert all('receipt' not in key.lower() for key in document_recipe)
     assert document_recipe['fields'] == ['documents']
     d=document_recipe['targets'][0]
     assert target_keys(d,{'src':'javascript:alert(1)'},{}) is None
@@ -248,10 +248,9 @@ def test_native_legal_nested_key_readiness_checks_inner_keys_and_outer_guards():
     assert not cfr['sourceAvailable']
 
 
-def test_main_array_cannot_borrow_missing_row_context_or_receipt_fields():
+def test_main_array_cannot_borrow_missing_row_context():
     from spicy_regs.explorer_navigation import published_navigation
     spec = recipe('vote_amendments')
-    spec['receiptFields'] = ['congress', 'chamber', 'vote_id']
     schemas = {'roll_call_votes': [('amendments', 'STRUCT(number VARCHAR)[]'),
                                   ('congress', 'INTEGER'), ('chamber', 'VARCHAR')],
                'amendments': [('amendment_id', 'VARCHAR')]}

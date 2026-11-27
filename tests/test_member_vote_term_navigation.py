@@ -36,7 +36,7 @@ def test_service_term_uses_one_recipe_derived_from_the_original_measured_relatio
     assert (spec['source'], target['table'], target['columns']) == (
         original.child, original.parent, list(original.parent_columns))
     assert target['guards'][0]['values'] == [HALF_OPEN, INCLUSIVE_END]
-    assert not spec['receiptFields']
+    assert all('receipt' not in key.lower() for key in spec)
 
 
 @pytest.mark.parametrize('index', ['0', '1', '29', 0, 1, 29])

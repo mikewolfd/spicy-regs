@@ -38,10 +38,8 @@ def route(table: str, columns: tuple[str, ...], keys: tuple[dict, ...], *guards:
 def array(identifier: str, source: str, fields: tuple[str, ...], targets: tuple[dict, ...], *,
           meaning: str, element_path: tuple[str, ...] = (),
           mode: str = "array", candidates: bool = False) -> dict:
-    # receiptFields named what the site's receipt lookup read beside a reference; the lookup is retired
-    # (ss-vse3, 2026-11-10), and the key stays, empty, because the deployed site refuses a recipe without it.
     return {"id": identifier, "source": source, "fields": list(fields), "targets": list(targets),
-            "mode": mode, "candidates": candidates, "meaning": meaning, "receiptFields": [],
+            "mode": mode, "candidates": candidates, "meaning": meaning,
             "elementPath": list(element_path), "ruleVersion": "source-navigation/1"}
 
 
