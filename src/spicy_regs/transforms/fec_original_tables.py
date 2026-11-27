@@ -15,6 +15,8 @@ two-part page); it is a join key to fec_collections, not the part that held a ro
 
 The selection also states how many rows its admitted originals hold per table; the
 conversion's qualification refuses a generation whose rebuilt table holds any other count.
+Every HTTP-200 source page excluded by body-boundary checks must carry an explicit per-SHA
+disposition in ``fec_original_selection.json`` backed by raw visual review (ss-j4vz).
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
-from typing import NotRequired, TypedDict
+from typing import Any, NotRequired, TypedDict
 from urllib.parse import urljoin, urlsplit
 
 import pyarrow as pa
@@ -36,6 +38,9 @@ from .fec_query import AMOUNT_TYPE, exact_amount
 IDENTITY_VERSION = "fec-original-tables/1"
 VERSION = "fec-original-tables/1"
 SELECTION_PATH = Path(__file__).with_name("fec_original_selection.json")
+EXCLUDED_PAGE_DISPOSITIONS = frozenset({"excluded_with_reason"})
+EXCLUDED_PAGE_CATEGORIES = frozenset({"source_backed_refusal", "accepted_coverage_limit", "table_scope_refusal"})
+EXCLUDED_PAGE_REFUSALS = frozenset({"unsupported_body_boundaries"})
 TABLES = (
     "fec_historical_ie_statistics",
     "fec_research_meeting_observations",
@@ -102,10 +107,47 @@ class Rebuilt:
     rows: list = field(default_factory=list)
     # (source_sha256, reason) for every selected original or row that was not published.
     refusals: list = field(default_factory=list)
+    # source_sha256 -> validated explicit disposition record for excluded HTTP-200 source pages.
+    dispositions: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 def _json(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+
+
+def _validate_excluded_page_dispositions(document):
+    dispositions = document.get("excluded_page_dispositions")
+    if not isinstance(dispositions, dict):
+        raise ValueError("FEC originals selection must declare excluded_page_dispositions as an object")
+    source_pages = {
+        entry["source_sha256"]: entry
+        for entry in document.get("originals", [])
+        if entry.get("table") == "fec_reference_source_pages"
+    }
+    for sha, item in dispositions.items():
+        if sha not in source_pages:
+            raise ValueError(f"excluded_page_dispositions names an unknown source page: {sha}")
+        entry = source_pages[sha]
+        if entry.get("acquisition_receipt") is None:
+            raise ValueError(f"excluded_page_dispositions cannot cover a receipt-less source page: {sha}")
+        if not isinstance(item, dict):
+            raise ValueError(f"excluded_page_dispositions entry must be an object: {sha}")
+        if item.get("disposition") not in EXCLUDED_PAGE_DISPOSITIONS:
+            raise ValueError(f"Unsupported excluded page disposition for {sha}: {item.get('disposition')!r}")
+        if item.get("category") not in EXCLUDED_PAGE_CATEGORIES:
+            raise ValueError(f"Unsupported excluded page category for {sha}: {item.get('category')!r}")
+        if item.get("extractor_refusal") not in EXCLUDED_PAGE_REFUSALS:
+            raise ValueError(f"Unsupported excluded page extractor_refusal for {sha}: {item.get('extractor_refusal')!r}")
+        if item.get("source_url") != entry.get("source_url"):
+            raise ValueError(f"excluded_page_dispositions source_url differs from selection for {sha}")
+        for field_name in ("reason_code", "rationale", "visual_review_doc"):
+            value = item.get(field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"excluded_page_dispositions.{field_name} must be a non-empty string for {sha}")
+        covered = item.get("covered_by_tables")
+        if not isinstance(covered, list) or any(not isinstance(name, str) or not name.strip() for name in covered):
+            raise ValueError(f"excluded_page_dispositions.covered_by_tables must be a list of table names for {sha}")
+    return dispositions
 
 
 def _document(path=SELECTION_PATH):
@@ -114,11 +156,17 @@ def _document(path=SELECTION_PATH):
         raise ValueError("Unsupported FEC originals selection")
     if set(document.get("expected_rows", {})) != set(TABLES):
         raise ValueError("FEC originals selection must state the expected rows of every rebuilt table")
+    _validate_excluded_page_dispositions(document)
     return document
 
 
 def selection(path=SELECTION_PATH):
     return _document(path)["originals"]
+
+
+def excluded_page_dispositions(path=SELECTION_PATH):
+    """Explicit per-SHA dispositions for HTTP-200 source pages excluded by body-boundary checks."""
+    return _document(path)["excluded_page_dispositions"]
 
 
 def expected_rows(table, path=SELECTION_PATH):
@@ -576,7 +624,7 @@ BUILDERS = {
 }
 
 
-def rebuild(table, *, store=None, originals=None):
+def rebuild(table, *, store=None, originals=None, dispositions=None):
     """Rows of one table from its selected originals: one receipt and one original read each."""
     if table not in BUILDERS:
         raise ValueError(f"No originals builder for {table}")
@@ -584,31 +632,68 @@ def rebuild(table, *, store=None, originals=None):
         from spicy_docs.storage.raw_archive import CentralRawArchiveStore
 
         store = CentralRawArchiveStore(create=False)
+    active_dispositions: dict[str, dict[str, Any]] | None = None
+    if table == "fec_reference_source_pages":
+        if dispositions is not None:
+            active_dispositions = dict(dispositions)
+        elif originals is None:
+            active_dispositions = excluded_page_dispositions()
     result = Rebuilt()
+    seen_shas: set[str] = set()
     for entry in originals if originals is not None else selection():
         if entry["table"] != table:
             continue
+        sha = entry["source_sha256"]
+        seen_shas.add(sha)
         context = receipt_context(store, entry)
         refusal = receipt_refusal(context)
         if refusal is not None:
-            result.refusals.append((entry["source_sha256"], refusal))
+            if active_dispositions is not None and sha in active_dispositions:
+                raise ValueError(
+                    f"Source page declared in excluded_page_dispositions was refused by receipt ({refusal}), "
+                    f"not {active_dispositions[sha].get('extractor_refusal')!r}: {sha}"
+                )
+            result.refusals.append((sha, refusal))
             continue
         if context.get("source_url", entry["source_url"]) != entry["source_url"]:
             # The receipt records what was fetched; a selection URL copied from elsewhere must agree with it.
-            raise ValueError(f"Selected source_url differs from its acquisition receipt: {entry['source_sha256']}")
+            raise ValueError(f"Selected source_url differs from its acquisition receipt: {sha}")
         ctx = _Original(table, entry, context.get("acquired_at"))
         BUILDERS[table](ctx, read_original(store, entry))
         status, reason = ctx.disposition_status or ("unsupported", "No disposition")
         if not status.startswith("mapped"):
-            result.refusals.append((entry["source_sha256"], f"{status}: {reason}"))
+            if active_dispositions is not None and sha in active_dispositions:
+                raise ValueError(
+                    f"Source page declared in excluded_page_dispositions returned {status!r} instead of "
+                    f"{active_dispositions[sha].get('extractor_refusal')!r}: {sha}"
+                )
+            result.refusals.append((sha, f"{status}: {reason}"))
             continue
         if table == "fec_reference_source_pages":
             # Second check behind the receipt: only a page whose body was extracted is a page
             # (a title saying the request failed, an empty body, unknown body boundaries).
             kept = [row for row in ctx.rows if row["content_status"] == "body_extracted"]
-            for row in ctx.rows:
-                if row["content_status"] != "body_extracted":
-                    result.refusals.append((entry["source_sha256"], row["content_status"]))
+            refused_statuses = [row["content_status"] for row in ctx.rows if row["content_status"] != "body_extracted"]
+            for content_status in refused_statuses:
+                result.refusals.append((sha, content_status))
+                if active_dispositions is not None and content_status in EXCLUDED_PAGE_REFUSALS:
+                    declared = active_dispositions.get(sha)
+                    if declared is None:
+                        raise ValueError(f"Excluded HTTP-200 source page lacks an explicit disposition: {sha}")
+                    if declared.get("extractor_refusal") != content_status:
+                        raise ValueError(f"Excluded HTTP-200 source page disposition mismatch for {sha}")
+                    result.dispositions[sha] = declared
+            if active_dispositions is not None and sha in active_dispositions:
+                expected_refusal = active_dispositions[sha].get("extractor_refusal")
+                if refused_statuses != [expected_refusal]:
+                    raise ValueError(
+                        f"Source page declared in excluded_page_dispositions was not refused as declared "
+                        f"({expected_refusal!r}): {sha}"
+                    )
             ctx.rows = kept
         result.rows.extend(ctx.rows)
+    if dispositions is not None and active_dispositions is not None:
+        unseen = sorted(set(active_dispositions) - seen_shas)
+        if unseen:
+            raise ValueError(f"Declared excluded_page_dispositions were not encountered in originals: {unseen}")
     return result
