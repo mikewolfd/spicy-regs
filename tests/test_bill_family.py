@@ -2172,3 +2172,340 @@ def test_a_refused_cosponsor_read_keeps_the_prior_rows(tmp_path, scoped, monkeyp
     [bill] = pq.read_table(second["congress_bills"]).to_pylist()
     assert (bill["update_date_including_text"], bill["cosponsors_outcome"]) == ("2026-09-20T00:00:00Z", "populated")
     assert pq.read_table(second["bill_cosponsors"]).to_pylist() == held
+
+
+# --------------------------------------------------------------------------- #
+# Held-row reclassification & empty-string cleanup (ss-kj95)
+# --------------------------------------------------------------------------- #
+
+
+def test_held_bill_versions_reclassify_short_bills_and_clean_empty_dates_without_refetch(tmp_path):
+    """Short full-text bills, newly covered slugs, and empty version_date clean deterministically with body_bytes=None."""
+    from spicy_regs.transforms.build_bill_family import reclassify_held_bill_versions
+
+    columns = TABLE_CONTRACTS["bill_versions"].columns
+    rows = [
+        # Short bill previously demoted to kind_uncertain (full_text_slug_thin); body_bytes absent (None)
+        {
+            "bill_id": "119-hr-10",
+            "version_code": "introduced-in-house",
+            "source": "govinfo",
+            "label": "Introduced in House",
+            "version_date": "",
+            "package_id": "BILLS-119hr10ih",
+            "section_count": "3",
+            "kind": "kind_uncertain",
+            "kind_rule": "full_text_slug_thin",
+            "kind_label": "Full bill text (short — verify)",
+            "kind_warning": "unusually short — may be incomplete",
+            "kind_section_count": "3",
+            "kind_body_bytes": None,
+        },
+        # Truly empty parsed body stays kind_uncertain with full_text_slug_empty_body
+        {
+            "bill_id": "119-hr-11",
+            "version_code": "introduced-in-house",
+            "source": "govinfo",
+            "label": "Introduced in House",
+            "version_date": "2025-01-03T05:00:00Z",
+            "package_id": "BILLS-119hr11ih",
+            "section_count": "0",
+            "kind": "kind_uncertain",
+            "kind_rule": "full_text_slug_thin",
+            "kind_label": "Full bill text (short — verify)",
+            "kind_warning": "unusually short — may be incomplete",
+            "kind_section_count": "0",
+            "kind_body_bytes": None,
+        },
+        # Previously unknown slugs now covered exhaustively
+        *[
+            {
+                "bill_id": f"119-s-{idx}",
+                "version_code": code,
+                "source": "govinfo",
+                "label": label,
+                "version_date": "2025-02-01T05:00:00Z",
+                "package_id": pkg,
+                "section_count": "2",
+                "kind": "unknown",
+                "kind_rule": "unknown",
+                "kind_label": "Unknown format",
+                "kind_warning": None,
+                "kind_section_count": "2",
+                "kind_body_bytes": None,
+            }
+            for idx, (code, label, pkg) in enumerate(
+                (
+                    ("private-law", "Private Law", None),
+                    ("rfs", "Referred in Senate", "BILLS-119s2rfs"),
+                    ("ats", "Agreed to Senate", "BILLS-119s3ats"),
+                    ("reported-in-senate", "Reported to Senate", "BILLS-119s4rs"),
+                ),
+                start=1,
+            )
+        ],
+    ]
+    path = tmp_path / "bill_versions.parquet"
+    filled = [{c: None for c in columns} | row for row in rows]
+    pq.write_table(pa.Table.from_pylist(filled, schema=pa.schema([(c, pa.string()) for c in columns])), path)
+
+    counts = reclassify_held_bill_versions(path)
+    assert counts == {"rows": 6, "kind_moved": 5, "version_date_cleaned": 1, "rows_moved": 6}
+    after = {row["bill_id"]: row for row in pq.read_table(path).to_pylist()}
+    assert (after["119-hr-10"]["kind"], after["119-hr-10"]["kind_rule"], after["119-hr-10"]["kind_warning"]) == (
+        "full_text",
+        "full_text_slug",
+        None,
+    )
+    assert after["119-hr-10"]["kind_label"] == "Full bill text"
+    assert after["119-hr-10"]["version_date"] is None
+    assert (after["119-hr-11"]["kind"], after["119-hr-11"]["kind_rule"]) == (
+        "kind_uncertain",
+        "full_text_slug_empty_body",
+    )
+    assert after["119-hr-11"]["version_date"] == "2025-01-03T05:00:00Z"
+    for bill_id in ("119-s-1", "119-s-2", "119-s-3", "119-s-4"):
+        assert (after[bill_id]["kind"], after[bill_id]["kind_rule"], after[bill_id]["kind_warning"]) == (
+            "full_text",
+            "full_text_slug",
+            None,
+        )
+
+    mtime = path.stat().st_mtime_ns
+    again = reclassify_held_bill_versions(path)
+    assert again == {"rows": 6, "kind_moved": 0, "version_date_cleaned": 0, "rows_moved": 0}
+    assert path.stat().st_mtime_ns == mtime, "second pass changes nothing and does not rewrite the file"
+
+
+def test_held_bill_versions_reclassify_works_on_native_schema_without_kind_body_bytes(tmp_path):
+    """Native subject bill_versions lacks kind_rule and kind_body_bytes; reclassification stays deterministic."""
+    from spicy_regs.legislative_documents import map_subject, subject_schema
+    from spicy_regs.transforms.build_bill_family import reclassify_held_bill_versions
+
+    columns = TABLE_CONTRACTS["bill_versions"].columns
+    raw_rows = [
+        dict.fromkeys(columns)
+        | {
+            "bill_id": "119-hr-50",
+            "version_code": "introduced-in-house",
+            "source": "govinfo",
+            "label": "Introduced in House",
+            "version_date": "",
+            "package_id": "BILLS-119hr50ih",
+            "section_count": "4",
+            "kind": "kind_uncertain",
+            "kind_label": "Full bill text (short — verify)",
+            "kind_warning": "unusually short — may be incomplete",
+        },
+        dict.fromkeys(columns)
+        | {
+            "bill_id": "119-s-51",
+            "version_code": "rfs",
+            "source": "govinfo",
+            "label": "Referred in Senate",
+            "version_date": "2025-03-01T05:00:00Z",
+            "package_id": "BILLS-119s51rfs",
+            "section_count": "2",
+            "kind": "unknown",
+            "kind_label": "Unknown format",
+            "kind_warning": None,
+        },
+    ]
+    native_schema = subject_schema("bill_versions")
+    assert "kind_body_bytes" not in native_schema.names and "kind_rule" not in native_schema.names
+    path = tmp_path / "bill_versions.native.parquet"
+    pq.write_table(
+        pa.Table.from_pylist([map_subject("bill_versions", r) for r in raw_rows], schema=native_schema),
+        path,
+    )
+    counts = reclassify_held_bill_versions(path)
+    assert counts == {"rows": 2, "kind_moved": 2, "version_date_cleaned": 1, "rows_moved": 2}
+    repaired = pq.read_table(path)
+    assert repaired.schema.equals(native_schema), "native Arrow column types stay intact"
+    rows = {r["bill_id"]: r for r in repaired.to_pylist()}
+    assert rows["119-hr-50"]["kind"] == "full_text" and rows["119-hr-50"]["version_date"] is None
+    assert rows["119-s-51"]["kind"] == "full_text" and rows["119-s-51"]["section_count"] == 2
+
+
+def test_held_section_diffs_and_cosponsors_clean_empty_strings_preserving_provenance(tmp_path):
+    """Empty date and district strings normalize to None while raw status and XML provenance stay verbatim."""
+    from spicy_regs.transforms.build_bill_family import HELD_EMPTY_STRING_COLUMNS, clean_held_empty_strings
+
+    diff_cols = TABLE_CONTRACTS["section_diffs"].columns
+    diff_path = tmp_path / "section_diffs.parquet"
+    diff_rows = [
+        dict.fromkeys(diff_cols)
+        | {
+            "bill_id": "119-hr-1",
+            "from_version_code": "ih",
+            "from_source": "govinfo",
+            "to_version_code": "enr",
+            "to_source": "govinfo",
+            "from_version_date": "",
+            "to_version_date": "",
+        },
+        dict.fromkeys(diff_cols)
+        | {
+            "bill_id": "119-hr-2",
+            "from_version_code": "ih",
+            "from_source": "govinfo",
+            "to_version_code": "eh",
+            "to_source": "govinfo",
+            "from_version_date": "2025-01-03T05:00:00Z",
+            "to_version_date": "2025-02-01T05:00:00Z",
+        },
+    ]
+    pq.write_table(pa.Table.from_pylist(diff_rows, schema=pa.schema([(c, pa.string()) for c in diff_cols])), diff_path)
+    diff_counts = clean_held_empty_strings(diff_path, HELD_EMPTY_STRING_COLUMNS["section_diffs"])
+    assert diff_counts == {"rows": 2, "from_version_date_cleaned": 1, "to_version_date_cleaned": 1, "rows_moved": 1}
+    repaired_diffs = {r["bill_id"]: r for r in pq.read_table(diff_path).to_pylist()}
+    assert repaired_diffs["119-hr-1"]["from_version_date"] is None
+    assert repaired_diffs["119-hr-1"]["to_version_date"] is None
+    assert repaired_diffs["119-hr-2"]["to_version_date"] == "2025-02-01T05:00:00Z"
+    assert clean_held_empty_strings(diff_path, HELD_EMPTY_STRING_COLUMNS["section_diffs"])["rows_moved"] == 0
+
+    cosp_cols = TABLE_CONTRACTS["bill_cosponsors"].columns
+    cosp_path = tmp_path / "bill_cosponsors.parquet"
+    xml = "<item><bioguideId>A000001</bioguideId><sponsorshipWithdrawnDate/><district/></item>"
+    cosp_rows = [
+        dict.fromkeys(cosp_cols)
+        | {
+            "bill_id": "119-hr-1",
+            "input_sha256": "sha256:" + "a" * 64,
+            "cosponsor_index": "0",
+            "bioguide_id": "A000001",
+            "sponsorship_date": "2025-01-03",
+            "sponsorship_date_status": "valid",
+            "sponsorship_withdrawn_date": "",
+            "sponsorship_withdrawn_date_status": "empty",
+            "district": "",
+            "source_xml": xml,
+        },
+        dict.fromkeys(cosp_cols)
+        | {
+            "bill_id": "119-hr-1",
+            "input_sha256": "sha256:" + "a" * 64,
+            "cosponsor_index": "1",
+            "bioguide_id": "B000002",
+            "sponsorship_date": "2025-01-03",
+            "sponsorship_date_status": "valid",
+            "sponsorship_withdrawn_date": "2025-02-01",
+            "sponsorship_withdrawn_date_status": "valid",
+            "district": "12",
+            "source_xml": "<item><bioguideId>B000002</bioguideId></item>",
+        },
+    ]
+    pq.write_table(pa.Table.from_pylist(cosp_rows, schema=pa.schema([(c, pa.string()) for c in cosp_cols])), cosp_path)
+    cosp_counts = clean_held_empty_strings(cosp_path, HELD_EMPTY_STRING_COLUMNS["bill_cosponsors"])
+    assert cosp_counts == {
+        "rows": 2,
+        "sponsorship_date_cleaned": 0,
+        "sponsorship_withdrawn_date_cleaned": 1,
+        "district_cleaned": 1,
+        "rows_moved": 1,
+    }
+    repaired_cosp = {r["bioguide_id"]: r for r in pq.read_table(cosp_path).to_pylist()}
+    assert repaired_cosp["A000001"]["sponsorship_withdrawn_date"] is None
+    assert repaired_cosp["A000001"]["district"] is None
+    assert repaired_cosp["A000001"]["sponsorship_withdrawn_date_status"] == "empty"
+    assert repaired_cosp["A000001"]["source_xml"] == xml
+    assert repaired_cosp["B000002"]["sponsorship_withdrawn_date"] == "2025-02-01"
+    assert repaired_cosp["B000002"]["district"] == "12"
+
+
+def test_build_bill_family_cleans_held_rows_without_refetching_bodies(tmp_path, scoped):
+    """Out-of-scope held rows from an earlier Congress reclassify and clean empty strings during a 119th run."""
+    prior = tmp_path / "prior"
+    prior.mkdir()
+    _seed_prior(
+        prior,
+        "bill_versions",
+        [
+            {
+                "bill_id": "118-hr-99",
+                "version_code": "introduced-in-house",
+                "source": "govinfo",
+                "label": "Introduced in House",
+                "version_date": "",
+                "package_id": "BILLS-118hr99ih",
+                "section_count": "2",
+                "kind": "kind_uncertain",
+                "kind_rule": "full_text_slug_thin",
+                "kind_label": "Full bill text (short — verify)",
+                "kind_warning": "unusually short — may be incomplete",
+            },
+            {
+                "bill_id": "118-s-42",
+                "version_code": "private-law",
+                "source": "congress",
+                "label": "Private Law",
+                "version_date": "",
+                "kind": "unknown",
+                "kind_rule": "unknown",
+                "kind_label": "Unknown format",
+            },
+        ],
+    )
+    _seed_prior(
+        prior,
+        "section_diffs",
+        [
+            {
+                "bill_id": "118-hr-99",
+                "from_version_code": "introduced-in-house",
+                "from_source": "govinfo",
+                "to_version_code": "enrolled-bill",
+                "to_source": "govinfo",
+                "from_version_date": "",
+                "to_version_date": "",
+                "item_count": "0",
+            }
+        ],
+    )
+    _seed_prior(
+        prior,
+        "bill_cosponsors",
+        [
+            {
+                "bill_id": "118-hr-99",
+                "input_sha256": "sha256:" + "b" * 64,
+                "cosponsor_index": "0",
+                "bioguide_id": "C000003",
+                "sponsorship_date": "2023-01-05",
+                "sponsorship_date_status": "valid",
+                "sponsorship_withdrawn_date": "",
+                "sponsorship_withdrawn_date_status": "empty",
+                "district": "",
+                "source_xml": "<item><sponsorshipWithdrawnDate/><district/></item>",
+            }
+        ],
+    )
+    # Seeded prior files live at _<table>_prior.parquet; expose them under <table>.parquet for _priors().
+    for name in ("bill_versions", "section_diffs", "bill_cosponsors"):
+        prior_scratch_path(prior, name).replace(prior / f"{name}.parquet")
+
+    body = StubBodyAcquirer()
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    out = {
+        path.stem: path
+        for path in build_bill_family(
+            run_dir,
+            bulk_acquirer=StubBulkAcquirer(),
+            body_acquirer=body,
+            max_version_fetches=0,
+            **_priors(prior),
+        )
+    }
+    assert body.requested == [], "no bodies may be fetched when cleaning held rows"
+    versions = {(row["bill_id"], row["version_code"]): row for row in pq.read_table(out["bill_versions"]).to_pylist()}
+    assert versions[("118-hr-99", "introduced-in-house")]["kind"] == "full_text"
+    assert versions[("118-hr-99", "introduced-in-house")]["version_date"] is None
+    assert versions[("118-s-42", "private-law")]["kind"] == "full_text"
+    assert versions[("118-s-42", "private-law")]["version_date"] is None
+    [diff] = pq.read_table(out["section_diffs"]).to_pylist()
+    assert diff["from_version_date"] is None and diff["to_version_date"] is None
+    [cosponsor] = pq.read_table(out["bill_cosponsors"]).to_pylist()
+    assert cosponsor["sponsorship_withdrawn_date"] is None and cosponsor["district"] is None
+    assert cosponsor["sponsorship_withdrawn_date_status"] == "empty"
+    assert cosponsor["source_xml"] == "<item><sponsorshipWithdrawnDate/><district/></item>"
