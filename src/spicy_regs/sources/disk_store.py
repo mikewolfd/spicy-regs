@@ -15,6 +15,7 @@ from dataclasses import dataclass
 import hashlib
 import os
 from pathlib import Path
+import re
 import shutil
 import sys
 from threading import RLock
@@ -52,6 +53,21 @@ def _copy_exact(source: BinaryIO, sink: BinaryIO, count: int, chunk_size: int = 
         if not piece:
             raise OSError('Local source ended before expected byte count')
         sink.write(piece)
+        remaining -= len(piece)
+
+
+def _skip_bytes(stream: BinaryIO | _ContextStream, count: int, chunk_size: int = 1024 * 1024) -> None:
+    """Advance ``stream`` by ``count`` bytes, seeking directly when supported."""
+    if count <= 0:
+        return
+    if getattr(stream, 'seekable', lambda: False)():
+        stream.seek(count)
+        return
+    remaining = count
+    while remaining > 0:
+        piece = stream.read(min(chunk_size, remaining))
+        if not piece:
+            raise OSError('Local source ended before requested range offset')
         remaining -= len(piece)
 
 
@@ -110,6 +126,12 @@ class _ContextStream:
     def read(self, size: int = -1) -> bytes:
         return self._stream.read(size)
 
+    def seekable(self) -> bool:
+        return bool(getattr(self._stream, 'seekable', lambda: False)())
+
+    def seek(self, offset: int, whence: int = 0) -> int:
+        return self._stream.seek(offset, whence)
+
     def close(self) -> None:
         if not self.closed:
             self.closed = True
@@ -126,6 +148,33 @@ class _ContextStream:
 
     def __exit__(self, exc_type, exc, tb) -> None:
         self.close()
+
+
+class _BoundedRangeStream:
+    """File-backed bounded slice stream for ranged ``DiskStore`` GETs without buffering full objects."""
+
+    def __init__(self, stream, length: int):
+        self._stream = stream
+        self._remaining = length
+
+    def read(self, size: int = -1) -> bytes:
+        if self._remaining <= 0:
+            return b''
+        if size is None or size < 0 or size > self._remaining:
+            size = self._remaining
+        data = self._stream.read(size)
+        self._remaining -= len(data)
+        return data
+
+    def close(self) -> None:
+        self._stream.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+        return False
 
 
 class DiskStore:
@@ -190,20 +239,63 @@ class DiskStore:
                 head['ChecksumSHA256'] = self.checksums[Key]
             return head
 
-    def get_object(self, *, Bucket, Key):
+    @staticmethod
+    def _parse_range(header: str, size: int) -> tuple[int, int]:
+        if not isinstance(header, str):
+            raise ValueError('Unsupported private store range')
+        match = re.fullmatch(r'bytes=(\d*)-(\d*)', header)
+        if match is None or (not match[1] and not match[2]):
+            raise ValueError('Unsupported private store range')
+        if match[1]:
+            start = int(match[1])
+            end = min(int(match[2]), size - 1) if match[2] else size - 1
+        else:
+            suffix = int(match[2])
+            if suffix <= 0:
+                raise refused('InvalidRange')
+            start = max(0, size - suffix)
+            end = size - 1
+        if size == 0 or start >= size or end < start:
+            raise refused('InvalidRange')
+        return start, end
+
+    def get_object(self, *, Bucket, Key, Range=None, IfMatch=None):
         with self.lock:
             result = self.head_object(Bucket=Bucket, Key=Key)
-            self.calls.append({'method': 'get_object', 'key': Key})
+            if IfMatch is not None and result['ETag'] != IfMatch:
+                raise refused('PreconditionFailed')
+            call: dict[str, object] = {'method': 'get_object', 'key': Key}
             if Key in self.objects:
-                body: BinaryIO | _ContextStream = self.objects[Key].open('rb')
+                stream: BinaryIO | _ContextStream = self.objects[Key].open('rb')
             else:
                 reference = self._references[Key]
-                body = _ContextStream(
+                stream = _ContextStream(
                     reference.source.open_stream(),
                     expected_path=reference.source.path,
                     expected_state=reference.file_state,
                 )
-            return {**result, 'Body': body}
+            if Range is None:
+                self.calls.append(call)
+                return {**result, 'Body': stream}
+            size = result['ContentLength']
+            try:
+                start, end = self._parse_range(Range, size)
+                length = end - start + 1
+                _skip_bytes(stream, start)
+            except BaseException:
+                stream.close()
+                raise
+            call['range'] = Range
+            if IfMatch is not None:
+                call['if_match'] = IfMatch
+            self.calls.append(call)
+            return {
+                **result,
+                'ContentLength': length,
+                'ContentRange': f'bytes {start}-{end}/{size}',
+                'ResponseMetadata': {'HTTPStatusCode': 206, 'RetryAttempts': 0},
+                'Body': _BoundedRangeStream(stream, length),
+            }
 
     def _condition(self, key, if_match, if_none_match):
         if if_none_match not in (None, '*'):

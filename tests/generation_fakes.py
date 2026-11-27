@@ -5,6 +5,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from hashlib import md5, sha256
 from io import BytesIO
+import re
 
 from botocore.exceptions import ClientError
 
@@ -15,6 +16,28 @@ _SEEDED = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 def error(code):
     return ClientError({"Error": {"Code": code}}, "test")
+
+
+def _parse_range(header: str, size: int) -> tuple[int, int]:
+    match = re.fullmatch(r"bytes=(\d*)-(\d*)", header)
+    if match is None or (not match[1] and not match[2]):
+        raise ValueError(f"Invalid Range header: {header!r}")
+    if match[1]:
+        start = int(match[1])
+        end = min(int(match[2]), size - 1) if match[2] else size - 1
+    else:
+        suffix = int(match[2])
+        if suffix <= 0:
+            failure = error("InvalidRange")
+            failure.response["Error"]["ActualObjectSize"] = str(size)
+            raise failure
+        start = max(0, size - suffix)
+        end = size - 1
+    if size == 0 or start >= size or end < start:
+        failure = error("InvalidRange")
+        failure.response["Error"]["ActualObjectSize"] = str(size)
+        raise failure
+    return start, end
 
 
 def _md5(raw: bytes) -> bytes:
@@ -86,11 +109,24 @@ class Store:
         self.copies.append(Key)
         return {}
 
-    def get_object(self, *, Bucket, Key):
+    def get_object(self, *, Bucket, Key, Range=None, IfMatch=None):
         if Key not in self.objects:
             raise error("NoSuchKey")
         self.reads[Key] += 1
-        return {"Body": BytesIO(self.objects[Key]), "ETag": self._etag(Key)}
+        etag = self._etag(Key)
+        if IfMatch is not None and IfMatch != etag:
+            raise error("PreconditionFailed")
+        raw = self.objects[Key]
+        if Range is None:
+            return {"Body": BytesIO(raw), "ETag": etag, "ContentLength": len(raw)}
+        start, end = _parse_range(Range, len(raw))
+        return {
+            "Body": BytesIO(raw[start:end + 1]),
+            "ETag": etag,
+            "ContentLength": end - start + 1,
+            "ContentRange": f"bytes {start}-{end}/{len(raw)}",
+            "ResponseMetadata": {"HTTPStatusCode": 206, "RetryAttempts": 0},
+        }
 
     def put_object(self, *, Bucket, Key, Body, IfMatch=None, IfNoneMatch=None, ContentMD5=None, etag=None,
                    ChecksumSHA256=None, **kwargs):

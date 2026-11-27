@@ -55,10 +55,10 @@ class Counting(Store):
                 self.most_unread = max(self.most_unread, len(self.unread))
         return result
 
-    def get_object(self, *, Bucket, Key):
+    def get_object(self, *, Bucket, Key, Range=None, IfMatch=None):
         with self.lock:
             self.unread.discard(Key)
-        return super().get_object(Bucket=Bucket, Key=Key)
+        return super().get_object(Bucket=Bucket, Key=Key, Range=Range, IfMatch=IfMatch)
 
 
 def test_new_blob_costs_one_head_one_put_and_one_get_on_its_upload_worker(tmp_path, monkeypatch):
@@ -294,7 +294,7 @@ def test_read_backs_run_concurrently_and_each_blob_is_read_once(tmp_path):
     both, lock, arrivals = threading.Barrier(2, timeout=5), threading.Lock(), []
 
     class Overlapping(Store):
-        def get_object(self, *, Bucket, Key):
+        def get_object(self, *, Bucket, Key, Range=None, IfMatch=None):
             if Key in blob_keys(evidence):
                 with lock:
                     arrivals.append(Key)
@@ -304,7 +304,7 @@ def test_read_backs_run_concurrently_and_each_blob_is_read_once(tmp_path):
                         both.wait()
                     except threading.BrokenBarrierError:
                         pass
-            return super().get_object(Bucket=Bucket, Key=Key)
+            return super().get_object(Bucket=Bucket, Key=Key, Range=Range, IfMatch=IfMatch)
 
     store = Overlapping()
     publish(store, directory, evidence)
@@ -332,12 +332,13 @@ def test_blobs_are_read_back_in_bounded_chunks_without_local_scratch(tmp_path, m
             super().close()
 
     class Streaming(Store):
-        def get_object(self, *, Bucket, Key):
+        def get_object(self, *, Bucket, Key, Range=None, IfMatch=None):
             nonlocal active, peak
-            result = super().get_object(Bucket=Bucket, Key=Key)
+            result = super().get_object(Bucket=Bucket, Key=Key, Range=Range, IfMatch=IfMatch)
             if Key in blob_keys(evidence):
+                raw = result["Body"].read()
                 result["Body"].close()
-                result["Body"] = Bounded(self.objects[Key])
+                result["Body"] = Bounded(raw)
                 bodies.append(result["Body"])
                 active += 1
                 peak = max(peak, active)
@@ -378,11 +379,12 @@ def test_remote_stream_or_membership_failure_closes_body_and_never_publishes(tmp
             return super().read(min(size, 3))
 
     class Failing(Store):
-        def get_object(self, *, Bucket, Key):
-            result = super().get_object(Bucket=Bucket, Key=Key)
+        def get_object(self, *, Bucket, Key, Range=None, IfMatch=None):
+            result = super().get_object(Bucket=Bucket, Key=Key, Range=Range, IfMatch=IfMatch)
             if failure == "interrupted-body" and Key in blob_keys(evidence):
+                raw = result["Body"].read()
                 result["Body"].close()
-                result["Body"] = Interrupted(self.objects[Key])
+                result["Body"] = Interrupted(raw)
                 opened.append(result["Body"])
             return result
 

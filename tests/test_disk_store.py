@@ -194,6 +194,10 @@ def test_local_source_multipart_verifies_etag_and_immutability_with_zero_disk_by
     assert store.head_object(Bucket='private', Key='blob') == {'ContentLength': len(payload), 'ETag': expected_etag}
     with store.get_object(Bucket='private', Key='blob')['Body'] as body:
         assert body.read() == payload
+    ranged = store.get_object(Bucket='private', Key='blob', Range='bytes=10-29', IfMatch=expected_etag)
+    assert ranged['ContentLength'] == 20 and ranged['ResponseMetadata']['HTTPStatusCode'] == 206
+    with ranged['Body'] as body:
+        assert body.read() == payload[10:30]
 
     # Server-side copy shares the verified reference with zero disk writes and preserves ETag and immutability.
     store.copy_object(Bucket='private', Key='copy/blob', CopySource={'Bucket': 'private', 'Key': 'blob'})
@@ -253,3 +257,21 @@ def test_local_source_spills_divergent_bytes_and_detects_post_upload_source_muta
     source_file.write_bytes(b'X' * len(original))
     with pytest.raises(OSError, match='changed before read-back'):
         store.get_object(Bucket='private', Key='verified')
+
+
+def test_ranged_get_enforces_if_match_and_bounds(tmp_path):
+    store = DiskStore(tmp_path / 'store', bucket='private')
+    store.put_object(Bucket='private', Key='blob', Body=b'0123456789')
+    etag = store.head_object(Bucket='private', Key='blob')['ETag']
+    reply = store.get_object(Bucket='private', Key='blob', Range='bytes=2-6', IfMatch=etag)
+    assert reply['ContentLength'] == 5
+    assert reply['ContentRange'] == 'bytes 2-6/10'
+    assert reply['ResponseMetadata']['HTTPStatusCode'] == 206
+    with reply['Body'] as body:
+        assert body.read(2) == b'23'
+        assert body.read(10) == b'456'
+        assert body.read(10) == b''
+    with pytest.raises(ClientError, match='PreconditionFailed'):
+        store.get_object(Bucket='private', Key='blob', Range='bytes=0-1', IfMatch='"wrong"')
+    with pytest.raises(ClientError, match='InvalidRange'):
+        store.get_object(Bucket='private', Key='blob', Range='bytes=10-12', IfMatch=etag)
