@@ -20,11 +20,35 @@ from typing import Any, Mapping, Sequence
 from .runtime_bounds import checkpoint
 
 FORMAT = "spicy-regs-fec-release"
-VERSION = 1
+VERSION = 2
+SUPPORTED_VERSIONS = (1, 2)
 LIMIT = 1024 * 1024
+_MAX_EXPANDED_BYTES = 16 * LIMIT
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _FAMILY = re.compile(r"[a-z][a-z0-9_-]*\Z")
 _IDENTITY_GROUPS = ("policies", "dictionaries", "definitions")
+_V1_FIELDS = frozenset({"format", "version", "output_membership", "views", "consumer", "recovery"})
+_V2_FIELDS = _V1_FIELDS | frozenset({"shared"})
+_VIEW_FIELDS = frozenset({
+    "dependencies",
+    "sql_sha256",
+    "interpretation",
+    "population",
+    "as_of",
+    "acceptance_receipts",
+    "evidence_generations",
+})
+_SHARED_REF_FIELDS = (
+    "acceptance_receipts",
+    "interpretation",
+    "population",
+    "as_of",
+    "evidence_generations",
+)
+_SHARED_SECTIONS = frozenset((*_SHARED_REF_FIELDS, "dependencies"))
+_V2_REF_ONLY_FIELDS = frozenset(f"{field}_ref" for field in _SHARED_REF_FIELDS) | frozenset(
+    {"output_dependencies", "dependency_refs"}
+)
 
 
 def sha256(raw: bytes) -> str:
@@ -56,18 +80,162 @@ def _file_digest(path):
     return "sha256:" + digest.hexdigest()
 
 
-def parse_receipt(raw: bytes, expected_digest: str) -> dict:
-    """Verify the deployment pin before parsing a bounded, non-executable receipt."""
-    if not _DIGEST.fullmatch(expected_digest) or len(raw) > LIMIT:
-        raise ValueError("Invalid release digest or receipt byte limit")
-    if sha256(raw) != expected_digest:
-        raise ValueError("Release receipt bytes differ from deployment digest")
-    receipt = json.loads(raw, object_pairs_hook=_pairs, parse_constant=_constant)
-    fields = {"format", "version", "output_membership", "views", "consumer", "recovery"}
-    if (not isinstance(receipt, dict) or set(receipt) != fields
-            or receipt["format"] != FORMAT or type(receipt["version"]) is not int or receipt["version"] != VERSION):
+def _valid_acceptance_receipts(value: Any) -> bool:
+    return (
+        isinstance(value, list)
+        and bool(value)
+        and all(isinstance(pin, str) and bool(_DIGEST.fullmatch(pin)) for pin in value)
+    )
+
+
+def _valid_dependency_pin(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == {"family", "generation", "descriptor"}
+        and isinstance(value["family"], str)
+        and bool(_FAMILY.fullmatch(value["family"]))
+        and isinstance(value["generation"], str)
+        and bool(_DIGEST.fullmatch(value["generation"]))
+        and isinstance(value["descriptor"], dict)
+    )
+
+
+def _valid_shared_value(section: str, value: Any) -> bool:
+    if section == "acceptance_receipts":
+        return _valid_acceptance_receipts(value)
+    if section == "dependencies":
+        return _valid_dependency_pin(value)
+    if section == "interpretation":
+        return isinstance(value, dict) and bool(value)
+    if section in ("population", "as_of"):
+        return isinstance(value, str) and bool(value)
+    if section == "evidence_generations":
+        try:
+            _evidence_generations(value)
+        except ValueError:
+            return False
+        return True
+    return False
+
+
+def _normalize_v2_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
+    shared: dict[str, dict[str, Any]] = {}
+    shared_sizes: dict[str, dict[str, int]] = {}
+    if "shared" in receipt:
+        raw_shared = receipt["shared"]
+        if not isinstance(raw_shared, dict) or not raw_shared or not (set(raw_shared) <= _SHARED_SECTIONS):
+            raise ValueError("Invalid release receipt shared section")
+        for section, entries in raw_shared.items():
+            if not isinstance(entries, dict) or not entries:
+                raise ValueError(f"Invalid shared {section} inventory")
+            section_sizes: dict[str, int] = {}
+            for ref_id, value in entries.items():
+                if not isinstance(ref_id, str) or not ref_id or not _valid_shared_value(section, value):
+                    raise ValueError(f"Invalid shared {section} entry: {ref_id!r}")
+                section_sizes[ref_id] = len(_json(value).encode())
+            shared[section] = entries
+            shared_sizes[section] = section_sizes
+
+    output_membership = receipt["output_membership"]
+    output_sizes = {name: len(_json(pin).encode()) for name, pin in output_membership.items()}
+    used_refs: dict[str, set[str]] = {section: set() for section in shared}
+    expanded_bytes = 0
+    normalized_views: dict[str, Any] = {}
+
+    for view_name, raw_view in receipt["views"].items():
+        if not isinstance(raw_view, dict):
+            normalized_views[view_name] = raw_view
+            continue
+        view: dict[str, Any] = {
+            key: value
+            for key, value in raw_view.items()
+            if key not in _V2_REF_ONLY_FIELDS and key not in _SHARED_REF_FIELDS and key != "dependencies"
+        }
+        for field in _SHARED_REF_FIELDS:
+            ref_key = f"{field}_ref"
+            if ref_key in raw_view:
+                if field in raw_view:
+                    raise ValueError(f"View repeats inline and shared {field}: {view_name}")
+                ref_id = raw_view[ref_key]
+                if not isinstance(ref_id, str) or not ref_id:
+                    raise ValueError(f"Invalid shared {field} reference in view: {view_name}")
+                pool = shared.get(field)
+                if pool is None or ref_id not in pool:
+                    raise ValueError(f"Unknown shared {field} reference in view {view_name}: {ref_id}")
+                expanded_bytes += shared_sizes[field][ref_id]
+                if expanded_bytes > _MAX_EXPANDED_BYTES:
+                    raise ValueError("Expanded release receipt exceeds byte limit")
+                used_refs[field].add(ref_id)
+                view[field] = deepcopy(pool[ref_id])
+            elif field in raw_view:
+                view[field] = raw_view[field]
+
+        has_inline = "dependencies" in raw_view
+        has_output = "output_dependencies" in raw_view
+        has_refs = "dependency_refs" in raw_view
+        if has_output or has_refs:
+            deps: dict[str, Any] = {}
+            if has_inline:
+                if not isinstance(raw_view["dependencies"], dict):
+                    raise ValueError(f"Invalid view dependencies: {view_name}")
+                deps.update(raw_view["dependencies"])
+            if has_output:
+                out_deps = raw_view["output_dependencies"]
+                if not isinstance(out_deps, list) or not out_deps:
+                    raise ValueError(f"Invalid output_dependencies in view: {view_name}")
+                for table in out_deps:
+                    if not isinstance(table, str) or not table or table not in output_membership:
+                        raise ValueError(f"Unknown output_membership dependency in view {view_name}: {table!r}")
+                    if table in deps:
+                        raise ValueError(f"Duplicate dependency table in view {view_name}: {table}")
+                    expanded_bytes += output_sizes[table]
+                    if expanded_bytes > _MAX_EXPANDED_BYTES:
+                        raise ValueError("Expanded release receipt exceeds byte limit")
+                    deps[table] = deepcopy(output_membership[table])
+            if has_refs:
+                dep_refs = raw_view["dependency_refs"]
+                if not isinstance(dep_refs, dict) or not dep_refs:
+                    raise ValueError(f"Invalid dependency_refs in view: {view_name}")
+                dep_pool = shared.get("dependencies")
+                for table, ref_id in dep_refs.items():
+                    if not isinstance(table, str) or not table or not isinstance(ref_id, str) or not ref_id:
+                        raise ValueError(f"Invalid dependency_refs entry in view: {view_name}")
+                    if dep_pool is None or ref_id not in dep_pool:
+                        raise ValueError(f"Unknown shared dependencies reference in view {view_name}: {ref_id}")
+                    if table in deps:
+                        raise ValueError(f"Duplicate dependency table in view {view_name}: {table}")
+                    expanded_bytes += shared_sizes["dependencies"][ref_id]
+                    if expanded_bytes > _MAX_EXPANDED_BYTES:
+                        raise ValueError("Expanded release receipt exceeds byte limit")
+                    used_refs["dependencies"].add(ref_id)
+                    deps[table] = deepcopy(dep_pool[ref_id])
+            view["dependencies"] = deps
+        elif has_inline:
+            view["dependencies"] = raw_view["dependencies"]
+        normalized_views[view_name] = view
+
+    for section, entries in shared.items():
+        unused = sorted(set(entries) - used_refs[section])
+        if unused:
+            raise ValueError(f"Unreferenced shared {section} entries: {', '.join(unused)}")
+
+    normalized = {key: receipt[key] for key in _V1_FIELDS if key != "views"}
+    normalized["views"] = normalized_views
+    return normalized
+
+
+def _validate_and_normalize_receipt(receipt: Any) -> dict:
+    if not isinstance(receipt, dict):
         raise ValueError("Invalid release receipt format or fields")
-    if any(not isinstance(receipt[key], dict) for key in fields - {"format", "version"}):
+    version = receipt.get("version")
+    if receipt.get("format") != FORMAT or type(version) is not int or version not in SUPPORTED_VERSIONS:
+        raise ValueError("Invalid release receipt format or fields")
+    if version == 1:
+        if set(receipt) != _V1_FIELDS:
+            raise ValueError("Invalid release receipt format or fields")
+    elif not (_V1_FIELDS <= set(receipt) <= _V2_FIELDS):
+        raise ValueError("Invalid release receipt format or fields")
+    if any(not isinstance(receipt[key], dict) for key in _V1_FIELDS - {"format", "version"}):
         raise ValueError("Release receipt sections must be objects")
     if not receipt["output_membership"] or not receipt["views"]:
         raise ValueError("Release receipt requires output membership and views")
@@ -107,7 +275,144 @@ def parse_receipt(raw: bytes, expected_digest: str) -> dict:
     pins = [pin for pins in recovery["retained_generations"].values() for pin in pins] + recovery["rollback_receipts"]
     if any(not isinstance(pin, str) or not _DIGEST.fullmatch(pin) for pin in pins):
         raise ValueError("Invalid retained generation or rollback digest")
+    if version == 2:
+        return _normalize_v2_receipt(receipt)
     return receipt
+
+
+def parse_receipt(raw: bytes, expected_digest: str) -> dict:
+    """Verify the deployment pin before parsing a bounded, non-executable receipt."""
+    if not _DIGEST.fullmatch(expected_digest) or len(raw) > LIMIT:
+        raise ValueError("Invalid release digest or receipt byte limit")
+    if sha256(raw) != expected_digest:
+        raise ValueError("Release receipt bytes differ from deployment digest")
+    receipt = json.loads(raw, object_pairs_hook=_pairs, parse_constant=_constant)
+    return _validate_and_normalize_receipt(receipt)
+
+
+def serialize_receipt(receipt: Mapping[str, Any]) -> bytes:
+    """Encode a receipt in canonical compact sorted JSON with trailing newline."""
+    return (_json(dict(receipt)) + "\n").encode()
+
+
+def compact_receipt(receipt: Mapping[str, Any]) -> dict[str, Any]:
+    """Factor repeated view metadata into a canonical VERSION = 2 receipt.
+
+    Deduplicates repeated acceptance inventories, interpretation/scope blocks,
+    and table dependencies (reusing ``output_membership`` directly and sharing
+    repeated non-output dependencies) while preserving exact normalized values,
+    digest order, and every validation and rollback invariant.
+    """
+    normalized = _validate_and_normalize_receipt(json.loads(_json(dict(receipt))))
+    output_membership = normalized["output_membership"]
+    views = normalized["views"]
+    sorted_view_names = sorted(views)
+
+    counts: dict[str, dict[str, int]] = {section: {} for section in _SHARED_SECTIONS}
+    order: dict[str, list[tuple[str, Any]]] = {section: [] for section in _SHARED_SECTIONS}
+    for view_name in sorted_view_names:
+        view = views[view_name]
+        if not isinstance(view, dict):
+            continue
+        if not (set(view) <= _VIEW_FIELDS):
+            raise ValueError(f"Invalid release receipt view fields: {view_name}")
+        for field in _SHARED_REF_FIELDS:
+            if field in view and _valid_shared_value(field, view[field]):
+                canon = _json(view[field])
+                if canon not in counts[field]:
+                    counts[field][canon] = 0
+                    order[field].append((canon, view[field]))
+                counts[field][canon] += 1
+        raw_deps = view.get("dependencies")
+        if isinstance(raw_deps, dict):
+            for table, pin in sorted(raw_deps.items()):
+                if table in output_membership and pin == output_membership[table]:
+                    continue
+                if _valid_dependency_pin(pin):
+                    canon = _json(pin)
+                    if canon not in counts["dependencies"]:
+                        counts["dependencies"][canon] = 0
+                        order["dependencies"].append((canon, pin))
+                    counts["dependencies"][canon] += 1
+
+    shared: dict[str, dict[str, Any]] = {}
+    ref_ids: dict[str, dict[str, str]] = {section: {} for section in _SHARED_SECTIONS}
+    for section in (*_SHARED_REF_FIELDS, "dependencies"):
+        section_entries: dict[str, Any] = {}
+        ref_extra = 2 if section == "dependencies" else 6
+        next_index = 1
+        for canon, value in order[section]:
+            count = counts[section][canon]
+            if count < 2:
+                continue
+            ref_id = str(next_index)
+            val_bytes = len(canon.encode())
+            if (count - 1) * val_bytes <= count * (ref_extra + len(ref_id)) + len(ref_id) + 3:
+                continue
+            section_entries[ref_id] = deepcopy(value)
+            ref_ids[section][canon] = ref_id
+            next_index += 1
+        if section_entries:
+            shared[section] = section_entries
+
+    compacted_views: dict[str, Any] = {}
+    for view_name in sorted_view_names:
+        raw_view = views[view_name]
+        if not isinstance(raw_view, dict):
+            compacted_views[view_name] = raw_view
+            continue
+        compact_view: dict[str, Any] = {}
+        if "sql_sha256" in raw_view:
+            compact_view["sql_sha256"] = raw_view["sql_sha256"]
+        for field in _SHARED_REF_FIELDS:
+            if field not in raw_view:
+                continue
+            value = raw_view[field]
+            canon = _json(value) if _valid_shared_value(field, value) else None
+            if canon is not None and canon in ref_ids[field]:
+                compact_view[f"{field}_ref"] = ref_ids[field][canon]
+            else:
+                compact_view[field] = deepcopy(value)
+        if "dependencies" in raw_view:
+            raw_deps = raw_view["dependencies"]
+            if not isinstance(raw_deps, dict):
+                compact_view["dependencies"] = deepcopy(raw_deps)
+            elif not raw_deps:
+                compact_view["dependencies"] = {}
+            else:
+                out_deps: list[str] = []
+                dep_refs: dict[str, str] = {}
+                inline_deps: dict[str, Any] = {}
+                for table, pin in sorted(raw_deps.items()):
+                    if not isinstance(table, str):
+                        raise ValueError(f"Invalid dependency table name in view: {view_name}")
+                    if table in output_membership and pin == output_membership[table]:
+                        out_deps.append(table)
+                        continue
+                    canon = _json(pin) if _valid_dependency_pin(pin) else None
+                    if canon is not None and canon in ref_ids["dependencies"]:
+                        dep_refs[table] = ref_ids["dependencies"][canon]
+                    else:
+                        inline_deps[table] = deepcopy(pin)
+                if out_deps:
+                    compact_view["output_dependencies"] = out_deps
+                if dep_refs:
+                    compact_view["dependency_refs"] = dep_refs
+                if inline_deps:
+                    compact_view["dependencies"] = inline_deps
+        compacted_views[view_name] = compact_view
+
+    compacted: dict[str, Any] = {
+        "format": FORMAT,
+        "version": VERSION,
+        "consumer": deepcopy(normalized["consumer"]),
+        "output_membership": deepcopy(output_membership),
+        "recovery": deepcopy(normalized["recovery"]),
+        "views": compacted_views,
+    }
+    if shared:
+        compacted["shared"] = shared
+    return compacted
 
 
 def _evidence_generations(value):
@@ -300,8 +605,7 @@ def check_view(spec: QualifiedView, configuration: dict, index: Mapping, availab
             required, running = receipt["consumer"][field], configuration["consumer"].get(field)
             if required != running or (field == "package_versions" and any(v is None for v in running.values())):
                 issue("consumer." + field, "consumer_identity_mismatch", required, running)
-        fields = {"dependencies", "sql_sha256", "interpretation", "population", "as_of", "acceptance_receipts", "evidence_generations"}
-        if not isinstance(expected, dict) or set(expected) != fields:
+        if not isinstance(expected, dict) or set(expected) != _VIEW_FIELDS:
             issue("views." + name, "view_receipt_missing_or_invalid")
         else:
             try:
@@ -333,7 +637,7 @@ def check_view(spec: QualifiedView, configuration: dict, index: Mapping, availab
                 if expected[field] != actual.get(field):
                     issue(field, "interpretation_identity_mismatch", expected[field], actual.get(field))
             acceptance = expected["acceptance_receipts"]
-            if not isinstance(acceptance, list) or not acceptance or any(not isinstance(pin, str) or not _DIGEST.fullmatch(pin) for pin in acceptance):
+            if not _valid_acceptance_receipts(acceptance):
                 issue("acceptance_receipts", "acceptance_evidence_pin_missing_or_invalid")
     return dict(
         status="compatible" if not issues else "disabled", reasons=issues,
