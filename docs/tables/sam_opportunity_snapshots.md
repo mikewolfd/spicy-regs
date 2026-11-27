@@ -6,7 +6,7 @@
 
 Exact selected original, declared scope and observed population counts.
 
-**Coverage.** Window. One declared agency and inclusive posted-date interval in an explicitly selected public notices file. All matching rows and revisions remain; no all-version history or attachment custody is inferred. Source deadlines retain their original precision and time zone spelling. *(measured 2026-11-13)*
+**Coverage.** Not a range. Either all rows of an explicitly selected public active-opportunities CSV (all-rows-in-public-extract) or one declared agency and inclusive posted-date window. All matching rows and revisions remain; API-only attachments and all-version history are explicitly omitted pending SAM API access (ss-vf7b). Source deadlines retain their original precision and time zone spelling. *(measured 2026-11-27)*
 
 - **Parquet file:** `sam_opportunity_snapshots.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

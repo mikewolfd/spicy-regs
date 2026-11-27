@@ -20,12 +20,14 @@ from spicy_regs.transforms import build_sam_sources as module
 
 
 def csv_body(kind="exclusions", rows=None):
-    columns = sorted(REQUIRED[kind] | ({"Record Status", "Creation_Date", "CAGE"} if kind == "exclusions" else set()))
+    row_list = rows if rows is not None else [{"SAM Number":"S4NATIVE", "Name":"Not registered",
+                                              "Additional Comments":"PII data has been masked from view"}]
+    extra = {key for row in row_list for key in row}
+    columns = sorted(REQUIRED[kind] | ({"Record Status", "Creation_Date", "CAGE"} if kind == "exclusions" else set()) | extra)
     stream = io.StringIO(newline="")
     writer = csv.writer(stream)
     writer.writerow(columns)
-    for row in rows if rows is not None else [{"SAM Number":"S4NATIVE", "Name":"Not registered",
-                                              "Additional Comments":"PII data has been masked from view"}]:
+    for row in row_list:
         writer.writerow([row.get(key, "") for key in columns])
     return stream.getvalue().encode()
 
@@ -60,6 +62,9 @@ def test_notice_window_keeps_amendments_missing_deadlines_and_no_award_join(tmp_
     assert [row["title_raw"] for row in rows]==["original","revision"]
     assert rows[0]["response_deadline_raw"]=="" and rows[1]["response_deadline_raw"]=="2026-11-20"
     assert summary["source_rows"]==4 and summary["selected_rows"]==2
+    assert summary["coverage_limit"] == (
+        "Declared agency/posted-date rows in one public file; amendments retained, no all-version or attachment custody claim."
+    )
 
 
 def test_parse_failure_does_not_replace_previous_table(tmp_path):
@@ -144,9 +149,13 @@ def test_installed_schemas_and_source_descriptions_are_consumable():
         assert name in mcp_server.TABLES
     index={"format":"spicy-regs-publication","version":2,"families":{
         "sam-exclusions":{"artifactDigest":"sha256:"+"0"*64,"tables":{name+".parquet":{"columns":[list(pair) for pair in described_schema(module.SCHEMAS[name])]}
-            for name in [module.TABLES["exclusions"],module.SNAPSHOTS["exclusions"]]}}}}
+            for name in [module.TABLES["exclusions"],module.SNAPSHOTS["exclusions"]]}},
+        "sam-opportunities":{"artifactDigest":"sha256:"+"1"*64,"tables":{name+".parquet":{"columns":[list(pair) for pair in described_schema(module.SCHEMAS[name])]}
+            for name in [module.TABLES["opportunities"],module.SNAPSHOTS["opportunities"]]}}}}
     bundle=build_bundle(index)
     assert bundle["tables"]["sam_exclusion_observations"]["sources"][0]["id"]=="sam-public"
+    assert bundle["tables"]["sam_opportunity_observations"]["sources"][0]["id"]=="sam-public"
+    assert bundle["tables"]["sam_opportunity_snapshots"]["sources"][0]["id"]=="sam-public"
 
 
 def test_byte_preserving_notice_decoding_records_its_uncertainty(tmp_path):
@@ -162,3 +171,82 @@ def test_byte_preserving_notice_decoding_records_its_uncertainty(tmp_path):
     assert row["text_interpretation_status"] == "byte-preserving-unqualified"
     assert json.loads(row["unqualified_text_fields_json"]) == ["Title"]
     assert summary["unqualified_text_rows"] == 1
+
+
+def test_full_public_extract_opportunities_retains_all_agencies_and_omits_api_only_scope(tmp_path, monkeypatch):
+    body=csv_body("opportunities",[
+        {"NoticeId":"n-gsa","CGAC":"047","PostedDate":"2026-11-06 09:33:33","Title":"GSA Lease",
+         "ResponseDeadLine":"2026-11-13T16:00:00-05:00","Description":"ASCII description"},
+        {"NoticeId":"n-dod","CGAC":"097","PostedDate":"2026-11-05 11:00:00","Title":"DoD Support",
+         "ResponseDeadLine":"2026-11-20T17:00:00-05:00","Description":"vendor\u0092s scope"},
+        {"NoticeId":"n-blank-cgac","CGAC":"","PostedDate":"2025-02-01 08:00:00","Title":"Blank CGAC Notice",
+         "ResponseDeadLine":"","Description":"38 U.S.C. \u00c2\u00a7\u00c2\u00a7 8127"},
+    ]).decode().encode("latin-1")
+    raw=tmp_path/"raw"
+    store=CentralRawArchiveStore(raw)
+    descriptor=capture(body,"opportunities","ContractOpportunitiesFullCSV.csv")
+    store.put_blob(descriptor["response_sha256"],len(body),[body])
+    output=tmp_path/"full-extract"
+    artifact,summary=pipeline.build(
+        "opportunities","ContractOpportunitiesFullCSV.csv",descriptor,
+        {"population":"all-rows-in-public-extract"},output,archive_root=raw,encoding="latin-1")
+    assert artifact.pin.artifact_digest.startswith("sha256:")
+    assert summary["source_rows"]==summary["selected_rows"]==summary["distinct_native_ids"]==3
+    assert summary["unqualified_text_rows"]==2
+    assert summary["snapshot_date"] is None
+    assert "API-only attachments and all-version history are omitted" in summary["coverage_limit"]
+    rows=pq.read_table(output/"generation/sam_opportunity_observations.parquet").to_pylist()
+    assert [r["native_id"] for r in rows]==["n-gsa","n-dod","n-blank-cgac"]
+    assert rows[0]["text_interpretation_status"]=="decoded-exact"
+    assert rows[1]["text_interpretation_status"]=="byte-preserving-unqualified"
+    assert rows[1]["description_raw"].encode("latin-1")==b"vendor\x92s scope"
+    assert rows[2]["agency_code_raw"]==""
+    assert rows[2]["description_raw"].encode("latin-1")==b"38 U.S.C. \xc2\xa7\xc2\xa7 8127"
+    monkeypatch.setattr(mcp_server,"DATA_DIR",output/"generation")
+    with mcp_server._build_connection() as con:
+        found=con.execute(
+            "SELECT native_id, response_deadline_raw, text_interpretation_status "
+            "FROM sam_opportunity_observations "
+            "WHERE try_cast(substr(response_deadline_raw, 1, 10) AS DATE) BETWEEN DATE '2026-11-13' AND DATE '2026-12-31' "
+            "ORDER BY response_deadline_raw, native_id"
+        ).fetchall()
+    assert found==[
+        ("n-gsa","2026-11-13T16:00:00-05:00","decoded-exact"),
+        ("n-dod","2026-11-20T17:00:00-05:00","byte-preserving-unqualified"),
+    ]
+    with pytest.raises(ValueError,match="SAM notice selection requires"):
+        module.validate_selection("opportunities",{"population":"unsupported-slice"})
+
+
+def test_validate_selection_rejects_malformed_and_mixed_inputs():
+    from typing import Any
+
+    public_extract: Any = module.ALL_PUBLIC_EXTRACT
+    with pytest.raises(TypeError):
+        public_extract["extra"] = "bad"
+    for bad in (None, ["agency_code", "posted_from", "posted_to"], "all-rows-in-public-extract"):
+        with pytest.raises(ValueError, match="JSON object"):
+            module.validate_selection("opportunities", bad)
+        with pytest.raises(ValueError, match="JSON object"):
+            module.validate_selection("exclusions", bad)
+    for bad_opp in (
+        {"population": "all-rows-in-public-extract", "agency_code": "047"},
+        {"population": "all-rows-in-public-extract", "extra": "x"},
+        {"agency_code": "047", "posted_from": "2026-11-01", "posted_to": "2026-11-07", "extra": "x"},
+    ):
+        with pytest.raises(ValueError, match="SAM notice selection requires"):
+            module.validate_selection("opportunities", bad_opp)
+    for bad_dates in (
+        {"agency_code": "047", "posted_from": 20261101, "posted_to": "2026-11-07"},
+        {"agency_code": "047", "posted_from": "2026-11-01", "posted_to": None},
+    ):
+        with pytest.raises(ValueError, match="ISO date strings"):
+            module.validate_selection("opportunities", bad_dates)
+    for bad_excl in (
+        {"agency_code": "047", "posted_from": "2026-11-01", "posted_to": "2026-11-07"},
+        {"population": "all-rows-in-public-extract", "extra": "x"},
+    ):
+        with pytest.raises(ValueError, match="SAM exclusions require"):
+            module.validate_selection("exclusions", bad_excl)
+    with pytest.raises(ValueError, match="SAM notice selection requires"):
+        module.validate_selection("entities", {"population": "all-rows-in-public-extract"})

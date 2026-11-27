@@ -6,7 +6,7 @@
 
 SAM contract opportunity observations with exact original evidence and complete native cells.
 
-**Coverage.** Window. One declared agency and inclusive posted-date interval in an explicitly selected public notices file. All matching rows and revisions remain; no all-version history or attachment custody is inferred. Source deadlines retain their original precision and time zone spelling. *(measured 2026-11-13)*
+**Coverage.** Not a range. Either all rows of an explicitly selected public active-opportunities CSV (all-rows-in-public-extract) or one declared agency and inclusive posted-date window. All matching rows and revisions remain; API-only attachments and all-version history are explicitly omitted pending SAM API access (ss-vf7b). Source deadlines retain their original precision and time zone spelling; non-ASCII text fields are staged reversibly under latin-1 with explicit text_interpretation_status and unqualified_text_fields_json markers. *(measured 2026-11-27)*
 
 - **Parquet file:** `sam_opportunity_observations.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

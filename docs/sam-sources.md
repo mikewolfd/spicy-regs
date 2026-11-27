@@ -10,12 +10,15 @@ parties, and account for multiple registration/EFT rows per UEI. Never infer
 name matches or rewrite a registration flag from this table.
 
 `sam_opportunity_observations` is separate from registrations and USAspending
-awards. The build selects a declared CGAC agency code and inclusive posted-date
-window, reads the complete original, and retains all matching observations.
-Notice revisions with the same native ID remain separate. The public file does
-not establish all-version history; a rolling filename supplies no snapshot
-date, so capture time and source hash identify the observation. Linked documents
-remain advertised until independently captured.
+awards. The build selects either the complete selected public active-opportunities
+CSV (`{"population":"all-rows-in-public-extract"}`) or a declared CGAC agency code
+and inclusive posted-date window, reads the complete original, and retains all
+matching observations. Notice revisions with the same native ID remain separate.
+The public file does not establish all-version history; a rolling filename
+supplies no snapshot date, so capture time and source hash identify the
+observation. API-only notice attachments and full version history are explicitly
+omitted pending SAM API credentials (`ss-vf7b`); linked SAM.gov notice URLs
+remain advertised without document custody.
 
 Capture one explicitly selected public file through the central raw archive:
 
@@ -27,8 +30,12 @@ uv run python -m spicy_regs.pipelines.sam_sources acquire \
 ```
 
 For exclusions, the selection JSON is
-`{"population":"all-rows-in-public-extract"}`. For a notices file, use
+`{"population":"all-rows-in-public-extract"}`. For a notices file, use either
+`{"population":"all-rows-in-public-extract"}` (recommended full public-extract
+cohort) or an explicit agency/date window such as
 `{"agency_code":"047","posted_from":"2026-11-01","posted_to":"2026-11-07"}`.
+See [the 2026-11-27 non-ASCII disposition audit](evidence/sam-opportunities-non-ascii-disposition-2026-11-27.md)
+for the byte-level encoding analysis and recommended owner disposition.
 Rebuild from the exact captured descriptor without downloading again:
 
 ```sh
