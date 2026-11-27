@@ -38,7 +38,17 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
-- **Selected combined CBO + Wave 1 reader provider** `spicy_docs-0.85.0+readers.20261127.3` is built from
+- **Selected Wave 2 reader provider** `spicy_docs-0.85.0+readers.20261127.5` is built from
+  `6d82ca7f945323d5030e5a951aeac87d27839e94` (tree `59fb1aea906cc5b352ca51cc8afb629c6908fa99`,
+  `mikewolfd/spicy-docs#57` on `fork/main`). It combines readable-text citation spans and
+  `STATUTE-*.xml` native references (`ss-tdf4`, `#53` / `.20261127.4`), verified ZIP spool reuse in
+  FEC agency-document parsing (`ss-6fuk`, `#55`), and the reviewed multi-cycle 2016–2024 FEC Federal
+  Elections workbook reader (`ss-kmso`, `#56`) on top of `.20261127.3`.
+  See [the receipt](spicy_docs-0.85.0+readers.20261127.5.json) for source, wheel and RECORD identity.
+  The superseded `.20261127.3` wheel is recoverable from this adoption commit's parent;
+  its receipt remains.
+
+- **Prior combined CBO + Wave 1 reader provider** `spicy_docs-0.85.0+readers.20261127.3` is built from
   `481c6cac8ca0cc1f6e68f958fb6280f34b63c6cd` (tree `6a3bbbe7a252ea8fa046cc06ed79d8a7abc4495b`,
   `mikewolfd/spicy-docs#52` on `fork/main`). It combines `spicy_docs.sources.cbo_data` (`US-CBO/cbo-data`),
   `spicy_docs.sources.cbo_eval_projections` (`US-CBO/eval-projections`), CBO/JCT route research docs, and
