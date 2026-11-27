@@ -11,6 +11,11 @@ on:
         required: false
         default: true
         type: boolean
+      force_publish:
+        description: 'Publish a new generation even when archive files are unchanged'
+        required: false
+        default: false
+        type: boolean
 jobs:
   run:
     uses: ./.github/workflows/_rollup.yml
@@ -18,4 +23,5 @@ jobs:
     with:
       command: run-rollup-administration-policy
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      administration_policy_force_publish: ${{ github.event_name == 'workflow_dispatch' && inputs.force_publish || false }}
       timeout_minutes: 20
