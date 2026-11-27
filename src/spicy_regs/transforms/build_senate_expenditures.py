@@ -14,7 +14,12 @@ The publisher's own ``packages/{id}/granules`` route states which files exist
 and each is fetched through ``acquire_granule`` so the granule summary proves
 it belongs to the package asked for; the **Full Report is skipped** because it
 duplicates Part I's pages byte-identically under a second ``file_name``, and
-``file_name`` is in the row identity. senate.gov's own index page is keyless
+``file_name`` is in the row identity. Part granules are processed in
+deterministic part order (``-1``, ``-2``, ...) per package so that opening
+``appropriation_summary`` pages repeated verbatim in later parts (same
+``package_id`` and page ``text_sha256``) are skipped rather than double-counted,
+while non-identical summary pages and all B-pages (``organization_detail`` /
+``payee_detail``) are preserved. senate.gov's own index page is keyless
 and links the same PDFs, but states no package identity, granule list or
 last-modified, so it is deliberately not the route here. No citation extractor
 runs over these volumes (the MODS yield is zero at full depth) — only the ruled
@@ -32,9 +37,11 @@ and granule-MODS routes (bodies are keyless); a ``401``/``403`` aborts the run.
 
 from __future__ import annotations
 
+import hashlib
 import os
-from collections import Counter
-from collections.abc import Callable, Iterator, Sequence
+import re
+from collections import Counter, defaultdict
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -45,6 +52,7 @@ from loguru import logger
 from spicy_docs.reading.paged_json import PagedJsonBudget, PagedJsonSourceError
 from spicy_docs.schemas.senate_expenditure_tables import (
     SENATE_EXPENDITURE_RULE_VERSION,
+    grid_kind,
     page_context,
     shape_senate_expenditure_rows,
 )
@@ -64,7 +72,13 @@ if TYPE_CHECKING:
 
 NAME = "senate_expenditures"
 #: Bump when this adapter changes how it reads or interprets a page stream.
-READ_POLICY_VERSION = "001"
+READ_POLICY_VERSION = "002"
+
+#: Grid kind deduplicated across parts of the same package when a later part
+#: repeats an earlier part's opening summary page verbatim.
+APPROPRIATION_SUMMARY_GRID = "appropriation_summary"
+
+_TRAILING_PART = re.compile(r".*-(\d+)\Z")
 
 #: The collection walked. Which of its rows are the report is spicy-docs' rule (``is_senate_expenditure_report``,
 #: round 5 X5): a ``GPO-CDOC-`` id, the collection and prefix differing on purpose (the reprints live inside ``CDOC``
@@ -209,18 +223,72 @@ def _current_processing(checkpoint: dict, processing_version: dict[str, str | No
     )
 
 
-def _prior_files(path: Path | None) -> set[tuple[str, str]]:
-    """Old output identities are correction work even if discovery no longer reaches them."""
+def _granule_sort_key(granule_id: str, package_id: str) -> tuple[int, int, str]:
+    """Deterministic part order per package: numeric parts ``-1``, ``-2``, ..., ``-10``, then lexical."""
+    stem = granule_id.removesuffix(".pdf")
+    prefix = f"{package_id}-"
+    if stem.startswith(prefix):
+        suffix = stem[len(prefix) :]
+        if suffix.isascii() and suffix.isdigit():
+            return (0, int(suffix), granule_id)
+    match = _TRAILING_PART.fullmatch(stem)
+    if match is not None:
+        return (1, int(match.group(1)), granule_id)
+    return (2, 0, granule_id)
+
+
+def _page_text_sha256(page_text: str) -> str:
+    """Hex SHA-256 of extracted page text, used to detect verbatim Part I/II summary repeats."""
+    return hashlib.sha256(page_text.encode("utf-8")).hexdigest()
+
+
+def _read_prior_index(
+    path: Path | None,
+) -> tuple[set[tuple[str, str]], dict[tuple[str, str], set[str]]]:
+    """Held ``(package_id, file_name)`` pairs and their emitted ``appropriation_summary`` text digests."""
     if path is None:
-        return set()
+        return set(), {}
     import pyarrow.parquet as pq
 
-    return {
-        (row["package_id"], row["file_name"])
-        for batch in pq.ParquetFile(path).iter_batches(columns=["package_id", "file_name"])
-        for row in batch.to_pylist()
-        if isinstance(row["package_id"], str) and isinstance(row["file_name"], str)
-    }
+    parquet = pq.ParquetFile(path)
+    available = set(parquet.schema_arrow.names)
+    if "package_id" not in available or "file_name" not in available:
+        return set(), {}
+    columns = [col for col in ("package_id", "file_name", "grid_kind", "text_sha256") if col in available]
+    files: set[tuple[str, str]] = set()
+    summary_hashes: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for batch in parquet.iter_batches(columns=columns):
+        for row in batch.to_pylist():
+            package_id = row.get("package_id")
+            file_name = row.get("file_name")
+            if not isinstance(package_id, str) or not isinstance(file_name, str):
+                continue
+            key = (package_id, file_name)
+            files.add(key)
+            if row.get("grid_kind") == APPROPRIATION_SUMMARY_GRID:
+                digest = row.get("text_sha256")
+                if isinstance(digest, str) and digest:
+                    summary_hashes[key].add(digest.removeprefix("sha256:"))
+    return files, dict(summary_hashes)
+
+
+def _packages_with_duplicate_summary_hashes(
+    prior_summary_hashes: Mapping[tuple[str, str], set[str]],
+) -> set[str]:
+    """Packages whose held files in ``prior`` still share an ``appropriation_summary`` page digest."""
+    by_package: dict[str, list[set[str]]] = defaultdict(list)
+    for (package_id, _file_name), hashes in prior_summary_hashes.items():
+        if hashes:
+            by_package[package_id].append(hashes)
+    duplicated: set[str] = set()
+    for package_id, hash_sets in by_package.items():
+        seen: set[str] = set()
+        for hashes in hash_sets:
+            if hashes & seen:
+                duplicated.add(package_id)
+                break
+            seen.update(hashes)
+    return duplicated
 
 
 def _listed(reader: PackageDiscoverySource, since: str) -> list[tuple[str, str | None]]:
@@ -252,12 +320,15 @@ def _listed(reader: PackageDiscoverySource, since: str) -> list[tuple[str, str |
 
 
 def _granule_ids(reader: PackageDiscoverySource, package_id: str) -> list[tuple[str, str | None]]:
-    """The report's own files, as the publisher states them — the Full Report excluded.
+    """The report's own files in deterministic part order — the Full Report excluded.
 
     The Full Report duplicates Part I's pages under a second ``file_name``
     (measured byte-identical over the first 60 pages), and ``file_name`` is in
     this table's identity, so reading both would publish every ruled row twice.
-    A granule whose id is the bare package id is that duplicate.
+    A granule whose id is the bare package id is that duplicate. Returning part
+    granules in deterministic ``-1``, ``-2``, ... order ensures Part I owns
+    shared opening ``appropriation_summary`` pages before later parts are
+    deduplicated against them.
     """
     ids: list[tuple[str, str | None]] = []
     for page in reader.granules(package_granules_url(package_id, page_size=100), max_pages=MAX_PAGES):
@@ -268,6 +339,7 @@ def _granule_ids(reader: PackageDiscoverySource, package_id: str) -> list[tuple[
             if str(record.get("granuleClass") or CONTENT_GRANULE) != CONTENT_GRANULE:
                 continue
             ids.append((granule_id, str(record.get("lastModified") or "") or None))
+    ids.sort(key=lambda item: _granule_sort_key(item[0], package_id))
     return ids
 
 
@@ -316,36 +388,60 @@ def _file_rows(
     file_name: str,
     page_count: int,
     body_rendition: str,
-) -> tuple[list[dict], int]:
-    """Every ruled row of the pages read, and how many tables they came from.
+    seen_summary_page_hashes: set[str] | None = None,
+) -> tuple[list[dict], int, set[str], int]:
+    """Every ruled row of the pages read, table count, emitted summary page hashes, and skipped duplicate summary pages.
 
     One ``page_context`` per page, not per table: the page text is scanned and
     hashed once and handed to each table on it, which is what the shaper's
-    ``context`` argument exists for.
+    ``context`` argument exists for. When ``seen_summary_page_hashes`` contains
+    the page's SHA-256 text digest from an earlier part of the same package,
+    tables whose ``grid_kind`` is ``appropriation_summary`` are skipped while
+    non-identical summary pages and all B-pages (``organization_detail``,
+    ``payee_detail``) are always emitted.
     """
     rows: list[dict] = []
     tables = 0
+    emitted_summary_hashes: set[str] = set()
+    duplicate_summary_pages = 0
     for result in pages:
         if not result.tables:
             continue
         context = page_context(result.text)
+        page_hash = _page_text_sha256(result.text)
+        page_emitted_summary = False
+        page_skipped_duplicate = False
         for ordinal, table in enumerate(result.tables):
+            table_cells = getattr(table, "cells", None)
+            kind = grid_kind(table) if table_cells else None
+            if (
+                kind == APPROPRIATION_SUMMARY_GRID
+                and seen_summary_page_hashes is not None
+                and page_hash in seen_summary_page_hashes
+            ):
+                page_skipped_duplicate = True
+                continue
             tables += 1
-            rows.extend(
-                shape_senate_expenditure_rows(
-                    table,
-                    result.text,
-                    package_id=package_id,
-                    file_name=file_name,
-                    table_ordinal=ordinal,
-                    page_count=page_count,
-                    pages_read=len(pages),
-                    body_rendition=body_rendition,
-                    body_derivation="pdf-extraction-lines",
-                    context=context,
-                )
+            shaped = shape_senate_expenditure_rows(
+                table,
+                result.text,
+                package_id=package_id,
+                file_name=file_name,
+                table_ordinal=ordinal,
+                page_count=page_count,
+                pages_read=len(pages),
+                body_rendition=body_rendition,
+                body_derivation="pdf-extraction-lines",
+                context=context,
             )
-    return rows, tables
+            if kind == APPROPRIATION_SUMMARY_GRID and shaped:
+                page_emitted_summary = True
+            rows.extend(shaped)
+        if page_skipped_duplicate:
+            duplicate_summary_pages += 1
+        if page_emitted_summary:
+            emitted_summary_hashes.add(page_hash)
+    return rows, tables, emitted_summary_hashes, duplicate_summary_pages
 
 
 def build_senate_expenditures(
@@ -388,6 +484,7 @@ def build_senate_expenditures(
     extractor = extractor or _extractor()
 
     prior = published_table(output_dir, NAME, download_prior)
+    prior_files, prior_summary_hashes = _read_prior_index(prior)
     checkpoints = {
         (row["package_id"], row["file_name"]): row
         for row in read_checkpoints(prior, NAME)
@@ -400,7 +497,8 @@ def build_senate_expenditures(
     completed_files: set[tuple[str, str]] = set()
     refusals: Counter[str] = Counter()
     grids: Counter[str] = Counter()
-    read_files = tables = pages = skipped = 0
+    duplicate_summary_pages_by_file: Counter[str] = Counter()
+    read_files = tables = pages = skipped = duplicate_summary_pages = 0
     packages = held_packages = 0
 
     listed = _listed(reader, since)
@@ -408,10 +506,11 @@ def build_senate_expenditures(
     stale_packages = sorted(
         {
             package_id
-            for package_id, file_name in _prior_files(prior) | checkpoints.keys()
+            for package_id, file_name in prior_files | checkpoints.keys()
             if package_id not in discovered
             and not _current_processing(checkpoints.get((package_id, file_name), {}), processing_version)
         }
+        | (_packages_with_duplicate_summary_hashes(prior_summary_hashes) - discovered)
     )
     if stale_packages:
         logger.info(
@@ -446,9 +545,11 @@ def build_senate_expenditures(
             continue
         # Existing rows alone prove neither a complete prefix nor that they
         # used the current rule. The checkpoint also represents empty success.
+        prior_seen: set[str] = set()
         unheld: list[tuple[str, str | None]] = []
         for gid, granule_modified in granule_ids:
-            checkpoint = checkpoints.get((package_id, f"{gid}.pdf"), {})
+            file_name = f"{gid}.pdf"
+            checkpoint = checkpoints.get((package_id, file_name), {})
             # Outside discovery this queue repairs processing only. A missing
             # sibling may keep the package pending, but must not cause an
             # already-corrected file to consume a read and a cap slot again.
@@ -462,7 +563,10 @@ def build_senate_expenditures(
                 if package_id in discovered
                 else _current_processing(checkpoint, processing_version)
             )
-            if not current:
+            file_prior_hashes = prior_summary_hashes.get((package_id, file_name), set())
+            if current and not (file_prior_hashes & prior_seen):
+                prior_seen.update(file_prior_hashes)
+            else:
                 unheld.append((gid, granule_modified))
         skipped += len(granule_ids) - len(unheld)
         if not unheld:
@@ -478,17 +582,28 @@ def build_senate_expenditures(
             held_packages += 1
             continue
         read_before = read_files
-        for granule_id, granule_modified in unheld:
+        unheld_ids = {gid for gid, _ in unheld}
+        seen_summary_page_hashes: set[str] = set()
+        for granule_id, granule_modified in granule_ids:
             file_name = f"{granule_id}.pdf"
+            file_prior_hashes = prior_summary_hashes.get((package_id, file_name), set())
+            if granule_id not in unheld_ids:
+                if not (file_prior_hashes & seen_summary_page_hashes):
+                    seen_summary_page_hashes.update(file_prior_hashes)
+                    continue
+                # An earlier part read in this run emitted summary pages that this
+                # held later part also holds in prior; re-read it to drop duplicates.
+                skipped -= 1
             try:
                 body = acquirer.acquire_granule(package_id, granule_id, prefer=("pdf",))
                 read_pages, page_count = _read_pages(body, extractor)
-                file_rows, found = _file_rows(
+                file_rows, found, emitted_summary_hashes, file_dup_summary_pages = _file_rows(
                     read_pages,
                     package_id=package_id,
                     file_name=file_name,
                     page_count=page_count,
                     body_rendition=body.format,
+                    seen_summary_page_hashes=seen_summary_page_hashes,
                 )
                 read = len(read_pages)
             except CredentialRefusedError:
@@ -501,6 +616,9 @@ def build_senate_expenditures(
                 logger.warning(
                     "{}: {} refused ({}): {}", package_id, granule_id, reason, scrub_credential(str(error), "")
                 )
+                # Prior rows for a refused file remain in the merged output, so
+                # retain any summary hashes they already hold for later parts.
+                seen_summary_page_hashes.update(file_prior_hashes)
                 continue
             # A successful evaluation replaces this file's entire prior
             # result, even when a corrected rule now yields zero rows. A
@@ -508,6 +626,7 @@ def build_senate_expenditures(
             # checkpoint, preserving the prior successful result for retry.
             completed_files.add((package_id, file_name))
             rows.extend(file_rows)
+            seen_summary_page_hashes.update(emitted_summary_hashes)
             checkpoints[(package_id, file_name)] = {
                 "package_id": package_id,
                 "file_name": file_name,
@@ -517,19 +636,24 @@ def build_senate_expenditures(
                 "page_limit": MAX_PAGES_PER_FILE,
                 "pages_read": read,
                 "page_count": page_count,
+                "duplicate_summary_pages_skipped": file_dup_summary_pages,
             }
             read_files += 1
             tables += found
             pages += read
+            duplicate_summary_pages += file_dup_summary_pages
+            if file_dup_summary_pages:
+                duplicate_summary_pages_by_file[file_name] += file_dup_summary_pages
             grids.update(row["grid_kind"] or "unrecognised" for row in file_rows)
             logger.info(
-                "{}: {} — {:,} pages of {} read, {:,} tables, {:,} ruled rows",
+                "{}: {} — {:,} pages of {} read, {:,} tables, {:,} ruled rows{}",
                 package_id,
                 file_name,
                 read,
                 page_count or "an unstated extent",
                 found,
                 len(file_rows),
+                f", {file_dup_summary_pages:,} duplicate summary pages skipped" if file_dup_summary_pages else "",
             )
         if read_files > read_before:
             # A package whose every file refused spends its requests without a
@@ -541,12 +665,13 @@ def build_senate_expenditures(
 
     logger.info(
         "Senate expenditures: {:,} ruled rows from {:,} files over {:,} packages, {:,} pages, {:,} tables;"
-        " {:,} files already held in {:,} fully-held packages, {:,} refused",
+        " {:,} duplicate summary pages skipped, {:,} files already held in {:,} fully-held packages, {:,} refused",
         len(rows),
         read_files,
         packages,
         pages,
         tables,
+        duplicate_summary_pages,
         skipped,
         held_packages,
         sum(refusals.values()),
@@ -559,13 +684,16 @@ def build_senate_expenditures(
         # above zero is the signal that the print changed shape.
         logger.info("Senate expenditures: rows by grid — {}", dict(grids))
 
-    status = {
+    status: dict[str, Any] = {
         "refused": sum(refusals.values()),
         "refusals": dict(refusals),
         "read_files": read_files,
         "skipped": skipped,
         "packages": packages,
+        "duplicate_summary_pages_skipped": duplicate_summary_pages,
     }
+    if duplicate_summary_pages_by_file:
+        status["duplicate_summary_pages_by_file"] = dict(duplicate_summary_pages_by_file)
     if coverage is not None:
         coverage.update(status)
     if evidence is not None:
