@@ -6,9 +6,9 @@
 
 One qualified card per CBO publication, with three positional fiscal windows, literal and typed millions, PAYGO and mandate answers, source context and original evidence. Join publication_id to cbo_cost_estimates for source-stated bill links; cards exist independently of whether those bill links resolve.
 
-**Coverage.** Empty. The published bill-family generation contains no card rows. Retained Common Crawl cards remain in a separate local candidate. Candidate builds use explicit retained captures selected through the bill-family archive manifest, account for every item of the selected feed, and record unread indexes, unretained pages, observed absence and unresolved PDF candidates separately. *(measured 2026-11-14)*
+**Coverage.** Sampled. Qualified 119th Congress CBO cost-estimate publication pages captured from Common Crawl archives and published in the bill-family generation, ordered by publication_date starting 2025-02-11. Builds use explicit retained captures selected through the bill-family archive manifest, account for every item of the selected feed, and record unretained pages, observed absence, and unresolved PDF candidates separately; existing published cards carry forward across routine bill-family refreshes. *(measured 2026-11-26)*
 
-**Data quality.** Authority is the archive with explicit capture time and publication time. Asterisks, blanks and nonnumeric amounts retain their literal and have null typed amounts. PDF-only bill/month matches remain unresolved. Current retained-source qualification does not establish complete archive coverage, PDF parity or public publication.
+**Data quality.** Authority is the web archive with explicit capture time and publication time. Asterisks, blanks and nonnumeric amounts retain their literal and have null typed amounts. PDF-only bill/month matches remain unresolved, and archive coverage is incomplete relative to the full CBO feed. Current retained-source qualification does not establish complete archive coverage or PDF-only extraction.
 
 - **Parquet file:** `cbo_estimate_cards.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
