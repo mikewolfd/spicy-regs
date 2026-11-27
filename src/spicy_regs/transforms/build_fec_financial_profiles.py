@@ -9,6 +9,7 @@ selects a latest row.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Iterable, Iterator
 from contextlib import closing
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -21,6 +22,7 @@ from tempfile import TemporaryDirectory
 
 import duckdb
 import pyarrow as pa
+import pyarrow.parquet as pq
 
 from spicy_regs.parquet_rows import write_rows
 from spicy_regs.transforms.fec_financial_policy import reported_summary_measure
@@ -33,6 +35,12 @@ POLICY = "fec-reported-profile-selection/1"
 LAYOUTS = {"candidate": CANDIDATE_CSV, "committee": COMMITTEE_CSV}
 #: A runaway bound on one summary CSV: the 2026 committee summary was 8.3 MB on 2026-11-10.
 MAX_SUMMARY_BYTES = 256 * 1024**2
+#: Bound on serialized witness JSON bytes for a single entity profile before failing closed.
+MAX_ENTITY_WITNESS_BYTES = 32 * 1024**2
+#: Bound on buffered profile JSON bytes inside the Parquet writer before flushing a batch.
+MAX_WRITER_BATCH_BYTES = 8 * 1024**2
+#: DuckDB memory ceiling for sorting staged summaries (no spill permitted).
+DUCKDB_MEMORY_LIMIT = "512MB"
 #: The share of one CSV's rows a refresh may lose against the published profiles before it refuses, so a header-only
 #: or truncated download never publishes. FEC dropped 32 of 18,594 rows between 2026-09-12 and 2026-11-10.
 MAX_ROW_LOSS = 0.10
@@ -175,15 +183,92 @@ def _equivalence(row, kind):
     return json_bytes({**{key: row[key] for key in fields}, "name": row[kind + "_name"]})
 
 
-def profile(rows, capture, selection):
-    """Keep all witnesses; equal financial facts select once, conflicts select none."""
+class _StreamingGroup:
+    """One entity's ordered witness stream without materializing ``list(group)`` in Python.
+
+    Supports ``group[0]`` peeking for callers/hooks inspecting the lead witness
+    while streaming all remaining witnesses once through :func:`profile`.
+    """
+
+    def __init__(self, first: dict, rest: Iterator[dict]):
+        self._first = first
+        self._rest = rest
+        self._consumed = False
+
+    def __getitem__(self, index: int) -> dict:
+        if index == 0:
+            return self._first
+        raise IndexError("Streaming witness group supports peeking index 0 only")
+
+    def __iter__(self) -> Iterator[dict]:
+        if self._consumed:
+            raise RuntimeError("Streaming witness group can only be iterated once")
+        self._consumed = True
+        yield self._first
+        yield from self._rest
+
+
+def profile(
+    rows: Iterable[dict],
+    capture,
+    selection,
+    *,
+    max_witness_bytes: int = MAX_ENTITY_WITNESS_BYTES,
+):
+    """Keep all witnesses; equal financial facts select once, conflicts select none.
+
+    Reduces ``rows`` in a single streaming pass so only the lead witness dict
+    and the bounded serialized ``witnesses_json`` bytes stay live in Python.
+    Assumes ``rows`` is ordered by ``record_id`` (as ``_profiles()`` guarantees)
+    so duplicate physical ``record_id`` witnesses are refused in O(1) memory,
+    and refuses groups exceeding ``max_witness_bytes``.
+    """
+    if type(max_witness_bytes) is not int or max_witness_bytes <= 0:
+        raise ValueError("max_witness_bytes must be a positive integer")
     kind = capture["entity_kind"]
-    first = rows[0]
+    iterator = iter(rows)
+    try:
+        first = next(iterator)
+    except StopIteration as error:
+        raise ValueError("Profile requires at least one witness row") from error
     entity_id = first[kind + "_native_id"]
     if not isinstance(entity_id, str) or not entity_id:
         raise ValueError("Selected summary lacks its entity identity; population cannot be qualified")
     first_facts = _equivalence(first, kind)
-    equivalent = all(_equivalence(row, kind) == first_facts for row in rows[1:])
+    first_name = first[kind + "_name"]
+    equivalent = True
+    same_name = True
+    witness_count = 0
+    prev_record_id = None
+    encoded = bytearray(b"[")
+
+    def consume(row: dict) -> None:
+        nonlocal equivalent, same_name, witness_count, prev_record_id
+        record_id = row.get("record_id")
+        if prev_record_id is not None and record_id == prev_record_id:
+            raise ValueError(f"Duplicate physical witness record_id for {kind} {entity_id}: {record_id}")
+        prev_record_id = record_id
+        if witness_count > 0:
+            if equivalent and _equivalence(row, kind) != first_facts:
+                equivalent = False
+            if same_name and row[kind + "_name"] != first_name:
+                same_name = False
+            encoded.append(44)  # ","
+        piece = json_bytes(row)
+        if len(encoded) + len(piece) + 1 > max_witness_bytes:
+            raise ValueError(
+                f"Entity {kind} {entity_id} witnesses exceed max_witness_bytes ({max_witness_bytes:,} bytes)"
+            )
+        encoded.extend(piece)
+        witness_count += 1
+
+    consume(first)
+    for row in iterator:
+        consume(row)
+    encoded.append(93)  # "]"
+    witnesses_json = encoded.decode()
+    encoded.clear()
+
     selected = first if equivalent else None
     result = dict.fromkeys(SCHEMA.names)
     result.update(
@@ -194,12 +279,10 @@ def profile(rows, capture, selection):
         scope_id=selection["scope_id"],
         entity_kind=kind,
         entity_id=entity_id,
-        entity_name=first[kind + "_name"]
-        if all(row[kind + "_name"] == first[kind + "_name"] for row in rows)
-        else None,
+        entity_name=first_name if same_name else None,
         source_cycle=selection["cycle"],
         selection_status="selected" if equivalent else "ambiguous",
-        selection_reason=("unique_reported_snapshot" if len(rows) == 1 else "equivalent_witnesses")
+        selection_reason=("unique_reported_snapshot" if witness_count == 1 else "equivalent_witnesses")
         if equivalent
         else "conflicting_reported_snapshots",
         amount_basis="source_reported",
@@ -208,8 +291,8 @@ def profile(rows, capture, selection):
         source_sha256=capture["response_sha256"],
         # Generations selected from fec-query named its generation here; these come from the CSV itself.
         source_table_generation=None,
-        witness_count=len(rows),
-        witnesses_json=json_bytes(rows).decode(),
+        witness_count=witness_count,
+        witnesses_json=witnesses_json,
         source_url=capture["request_url"],
         publisher_profile_url=f"https://www.fec.gov/data/{kind}/{entity_id}/?cycle={selection['cycle']}",
         selection_policy=POLICY,
@@ -243,25 +326,38 @@ def profile(rows, capture, selection):
     return result
 
 
-def _profiles(summaries: Path, selection, outcomes):
+def _profiles(
+    summaries: Path,
+    selection,
+    outcomes,
+    *,
+    max_witness_bytes: int = MAX_ENTITY_WITNESS_BYTES,
+    duckdb_memory_limit: str = DUCKDB_MEMORY_LIMIT,
+):
     """One profile per entity of the staged summaries, read in one bounded ordered pass."""
     captures = {item["collection_id"]: item for item in selection["captures"]}
     # No corpus-sized Python list or spill. Sorting is bounded by DuckDB's
-    # memory refusal, and only one entity's witnesses stay in Python.
-    with duckdb.connect(config={"threads": 1, "memory_limit": "512MB", "max_temp_directory_size": "0B"}) as db:
+    # memory refusal, and witnesses stream incrementally without list(group).
+    with duckdb.connect(
+        config={"threads": 1, "memory_limit": duckdb_memory_limit, "max_temp_directory_size": "0B"}
+    ) as db:
         reader = db.execute(
             """SELECT * FROM read_parquet(?)
                ORDER BY collection_id,
                  CASE WHEN summary_type='candidate-summary-csv/1'
                       THEN candidate_native_id ELSE committee_native_id END, record_id""",
             [str(summaries)],
-        ).to_arrow_reader(batch_size=256)
+        ).to_arrow_reader(batch_size=64)
         try:
             rows = (row for batch in reader for row in batch.to_pylist())
             for (collection, _entity), group in groupby(
                 rows, key=lambda row: (row["collection_id"], row[captures[row["collection_id"]]["entity_kind"] + "_native_id"])
             ):
-                result = profile(list(group), captures[collection], selection)
+                stream = _StreamingGroup(next(group), group)
+                if max_witness_bytes == MAX_ENTITY_WITNESS_BYTES:
+                    result = profile(stream, captures[collection], selection)
+                else:
+                    result = profile(stream, captures[collection], selection, max_witness_bytes=max_witness_bytes)
                 outcomes[result["selection_status"]] += 1
                 outcomes["witnesses"] += result["witness_count"]
                 yield result
@@ -269,10 +365,44 @@ def _profiles(summaries: Path, selection, outcomes):
             reader.close()
 
 
+def _write_bounded_profiles(
+    profiles: Iterable[dict],
+    destination: Path,
+    *,
+    batch_size: int = 128,
+    max_batch_bytes: int = MAX_WRITER_BATCH_BYTES,
+) -> Path:
+    """Write profile rows bounded by both row count and witness JSON bytes, replacing ``destination`` atomically."""
+    if type(batch_size) is not int or batch_size <= 0:
+        raise ValueError("batch_size must be a positive integer")
+    if type(max_batch_bytes) is not int or max_batch_bytes <= 0:
+        raise ValueError("max_batch_bytes must be a positive integer")
+    from spicy_regs.native_types import extra_field_checker
+
+    check_fields = extra_field_checker(SCHEMA)
+    with TemporaryDirectory(dir=destination.parent, prefix=".fec-profiles-write-") as scratch:
+        temporary = Path(scratch) / "rows.parquet"
+        with pq.ParquetWriter(temporary, SCHEMA, compression="zstd") as writer:
+            batch: list[dict] = []
+            batch_bytes = 0
+            for row in profiles:
+                check_fields(row)
+                row_bytes = len(row["witnesses_json"]) if row.get("witnesses_json") else 0
+                if batch and (len(batch) >= batch_size or batch_bytes + row_bytes > max_batch_bytes):
+                    writer.write_table(pa.Table.from_pylist(batch, schema=SCHEMA))
+                    batch.clear()
+                    batch_bytes = 0
+                batch.append(row)
+                batch_bytes += row_bytes
+            if batch:
+                writer.write_table(pa.Table.from_pylist(batch, schema=SCHEMA))
+                batch.clear()
+        temporary.replace(destination)
+    return destination
+
+
 def published_rows(table: Path) -> dict[str, int]:
     """The CSV rows behind a published profiles table, by entity kind: the witnesses its profiles record."""
-    import pyarrow.parquet as pq
-
     totals = pq.read_table(table, columns=["entity_kind", "witness_count"]).group_by("entity_kind").aggregate(
         [("witness_count", "sum")])
     return dict(zip(totals["entity_kind"].to_pylist(), totals["witness_count_sum"].to_pylist(), strict=True))
@@ -290,7 +420,18 @@ def _refuse_lost_rows(selection, counts, prior_rows, accept_shrink):
                 f"loss by hand with build --accept-shrink {kind}")
 
 
-def build_profiles(selection, store, destination, *, selection_sha256, prior_rows=None, accept_shrink=()):
+def build_profiles(
+    selection,
+    store,
+    destination,
+    *,
+    selection_sha256,
+    prior_rows=None,
+    accept_shrink=(),
+    max_entity_witness_bytes: int = MAX_ENTITY_WITNESS_BYTES,
+    max_writer_batch_bytes: int = MAX_WRITER_BATCH_BYTES,
+    duckdb_memory_limit: str = DUCKDB_MEMORY_LIMIT,
+):
     """Map both captured CSVs from ``store`` into a staged summary table, then write the profiles atomically.
 
     ``selection_sha256`` is the digest of the retained selection, recorded in every witness. ``prior_rows`` are
@@ -312,11 +453,17 @@ def build_profiles(selection, store, destination, *, selection_sha256, prior_row
         mapped = sum(counts[item["collection_id"]] for item in selection["captures"])
 
         def checked():
-            yield from _profiles(staged, selection, outcomes)
+            yield from _profiles(
+                staged,
+                selection,
+                outcomes,
+                max_witness_bytes=max_entity_witness_bytes,
+                duckdb_memory_limit=duckdb_memory_limit,
+            )
             if outcomes.pop("witnesses", 0) != mapped:
                 raise ValueError("Profile witnesses differ from the mapped summary rows")
 
         with closing(checked()) as profiles:
-            write_rows(profiles, destination, SCHEMA, batch_size=128)
+            _write_bounded_profiles(profiles, destination, batch_size=128, max_batch_bytes=max_writer_batch_bytes)
     return {"source_rows": dict(counts), "profiles": dict(outcomes), "selection_policy": POLICY,
             "published_rows": prior_rows, "accepted_shrink": sorted(accept_shrink)}

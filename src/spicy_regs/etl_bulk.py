@@ -41,6 +41,7 @@ import pyarrow.parquet as pq
 from spicy_regs.runtime_bounds import bounded_connection, checkpoint
 from spicy_regs.etl_receipts import (
     RECEIPT_ROW_GROUP,
+    RECEIPT_ROW_GROUP_BYTES,
     RECEIPT_SCHEMA, end_receipt_row_group, open_receipt_writer,
     DatasetPolicy,
     ParquetInput,
@@ -82,6 +83,8 @@ _ROUTE = '["route","\\u001B"]'
 _BATCH = 2_000
 #: Target logical Arrow bytes per opt-in INSERT; one larger row stays intact.
 _INSERT_BYTES = 16 * 1024 * 1024
+#: Target logical Arrow bytes per ``write_split`` DuckDB batch (wide text expands >15x in SQL); one larger row stays intact.
+_WRITE_SPLIT_BYTES = 4 * 1024 * 1024
 
 
 class BulkValidationError(RuntimeError):
@@ -530,6 +533,34 @@ def new_receipt_writer(path: Path) -> pq.ParquetWriter:
     return open_receipt_writer(path)
 
 
+def _byte_bounded_batches(pieces: Iterable[pa.RecordBatch], max_bytes: int) -> Iterator[pa.RecordBatch]:
+    """Slice wide Arrow record batches into contiguous ordered sub-batches of at most ``max_bytes``.
+
+    A single row whose logical Arrow size exceeds ``max_bytes`` stays intact as a
+    one-row batch so progress is guaranteed without breaking file order.
+    """
+    for batch in pieces:
+        yield from _insert_batches(batch, max_bytes=max_bytes)
+
+
+def _source_pieces(original: pa.Table | pq.ParquetFile, batch_rows: int, max_bytes: int) -> Iterator[pa.RecordBatch]:
+    """Yield ordered Arrow batches from ``original`` bounded by both ``batch_rows`` and ``max_bytes``."""
+    if isinstance(original, pa.Table):
+        yield from _byte_bounded_batches(original.to_batches(max_chunksize=batch_rows), max_bytes)
+        return
+    metadata = original.metadata
+    for group in range(metadata.num_row_groups):
+        row_group = metadata.row_group(group)
+        if row_group.num_rows == 0:
+            continue
+        avg_bytes = row_group.total_byte_size // row_group.num_rows
+        group_rows = min(batch_rows, max(1, max_bytes // avg_bytes)) if avg_bytes > 0 else batch_rows
+        yield from _byte_bounded_batches(
+            original.iter_batches(batch_size=group_rows, row_groups=[group]),
+            max_bytes,
+        )
+
+
 def write_split(
     con: duckdb.DuckDBPyConnection,
     query: str,
@@ -551,6 +582,7 @@ def write_split(
     subject_columns: Sequence[str] | None = None,
     receipt_writer: pq.ParquetWriter | None = None,
     subject_writer: pq.ParquetWriter | None = None,
+    max_batch_bytes: int | None = None,
 ) -> int:
     """Write a subject file and a receipt file from one SQL query over ``source``; return how many rows the row code decided.
 
@@ -560,8 +592,11 @@ def write_split(
     ``query`` reads :data:`SOURCE_BATCH` (the source's rows with a ``file_row_number`` column, as ``read_parquet(...,
     file_row_number = true)`` gives them) and yields the subject columns, the receipt columns, ``_ordinal`` and
     ``_reference``, plus ``_accepted`` where a row can be proven receipted without a subject. The source is fed to
-    DuckDB as ordered registered batches, because a parallel ``read_parquet`` stream was seen to emit a later row group
-    first (the order relies on registering one table per query; the ordinal guard below stays). A row marked
+    DuckDB as ordered registered batches bounded by both ``batch_rows`` and ``max_batch_bytes`` (defaulting to
+    :data:`_WRITE_SPLIT_BYTES`, with any single oversized row kept intact), because a parallel ``read_parquet`` stream was
+    seen to emit a later row group first and wide multi-megabyte text tables (such as ``hearing_transcripts``) expand
+    several-fold inside DuckDB if registered in a single ``batch_rows`` batch (the order relies on registering one
+    table per query; the ordinal guard below stays). A row marked
     ``_reference`` is given to ``row_attempt(batch, index, source_row)``, the family's own row function, with the row as
     the source file holds it (never decoded from the query's encoded text, which spells a value SQL does not own as a
     marker), and merged back in place; with ``refusals_last`` its failure receipt goes after normal accepted/observed
@@ -582,6 +617,9 @@ def write_split(
     """
     if subject_columns is not None and len(subject_columns) != len(subject_schema):
         raise ValueError("subject_columns must name one query column per subject field")
+    byte_limit = _WRITE_SPLIT_BYTES if max_batch_bytes is None else max_batch_bytes
+    if type(byte_limit) is not int or byte_limit <= 0:
+        raise ValueError("max_batch_bytes must be a positive integer")
     selected_subjects = subject_schema.names if subject_columns is None else list(subject_columns)
     seen, routed, piece_start = 0, 0, 0
     piece: pa.RecordBatch | None = None
@@ -595,8 +633,10 @@ def write_split(
 
         def emit(table: pa.Table, final: bool = False) -> None:
             nonlocal pending
-            pending = pa.concat_tables([pending, table])
-            whole = pending.num_rows if final else pending.num_rows - pending.num_rows % _GROUP
+            if table.num_rows:
+                pending = pa.concat_tables([pending, table]) if pending.num_rows else table
+            flush_bytes = pending.nbytes >= RECEIPT_ROW_GROUP_BYTES
+            whole = pending.num_rows if (final or flush_bytes) else pending.num_rows - pending.num_rows % _GROUP
             if whole:
                 receipts.write_table(pending.slice(0, whole), row_group_size=_GROUP)
                 pending = pending.slice(whole)
@@ -636,9 +676,7 @@ def write_split(
         try:
             with nullcontext(source) if isinstance(source, pa.Table) else pq.ParquetFile(source) as original:
                 start = 0
-                pieces = (original.to_batches(max_chunksize=batch_rows) if isinstance(original, pa.Table)
-                          else original.iter_batches(batch_size=batch_rows))
-                for piece in pieces:
+                for piece in _source_pieces(original, batch_rows, byte_limit):
                     piece_start = start
                     checkpoint()
                     piece.validate(full=True)
@@ -647,7 +685,7 @@ def write_split(
                     start += piece.num_rows
                     con.register(SOURCE_BATCH, numbered)
                     try:
-                        for batch in con.execute(query).to_arrow_reader(batch_rows):
+                        for batch in con.execute(query).to_arrow_reader(max(1, piece.num_rows)):
                             table = pa.Table.from_batches([batch])
                             table.validate(full=True)
                             ordinals = table["_ordinal"].to_pylist()
@@ -658,6 +696,7 @@ def write_split(
                                 routed += part(each)
                     finally:
                         con.unregister(SOURCE_BATCH)
+                        del numbered
             for receipt_batch in batched(last_receipts, _GROUP):
                 emit(pa.Table.from_pylist(list(receipt_batch), schema=RECEIPT_SCHEMA))
             refused.close()
@@ -996,12 +1035,13 @@ def _numbered(
 Span = tuple[int, int, ParquetInput]
 
 
-def _insert_batches(batch: pa.RecordBatch) -> Iterator[pa.RecordBatch]:
+def _insert_batches(batch: pa.RecordBatch, max_bytes: int | None = None) -> Iterator[pa.RecordBatch]:
     """Ordered zero-copy slices; backing row-group buffers and one wide row can exceed the target."""
+    limit = _INSERT_BYTES if max_bytes is None else max_bytes
     pending = [batch]
     while pending:
         piece = pending.pop()
-        if piece.num_rows > 1 and piece.nbytes > _INSERT_BYTES:
+        if piece.num_rows > 1 and piece.nbytes > limit:
             middle = piece.num_rows // 2
             pending.extend((piece.slice(middle), piece.slice(0, middle)))
         else:

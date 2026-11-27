@@ -14,6 +14,8 @@ import json
 import os
 import re
 import tempfile
+import zlib
+from collections.abc import Callable
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -48,6 +50,17 @@ EVIDENCE_VERSION = 2
 #: Journaled policy decision of evidence not bound to a publisher; a root ``CompletedCapture`` carries the same one.
 _DEFAULT_POLICY_DECISION = "existing-full-default"
 #: Receipt fields only the retaining operation sets; caller metadata never replaces them.
+_COMPRESSED_ENCODINGS = frozenset({"gzip", "x-gzip", "deflate"})
+_COMPRESSION_FIELDS = frozenset(
+    {
+        "wire_sha256",
+        "wire_byte_size",
+        "decoded_sha256",
+        "decoded_byte_size",
+        "decoded_status",
+    }
+)
+_SHA256_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _OWNER_FIELDS = frozenset(
     {
         "event",
@@ -68,6 +81,7 @@ _OWNER_FIELDS = frozenset(
         "request_body",
         "response_headers",
         "archive_receipt_key",
+        *_COMPRESSION_FIELDS,
     }
 )
 ARCHIVE_REFERENCE = "source-archive.json"
@@ -200,19 +214,178 @@ class EvidenceMemberSource:
         return self.local.open(object_key)
 
 
+def _normalize_encoding(content_encoding: str | None) -> str:
+    """Normalized lower-case HTTP content-encoding token, defaulting to ``identity``."""
+    return (content_encoding or "identity").strip().lower() or "identity"
+
+
+def _is_valid_sha256(value: Any) -> bool:
+    return isinstance(value, str) and bool(_SHA256_RE.fullmatch(value))
+
+
+def _validate_positive_bound(value: int | None, name: str) -> None:
+    if value is not None and (type(value) is not int or value < 1):
+        raise ValueError(f"{name} must be positive")
+
+
+class _CompressedDecoder:
+    """Chunk-boundary-invariant streaming decompressor for gzip, x-gzip, and deflate.
+
+    Shared by ``_StreamCheck`` (capture/transport) and ``_stream_verify_compressed``
+    (seal/verification) so both paths make the exact same decoding decision.
+    For ``deflate``, the opening 2 wire bytes are buffered before selecting
+    RFC 1950 zlib vs RFC 1951 raw deflate, making the fallback invariant to
+    chunk splits (including 1-byte opening chunks).
+    """
+
+    def __init__(self, encoding: str, on_decoded: Callable[[bytes], None]):
+        self.encoding = encoding
+        self._is_gzip = encoding in ("gzip", "x-gzip")
+        self._on_decoded = on_decoded
+        self._decoder: Any = zlib.decompressobj(16 + zlib.MAX_WBITS) if self._is_gzip else None
+        self._deflate_probe = bytearray()
+        self._wire_seen = False
+        self.failed = False
+
+    def _feed(self, pending: bytes) -> None:
+        while pending:
+            assert self._decoder is not None
+            if self._decoder.eof:
+                if not self._is_gzip:
+                    self.failed = True
+                    self._decoder = None
+                    return
+                self._decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+            try:
+                decoded = self._decoder.decompress(pending, _CHUNK)
+            except zlib.error:
+                self.failed = True
+                self._decoder = None
+                return
+            if decoded:
+                self._on_decoded(decoded)
+            if self._decoder.unconsumed_tail:
+                pending = self._decoder.unconsumed_tail
+            elif self._decoder.eof and self._decoder.unused_data:
+                pending = self._decoder.unused_data
+            else:
+                pending = b""
+
+    def update(self, chunk: bytes) -> None:
+        if self.failed or not chunk:
+            return
+        self._wire_seen = True
+        if self.encoding == "deflate" and self._decoder is None:
+            need = 2 - len(self._deflate_probe)
+            self._deflate_probe.extend(chunk[:need])
+            chunk = chunk[need:]
+            if len(self._deflate_probe) < 2:
+                return
+            probe = bytes(self._deflate_probe)
+            self._deflate_probe.clear()
+            decoder = zlib.decompressobj(zlib.MAX_WBITS)
+            try:
+                decoded = decoder.decompress(probe, _CHUNK)
+            except zlib.error:
+                # RFC 1951 raw deflate fallback on the fixed 2-byte opening probe.
+                self._decoder = zlib.decompressobj(-zlib.MAX_WBITS)
+                self._feed(probe)
+            else:
+                self._decoder = decoder
+                if decoded:
+                    self._on_decoded(decoded)
+                if decoder.unconsumed_tail:
+                    self._feed(decoder.unconsumed_tail)
+                elif decoder.eof and decoder.unused_data:
+                    self._feed(decoder.unused_data)
+            if not chunk or self.failed:
+                return
+        self._feed(chunk)
+
+    def finish(self) -> None:
+        if self.failed:
+            return
+        if self._decoder is None or not self._wire_seen:
+            self.failed = True
+            self._decoder = None
+            return
+        try:
+            rest = self._decoder.flush()
+        except zlib.error:
+            self.failed = True
+            self._decoder = None
+            return
+        if rest:
+            self._on_decoded(rest)
+        if not self._decoder.eof or self._decoder.unused_data:
+            self.failed = True
+            self._decoder = None
+
+
 class _StreamCheck:
     """One pass over streamed bytes: byte bound, credential scan across chunk boundaries and SHA-256.
 
     Only the last ``len(secret) - 1`` bytes carry over between chunks, so no
     chunk is copied whole and nothing grows with the stream. ``scan_paths`` also
     notes, in the same pass, whether the bytes name a local path (``local_path``).
+    For compressed transport encodings (``gzip``, ``x-gzip``, ``deflate``), the
+    same streaming pass incrementally decompresses in ``_CHUNK`` slices to bind
+    ``decoded_sha256`` and ``decoded_byte_size`` separately from the retained wire
+    bytes without buffering the decoded payload in memory.
     """
 
-    def __init__(self, evidence: CaptureEvidence, max_bytes: int, *, scan_paths: bool = False):
+    def __init__(
+        self,
+        evidence: CaptureEvidence | SourceEvidenceContext,
+        max_bytes: int,
+        *,
+        scan_paths: bool = False,
+        content_encoding: str | None = "identity",
+        max_decoded_bytes: int | None = None,
+    ):
+        _validate_positive_bound(max_decoded_bytes, "max_decoded_bytes")
         self.evidence, self.max_bytes = evidence, max_bytes
         self.secret = evidence.credential.encode()
         self.digest, self.size, self.tail = hashlib.sha256(), 0, b""
         self.scan_paths, self.local_path, self.path_tail = scan_paths, False, b""
+        self.encoding = _normalize_encoding(content_encoding)
+        self.compressed = self.encoding != "identity"
+        self.supported_compression = self.encoding in _COMPRESSED_ENCODINGS
+        self.max_decoded_bytes = max_decoded_bytes
+        self.decoded_digest = hashlib.sha256()
+        self.decoded_size = 0
+        self.decoded_tail = b""
+        self._decoder: _CompressedDecoder | None = (
+            _CompressedDecoder(self.encoding, self._update_decoded) if self.supported_compression else None
+        )
+
+    @property
+    def decoded_failed(self) -> bool:
+        return self._decoder.failed if self._decoder is not None else False
+
+    def _scan_secret(self, data: bytes, *, decoded: bool) -> None:
+        if not self.secret or not data:
+            return
+        keep = len(self.secret) - 1
+        tail = self.decoded_tail if decoded else self.tail
+        if self.secret in data or self.secret in tail + data[:keep]:
+            from spicy_docs.transport.credentials import CredentialRefusedError
+
+            raise CredentialRefusedError("Source response refused; credential-bearing bytes were not retained")
+        new_tail = (tail + data[-keep:])[-keep:] if keep else b""
+        if decoded:
+            self.decoded_tail = new_tail
+        else:
+            self.tail = new_tail
+
+    def _update_decoded(self, decoded: bytes) -> None:
+        if not decoded:
+            return
+        self.decoded_size += len(decoded)
+        if self.max_decoded_bytes is not None and self.decoded_size > self.max_decoded_bytes:
+            raise self.evidence._failure("Decoded source response exceeds its retention byte bound")
+        self._scan_secret(decoded, decoded=True)
+        self.decoded_digest.update(decoded)
 
     def update(self, chunk: bytes) -> None:
         self.size += len(chunk)
@@ -221,23 +394,72 @@ class _StreamCheck:
             # that states no length can get here, and letting its bytes reach the owner unretained would leave
             # a used response the run could not prove. The run fails loudly instead.
             raise self.evidence._failure("Source response exceeds its retention byte bound")
-        if self.secret:
-            keep = len(self.secret) - 1
-            if self.secret in chunk or self.secret in self.tail + chunk[:keep]:
-                from spicy_docs.transport.credentials import CredentialRefusedError
-
-                raise CredentialRefusedError("Source response refused; credential-bearing bytes were not retained")
-            self.tail = (self.tail + chunk[-keep:])[-keep:] if keep else b""
+        self._scan_secret(chunk, decoded=False)
         if self.scan_paths and not self.local_path:
             # A root and its lookbehind ("file://") span at most 17 bytes, so 24 carried bytes see one a chunk splits.
             window = self.path_tail + chunk[:24]
             self.local_path = bool(_LOCAL_PATH_BYTES.search(chunk) or _LOCAL_PATH_BYTES.search(window))
             self.path_tail = (self.path_tail + chunk[-24:])[-24:]
         self.digest.update(chunk)
+        if self._decoder is not None:
+            self._decoder.update(chunk)
+
+    def finish(self) -> None:
+        """Finalize streaming decompression and verify stream completion (catching truncated payloads)."""
+        if self._decoder is not None:
+            self._decoder.finish()
 
     @property
     def sha256(self) -> str:
         return "sha256:" + self.digest.hexdigest()
+
+    @property
+    def decoded_sha256(self) -> str | None:
+        if not self.compressed:
+            return self.sha256
+        if not self.supported_compression or self.decoded_failed:
+            return None
+        return "sha256:" + self.decoded_digest.hexdigest()
+
+    def compression_fields(self, policy: str) -> dict[str, str | int]:
+        """Separate wire and decoded identity fields for compressed captures; empty for ``identity``."""
+        if not self.compressed:
+            return {}
+        fields: dict[str, str | int] = {"wire_byte_size": self.size}
+        if policy != "metadata_only":
+            fields["wire_sha256"] = self.sha256
+        if not self.supported_compression:
+            fields["decoded_status"] = "unsupported_encoding"
+        elif self.decoded_failed:
+            fields["decoded_status"] = "undecodable"
+        else:
+            fields["decoded_byte_size"] = self.decoded_size
+            if policy != "metadata_only":
+                assert self.decoded_sha256 is not None
+                fields["decoded_sha256"] = self.decoded_sha256
+        return fields
+
+
+def _check_expected_digests(
+    evidence: CaptureEvidence | SourceEvidenceContext,
+    check: _StreamCheck,
+    *,
+    expected_wire_sha256: str | None = None,
+    expected_decoded_sha256: str | None = None,
+) -> None:
+    """Reject mismatches on either wire (compressed) or decoded digests before journaling."""
+    if expected_wire_sha256 is not None:
+        if not _is_valid_sha256(expected_wire_sha256):
+            raise evidence._failure("Invalid expected wire_sha256 digest")
+        if check.sha256 != expected_wire_sha256:
+            raise evidence._failure("Captured wire digest differs from expected wire_sha256")
+    if expected_decoded_sha256 is not None:
+        if not _is_valid_sha256(expected_decoded_sha256):
+            raise evidence._failure("Invalid expected decoded_sha256 digest")
+        if check.decoded_sha256 is None:
+            raise evidence._failure("Compressed capture could not be decoded to verify expected decoded_sha256")
+        if check.decoded_sha256 != expected_decoded_sha256:
+            raise evidence._failure("Captured decoded digest differs from expected decoded_sha256")
 
 
 class CaptureEvidence:
@@ -308,16 +530,17 @@ class CaptureEvidence:
         self._restricted_diagnostics |= policy != "full"
         return SourceEvidenceContext(self, publisher_id, policy, parser_version, policy_decision_id)
 
-    def _body(self, body: bytes, *, raw_source: bool = True) -> dict:
+    def _body(self, body: bytes, *, raw_source: bool = True, digest: str | None = None) -> dict:
         """Public receipt for bytes, retaining them only under full policy."""
         result: dict[str, str | int | bool] = {"byte_size": len(body), "body_retained": self.policy == "full"}
         if self.policy != "metadata_only":
-            result["sha256"] = "sha256:" + hashlib.sha256(body).hexdigest()
-        if self.policy == "full":
-            self._blob(body, raw_source=raw_source)
-            result["blob_member"] = "blobs/sha256/" + hashlib.sha256(body).hexdigest()
-            if raw_source:
-                result["blob_store"] = "central-raw"
+            computed = digest if digest is not None else "sha256:" + hashlib.sha256(body).hexdigest()
+            result["sha256"] = computed
+            if self.policy == "full":
+                self._blob(body, raw_source=raw_source, digest=computed)
+                result["blob_member"] = "blobs/sha256/" + computed.removeprefix("sha256:")
+                if raw_source:
+                    result["blob_store"] = "central-raw"
         return result
 
     def _safe(self, value, field: str = ""):
@@ -419,8 +642,14 @@ class CaptureEvidence:
         ) if key in receipt}
         for body in (receipt, receipt.get("request_body"), receipt.get("response")):
             if isinstance(body, dict) and body.get("blob_store") == "central-raw":
+                compression = {
+                    key: body[key]
+                    for key in ("content_encoding", *_COMPRESSION_FIELDS)
+                    if key in body
+                }
                 files.append({
                     **identity,
+                    **compression,
                     "sha256": body["sha256"], "bytes": body["byte_size"],
                     "family": self.family,
                     "source_url": receipt.get("resolved_url") or receipt.get("source_url")
@@ -443,30 +672,45 @@ class CaptureEvidence:
         if raw_source:
             self._pending_blobs.add(digest)
 
-    def _blob(self, body: bytes, *, raw_source: bool = True) -> dict:
+    def _blob(self, body: bytes, *, raw_source: bool = True, digest: str | None = None) -> dict:
         """Store response bytes content-addressed; refuses once the artifact has been sealed."""
         if self.artifact is not None:
             raise SourceEvidenceError("Cannot append to sealed source evidence")
-        digest = "sha256:" + hashlib.sha256(body).hexdigest()
+        computed = digest if digest is not None else "sha256:" + hashlib.sha256(body).hexdigest()
         try:
-            self._put_body(digest, len(body), [body], raw_source=raw_source)
+            self._put_body(computed, len(body), [body], raw_source=raw_source)
         except Exception as error:
             raise self._failure("Cannot retain source response bytes") from error
-        return {"sha256": digest, "byte_size": len(body)}
+        return {"sha256": computed, "byte_size": len(body)}
 
-    def capture(self, capture: CapturedBodyResponse, *, stage: str, source_validation: str | None = None, **fields) -> dict:
+    def capture(
+        self,
+        capture: CapturedBodyResponse,
+        *,
+        stage: str,
+        source_validation: str | None = None,
+        expected_wire_sha256: str | None = None,
+        expected_decoded_sha256: str | None = None,
+        max_decoded_bytes: int | None = None,
+        **fields,
+    ) -> dict:
         """Retain one owner capture's body (and request body) into the evidence store.
 
         The returned ``archive_receipt_key`` locates the committed central receipt.
         Anything that is not a ``CapturedBodyResponse`` raises
         ``SourceEvidenceError``; a credential-bearing or 401/403 response raises
         ``CredentialRefusedError`` and journals only a refusal reason and status.
+        For compressed captures (``gzip``, ``x-gzip``, ``deflate``), wire and
+        decoded digests are bound separately via bounded streaming decompression,
+        and mismatches against ``expected_wire_sha256`` or ``expected_decoded_sha256``
+        refuse before retention.
         """
         from spicy_docs.transport.captured import CapturedBodyResponse
         from spicy_docs.transport.credentials import CredentialRefusedError
 
         if not isinstance(capture, CapturedBodyResponse):
             raise SourceEvidenceError("Source result has no owner capture")
+        _validate_positive_bound(max_decoded_bytes, "max_decoded_bytes")
         access_refused = capture.status_code in (401, 403)
         if access_refused or (
             self.credential
@@ -496,8 +740,42 @@ class CaptureEvidence:
             raise CredentialRefusedError(message)
         if self.policy != "full" and source_validation not in {None, "refused"}:
             raise SourceEvidenceError("Non-retaining source validation must use the fixed refusal marker")
+        check = _StreamCheck(
+            self,
+            len(capture.body),
+            content_encoding=capture.content_encoding,
+            max_decoded_bytes=max_decoded_bytes,
+        )
+        try:
+            body_len = len(capture.body)
+            for offset in range(0, body_len, _CHUNK):
+                check.update(capture.body[offset : offset + _CHUNK])
+            check.finish()
+        except CredentialRefusedError:
+            self.event(
+                "refusal",
+                stage=stage,
+                error_type="CredentialRefusedError",
+                reason_code="credential_echo",
+                status_code=capture.status_code,
+                body_retained=False,
+                credential_refused=True,
+                message=None,
+                response=None,
+            )
+            raise
+        _check_expected_digests(
+            self,
+            check,
+            expected_wire_sha256=expected_wire_sha256,
+            expected_decoded_sha256=expected_decoded_sha256,
+        )
+        response = {
+            **self._body(capture.body, digest=check.sha256),
+            **check.compression_fields(self.policy),
+        }
         return self._record_capture(
-            self._body(capture.body),
+            response,
             stage=stage,
             requested_url=capture.requested_url,
             resolved_url=capture.resolved_url,
@@ -531,6 +809,7 @@ class CaptureEvidence:
         method: str,
         request_body: bytes | None,
         response_headers: list[tuple[str, str]] | None = None,
+        compression: dict[str, str | int] | None = None,
     ) -> dict:
         """Retain a complete, already bounded and credential-scanned file in one read.
 
@@ -543,7 +822,7 @@ class CaptureEvidence:
             from spicy_docs.transport.credentials import CredentialRefusedError
 
             raise CredentialRefusedError("Source response refused; credential-bearing bytes were not retained")
-        response = self._file_blob(stream, sha256=sha256, byte_size=byte_size)
+        response = {**self._file_blob(stream, sha256=sha256, byte_size=byte_size), **(compression or {})}
         return self._record_capture(
             response,
             stage=stage,
@@ -693,7 +972,17 @@ class CaptureEvidence:
         # contexts publish only the bounded receipt, never local extraction names.
         return self._retained(blob, stage=stage, fields={"original_location": path.name, **fields}, name=path.name)
 
-    def transport(self, transport=None, *, stage: str, max_bytes: int, response_header_names: tuple[str, ...] = ()):
+    def transport(
+        self,
+        transport=None,
+        *,
+        stage: str,
+        max_bytes: int,
+        response_header_names: tuple[str, ...] = (),
+        max_decoded_bytes: int | None = None,
+        expected_wire_sha256: str | None = None,
+        expected_decoded_sha256: str | None = None,
+    ):
         """Observe streamed HTTP responses before owner parsing, including retries.
 
         The source still owns requests, pacing and validation. This wrapper only
@@ -706,6 +995,8 @@ class CaptureEvidence:
         directly through the maintained private blob writer, then the owner
         replays those retained bytes with renewed integrity. Restricted
         policies use a private temporary replay file and retain no body blob.
+        For compressed responses, wire and decoded digests are bound separately
+        in one streaming pass without buffering the decoded body in memory.
         """
         import httpx
         from spicy_docs.transport.captured import CompletedCapture
@@ -714,6 +1005,7 @@ class CaptureEvidence:
         evidence = self
         if type(max_bytes) is not int or max_bytes < 1:
             raise ValueError("max_bytes must be positive")
+        _validate_positive_bound(max_decoded_bytes, "max_decoded_bytes")
 
         class RetainedStream(httpx.SyncByteStream):
             def __init__(self, stream, request, request_body, response, observed_at):
@@ -723,7 +1015,6 @@ class CaptureEvidence:
                 self.extensions: dict[str, Any] = {}
 
             def __iter__(self):
-                check = _StreamCheck(evidence, max_bytes)
                 retained = False
                 metadata: dict[str, Any] = dict(
                     stage=stage,
@@ -738,6 +1029,12 @@ class CaptureEvidence:
                     **({"response_headers": [
                         (name, value) for name in response_header_names for value in self.response.headers.get_list(name)
                     ]} if response_header_names and evidence.policy == "full" else {}),
+                )
+                check = _StreamCheck(
+                    evidence,
+                    max_bytes,
+                    content_encoding=metadata["content_encoding"],
+                    max_decoded_bytes=max_decoded_bytes,
                 )
                 try:
                     if evidence.artifact is not None:
@@ -761,19 +1058,28 @@ class CaptureEvidence:
                                 for chunk in self.stream:
                                     check.update(chunk)
                                     yield chunk
+                                check.finish()
+                                _check_expected_digests(
+                                    evidence,
+                                    check,
+                                    expected_wire_sha256=expected_wire_sha256,
+                                    expected_decoded_sha256=expected_decoded_sha256,
+                                )
                             except BaseException as error:
                                 source_error = error
                                 raise
 
                         try:
                             # Rulespec's private .pending file replaces the old
-                            # evidence spool; no public blob appears before EOF
-                            # and the complete credential scan.
+                            # evidence spool; no public blob appears before EOF,
+                            # the complete credential scan, and digest checks.
                             result = evidence.store.put_stream(checked_chunks(), max_bytes=max_bytes)
                         except BaseException as error:
                             if error is source_error or not isinstance(error, Exception):
                                 raise
                             raise evidence._failure("Cannot retain source response bytes") from error
+                        if result.blob_ref != check.sha256 or result.byte_size != check.size:
+                            raise evidence._failure("Retained wire bytes differ from observed stream digest")
                         receipt = evidence._record_capture(
                             {
                                 "sha256": result.blob_ref,
@@ -781,6 +1087,7 @@ class CaptureEvidence:
                                 "body_retained": True,
                                 "blob_store": "central-raw",
                                 "blob_member": "blobs/sha256/" + result.blob_ref.removeprefix("sha256:"),
+                                **check.compression_fields(evidence.policy),
                             },
                             **metadata,
                         )
@@ -816,7 +1123,20 @@ class CaptureEvidence:
                                 check.update(chunk)
                                 staged(stream.write, chunk)
                             staged(stream.flush)
-                            evidence._retain_file(stream, sha256=check.sha256, byte_size=check.size, **metadata)
+                            check.finish()
+                            _check_expected_digests(
+                                evidence,
+                                check,
+                                expected_wire_sha256=expected_wire_sha256,
+                                expected_decoded_sha256=expected_decoded_sha256,
+                            )
+                            evidence._retain_file(
+                                stream,
+                                sha256=check.sha256,
+                                byte_size=check.size,
+                                compression=check.compression_fields(evidence.policy),
+                                **metadata,
+                            )
                             retained = True
                             stream.seek(0)
                             while chunk := stream.read(_CHUNK):
@@ -1105,19 +1425,50 @@ class CaptureEvidence:
         if self._used_input_scope is not None and (self._used_input_scope != scope or complete):
             raise self._failure("Incompatible used-input scopes or repeated complete selection")
         normalized = []
+        required_keys = {"location", "sha256", "bytes", "asset_kind"}
+        optional_keys = {"wire_sha256", "wire_bytes", "decoded_sha256", "decoded_bytes"}
         try:
             for item in inputs:
-                if (not isinstance(item, dict) or set(item) != {"location", "sha256", "bytes", "asset_kind"}
-                        or any(not isinstance(item[key], str) or not item[key].strip()
-                               for key in ("location", "asset_kind"))):
+                if (
+                    not isinstance(item, dict)
+                    or not (required_keys <= set(item) <= required_keys | optional_keys)
+                    or any(
+                        not isinstance(item[key], str) or not item[key].strip()
+                        for key in ("location", "asset_kind")
+                    )
+                ):
                     raise ValueError("Invalid used-input descriptor")
-                normalized.append({**item, "location": self._safe(item["location"], "used input location"),
-                                   "sha256": sha(item["sha256"]), "bytes": count(item["bytes"])})
+                wire_sha = sha(item["sha256"])
+                wire_bytes = count(item["bytes"])
+                if "wire_sha256" in item and sha(item["wire_sha256"]) != wire_sha:
+                    raise ValueError("Used-input wire_sha256 differs from sha256")
+                if "wire_bytes" in item and count(item["wire_bytes"]) != wire_bytes:
+                    raise ValueError("Used-input wire_bytes differs from bytes")
+                if ("decoded_sha256" in item) != ("decoded_bytes" in item):
+                    raise ValueError("Used-input decoded_sha256 and decoded_bytes must be declared together")
+                entry: dict[str, Any] = {
+                    "location": self._safe(item["location"], "used input location"),
+                    "sha256": wire_sha,
+                    "bytes": wire_bytes,
+                    "asset_kind": item["asset_kind"],
+                }
+                if "decoded_sha256" in item:
+                    entry["decoded_sha256"] = sha(item["decoded_sha256"])
+                    entry["decoded_bytes"] = count(item["decoded_bytes"])
+                normalized.append(entry)
         except (ValueError, TypeError, KeyError) as error:
             raise self._failure("Invalid used-input descriptor") from error
         self._used_input_scope = scope
         for item in normalized:
-            self._used_inputs[tuple(item[key] for key in ("location", "sha256", "bytes", "asset_kind"))] = item
+            dedup_key = (
+                item["location"],
+                item["sha256"],
+                item["bytes"],
+                item["asset_kind"],
+                item.get("decoded_sha256"),
+                item.get("decoded_bytes"),
+            )
+            self._used_inputs[dedup_key] = item
 
     def _finalize_used_inputs(self, events, *, success: bool) -> set[str]:
         """Resolve one indexed journal pass; captures alone never create declarations."""
@@ -1148,7 +1499,7 @@ class CaptureEvidence:
                         native_id = next((str(event[field]) for field in ("native_id", "source_id")
                                           if event.get(field) is not None), location)
                         identity = native_id, observation["source_version"], observation["version_kind"]
-                        indexed.setdefault(key, {})[identity] = observation
+                        indexed.setdefault(key, {})[identity] = (observation, event)
             response = event.get("response")
             if event.get("event") == "refusal" and isinstance(response, dict) and response.get("sha256"):
                 for location in {response.get(key) or event.get(key) for key in
@@ -1167,11 +1518,29 @@ class CaptureEvidence:
             if len(matches) != 1:
                 raise self._failure("Used original has ambiguous recorded native identity or version")
             identity = next(iter(matches))[0]
-            matched = next(iter(matches.values()))
+            matched, capture_event = next(iter(matches.values()))
+            if capture_event.get("decoded_status") in {"undecodable", "unsupported_encoding"}:
+                raise self._failure("Used compressed original could not be decoded")
+            is_compressed = _normalize_encoding(capture_event.get("content_encoding")) != "identity"
+            if is_compressed:
+                if not capture_event.get("decoded_sha256") or capture_event.get("decoded_byte_size") is None:
+                    raise self._failure("Used compressed original lacks a verified decoded digest")
+                actual_decoded = (capture_event["decoded_sha256"], capture_event["decoded_byte_size"])
+            else:
+                actual_decoded = (matched["sha256"], matched["bytes"])
+            if "decoded_sha256" in item and (item["decoded_sha256"], item["decoded_bytes"]) != actual_decoded:
+                raise self._failure("Used original differs from its recorded decoded digest")
             row = {**item, "source_id": identity, "source_version": matched["source_version"],
                    "version_kind": matched["version_kind"]}
+            if is_compressed:
+                row["wire_sha256"] = matched["sha256"]
+                row["decoded_sha256"], row["decoded_bytes"] = actual_decoded
             native = tuple(row[key] for key in ("source_id", "source_version", "version_kind", "asset_kind"))
-            if native in used and (used[native]["sha256"], used[native]["bytes"]) != key[:2]:
+            if native in used and (
+                (used[native]["sha256"], used[native]["bytes"]) != key[:2]
+                or (used[native].get("decoded_sha256"), used[native].get("decoded_bytes"))
+                != (row.get("decoded_sha256"), row.get("decoded_bytes"))
+            ):
                 raise self._failure("Used native identity has conflicting bytes")
             used.setdefault(native, row)
         scope_id, complete = self._used_input_scope
@@ -1350,6 +1719,46 @@ def _require_current_version(spec) -> None:
         )
 
 
+def _stream_verify_compressed(source: MemberSource, key: str, event: dict) -> None:
+    """Verify wire and decoded digests of a retained compressed blob in one bounded streaming pass."""
+    encoding = _normalize_encoding(event.get("content_encoding"))
+    wire_digest = hashlib.sha256()
+    wire_size = 0
+    decoded_digest = hashlib.sha256()
+    decoded_size = 0
+
+    def on_decoded(decoded: bytes) -> None:
+        nonlocal decoded_size
+        decoded_size += len(decoded)
+        decoded_digest.update(decoded)
+
+    decoder = _CompressedDecoder(encoding, on_decoded) if encoding in _COMPRESSED_ENCODINGS else None
+
+    with source.open(key) as stream:
+        while chunk := stream.read(_CHUNK):
+            wire_size += len(chunk)
+            wire_digest.update(chunk)
+            if decoder is not None:
+                decoder.update(chunk)
+
+    decode_failed = False
+    if decoder is not None:
+        decoder.finish()
+        decode_failed = decoder.failed
+
+    actual_wire = "sha256:" + wire_digest.hexdigest()
+    if actual_wire != event["wire_sha256"] or wire_size != event["wire_byte_size"]:
+        raise SourceEvidenceError("Wire digest differs from retained compressed bytes")
+    if "decoded_sha256" in event:
+        if decode_failed:
+            raise SourceEvidenceError("Retained compressed bytes cannot decode to declared decoded_sha256")
+        actual_decoded = "sha256:" + decoded_digest.hexdigest()
+        if actual_decoded != event["decoded_sha256"] or decoded_size != event["decoded_byte_size"]:
+            raise SourceEvidenceError("Decoded digest differs from retained compressed bytes")
+    elif event.get("decoded_status") == "undecodable" and not decode_failed:
+        raise SourceEvidenceError("Retained compressed bytes decoded despite undecodable status")
+
+
 def _verify_receipts(source: MemberSource, artifact) -> None:
     """Validate versioned receipt policy and every declared body/member binding."""
     _require_current_version(artifact.root["spec"])
@@ -1369,6 +1778,7 @@ def _verify_receipts(source: MemberSource, artifact) -> None:
     require(JOURNAL in members and members[JOURNAL]["role"] == "journal", "Invalid evidence journal role")
     capture_ids = set()
     policies = {}
+    verified_captures: dict[tuple[str, int], list[dict]] = {}
 
     def body(receipt, policy, *, event_record=False):
         require(isinstance(receipt, dict), "Invalid source body receipt")
@@ -1381,18 +1791,15 @@ def _verify_receipts(source: MemberSource, artifact) -> None:
         require(receipt.get("body_retained") is (policy == "full"), "Body retention contradicts policy")
         if policy == "metadata_only":
             require(
-                "sha256" not in receipt and "blob_member" not in receipt,
+                "sha256" not in receipt
+                and "blob_member" not in receipt
+                and "wire_sha256" not in receipt
+                and "decoded_sha256" not in receipt,
                 "Metadata-only receipt exposes a body identity",
             )
         else:
             digest = receipt.get("sha256")
-            require(
-                isinstance(digest, str)
-                and len(digest) == 71
-                and digest.startswith("sha256:")
-                and all(c in "0123456789abcdef" for c in digest[7:]),
-                "Invalid source body digest",
-            )
+            require(_is_valid_sha256(digest), "Invalid source body digest")
         if policy != "full":
             require("blob_member" not in receipt, "Non-retaining receipt names a source blob")
             return
@@ -1406,6 +1813,91 @@ def _verify_receipts(source: MemberSource, artifact) -> None:
             "Source body receipt differs from admitted bytes",
         )
         claimed.add(key)
+
+    def compression_binding(event, policy):
+        encoding = _normalize_encoding(event.get("content_encoding"))
+        compressed = encoding != "identity"
+        if "decoded_status" in event:
+            require(
+                event["decoded_status"] in {"undecodable", "unsupported_encoding"},
+                "Invalid decoded capture status",
+            )
+        if policy == "metadata_only":
+            require(
+                "wire_sha256" not in event and "decoded_sha256" not in event,
+                "Metadata-only receipt exposes a body identity",
+            )
+            if "wire_byte_size" in event:
+                require(
+                    type(event["wire_byte_size"]) is int and event["wire_byte_size"] == event["byte_size"],
+                    "Wire byte size differs from captured byte size",
+                )
+            has_decoded_size = "decoded_byte_size" in event
+            if has_decoded_size:
+                require(
+                    type(event["decoded_byte_size"]) is int and event["decoded_byte_size"] >= 0,
+                    "Invalid decoded byte size",
+                )
+                require("decoded_status" not in event, "Decoded capture cannot also claim a decode failure status")
+            if not compressed:
+                require("decoded_status" not in event, "Uncompressed capture cannot claim a decode failure status")
+                return
+            require("wire_byte_size" in event, "Compressed capture must bind wire_byte_size")
+            if encoding in _COMPRESSED_ENCODINGS:
+                require(
+                    has_decoded_size or event.get("decoded_status") == "undecodable",
+                    "Compressed capture must bind decoded_byte_size or explicit undecodable status",
+                )
+            else:
+                require(
+                    event.get("decoded_status") == "unsupported_encoding",
+                    "Unsupported compressed encoding must record unsupported_encoding status",
+                )
+            return
+        if "wire_sha256" in event:
+            require(
+                _is_valid_sha256(event["wire_sha256"]) and event["wire_sha256"] == event["sha256"],
+                "Wire digest differs from captured sha256",
+            )
+        if "wire_byte_size" in event:
+            require(
+                type(event["wire_byte_size"]) is int and event["wire_byte_size"] == event["byte_size"],
+                "Wire byte size differs from captured byte size",
+            )
+        has_decoded_sha = "decoded_sha256" in event
+        has_decoded_size = "decoded_byte_size" in event
+        require(has_decoded_sha == has_decoded_size, "Decoded digest and byte size must appear together")
+        if has_decoded_sha:
+            require(_is_valid_sha256(event["decoded_sha256"]), "Invalid decoded body digest")
+            require(
+                type(event["decoded_byte_size"]) is int and event["decoded_byte_size"] >= 0,
+                "Invalid decoded byte size",
+            )
+            require("decoded_status" not in event, "Decoded capture cannot also claim a decode failure status")
+        if not compressed:
+            require("decoded_status" not in event, "Uncompressed capture cannot claim a decode failure status")
+            if has_decoded_sha:
+                require(
+                    event["decoded_sha256"] == event["sha256"] and event["decoded_byte_size"] == event["byte_size"],
+                    "Uncompressed capture decoded digest differs from wire digest",
+                )
+            return
+        require(
+            "wire_sha256" in event and "wire_byte_size" in event,
+            "Compressed capture must bind wire_sha256 and wire_byte_size",
+        )
+        if encoding in _COMPRESSED_ENCODINGS:
+            require(
+                has_decoded_sha or event.get("decoded_status") == "undecodable",
+                "Compressed capture must bind decoded_sha256 or explicit undecodable status",
+            )
+            if policy == "full":
+                _stream_verify_compressed(source, event["blob_member"], event)
+        else:
+            require(
+                event.get("decoded_status") == "unsupported_encoding",
+                "Unsupported compressed encoding must record unsupported_encoding status",
+            )
 
     for event in events:
         require(isinstance(event, dict), "Evidence journal event must be an object")
@@ -1459,6 +1951,10 @@ def _verify_receipts(source: MemberSource, artifact) -> None:
                         "Capture lacks required HTTP observation metadata",
                     )
                 body(event, policy, event_record=True)
+                if kind == "capture":
+                    compression_binding(event, policy)
+                if policy != "metadata_only" and is_original(event):
+                    verified_captures.setdefault((event["sha256"], event["byte_size"]), []).append(event)
                 if event.get("request_body") is not None:
                     body(event["request_body"], policy)
             elif kind == "capture-incomplete":
@@ -1502,11 +1998,39 @@ def _verify_receipts(source: MemberSource, artifact) -> None:
                     "credential_refused",
                     "bytes_received",
                     "source_validation",
+                    *_COMPRESSION_FIELDS,
                 }
                 require(set(event) <= allowed, "Unexpected non-retaining receipt fields")
                 require(event.get("message") is None, "Non-retaining diagnostics contain source text")
                 require("source_validation" not in event or event["source_validation"] == "refused",
                         "Non-retaining source validation must use the fixed refusal marker")
+        if kind == "selected-inputs" and isinstance(event.get("manifest"), dict):
+            for used_row in event["manifest"].get("used", ()):
+                if not isinstance(used_row, dict):
+                    continue
+                if "wire_sha256" in used_row:
+                    require(
+                        used_row["wire_sha256"] == used_row.get("sha256"),
+                        "Selected used input wire_sha256 differs from sha256",
+                    )
+                if "decoded_sha256" in used_row:
+                    pin = (used_row.get("sha256"), used_row.get("bytes"))
+                    matched = verified_captures.get(pin, [])
+                    require(
+                        any(
+                            (
+                                cap.get("decoded_sha256") == used_row["decoded_sha256"]
+                                and cap.get("decoded_byte_size") == used_row.get("decoded_bytes")
+                            )
+                            or (
+                                _normalize_encoding(cap.get("content_encoding")) == "identity"
+                                and cap.get("sha256") == used_row["decoded_sha256"]
+                                and cap.get("byte_size") == used_row.get("decoded_bytes")
+                            )
+                            for cap in matched
+                        ),
+                        "Selected used input decoded digest differs from retained capture",
+                    )
         if kind == "lineage" and event.get("prior_root") is not None:
             receipt = event["prior_root"]
             key = "blobs/sha256/" + receipt["sha256"].removeprefix("sha256:")
