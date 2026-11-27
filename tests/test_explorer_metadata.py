@@ -793,3 +793,50 @@ def test_the_published_inputs_are_every_mutable_object_the_publisher_read(measur
     same, _ = unchanged(store.objects[script.KEY], revision=bundle["sourceRevision"],
                         read=lambda key: asked.append(key) or store.objects.get(key))
     assert same and sorted(asked) == sorted(bundle["inputs"])
+
+
+def test_wave_b_disclosure_tables_resolve_sources_and_drop_local_candidate_copy():
+    from spicy_regs.contract_types import described_schema
+    from spicy_regs.explorer_metadata import read_json
+    from spicy_regs.pipelines.house_disclosures import SCHEMAS as house_schemas
+    from spicy_regs.transforms.build_executive_disclosures import SCHEMAS as executive_schemas
+
+    assert len(house_schemas) == 5
+    assert len(executive_schemas) == 3
+    scopes = [
+        ("house-disclosures", house_schemas, "house-disclosures", "https://disclosures-clerk.house.gov/"),
+        ("executive-disclosures", executive_schemas, "executive-disclosures",
+         "https://www.oge.gov/web/OGE.nsf/publicresources_disclosure-faq"),
+    ]
+    selected = {"format": "spicy-regs-publication", "version": 2, "families": {}}
+    for number, (family, schemas, _, _) in enumerate(scopes, 1):
+        selected["families"][family] = {
+            "artifactDigest": "sha256:" + str(number) * 64,
+            "tables": {name + ".parquet": {
+                "columns": [list(pair) for pair in described_schema(schema)],
+                "rows": 1, "byteSize": 100,
+            } for name, schema in schemas.items()},
+        }
+    bundle = build_bundle(selected, generated_at="2026-11-27T00:00:00Z")
+    metadata = read_json("table_metadata.json")
+    for family, schemas, source_id, url in scopes:
+        for name in schemas:
+            table = bundle["tables"][name]
+            assert table["metadataStatus"] == table["sourceStatus"] == "documented"
+            assert table["sources"], f"{name} must resolve non-empty sources"
+            assert [(entry["id"], entry["url"]) for entry in table["sources"]] == [(source_id, url)]
+            assert table["modelGenerated"] is False
+            if family == "executive-disclosures":
+                assert "local candidate only" not in table.get("coverage", "").lower()
+                assert "local candidate only" not in metadata[name].get("coverage", "").lower()
+
+
+def test_court_parentheticals_group_id_documents_unexported_group_table():
+    from spicy_regs.explorer_metadata import read_json
+
+    metadata = read_json("table_metadata.json")
+    columns = {col["column_name"]: col["description"] for col in metadata["court_parentheticals"]["columns"]}
+    assert columns["group_id"] == (
+        "Publisher's group label for parentheticals making the same point; NULL when ungrouped. "
+        "Compare within this table only: the publisher declares but never exports its group table."
+    )

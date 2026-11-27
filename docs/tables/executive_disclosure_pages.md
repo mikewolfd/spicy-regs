@@ -6,7 +6,7 @@
 
 Executive disclosure interpreted pages for an explicitly selected public filing cohort.
 
-**Coverage.** Not a range. Local candidate only until separately published. Selected archived White House Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part 6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md. *(measured 2026-11-13)*
+**Coverage.** Not a range. Published pilot cohort of selected archived White House Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part 6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md. *(measured 2026-11-13)*
 
 - **Parquet file:** `executive_disclosure_pages.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

@@ -13381,7 +13381,7 @@ tables:
     - cohort_id
     - filing_id
     summary: Executive disclosure filing lookup for an explicitly selected public filing cohort.
-    coverage: Not a range. Local candidate only until separately published. Selected archived White House
+    coverage: Not a range. Published pilot cohort of selected archived White House
       Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part
       6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive,
       amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.
@@ -13433,7 +13433,7 @@ tables:
     identity_columns:
     - fact_id
     summary: Executive disclosure supported Part 6 facts for an explicitly selected public filing cohort.
-    coverage: Not a range. Local candidate only until separately published. Selected archived White House
+    coverage: Not a range. Published pilot cohort of selected archived White House
       Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part
       6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive,
       amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.
@@ -13477,7 +13477,7 @@ tables:
     - source_sha256
     - page
     summary: Executive disclosure interpreted pages for an explicitly selected public filing cohort.
-    coverage: Not a range. Local candidate only until separately published. Selected archived White House
+    coverage: Not a range. Published pilot cohort of selected archived White House
       Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part
       6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive,
       amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.
