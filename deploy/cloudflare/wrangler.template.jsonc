@@ -30,8 +30,8 @@
     "SPICY_REGS_R2_URL": "{{ R2_PUBLIC_URL }}",
     // Set these to the admitted release receipt and actual deployed image pins.
     // Empty values keep qualified FEC views disabled until release acceptance.
-    "SPICY_REGS_FEC_RELEASE_SHA256": "sha256:8b0e78a5768e4cf9712e899e88341e280e9443ae024b2aa2bde042fae4b188a2",
-    "SPICY_REGS_CONSUMER_IMAGE_DIGEST": "sha256:9c9dacbcda5ad3596b57490901280bf60205b20236e9b104033096ff42926be5",
+    "SPICY_REGS_FEC_RELEASE_SHA256": "sha256:a11c7f9228d7b7eb216417d218721e470ded57d0c5dad51179a4c4c36049b275",
+    "SPICY_REGS_CONSUMER_IMAGE_DIGEST": "sha256:9ad717edcaf7ecf1de17db628c7470e8290353f52493be567e85f7e0abd1549b",
     "R2_CATALOG_URI": "",
     "R2_CATALOG_WAREHOUSE": "",
     "R2_CATALOG_NAMESPACE": "default"
@@ -41,7 +41,7 @@
       "class_name": "McpContainer",
       // Build and push Dockerfile from the repo root before binding a new release.
       // Deploy the measured image digest so the receipt and runtime stay matched.
-      "image": "registry.cloudflare.com/174055408ff1560e60601c4d12c561c4/spicy-regs-reader@sha256:9c9dacbcda5ad3596b57490901280bf60205b20236e9b104033096ff42926be5",
+      "image": "registry.cloudflare.com/174055408ff1560e60601c4d12c561c4/spicy-regs-reader@sha256:9ad717edcaf7ecf1de17db628c7470e8290353f52493be567e85f7e0abd1549b",
       "image_build_context": "../../",
       "instance_type": "standard-4",
       "max_instances": 10
