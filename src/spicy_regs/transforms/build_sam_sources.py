@@ -9,8 +9,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Mapping
 from datetime import date, datetime
 from pathlib import Path
+from types import MappingProxyType
 
 import pyarrow as pa
 
@@ -59,21 +61,32 @@ def _json(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
+ALL_PUBLIC_EXTRACT: Mapping[str, str] = MappingProxyType({"population": "all-rows-in-public-extract"})
+
+
 def validate_selection(kind, selection):
+    if not isinstance(selection, Mapping):
+        raise ValueError("SAM selection must be a JSON object")
     if kind == "exclusions":
-        if selection != {"population": "all-rows-in-public-extract"}:
+        if selection != ALL_PUBLIC_EXTRACT:
             raise ValueError("SAM exclusions require the complete selected public extract")
         return
+    if kind == "opportunities" and selection == ALL_PUBLIC_EXTRACT:
+        return
     if kind != "opportunities" or set(selection) != {"agency_code", "posted_from", "posted_to"}:
-        raise ValueError("SAM notice selection requires agency_code, posted_from and posted_to")
+        raise ValueError("SAM notice selection requires all-rows-in-public-extract or agency_code, posted_from and posted_to")
     if not isinstance(selection["agency_code"], str) or re.fullmatch(r"[0-9]{3}", selection["agency_code"]) is None:
         raise ValueError("SAM public CSV agency_code must be a three-digit CGAC")
+    if not all(isinstance(selection[key], str) for key in ("posted_from", "posted_to")):
+        raise ValueError("SAM notice posted_from and posted_to must be ISO date strings")
     first, last = (date.fromisoformat(selection[key]) for key in ("posted_from", "posted_to"))
     if last < first or (last - first).days > 365:
         raise ValueError("SAM notice date window is reversed or exceeds 365 days")
 
 
 def _selected(fields, selection):
+    if selection == ALL_PUBLIC_EXTRACT:
+        return True
     if fields["CGAC"].zfill(3) != selection["agency_code"]:
         return False
     # The file's printed calendar date, with no guessed time zone conversion.
@@ -152,6 +165,8 @@ def build_sam_source(records, output_dir: Path, *, kind, capture, selection, sna
         "unqualified_text_rows": unqualified_count,
         "coverage_limit": ("All rows of the selected public active-exclusions file; no inactive history or registration inference."
                            if kind == "exclusions" else
+                           "All rows of the selected public active-opportunities CSV; amendments retained, API-only attachments and all-version history are omitted."
+                           if selection == ALL_PUBLIC_EXTRACT else
                            "Declared agency/posted-date rows in one public file; amendments retained, no all-version or attachment custody claim."),
     }
     summary_path = write_rows([summary], output_dir / (SNAPSHOTS[kind] + ".parquet"), SNAPSHOT_SCHEMA)

@@ -1300,7 +1300,7 @@
               "value": "VARCHAR"
             }
           ],
-          "description": "Literal sponsorshipDate; absent is NULL and present empty is an empty string."
+          "description": "Normalized sponsorshipDate; NULL when absent or present empty (see sponsorship_date_status and source_xml)."
         },
         {
           "name": "is_original",
@@ -1326,7 +1326,7 @@
               "value": "VARCHAR"
             }
           ],
-          "description": "Literal sponsorshipWithdrawnDate; retained BILLSTATUS source observations include positive dates."
+          "description": "Normalized sponsorshipWithdrawnDate; NULL when absent or present empty (see sponsorship_withdrawn_date_status and source_xml); retained BILLSTATUS source observations include positive dates."
         },
         {
           "name": "party",
@@ -1365,7 +1365,7 @@
               "value": "VARCHAR"
             }
           ],
-          "description": "District as the cosponsor entry states it."
+          "description": "District as the cosponsor entry states it; NULL when absent or present empty."
         }
       ],
       "dataGranularityDescription": "One cosponsor occurrence in one retained BILLSTATUS observation.",
@@ -2681,7 +2681,7 @@
               "value": "VARCHAR"
             }
           ],
-          "description": "Congress textVersions action-associated date for this printing, not its online publication time; the merge prefers the larger value. An enrolled printing's date is empty at the publisher (BILLSTATUS `<date/>` and the printing's own dc:date), so version_date is '' (not NULL) on enrolled rows, which sorts before every date: order printings with printing_order or NULLIF(version_date, '')."
+          "description": "Congress textVersions action-associated date for this printing, not its online publication time; the merge prefers the larger value. NULL when absent or when the publisher states an empty `<date/>` (as on enrolled printings, whose dc:date is also empty): order printings with printing_order."
         },
         {
           "name": "package_id",
@@ -2790,7 +2790,7 @@
               "value": "VARCHAR"
             }
           ],
-          "description": "Interpreted document kind: `full_text`, `kind_uncertain` (a full-text slug whose document is too thin to be sure), `procedural_amendments`, `procedural_summary`, or `unknown`."
+          "description": "Interpreted document kind: `full_text`, `kind_uncertain` (a full-text slug whose measured body yielded zero sections or zero bytes), `procedural_amendments`, `procedural_summary`, or `unknown`."
         },
         {
           "name": "kind_label",
@@ -2892,7 +2892,7 @@
               "value": "STRUCT(field VARCHAR, \"value\" VARCHAR, state VARCHAR, \"precision\" VARCHAR, locator VARCHAR, source_sha256 VARCHAR, source_url VARCHAR, observed_at VARCHAR, attributes STRUCT(\"name\" VARCHAR, \"value\" VARCHAR)[])[]"
             }
           ],
-          "description": "Native SUMMARY/MODS date observations with original values, precision, attributes and exact evidence/capture locators."
+          "description": "Native SUMMARY and MODS date observations, preserving values, precision, attributes and exact evidence locators. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
         },
         {
           "name": "publication_evidence_status",
@@ -7459,12 +7459,12 @@
     {
       "vendor": "spicy-regs",
       "property": "tableMetadataSha256",
-      "value": "fec8c91d6d23614bb73b62edd28066d37c56d8ed860c2965e1398a1550f8a12d"
+      "value": "fcc4ca53889332fb8f93b427476162b00da95ba1b21cf114a3cdb46d11ec7a69"
     },
     {
       "vendor": "spicy-regs",
       "property": "tableJoinsSha256",
-      "value": "8ec6cda0366dbadfc80a6e3a9162162953d3a24d38a5a44f91eba7bbe6c24507"
+      "value": "95e668cfb9c0cc797c1f1090bb27417a171129a6abbebac00b211b7328e76297"
     }
   ]
 }

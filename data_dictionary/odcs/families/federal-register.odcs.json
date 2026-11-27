@@ -217,7 +217,7 @@
               "value": "attribute"
             }
           ],
-          "description": "The issuing agencies as the Register's agency objects, a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+          "description": "The issuing agencies as the Register's agency objects, a Native list preserved verbatim in publisher order. Each element corresponds to one publisher agency/subagency `<SUBAGY>`/`<AGENCY>` entry (`raw_name` distinct); canonical `name`, `id` and `slug` may legitimately repeat across elements and are intentionally not deduplicated. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
         },
         {
           "name": "agency_slugs",
@@ -248,7 +248,7 @@
               "value": "attribute"
             }
           ],
-          "description": "The issuing agencies' Register slugs, comma-separated; NULL when none. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+          "description": "The issuing agencies' Register slugs, comma-separated in publisher order (repeating a slug when multiple `agencies` entries resolve to the same canonical agency); NULL when none. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
         },
         {
           "name": "docket_ids",
@@ -1058,12 +1058,12 @@
     {
       "vendor": "spicy-regs",
       "property": "tableMetadataSha256",
-      "value": "fec8c91d6d23614bb73b62edd28066d37c56d8ed860c2965e1398a1550f8a12d"
+      "value": "fcc4ca53889332fb8f93b427476162b00da95ba1b21cf114a3cdb46d11ec7a69"
     },
     {
       "vendor": "spicy-regs",
       "property": "tableJoinsSha256",
-      "value": "8ec6cda0366dbadfc80a6e3a9162162953d3a24d38a5a44f91eba7bbe6c24507"
+      "value": "95e668cfb9c0cc797c1f1090bb27417a171129a6abbebac00b211b7328e76297"
     }
   ]
 }
