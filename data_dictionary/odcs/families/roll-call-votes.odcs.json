@@ -1,0 +1,1140 @@
+{
+  "apiVersion": "v3.2.0",
+  "kind": "DataContract",
+  "id": "urn:spicy-regs:odcs:family:roll-call-votes",
+  "version": "1.0.0",
+  "name": "spicy-regs roll-call-votes",
+  "status": "active",
+  "domain": "spicycongress",
+  "dataProduct": "spicycongress",
+  "description": {
+    "purpose": "Deterministic ODCS v3.2.0 DataContract for spicy-regs publication family 'roll-call-votes' (2 table(s)), targeting DDK domain 'spicycongress'.",
+    "usage": "Verify Parquet Arrow schema parity before publishing or consuming generations."
+  },
+  "tags": [
+    "ddk-domain:spicycongress",
+    "family:roll-call-votes",
+    "pilot-wave",
+    "subject:congress"
+  ],
+  "schema": [
+    {
+      "id": "member_votes",
+      "name": "member_votes",
+      "physicalName": "member_votes.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Member vote positions",
+      "description": "One row per member's position on one roll call. `position` keeps the publisher's own word (the Clerk spells both Aye/No and Yea/Nay) and `position_normalized` carries the fold, so a count and a quotation are both answerable. All columns are stored as VARCHAR.",
+      "properties": [
+        {
+          "name": "vote_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:identifier:congress-roll-call-vote-id"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:roll-call-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "The roll call this position belongs to, as roll_call_votes keys it.",
+          "logicalTypeOptions": {
+            "pattern": "^[0-9]+-(house|senate)-[1-2]-[0-9]+$"
+          }
+        },
+        {
+          "name": "congress",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The numbered Congress the roll call belongs to."
+        },
+        {
+          "name": "chamber",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "house or senate."
+        },
+        {
+          "name": "session",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The session number within that Congress."
+        },
+        {
+          "name": "roll_number",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The roll-call number within that session."
+        },
+        {
+          "name": "member_key",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 2,
+          "description": "The file-stated id: `lis:` plus the LIS id on a Senate record, the bare bioguide id on a House one, and `name:` plus the publisher's name where the file states neither (every Clerk file of 1990-2002). A Senate bioguide comes from the crosswalk and does not always resolve, so keying on it would split one member's votes across two rows; an identity column also cannot be null, which the design's bioguide key would have been. A `name:` key identifies the row within its roll call, not a person: across 1990-2002 at least 21 of the Clerk's labels name two different members (Jones (NC), Allen, Schiff, Wilson, McHugh, Smith (WA)...), so a person is the host's crosswalk, never this key. Congress, member_name, party and state do not identify one either: one Congress can seat a successor of the same surname, party and state (where the Clerk states bioguide ids, 5 such keys name two: 109th Matsui D-CA, 110th Carson D-IN, 112th Payne D-NJ, 117th Letlow R-LA, 119th Grijalva D-AZ; in 1990-2002 the 105th's Capps and Bono (CA) and the 107th's Shuster (PA) show it as a gap inside the Congress), so the crosswalk adds vote_date, checked against each member's service dates."
+        },
+        {
+          "name": "bioguide_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:identifier:bioguide-id"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:bioguide-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The voting member's bioguide id: stated by the publisher on a House row (the Clerk's name-id, from 2003), and filled by the host's crosswalk at merge time on a Senate row, whose file states only lis_id (members.lis_id resolves it); NULL where neither supplies one.",
+          "logicalTypeOptions": {
+            "pattern": "^[A-Z][0-9]{6}$"
+          }
+        },
+        {
+          "name": "lis_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The voting member's Senate LIS id, which only the Senate file carries."
+        },
+        {
+          "name": "member_name",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The member's name exactly as the roll-call source spells it."
+        },
+        {
+          "name": "party",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The member's party as the roll-call source states it."
+        },
+        {
+          "name": "state",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The member's state as the roll-call source states it. On a House row `XX` is the Clerk's marking for the non-voting delegates and the Resident Commissioner, on the roll calls they voted in: 2,169 of the Clerk's 22,512 of 1990-2026 (1993-1994, 2007-2010, 2019-2020 and from 2022; none in 2021), every one an amendment vote or a motion in committee (to rise, to strike or limit debate, a call in committee, a ruling of the chair), filed under <committee> (clerk_body_element on roll_call_votes) from 2007 and under <chamber> in 1993-1994.  Kept as stated, not mapped to a territory."
+        },
+        {
+          "name": "position",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The member's position exactly as the publisher spelled it (Yea, Aye, Not Voting...)."
+        },
+        {
+          "name": "position_normalized",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "That position folded onto yea, nay, present or not_voting; NULL for a named candidate choice."
+        },
+        {
+          "name": "vote_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The chamber's literal date; sorts as text, not by time (see roll_call_votes `vote_day`)."
+        }
+      ],
+      "dataGranularityDescription": "One row per member's position on one roll call.",
+      "tags": [
+        "subject:congress",
+        "coverage:sampled"
+      ],
+      "relationships": [
+        {
+          "id": "fk-member_votes-bioguide_id-to-members-bioguide_id",
+          "type": "foreignKey",
+          "from": "member_votes.bioguide_id",
+          "to": "members.bioguide_id",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 1261
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 1
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 99.9206
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "members"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "L000555 is Luke Letlow, elected in 2020, who died on 2020-12-29 before taking the seat. The Clerk's 117-house-1-1 roll lists him Not Voting; Congress.gov lists only members who served. Measured after the 108th-119th votes chain; receipt join-map-2026-09-26/vote-joins-after-votes-chain.json."
+            }
+          ]
+        },
+        {
+          "id": "fk-member_votes-vote_id-to-roll_call_votes-vote_id",
+          "type": "foreignKey",
+          "from": "member_votes.vote_id",
+          "to": "roll_call_votes.vote_id",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 23358
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "roll-call-votes"
+            }
+          ]
+        }
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "84572f43a16dfe40eddea0b8ecfe0bbeeb49fd838f6b1d914d62ac4e58b6e14b"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "vote_id",
+            "member_key"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "roll_call_votes",
+      "name": "roll_call_votes",
+      "physicalName": "roll_call_votes.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "House and Senate roll-call votes",
+      "description": "One row per roll call: the publisher's own tally, and the bill it refers to. The four tally columns are the publisher's own counts, NULL on a candidate election (a Speaker vote), whose choices `tallies` keeps under their own labels. A Senate count element the file leaves empty or omits (`<present/>`, `<absent/>`) is read as 0, which is what the Senate means by it (119-senate-1-15: 50 yea, 50 nay, 0 present, 0 absent).",
+      "properties": [
+        {
+          "name": "vote_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:identifier:congress-roll-call-vote-id"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:roll-call-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "Natural key: congress, chamber, session and roll number joined with hyphens.",
+          "logicalTypeOptions": {
+            "pattern": "^[0-9]+-(house|senate)-[1-2]-[0-9]+$"
+          }
+        },
+        {
+          "name": "congress",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The numbered Congress the roll call belongs to."
+        },
+        {
+          "name": "chamber",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "house or senate."
+        },
+        {
+          "name": "session",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The session number within that Congress."
+        },
+        {
+          "name": "roll_number",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The roll-call number within that session."
+        },
+        {
+          "name": "vote_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The chamber's literal date; sorts as text, not by time (see `vote_day`)."
+        },
+        {
+          "name": "question",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The question put to the chamber, as the publisher states it."
+        },
+        {
+          "name": "result",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The stated result of the roll call."
+        },
+        {
+          "name": "yea",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "Yea votes, from the Clerk's yea-total or the Senate's yeas; a blank Senate count reads 0 (see present)."
+        },
+        {
+          "name": "nay",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "Nay votes, from the Clerk's nay-total or the Senate's nays; a blank Senate count reads 0 (see present)."
+        },
+        {
+          "name": "present",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "Present votes, as each publisher counts them. A Senate count element the file leaves empty or omits (`<present/>`) reads 0, which is what the Senate means by it: 119-senate-1-15 states 50 yeas, 50 nays and empty present and absent, 100 positions."
+        },
+        {
+          "name": "not_voting",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "Members not voting: the Clerk's not-voting-total, or the Senate's absent, folded to one column. A blank Senate `<absent/>` reads 0, as for present."
+        },
+        {
+          "name": "tallies",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "object",
+            "properties": [
+              {
+                "name": "choice",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "count",
+                "logicalType": "integer",
+                "logicalTypeOptions": {
+                  "format": "i64"
+                },
+                "physicalType": "Int64"
+              }
+            ]
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "STRUCT(choice VARCHAR, count BIGINT)[]"
+            }
+          ],
+          "description": "The overall totals the publisher stated, under the publisher's own names, as a Native structure; the Clerk's totals by party are party_totals. Candidate elections keep literal choice labels here and leave the four ordinary tally columns NULL. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "member_vote_count",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "How many member positions the file carried; the member_votes row count for this roll call."
+        },
+        {
+          "name": "bill_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:rkaf:us:bill:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:legal-location"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:bill-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The bill this roll call refers to: from a bill action's recorded-vote reference, a vote-list reference, or the vote file's own statement of its measure.",
+          "logicalTypeOptions": {
+            "pattern": "^[0-9]+-(hr|s|hjres|sjres|hconres|sconres|hres|sres)-[0-9]+$"
+          }
+        },
+        {
+          "name": "tally_kind",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "positions for ordinary totals, candidates for native named-choice totals; NULL on legacy or linkage-only rows."
+        },
+        {
+          "name": "documents",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "object",
+            "properties": [
+              {
+                "name": "congress",
+                "logicalType": "integer",
+                "logicalTypeOptions": {
+                  "format": "i64"
+                },
+                "physicalType": "Int64"
+              },
+              {
+                "name": "name",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "nomination_id",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "number",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "short_title",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "title",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "type",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              }
+            ]
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "STRUCT(congress BIGINT, \"name\" VARCHAR, nomination_id VARCHAR, number VARCHAR, short_title VARCHAR, title VARCHAR, \"type\" VARCHAR)[]"
+            }
+          ],
+          "description": "Ordered Senate document objects with native congress, type, number, nomination_id, name, title and short_title; [] for captured votes without documents, NULL for legacy or linkage-only rows. Numbers retain publisher spelling, including nomination suffixes; nomination_id carries {congress}-pn-{number}[-{part}] on PN documents and NULL otherwise. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "amendments",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "object",
+            "properties": [
+              {
+                "name": "number",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "purpose",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "to_amendment_number",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "to_amendment_to_amendment_number",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "to_document_number",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "to_document_short_title",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              }
+            ]
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "STRUCT(number VARCHAR, purpose VARCHAR, to_amendment_number VARCHAR, to_amendment_to_amendment_number VARCHAR, to_document_number VARCHAR, to_document_short_title VARCHAR)[]"
+            }
+          ],
+          "description": "Ordered Senate amendment objects with native number, to_amendment_number, to_amendment_to_amendment_number, to_document_number, to_document_short_title and purpose; [] for captured votes without amendments, NULL for legacy or linkage-only rows. Repeated empty-ID blocks remain separate observations; no document pairing is inferred. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "vote_day",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The chamber's own printed vote date as an ISO day (YYYY-MM-DD) in Eastern local time, which sorts where vote_date does not and is never the UTC day of a Congress.gov recordedVotes date; NULL where the file prints no date, on linkage-only rows, and on rows published before this column until a host backfills them."
+        },
+        {
+          "name": "legis_num",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The Clerk's own legis-num as the House vote file states it (H R 3354, H RES 682, QUORUM); empty when a captured Clerk file states none; NULL on Senate rows, linkage-only rows and House rows captured before this column."
+        },
+        {
+          "name": "clerk_body_element",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Which element of the Clerk's file names the voting body, `committee` or `chamber`; both read 'U.S. House of Representatives', so the element is the fact.  The Clerk files 3,830 of its 22,512 roll calls of 1990-2026 under <committee>, all from 2007 on: 3,791 amendment votes, 29 motions for the committee to rise or calls in committee, 5 rulings of the chair, 3 vacated votes and 2 House questions (a passage, a recommittal).  It calls none a Committee of the Whole vote; that is the inference.  NULL on Senate rows, linkage-only rows and rows captured before this column."
+        },
+        {
+          "name": "vote_desc",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The Clerk's own vote-desc as the House vote file states it, most often the measure's title (\"PRECIP Act\"); 13,780 of the Clerk's 22,512 files of 1990-2026 state one.  On the five roll calls the House vacated by unanimous consent before recording a position (112-1-484, 112-2-327, 113-2-275, 114-1-300, 114-2-44) it is the file's statement of what happened (\"This vote was vacated by unanimous consent on 4-Jun-2015.\"), and the row has zero tallies, member_vote_count 0 and no member_votes rows.  A vote vacated after its positions were recorded publishes as any other: 110-2-640 (2008) lists 433 members and says \"Proceedings on Roll Call 640 were vacated by unanimous consent.\"  Empty when a captured Clerk file states none; NULL on Senate rows, linkage-only rows and House rows captured before this column."
+        },
+        {
+          "name": "vote_question_text",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The Senate's full question text as the file states it, the amendment and the measure named in words (On the Amendment S.Amdt. 2360 to H.R. 1), so it names the amendment voted on even when the amendment block is empty (119-2-180 and 119-2-182 name SA 5823 only here and in vote_title). Empty when a captured Senate file states none; NULL on House rows, linkage-only rows and Senate rows captured before this column."
+        },
+        {
+          "name": "vote_title",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The Senate's vote title as the file states it (`Amdt. No. 2360, as Amended`). Empty when a captured Senate file states none; NULL on House rows, linkage-only rows and Senate rows captured before this column."
+        },
+        {
+          "name": "majority_requirement",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The majority the Senate file states the question needed: `1/2`, `3/5` or `2/3`. Empty when a captured Senate file states none; NULL on House rows, linkage-only rows and Senate rows captured before this column."
+        },
+        {
+          "name": "modify_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The Senate file's own modify_date literal (`July 1, 2025,  12:57 PM`), when the publisher last changed it; sorts as text. Empty when a captured Senate file states none; NULL on House rows, linkage-only rows and Senate rows captured before this column."
+        },
+        {
+          "name": "tie_breaker_by_whom",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Who cast the tie-breaking vote, as the Senate's tie_breaker block names them (`Vice President of the United States`): the reason a 50-50 roll call reads Agreed to. NULL when the vote was not tied (the block is present and empty), on House rows, linkage-only rows and Senate rows captured before this column."
+        },
+        {
+          "name": "tie_breaker_vote",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The tie-breaking vote as cast (`Yea`); NULL wherever tie_breaker_by_whom is."
+        },
+        {
+          "name": "party_totals",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "object",
+            "properties": [
+              {
+                "name": "party",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "yea-total",
+                "logicalType": "integer",
+                "logicalTypeOptions": {
+                  "format": "i64"
+                },
+                "physicalType": "Int64"
+              },
+              {
+                "name": "nay-total",
+                "logicalType": "integer",
+                "logicalTypeOptions": {
+                  "format": "i64"
+                },
+                "physicalType": "Int64"
+              },
+              {
+                "name": "present-total",
+                "logicalType": "integer",
+                "logicalTypeOptions": {
+                  "format": "i64"
+                },
+                "physicalType": "Int64"
+              },
+              {
+                "name": "not-voting-total",
+                "logicalType": "integer",
+                "logicalTypeOptions": {
+                  "format": "i64"
+                },
+                "physicalType": "Int64"
+              }
+            ]
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "STRUCT(party VARCHAR, \"yea-total\" BIGINT, \"nay-total\" BIGINT, \"present-total\" BIGINT, \"not-voting-total\" BIGINT)[]"
+            }
+          ],
+          "description": "The Clerk's totals by party, as a Native list in the file's order: each object the party as the Clerk names it (Republican, Democratic, Independent; member_votes.party spells the same parties R, D and I) and its yea-total, nay-total, present-total and not-voting-total. [] when a captured Clerk file states none (a Speaker election). NULL on Senate rows, whose files state none; on linkage-only rows; and on House rows captured before this column until they are read again. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "source_url",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The publisher's own URL for this roll call."
+        },
+        {
+          "name": "match_rule",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Which vote-matching rule named that bill: bill_action_recorded_vote (the bill's own action records this roll call), house_vote_legislation (Congress.gov's House vote list), vote_file_legislation (the vote file names the bill: the Clerk's legis-num, or the Senate's document or amended document), or unmatched."
+        },
+        {
+          "name": "match_action_index",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "Position of the action whose recordedVote named this roll call, where one did."
+        },
+        {
+          "name": "match_url",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The reference URL the match was read from."
+        },
+        {
+          "name": "conflict_count",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "How many later references disagreed with the one that won; kept, never dropped."
+        }
+      ],
+      "dataGranularityDescription": "One row per roll call: the publisher's own tally, and the bill it refers to.",
+      "tags": [
+        "subject:congress",
+        "coverage:sampled"
+      ],
+      "relationships": [
+        {
+          "id": "fk-roll_call_votes-bill_id-to-congress_bills-bill_id",
+          "type": "foreignKey",
+          "from": "roll_call_votes.bill_id",
+          "to": "congress_bills.bill_id",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 7515
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "bill-family"
+            }
+          ]
+        }
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "46f2636386a0e0d8cf1e4f2aea79480840d0245190f64c089e8d32c9eb91319a"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "vote_id"
+          ]
+        }
+      ]
+    }
+  ],
+  "customProperties": [
+    {
+      "vendor": "ddk",
+      "property": "targetDomain",
+      "value": "spicycongress"
+    },
+    {
+      "vendor": "ddk",
+      "property": "secondaryDomains",
+      "value": []
+    },
+    {
+      "vendor": "ddk",
+      "property": "arrowSchemaProfile",
+      "value": "urn:ddk:odcs:arrow-declaration:3"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "family",
+      "value": "roll-call-votes"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "pilotWave",
+      "value": true
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "tableMetadataSha256",
+      "value": "fec8c91d6d23614bb73b62edd28066d37c56d8ed860c2965e1398a1550f8a12d"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "tableJoinsSha256",
+      "value": "8ec6cda0366dbadfc80a6e3a9162162953d3a24d38a5a44f91eba7bbe6c24507"
+    }
+  ]
+}

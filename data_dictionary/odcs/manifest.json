@@ -1,0 +1,231 @@
+{
+  "format": "spicy-regs-odcs-manifest",
+  "version": 1,
+  "odcs_api_version": "v3.2.0",
+  "arrow_profile": "urn:ddk:odcs:arrow-declaration:3",
+  "scope": "pilot",
+  "source_digests": {
+    "table_metadata_sha256": "fec8c91d6d23614bb73b62edd28066d37c56d8ed860c2965e1398a1550f8a12d",
+    "table_joins_sha256": "8ec6cda0366dbadfc80a6e3a9162162953d3a24d38a5a44f91eba7bbe6c24507"
+  },
+  "pilot_families": [
+    "amendments",
+    "bill-family",
+    "committee-rosters",
+    "members",
+    "nominations",
+    "roll-call-votes",
+    "federal-register",
+    "rulemaking"
+  ],
+  "enrolled_families": [
+    "amendments",
+    "bill-family",
+    "committee-rosters",
+    "federal-register",
+    "members",
+    "nominations",
+    "roll-call-votes",
+    "rulemaking"
+  ],
+  "contracts": {
+    "amendments": {
+      "family": "amendments",
+      "path": "families/amendments.odcs.json",
+      "sha256": "b2ef144c8ba17bc270d39efa567ae8a0dc81a2c82b9d0494371fde2b5425478a",
+      "contract_id": "urn:spicy-regs:odcs:family:amendments",
+      "domain": "spicycongress",
+      "secondary_domains": [],
+      "pilot_wave": true,
+      "tables": [
+        "amendments"
+      ],
+      "table_count": 1,
+      "relationship_count": 3,
+      "refspec_mapped_columns": 4
+    },
+    "bill-family": {
+      "family": "bill-family",
+      "path": "families/bill-family.odcs.json",
+      "sha256": "ff3f7cabfe6a72d721bbdbc9a428c2e01249934a80f7806e30228fde1f8428f1",
+      "contract_id": "urn:spicy-regs:odcs:family:bill-family",
+      "domain": "spicycongress",
+      "secondary_domains": [
+        "RefSpec"
+      ],
+      "pilot_wave": true,
+      "tables": [
+        "bill_actions",
+        "bill_committee_activities",
+        "bill_committees",
+        "bill_cosponsors",
+        "bill_family_document_file_outcomes",
+        "bill_publisher_summaries",
+        "bill_sections",
+        "bill_summaries",
+        "bill_versions",
+        "bill_vote_references",
+        "cbo_cost_estimates",
+        "cbo_estimate_cards",
+        "cbo_feed_items",
+        "congress_bills",
+        "diff_summaries",
+        "financial_changes",
+        "public_activity_events",
+        "section_classifications",
+        "section_diff_items",
+        "section_diffs"
+      ],
+      "table_count": 20,
+      "relationship_count": 30,
+      "refspec_mapped_columns": 30
+    },
+    "committee-rosters": {
+      "family": "committee-rosters",
+      "path": "families/committee-rosters.odcs.json",
+      "sha256": "55befc8b12db4b4d91fa2fe10d944a27034a94591f22f4f968c8a168f5096d93",
+      "contract_id": "urn:spicy-regs:odcs:family:committee-rosters",
+      "domain": "spicycongress",
+      "secondary_domains": [
+        "SpicyEntities"
+      ],
+      "pilot_wave": true,
+      "tables": [
+        "committee_assignments",
+        "committee_directory_entries",
+        "committees"
+      ],
+      "table_count": 3,
+      "relationship_count": 4,
+      "refspec_mapped_columns": 5
+    },
+    "federal-register": {
+      "family": "federal-register",
+      "path": "families/federal-register.odcs.json",
+      "sha256": "d31e7a616e7fb505827f67c633c631b1b0f44beaba49d993ecab5db8407290e0",
+      "contract_id": "urn:spicy-regs:odcs:family:federal-register",
+      "domain": "spicygov",
+      "secondary_domains": [
+        "RefSpec"
+      ],
+      "pilot_wave": true,
+      "tables": [
+        "federal_register"
+      ],
+      "table_count": 1,
+      "relationship_count": 1,
+      "refspec_mapped_columns": 12
+    },
+    "members": {
+      "family": "members",
+      "path": "families/members.odcs.json",
+      "sha256": "00f8322c0fade545654ee4b6d91b538fb1f1517e280f42860a825fdc5775fcec",
+      "contract_id": "urn:spicy-regs:odcs:family:members",
+      "domain": "spicycongress",
+      "secondary_domains": [
+        "SpicyEntities"
+      ],
+      "pilot_wave": true,
+      "tables": [
+        "member_party_affiliations",
+        "member_terms",
+        "members"
+      ],
+      "table_count": 3,
+      "relationship_count": 2,
+      "refspec_mapped_columns": 5
+    },
+    "nominations": {
+      "family": "nominations",
+      "path": "families/nominations.odcs.json",
+      "sha256": "b1904831a8536fce394aa8179526494f4b3a69193c562b450743dd63108df1d0",
+      "contract_id": "urn:spicy-regs:odcs:family:nominations",
+      "domain": "spicycongress",
+      "secondary_domains": [
+        "spicygov"
+      ],
+      "pilot_wave": true,
+      "tables": [
+        "nominations",
+        "nominations_detail_reads"
+      ],
+      "table_count": 2,
+      "relationship_count": 0,
+      "refspec_mapped_columns": 2
+    },
+    "roll-call-votes": {
+      "family": "roll-call-votes",
+      "path": "families/roll-call-votes.odcs.json",
+      "sha256": "a2d58bf044603e27896cd4b6c2cbf21925a22e2c9df75368ba5ffec3de287c04",
+      "contract_id": "urn:spicy-regs:odcs:family:roll-call-votes",
+      "domain": "spicycongress",
+      "secondary_domains": [],
+      "pilot_wave": true,
+      "tables": [
+        "member_votes",
+        "roll_call_votes"
+      ],
+      "table_count": 2,
+      "relationship_count": 3,
+      "refspec_mapped_columns": 4
+    },
+    "rulemaking": {
+      "family": "rulemaking",
+      "path": "families/rulemaking.odcs.json",
+      "sha256": "003005b4f545d3a4e222f3e4bf8df37116efd8dd928eebee4d5c9bd9ec516bb0",
+      "contract_id": "urn:spicy-regs:odcs:family:rulemaking",
+      "domain": "spicygov",
+      "secondary_domains": [
+        "RefSpec"
+      ],
+      "pilot_wave": true,
+      "tables": [
+        "agency_lifecycle_stats",
+        "agenda_item_proceedings",
+        "comment_periods",
+        "lifecycle_events",
+        "proceedings",
+        "regulatory_agenda_items",
+        "rule_targets",
+        "rulemaking_lifecycles"
+      ],
+      "table_count": 8,
+      "relationship_count": 15,
+      "refspec_mapped_columns": 21
+    }
+  },
+  "tracked_catalog_gaps": {
+    "derived_child_views": [
+      "fec_filing_report_measures",
+      "fec_filing_text",
+      "fec_legal_citations",
+      "fec_legal_subjects"
+    ],
+    "shared_processing_tables": [
+      "etl_receipts"
+    ],
+    "unassigned_metadata_tables": [
+      "court_opinion_texts",
+      "crs_report_files",
+      "federal_register_issues",
+      "house_allowance_formula_pages",
+      "house_allowance_formula_rows",
+      "house_allowance_formula_values",
+      "house_allowance_summary_pages",
+      "house_allowance_summary_rows",
+      "house_allowance_summary_values",
+      "house_financial_summary_pages",
+      "house_financial_summary_rows",
+      "house_financial_summary_values",
+      "house_mailing_summary_pages",
+      "house_mailing_summary_rows",
+      "house_mailing_summary_values",
+      "senate_financial_summary_pages",
+      "senate_financial_summary_rows",
+      "senate_financial_summary_values"
+    ],
+    "local_families_without_inline_arrow_schema": [
+      "court-opinions"
+    ]
+  }
+}

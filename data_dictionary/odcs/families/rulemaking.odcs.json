@@ -1,0 +1,3160 @@
+{
+  "apiVersion": "v3.2.0",
+  "kind": "DataContract",
+  "id": "urn:spicy-regs:odcs:family:rulemaking",
+  "version": "1.0.0",
+  "name": "spicy-regs rulemaking",
+  "status": "active",
+  "domain": "spicygov",
+  "dataProduct": "spicygov",
+  "description": {
+    "purpose": "Deterministic ODCS v3.2.0 DataContract for spicy-regs publication family 'rulemaking' (8 table(s)), targeting DDK domain 'spicygov'.",
+    "usage": "Verify Parquet Arrow schema parity before publishing or consuming generations."
+  },
+  "tags": [
+    "ddk-domain:spicygov",
+    "ddk-secondary-domain:RefSpec",
+    "family:rulemaking",
+    "pilot-wave",
+    "subject:rulemaking"
+  ],
+  "schema": [
+    {
+      "id": "agency_lifecycle_stats",
+      "name": "agency_lifecycle_stats",
+      "physicalName": "agency_lifecycle_stats.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Time to final rule by agency",
+      "description": "Estimated days to a final rule by agency and stratum, using Aalen–Johansen cumulative incidence with withdrawal as a competing outcome and 95% intervals. Cells pool all proposal years; fewer than 30 rules suppress estimates. NULL quartiles mean the estimate never reaches that probability. Routine families exist only for FAA, EPA and USCG. Each docketed proceeding counts separately, including proposals naming several dockets. Cohort estimates require filtering and recomputing the underlying lifecycles.",
+      "properties": [
+        {
+          "name": "agency_code",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:regulations-gov-agency:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:agency-code"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            },
+            {
+              "vendor": "refspec",
+              "property": "authority",
+              "value": "RefSpec REF-038 Regulations.gov agency projection"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "The agency the cell covers; NULL for all agencies together."
+        },
+        {
+          "name": "stratum",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 2,
+          "description": "The rules counted: `all`, `routine`, `non_routine`, or one routine family."
+        },
+        {
+          "name": "rules",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i32"
+          },
+          "physicalType": "Int32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "INTEGER"
+            }
+          ],
+          "description": "Lifecycles in the cell with a survival outcome."
+        },
+        {
+          "name": "finals",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i32"
+          },
+          "physicalType": "Int32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "INTEGER"
+            }
+          ],
+          "description": "How many of them became final."
+        },
+        {
+          "name": "withdrawals",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i32"
+          },
+          "physicalType": "Int32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "INTEGER"
+            }
+          ],
+          "description": "How many of them were withdrawn."
+        },
+        {
+          "name": "censored",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i32"
+          },
+          "physicalType": "Int32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "INTEGER"
+            }
+          ],
+          "description": "How many of them were still open at `censor_date`."
+        },
+        {
+          "name": "suppressed",
+          "logicalType": "boolean",
+          "physicalType": "Boolean",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BOOLEAN"
+            }
+          ],
+          "description": "Whether the cell has fewer than 30 rules and so carries no estimates."
+        },
+        {
+          "name": "q1_days",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i32"
+          },
+          "physicalType": "Int32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "INTEGER"
+            }
+          ],
+          "description": "First day the cumulative incidence of a final reaches 25%; NULL where it never does or the cell is suppressed."
+        },
+        {
+          "name": "q1_lower_days",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i32"
+          },
+          "physicalType": "Int32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "INTEGER"
+            }
+          ],
+          "description": "Lower end of the 95% interval of `q1_days`: the first day the band's upper edge reaches 25%; NULL where it never does or the cell is suppressed."
+        },
+        {
+          "name": "q1_upper_days",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i32"
+          },
+          "physicalType": "Int32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "INTEGER"
+            }
+          ],
+          "description": "Upper end of the 95% interval of `q1_days`: the first day the band's lower edge reaches 25%; NULL where it never does."
+        },
+        {
+          "name": "median_days",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i32"
+          },
+          "physicalType": "Int32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "INTEGER"
+            }
+          ],
+          "description": "First day the cumulative incidence of a final reaches 50%: the median time to final; NULL where it never does or the cell is suppressed."
+        },
+        {
+          "name": "median_lower_days",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i32"
+          },
+          "physicalType": "Int32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "INTEGER"
+            }
+          ],
+          "description": "Lower end of the 95% interval of `median_days`: the first day the band's upper edge reaches 50%; NULL where it never does or the cell is suppressed."
+        },
+        {
+          "name": "median_upper_days",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i32"
+          },
+          "physicalType": "Int32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "INTEGER"
+            }
+          ],
+          "description": "Upper end of the 95% interval of `median_days`; NULL where the band's lower edge never reaches 50%."
+        },
+        {
+          "name": "q3_days",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i32"
+          },
+          "physicalType": "Int32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "INTEGER"
+            }
+          ],
+          "description": "First day the cumulative incidence of a final reaches 75%; NULL where it never does or the cell is suppressed."
+        },
+        {
+          "name": "q3_lower_days",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i32"
+          },
+          "physicalType": "Int32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "INTEGER"
+            }
+          ],
+          "description": "Lower end of the 95% interval of `q3_days`: the first day the band's upper edge reaches 75%; NULL where it never does or the cell is suppressed."
+        },
+        {
+          "name": "q3_upper_days",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i32"
+          },
+          "physicalType": "Int32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "INTEGER"
+            }
+          ],
+          "description": "Upper end of the 95% interval of `q3_days`; NULL where the band's lower edge never reaches 75%."
+        },
+        {
+          "name": "censor_date",
+          "logicalType": "date",
+          "logicalTypeOptions": {
+            "format": "yyyy-MM-dd"
+          },
+          "physicalType": "Date32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "DATE"
+            }
+          ],
+          "description": "The lifecycles' censor date, where the estimates' open rules are censored."
+        }
+      ],
+      "dataGranularityDescription": "One agency (or all agencies) and one stratum of rules.",
+      "tags": [
+        "subject:rulemaking",
+        "coverage:derived"
+      ],
+      "relationships": [
+        {
+          "id": "fk-agency_lifecycle_stats-agency_code-to-agency_stats-agency_code",
+          "type": "foreignKey",
+          "from": "agency_lifecycle_stats.agency_code",
+          "to": "agency_stats.agency_code",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "one"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 163
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "agency-stats"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "Null agency codes represent all agencies together and are excluded. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness."
+            }
+          ]
+        }
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "bc9e050d033d80941b21de6a3903caa7c5a5881c26773b2f1d406c430017b222"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "agency_code",
+            "stratum"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "agenda_item_proceedings",
+      "name": "agenda_item_proceedings",
+      "physicalName": "agenda_item_proceedings.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Agenda item to proceeding links",
+      "description": "One row per piece of evidence that an agenda item tracks a proceeding: a docket, Regulations.gov document or Register document that directly reports the RIN for that proceeding. Unified Agenda equality alone never links an action. Keyed `relationship_id`; joins `regulatory_agenda_items` on `agenda_item_id`, `proceedings` on `proceeding_id` and `unified_agenda` on `rin`. Built by `build_regulatory_agenda`; all columns are VARCHAR.",
+      "properties": [
+        {
+          "name": "relationship_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "Stable id of the link (`agenda_proceeding_relationship_<24 hex>`), from its RIN, proceeding, source and evidence."
+        },
+        {
+          "name": "agenda_item_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:rkaf:us:rin:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:agenda-item-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The agenda item; joins `regulatory_agenda_items.agenda_item_id`.",
+          "logicalTypeOptions": {
+            "pattern": "^urn:rkaf:us:rin:\\d{4}-[A-Z0-9]{4}$"
+          }
+        },
+        {
+          "name": "rin",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:rkaf:us:rin:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:rin"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The item's Regulation Identifier Number.",
+          "logicalTypeOptions": {
+            "pattern": "^\\d{4}-[A-Z0-9]{4}$"
+          }
+        },
+        {
+          "name": "proceeding_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:identifier:spicy-rulemaking-proceeding-id"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:rulemaking-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The proceeding the item tracks; joins `proceedings.proceeding_id`."
+        },
+        {
+          "name": "relationship_role",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The link's role; `agenda_tracks_proceeding` throughout."
+        },
+        {
+          "name": "source",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "What reported the RIN: `docket_rin` (the docket), `document_rin` (a document's `additional_rins`) or `federal_register_rin` (a Register document)."
+        },
+        {
+          "name": "evidence_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The reporting record, by `source`: a docket id, a Regulations.gov document id, or a dated Register record id (`number@YYYY-MM-DD`)."
+        },
+        {
+          "name": "evidence_uri",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Public URL of that record on regulations.gov or federalregister.gov."
+        },
+        {
+          "name": "evidence_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Eastern day of the evidence: the docket's or document's latest date, or the Register publication date."
+        }
+      ],
+      "dataGranularityDescription": "One evidence record linking one agenda item (RIN) to one proceeding.",
+      "tags": [
+        "subject:rulemaking",
+        "coverage:derived"
+      ],
+      "relationships": [
+        {
+          "id": "fk-agenda_item_proceedings-proceeding_id-to-proceedings-proceeding_id",
+          "type": "foreignKey",
+          "from": "agenda_item_proceedings.proceeding_id",
+          "to": "proceedings.proceeding_id",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 80688
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "rulemaking"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json."
+            }
+          ]
+        },
+        {
+          "id": "fk-agenda_item_proceedings-agenda_item_id-to-regulatory_agenda_items-agenda_item_id",
+          "type": "foreignKey",
+          "from": "agenda_item_proceedings.agenda_item_id",
+          "to": "regulatory_agenda_items.agenda_item_id",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 35451
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "rulemaking"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json."
+            }
+          ]
+        }
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "31343e1c77851ba8f50590a7cc1df0fdfb0619be4f1f41d3ad246085f25dd7eb"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "relationship_id"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "comment_periods",
+      "name": "comment_periods",
+      "physicalName": "comment_periods.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Derived submission-date windows",
+      "description": "One rule-derived group of source-reported comment windows. Extension/reopening language links windows only when an explicit page citation or qualified RIN uniquely identifies an overlapping or adjoining earlier notice. Conflicts do not link; a gap starts another period. These are candidate groupings, not verified legal extensions. Docket/proceeding anchors never merge groups, and synthetic Federal Register feed dockets anchor none. Ordered source references support navigation.",
+      "properties": [
+        {
+          "name": "comment_period_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "Stable id of the period (`comment_period_<24 hex>`), from the records that open it."
+        },
+        {
+          "name": "proceeding_ids",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            }
+          ],
+          "description": "Native list of the proceedings its notices belong to; `[]` when none resolves. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "rins",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            }
+          ],
+          "description": "Native list of the RINs its records state and its proceedings hold. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "docket_ids",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:identifier:regulations-gov-docket-id"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:docket-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "Native list of the Regulations.gov dockets anchoring it: those its Register record names, else those of its copies, else a Regulations.gov notice's own; never a feed docket. `[]` where the publishers place the notice in no docket (the Register names none and no copy sits in one, as for FCC-2026-2942-0001), which is not proof that none exists. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "open_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Eastern day the period opens: the earliest opening among its records (a document's comment start, else its posting; a Register record's publication), `YYYY-MM-DD`."
+        },
+        {
+          "name": "close_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Maximum non-placeholder normalized close among grouped records, YYYY-MM-DD: the later of register_close_date and regulations_gov_close_date. Not a legally controlling/current deadline or a submission-purpose classification. Search all three dates; see data_quality."
+        },
+        {
+          "name": "source",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The sources of the dates it takes, `+`-joined: `documents.comment_end_date` and `federal_register.comments_close_on`."
+        },
+        {
+          "name": "opened_by_artifact_ids",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            }
+          ],
+          "description": "Native list of public URLs of the records whose window opens the period on `open_date`. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "evidence_ids",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            }
+          ],
+          "description": "Native list of every record in the period, each in exactly one period: dated Register record ids (`number@date`), a notice's Register record included when only its copies state a window, and Regulations.gov document ids. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "evidence_occurrences",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "object",
+            "properties": [
+              {
+                "name": "source",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "role",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "evidence_id",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "source_ordinal",
+                "logicalType": "integer",
+                "logicalTypeOptions": {
+                  "format": "i64"
+                },
+                "physicalType": "Int64"
+              },
+              {
+                "name": "document_id",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "document_number",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "publication_date",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "open_date",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "close_date",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "rins",
+                "logicalType": "array",
+                "items": {
+                  "logicalType": "string",
+                  "physicalType": "Utf8"
+                }
+              },
+              {
+                "name": "rin_values_json",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              }
+            ]
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "STRUCT(\"source\" VARCHAR, \"role\" VARCHAR, evidence_id VARCHAR, source_ordinal BIGINT, document_id VARCHAR, document_number VARCHAR, publication_date VARCHAR, open_date VARCHAR, close_date VARCHAR, rins VARCHAR[], rin_values_json VARCHAR)[]"
+            }
+          ],
+          "description": "Every accepted source date window before membership lists reduce to sets. Includes source namespace, native document key, source row order, role, dates, and ordered RIN observations. A Register reference requires both document number and publication date; missing older observations remain null. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "unresolved_fr_references_json",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "JSON array of unresolved Register number references attached to its evidence."
+        },
+        {
+          "name": "anchor_kind",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "What anchors the period: `docket` when a docket does, `proceeding` when only a proceeding does, `none` when neither; the rulespec export takes the anchored rows."
+        },
+        {
+          "name": "register_close_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Latest `comments_close_on` of its Register records, `YYYY-MM-DD`; NULL when the Register states none."
+        },
+        {
+          "name": "regulations_gov_close_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Latest comment end (Eastern day) of its Regulations.gov documents, `YYYY-MM-DD`; NULL when none states one."
+        }
+      ],
+      "dataGranularityDescription": "One rule-derived group of source-reported date windows for a notice and its candidate extensions; not a legally adjudicated comment period.",
+      "tags": [
+        "subject:rulemaking",
+        "coverage:derived"
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "3c5381c9b8edba33714f7f402312eab5f529d87e3b09bc6c81c9e98552e0b25a"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "comment_period_id"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lifecycle_events",
+      "name": "lifecycle_events",
+      "physicalName": "lifecycle_events.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Rulemaking lifecycle events",
+      "description": "One dated stage event per document in a docketed proceeding. A uniquely resolved Federal Register number supplies its document type and date; otherwise the Regulations.gov type and upload day apply. Only Rule/Proposed Rule types create those stages: Notice entries and withdrawn postings do not. A dated Unified Agenda withdrawal can add a withdrawal event. Main document identity and date-source fields preserve those distinctions.",
+      "properties": [
+        {
+          "name": "lifecycle_event_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "Stable identity of this lifecycle event within its lifecycle."
+        },
+        {
+          "name": "proceeding_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:identifier:spicy-rulemaking-proceeding-id"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:rulemaking-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The proceeding; joins `rulemaking_lifecycles.proceeding_id`."
+        },
+        {
+          "name": "document_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:identifier:regulations-gov-document-id"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:document-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The document, by `dated_by`: a dated Register record id (`number@YYYY-MM-DD`), a Regulations.gov document id, or an agenda item id (`urn:rkaf:us:rin:<rin>`)."
+        },
+        {
+          "name": "stage",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The stage the event records: `proposed`, `supplemental`, `final` or `withdrawn`."
+        },
+        {
+          "name": "event_date",
+          "logicalType": "date",
+          "logicalTypeOptions": {
+            "format": "yyyy-MM-dd"
+          },
+          "physicalType": "Date32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "DATE"
+            }
+          ],
+          "description": "The event's day, from the source `dated_by` names."
+        },
+        {
+          "name": "source",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Who typed the stage: `federal_register` (for its copies too, wherever it states a type), `regulations_gov` or `unified_agenda`."
+        },
+        {
+          "name": "dated_by",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Whose day `event_date` is, and so which kind of id `document_id` is: `federal_register`, `regulations_gov` (its upload) or `unified_agenda`."
+        },
+        {
+          "name": "evidence_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The proceedings stage event it came from: that record's own id, or `<agenda item id>@<edition>` for an Agenda withdrawal."
+        },
+        {
+          "name": "joined_by",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "How the document joined the proceeding: `docket`, `fr_docket_link`, `fr_copy`, `specific_rin` or `agenda_rin`."
+        },
+        {
+          "name": "document_form",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Its stage refined by its title: `proposed`, `advance_proposed`, `comment_period`, `final`, `interim_final`, `direct_final`, `correction`, `supplemental` or `withdrawn`."
+        },
+        {
+          "name": "anchor_role",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "`proposal`, `final` or `withdrawal` when the lifecycle anchors on this document; NULL otherwise."
+        }
+      ],
+      "dataGranularityDescription": "One stage event per document of one docketed proceeding.",
+      "tags": [
+        "subject:rulemaking",
+        "coverage:derived"
+      ],
+      "relationships": [
+        {
+          "id": "fk-lifecycle_events-proceeding_id-to-rulemaking_lifecycles-proceeding_id",
+          "type": "foreignKey",
+          "from": "lifecycle_events.proceeding_id",
+          "to": "rulemaking_lifecycles.proceeding_id",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 65278
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "rulemaking"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json."
+            }
+          ]
+        }
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "8df8c39a17208cb0bb33dfa669cb5ee91f9a8360a475df6717d6b51d946a12d8"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "lifecycle_event_id"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "proceedings",
+      "name": "proceedings",
+      "physicalName": "proceedings.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Rulemaking proceedings",
+      "description": "One rulemaking proceeding with its source dockets, Register documents and staged events. RINs provide agenda evidence and never merge dockets. Withdrawn Regulations.gov postings supply no event, title, agency or RIN evidence. A docket-less proceeding is one Register document. `proceeding_id` continues across generations when source records overlap; main IDs link agenda associations, comment periods and lifecycle records.",
+      "properties": [
+        {
+          "name": "proceeding_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:identifier:spicy-rulemaking-proceeding-id"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:rulemaking-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "Stable opaque id of the proceeding (`proceeding_<24 hex>`), continued from the prior generation where it overlaps one."
+        },
+        {
+          "name": "rin",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:rkaf:us:rin:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:rin"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The proceeding's RIN when it holds exactly one, else NULL; a query aid, never its identity (`rins` lists every RIN).",
+          "logicalTypeOptions": {
+            "pattern": "^\\d{4}-[A-Z0-9]{4}$"
+          }
+        },
+        {
+          "name": "docket_ids",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:identifier:regulations-gov-docket-id"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:docket-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "Native list of the Regulations.gov dockets the proceeding comprises; `[]` for a docket-less proceeding. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "title",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Title of its most recently dated titled document."
+        },
+        {
+          "name": "agency_code",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:regulations-gov-agency:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:agency-code"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            },
+            {
+              "vendor": "refspec",
+              "property": "authority",
+              "value": "RefSpec REF-038 Regulations.gov agency projection"
+            }
+          ],
+          "description": "The agency code most of its documents carry. A docket-less proceeding takes its Register document's agency code. Each Register agency maps to one Regulations.gov code through RefSpec's agency projection and agency registry, whose identity bridges and successions give a defunct agency its current successor's code whatever the document's date: a 1998 Health Care Finance Administration notice is CMS. A split agency maps only when every successor gives the same one code. A department named with one of its own agencies yields to it (Transportation Department with FAA is FAA), and a department signing with one of its own unmapped bureaus keeps the department's code. NULL when no agency maps or the agencies are unrelated."
+        },
+        {
+          "name": "current_stage",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The one stage (`proposed`, `supplemental`, `final` or `withdrawn`) of its latest dated events; NULL when none, or when that day's events disagree."
+        },
+        {
+          "name": "stage_events",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "object",
+            "properties": [
+              {
+                "name": "stage",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "event_kind",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "effective_date",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "document_id",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              }
+            ]
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "STRUCT(stage VARCHAR, event_kind VARCHAR, effective_date VARCHAR, document_id VARCHAR)[]"
+            }
+          ],
+          "description": "Native list of its stage events, one per staged document: `{effective_date, event_kind, evidence_id, joined_by, source, stage}`. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "fr_document_numbers",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            }
+          ],
+          "description": "Native list of the Federal Register document numbers it holds. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "cfr_refs",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            }
+          ],
+          "description": "Native list of the CFR references (`title-part`) that the `rule_targets` edges of its dockets name. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "cfr_target_iris",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            }
+          ],
+          "description": "The same CFR references as Rulespec identifiers (e.g. `urn:rkaf:us:cfr:40:60`). Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "authority_refs",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            }
+          ],
+          "description": "Always `[]`: legal authority belongs to the editioned Unified Agenda entry, never to an action. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "fr_document_ids",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            }
+          ],
+          "description": "Native list of the dated Federal Register record ids (`number@YYYY-MM-DD`) it holds. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "fr_document_joins_json",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "How each `fr_document_ids` document joined, in the same order: `{fr_document_id, joined_by}`, `joined_by` being `fr_docket_link`, `fr_copy`, `specific_rin` or `fr_document`."
+        },
+        {
+          "name": "unresolved_fr_references_json",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "JSON array of Register number references it holds that resolve to no single record, each with its candidates and status."
+        },
+        {
+          "name": "rins",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            }
+          ],
+          "description": "Native list of every RIN it holds, from its dockets, documents and Register documents. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        }
+      ],
+      "dataGranularityDescription": "One rulemaking proceeding: the dockets and Register documents that are one action.",
+      "tags": [
+        "subject:rulemaking",
+        "coverage:derived"
+      ],
+      "relationships": [
+        {
+          "id": "fk-proceedings-rin-to-unified_agenda-rin",
+          "type": "foreignKey",
+          "from": "proceedings.rin",
+          "to": "unified_agenda.rin",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "scope"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 30536
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 3833
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 87.4476
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "unified-agenda"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "unified_agenda holds every readable edition, Fall 1995 to the newest (202510). Of the RINs no edition lists, 802 are X-pattern codes (NOAA's 0648-X in-season series and other agencies', never on the agenda; decision 61), 3,030 are well formed but unlisted, and 1 is the placeholder 0000-AA00. Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json."
+            }
+          ]
+        }
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "5fc969b29ea36164e045fd312d79a338978e548a73e8f8a907821aa2f6485f2e"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "proceeding_id"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "regulatory_agenda_items",
+      "name": "regulatory_agenda_items",
+      "physicalName": "regulatory_agenda_items.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Regulatory Agenda items",
+      "description": "One row per Regulation Identifier Number: the durable Regulatory Agenda item a RIN identifies, with how many proceedings evidence links it to and whether its scope is resolved. Keyed `agenda_item_id` (`urn:rkaf:us:rin:<rin>`), one per `rin`; joined by `agenda_item_proceedings` on `agenda_item_id`, and to `unified_agenda` on `rin`. Built by `build_regulatory_agenda`.",
+      "properties": [
+        {
+          "name": "agenda_item_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:rkaf:us:rin:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:agenda-item-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "The item's id, `urn:rkaf:us:rin:<rin>`.",
+          "logicalTypeOptions": {
+            "pattern": "^urn:rkaf:us:rin:\\d{4}-[A-Z0-9]{4}$"
+          }
+        },
+        {
+          "name": "rin",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:rkaf:us:rin:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:rin"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The Regulation Identifier Number the item is (e.g. `2060-AV16`).",
+          "logicalTypeOptions": {
+            "pattern": "^\\d{4}-[A-Z0-9]{4}$"
+          }
+        },
+        {
+          "name": "scope_status",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "`recurring` (its latest Agenda priority is Routine and Frequent), `single_observed` (evidence links one proceeding) or `unresolved` (none or several)."
+        },
+        {
+          "name": "linked_proceeding_count",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "How many proceedings `agenda_item_proceedings` links the item to, as a decimal string."
+        },
+        {
+          "name": "observation_count",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "How many distinct Unified Agenda entries (edition and URL) list the RIN, as a decimal string; `0` when no edition does."
+        },
+        {
+          "name": "latest_agenda_edition",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The latest Unified Agenda edition listing the RIN, `YYYYMM`; NULL when no edition does."
+        },
+        {
+          "name": "first_seen",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Earliest Eastern day any source dates the RIN: an Agenda edition or action date, a docket or document date, or a Register publication."
+        },
+        {
+          "name": "last_seen",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Latest Eastern day any source dates the RIN."
+        },
+        {
+          "name": "unresolved_fr_references_json",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "JSON array of unresolved Register number references from the Register documents that state this RIN."
+        }
+      ],
+      "dataGranularityDescription": "One durable Regulatory Agenda item per RIN.",
+      "tags": [
+        "subject:rulemaking",
+        "coverage:derived"
+      ],
+      "relationships": [
+        {
+          "id": "fk-regulatory_agenda_items-rin-to-unified_agenda-rin",
+          "type": "foreignKey",
+          "from": "regulatory_agenda_items.rin",
+          "to": "unified_agenda.rin",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "scope"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 52092
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 5845
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 88.7794
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "unified-agenda"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "unified_agenda holds every readable edition, Fall 1995 to the newest (202510). Of the RINs no edition lists, 2,410 are X-pattern codes (NOAA's 0648-X in-season series and other agencies', never on the agenda; decision 61), 3,434 are well formed but unlisted (an item exists for every RIN any source states), and 1 is the placeholder 0000-AA00. Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json."
+            }
+          ]
+        },
+        {
+          "id": "fk-regulatory_agenda_items-rin_latest_agenda_edition-to-unified_agenda-rin_agenda_edition",
+          "type": "foreignKey",
+          "from": [
+            "regulatory_agenda_items.rin",
+            "regulatory_agenda_items.latest_agenda_edition"
+          ],
+          "to": [
+            "unified_agenda.rin",
+            "unified_agenda.agenda_edition"
+          ],
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 46247
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "unified-agenda"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "An item with no latest edition is one no edition lists. Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json."
+            }
+          ]
+        }
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "b195d8d010ceede6889adaa6eeacefb5951067124092a1fa13a86135c5d0a99d"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "agenda_item_id"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rule_targets",
+      "name": "rule_targets",
+      "physicalName": "rule_targets.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Docket, CFR and agenda links",
+      "description": "One observed link between a Regulations.gov docket, a CFR part or a Unified Agenda RIN, with its source evidence class. Missing and ambiguous references remain unresolved. Action-notice citation rows can have both targets NULL. RIN navigation returns agenda editions; it does not merge proceedings. Main identifiers carry the relationship; receipts retain interpretation evidence.",
+      "properties": [
+        {
+          "name": "rule_target_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "Stable identity of this rule-target assertion, preserving repeated observations independently."
+        },
+        {
+          "name": "docket_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:identifier:regulations-gov-docket-id"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:docket-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "Regulations.gov docket the edge belongs to, normalized; joins `dockets.docket_id`."
+        },
+        {
+          "name": "cfr_ref",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:rkaf:us:cfr:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:legal-location"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:cfr-reference"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "CFR reference the rule targets, `title-part` or `title-part.section` (e.g. `40-60`); NULL on a RIN-only or citation edge."
+        },
+        {
+          "name": "cfr_title",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The CFR title of `cfr_ref` (e.g. `40`)."
+        },
+        {
+          "name": "cfr_part",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The CFR part of `cfr_ref` (e.g. `60`)."
+        },
+        {
+          "name": "cfr_section",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The CFR section of `cfr_ref` when it names one; NULL for a part-level reference."
+        },
+        {
+          "name": "rin",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:rkaf:us:rin:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:rin"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "Regulation Identifier Number the edge carries (e.g. `2060-AV16`); NULL on a CFR-only or citation edge.",
+          "logicalTypeOptions": {
+            "pattern": "^\\d{4}-[A-Z0-9]{4}$"
+          }
+        },
+        {
+          "name": "source",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The evidence class: `fr_cfr_ref`, `docket_rin`, `document_rin`, `document_fr_doc` or `docket_document_cites_action_notice`."
+        },
+        {
+          "name": "evidence_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The least id of the records stating the edge: the docket for `docket_rin`, a dated Register record id (`number@YYYY-MM-DD`) for `fr_cfr_ref`, else a Regulations.gov document id."
+        },
+        {
+          "name": "first_seen",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Earliest Eastern day any evidence for the edge is dated, `YYYY-MM-DD`."
+        },
+        {
+          "name": "last_seen",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Latest Eastern day any evidence for the edge is dated, `YYYY-MM-DD`."
+        },
+        {
+          "name": "fr_references_json",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "JSON array of the literal Federal Register number references behind the edge, each with the `status` saying how it resolved (`dated`, `single_candidate_in_input`, `ambiguous`, `missing`, or a folded or unpadded match)."
+        },
+        {
+          "name": "fr_document_ids",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            }
+          ],
+          "description": "Dated Federal Register document identities associated with this subject; no applicability inference is implied. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        }
+      ],
+      "dataGranularityDescription": "One observed docket, CFR and RIN edge per evidence source class.",
+      "tags": [
+        "subject:rulemaking",
+        "coverage:derived"
+      ],
+      "relationships": [
+        {
+          "id": "fk-rule_targets-cfr_title_cfr_part-to-cfr_sections-title_part",
+          "type": "foreignKey",
+          "from": [
+            "rule_targets.cfr_title",
+            "rule_targets.cfr_part"
+          ],
+          "to": [
+            "cfr_sections.title",
+            "cfr_sections.part"
+          ],
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "scope"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 6146
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 812
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 86.7881
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "cfr-sections"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "rule_targets holds part-level keys, so the join is on title and part, which a part held only as section rows also has; the printed cfr_ref missed 12 such parts (50 CFR 622 among them). cfr_sections holds the 2025 edition of every title and the 2026 edition of titles 5, 7, 9-12 and 14-16 only, so a part can be missing either way: 679 of the 799 missing keys were last cited before 2025, which fits a part removed or redesignated since; a key first cited later can name a part created after the held edition (41 CFR 105-9 and 105-10 are new in 2026) or one a proposed rule would create, which no edition holds (2 CFR 6100, 10 CFR 57, 21 CFR 1108 and 43 CFR 1700 are in no eCFR version of 2025-01-01 or 2026-09-30). Title 41 matches at chapter level only: the Federal Register cuts a compound part at the hyphen (41 CFR 60-1.4 is part 60), so 13 of its 14 Title 41 keys (chapters 50, 51, 60, 61, 101, 102, 105, 128, 201 and 300-303) name chapters, which no cfr_sections part matches once its Title 41 structural rows carry their compound parts; they are counted missing (the 14th, 41-74, names no Title 41 chapter and is among the 799). A Register reference that names a chapter and no part (FR 2026-00929, chapters 300-304) yields no edge. Measured 2026-10-03 on rule_targets snapshot_448e6d9a… and cfr_sections eab08a3f…: 6,146 keys, 799 missing, plus those 13; the same counts on snapshot_55d396ee…. Receipts mcp-chaos-2026-10-02/round4/joins-measured-2026-10-03.json and mcp-chaos-2026-10-02/round5/scout-A/m1b_rt_missing.out."
+            }
+          ]
+        },
+        {
+          "id": "fk-rule_targets-docket_id-to-dockets-docket_id",
+          "type": "foreignKey",
+          "from": "rule_targets.docket_id",
+          "to": "dockets.docket_id",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 143012
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 83
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 99.9419
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "dockets"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "Normalized FR-to-Regulations.gov bridge from the materialized rulemaking snapshot. Each orphan is one fill-docket-gaps asked for: 16 answer 404 and 67 answer 400 Invalid ID."
+            }
+          ]
+        },
+        {
+          "id": "fk-rule_targets-rin-to-unified_agenda-rin",
+          "type": "foreignKey",
+          "from": "rule_targets.rin",
+          "to": "unified_agenda.rin",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "scope"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 22290
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 2299
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 89.6859
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "unified-agenda"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "unified_agenda holds every readable edition, Fall 1995 to the newest (202510). Of the RINs no edition lists, 1,269 are X-pattern codes (NOAA's 0648-X in-season series and other agencies', never on the agenda; decision 61), 1,029 are well formed but unlisted (854 first dated 1995-2025, 174 in 2026, after the newest edition, and 1 before Fall 1995), and 1 is the placeholder 0000-AA00. Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json."
+            }
+          ]
+        }
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "694fd72e7dbb661089aa922fbcef6b256ef0a174106113e196866266256fda4c"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "rule_target_id"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rulemaking_lifecycles",
+      "name": "rulemaking_lifecycles",
+      "physicalName": "rulemaking_lifecycles.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Rulemaking lifecycles",
+      "description": "One docketed proceeding's proposal-to-final history and survival outcome. The earliest Register-dated proposal takes precedence over an upload-dated proposal; the final must follow it strictly. Other events determine the outcome or censor date. Docket-less Register records cannot pair and are excluded. Unified Agenda status and routine strata remain separate context. These are docketed proceedings, not a count of distinct RINs or regulations.",
+      "properties": [
+        {
+          "name": "proceeding_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:identifier:spicy-rulemaking-proceeding-id"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:rulemaking-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "The docketed proceeding the lifecycle reads; joins `proceedings.proceeding_id`."
+        },
+        {
+          "name": "agency_code",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:regulations-gov-agency:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:agency-code"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            },
+            {
+              "vendor": "refspec",
+              "property": "authority",
+              "value": "RefSpec REF-038 Regulations.gov agency projection"
+            }
+          ],
+          "description": "The proceeding's agency code."
+        },
+        {
+          "name": "kind",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "What its events make: `finalized` (a final strictly after the proposal), `companion` (a Register-dated final on the proposal's Register day, 54b; no survival outcome), `upload_pair` (an upload-dated proposal and a final that day, 54c; no survival outcome), `withdrawn` (a Register or Agenda withdrawal on or after the proposal, no later final), `open` (censored at `censor_date`), `final_without_observed_proposal` or `no_anchor`."
+        },
+        {
+          "name": "proposal_date",
+          "logicalType": "date",
+          "logicalTypeOptions": {
+            "format": "yyyy-MM-dd"
+          },
+          "physicalType": "Date32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "DATE"
+            }
+          ],
+          "description": "Day of the earliest proposed event; NULL without a proposal."
+        },
+        {
+          "name": "proposal_document_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:identifier:regulations-gov-document-id"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:document-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The proposal's document: a dated Register record id (`number@YYYY-MM-DD`) when the Register dates a proposal of the proceeding, else a Regulations.gov document id (decision 54d)."
+        },
+        {
+          "name": "proposal_form",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The proposal's form from its title: `proposed`, `advance_proposed`, `comment_period` or `correction`."
+        },
+        {
+          "name": "final_date",
+          "logicalType": "date",
+          "logicalTypeOptions": {
+            "format": "yyyy-MM-dd"
+          },
+          "physicalType": "Date32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "DATE"
+            }
+          ],
+          "description": "Day of the final the lifecycle pairs or anchors on; NULL without one."
+        },
+        {
+          "name": "final_document_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:identifier:regulations-gov-document-id"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:document-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The final's document, spelled as `proposal_document_id` is."
+        },
+        {
+          "name": "final_form",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The final's form from its title: `final`, `interim_final`, `direct_final` or `correction`."
+        },
+        {
+          "name": "finals_before_proposal",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i32"
+          },
+          "physicalType": "Int32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "INTEGER"
+            }
+          ],
+          "description": "Finals dated before the proposal, counted and never paired; NULL without a proposal."
+        },
+        {
+          "name": "withdrawal_date",
+          "logicalType": "date",
+          "logicalTypeOptions": {
+            "format": "yyyy-MM-dd"
+          },
+          "physicalType": "Date32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "DATE"
+            }
+          ],
+          "description": "Day of the withdrawal that makes it `withdrawn`; NULL otherwise."
+        },
+        {
+          "name": "withdrawal_document_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:identifier:regulations-gov-document-id"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:document-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The withdrawal: a dated Register record id, or the agenda item id (`urn:rkaf:us:rin:<rin>`) of an Agenda withdrawal."
+        },
+        {
+          "name": "outcome",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Its survival outcome: `final`, `withdrawn` (a competing outcome) or `censored`; NULL for a kind outside survival."
+        },
+        {
+          "name": "duration_days",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i32"
+          },
+          "physicalType": "Int32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "INTEGER"
+            }
+          ],
+          "description": "Days from the proposal to the final, the withdrawal or `censor_date`; NULL without an outcome."
+        },
+        {
+          "name": "censor_date",
+          "logicalType": "date",
+          "logicalTypeOptions": {
+            "format": "yyyy-MM-dd"
+          },
+          "physicalType": "Date32",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "DATE"
+            }
+          ],
+          "description": "The generation's last event day, capped at the run's day, where open lifecycles are censored; one date in every row."
+        },
+        {
+          "name": "open_signal",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "What the latest Unified Agenda entry of its specific RINs says (`agenda_completed_final`, `agenda_completed_withdrawn`, `agenda_completed_other`, `agenda_long_term`, `agenda_active`, `agenda_dropped_off`), else `not_on_agenda` or `no_specific_rin`."
+        },
+        {
+          "name": "routine_family",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The routine family the proposal's own title names (the final's without a proposal; the proceeding's with no anchor), read at time zero so the stratum never depends on the outcome (decision 55a): `airworthiness_directive`, `airspace`, `state_air_plan`, `pesticide_tolerance` (pesticide-petition receipts included), `coast_guard_local`; NULL otherwise."
+        },
+        {
+          "name": "agenda_priority",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "That Agenda entry's `priority_category` (e.g. `Economically Significant`); NULL without one."
+        },
+        {
+          "name": "agenda_major",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "That Agenda entry's `major` (`Yes`, `No` or `Undetermined`); NULL without one."
+        },
+        {
+          "name": "specific_rins",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            }
+          ],
+          "description": "Native list of the RINs the proceeding's docket-side evidence alone holds. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "pre_2008_coverage",
+          "logicalType": "boolean",
+          "physicalType": "Boolean",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BOOLEAN"
+            }
+          ],
+          "description": "Whether it is anchored before 2008, when Regulations.gov coverage is thin; NULL without an anchor, or for an upload pair from 2008 on."
+        }
+      ],
+      "dataGranularityDescription": "One lifecycle per docketed proceeding.",
+      "tags": [
+        "subject:rulemaking",
+        "coverage:derived"
+      ],
+      "relationships": [
+        {
+          "id": "fk-rulemaking_lifecycles-agency_code-to-agency_stats-agency_code",
+          "type": "foreignKey",
+          "from": "rulemaking_lifecycles.agency_code",
+          "to": "agency_stats.agency_code",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "one"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 170
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "agency-stats"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "Agency assigned to the proceeding; preserve mapping provenance. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness."
+            }
+          ]
+        },
+        {
+          "id": "fk-rulemaking_lifecycles-proceeding_id_final_document_id-to-lifecycle_events-proceeding_id_document_id",
+          "type": "foreignKey",
+          "from": [
+            "rulemaking_lifecycles.proceeding_id",
+            "rulemaking_lifecycles.final_document_id"
+          ],
+          "to": [
+            "lifecycle_events.proceeding_id",
+            "lifecycle_events.document_id"
+          ],
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 55640
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "rulemaking"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "The final anchor is one of its proceeding's events. Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json."
+            }
+          ]
+        },
+        {
+          "id": "fk-rulemaking_lifecycles-proceeding_id_proposal_document_id-to-lifecycle_events-proceeding_id_document_id",
+          "type": "foreignKey",
+          "from": [
+            "rulemaking_lifecycles.proceeding_id",
+            "rulemaking_lifecycles.proposal_document_id"
+          ],
+          "to": [
+            "lifecycle_events.proceeding_id",
+            "lifecycle_events.document_id"
+          ],
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 36697
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "rulemaking"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "The proposal anchor is one of its proceeding's events. Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json."
+            }
+          ]
+        },
+        {
+          "id": "fk-rulemaking_lifecycles-proceeding_id_withdrawal_document_id-to-lifecycle_events-proceeding_id_document_id",
+          "type": "foreignKey",
+          "from": [
+            "rulemaking_lifecycles.proceeding_id",
+            "rulemaking_lifecycles.withdrawal_document_id"
+          ],
+          "to": [
+            "lifecycle_events.proceeding_id",
+            "lifecycle_events.document_id"
+          ],
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 721
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "rulemaking"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "The withdrawal anchor is one of its proceeding's events. Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json."
+            }
+          ]
+        },
+        {
+          "id": "fk-rulemaking_lifecycles-proceeding_id-to-proceedings-proceeding_id",
+          "type": "foreignKey",
+          "from": "rulemaking_lifecycles.proceeding_id",
+          "to": "proceedings.proceeding_id",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 75270
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "rulemaking"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json."
+            }
+          ]
+        }
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "c79fd3eb5bca2c92fc2ab3834d8ddbe509c00258d69e54c99cc3c8b7419dd106"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "proceeding_id"
+          ]
+        }
+      ]
+    }
+  ],
+  "customProperties": [
+    {
+      "vendor": "ddk",
+      "property": "targetDomain",
+      "value": "spicygov"
+    },
+    {
+      "vendor": "ddk",
+      "property": "secondaryDomains",
+      "value": [
+        "RefSpec"
+      ]
+    },
+    {
+      "vendor": "ddk",
+      "property": "arrowSchemaProfile",
+      "value": "urn:ddk:odcs:arrow-declaration:3"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "family",
+      "value": "rulemaking"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "pilotWave",
+      "value": true
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "tableMetadataSha256",
+      "value": "fec8c91d6d23614bb73b62edd28066d37c56d8ed860c2965e1398a1550f8a12d"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "tableJoinsSha256",
+      "value": "8ec6cda0366dbadfc80a6e3a9162162953d3a24d38a5a44f91eba7bbe6c24507"
+    }
+  ]
+}

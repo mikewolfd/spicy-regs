@@ -157,6 +157,7 @@ embed = "spicy_regs.vectordb.embed:main"
 spicy-regs = "spicy_regs.cli:main"
 spicy-regs-mcp = "spicy_regs.mcp_server:main"
 spicy-regs-dict = "spicy_regs.data_dictionary:main"
+export-odcs-contracts = "spicy_regs.odcs_contracts:main"
 
 [build-system]
 requires = ["uv_build"]

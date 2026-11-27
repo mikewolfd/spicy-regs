@@ -1,0 +1,656 @@
+{
+  "apiVersion": "v3.2.0",
+  "kind": "DataContract",
+  "id": "urn:spicy-regs:odcs:family:nominations",
+  "version": "1.0.0",
+  "name": "spicy-regs nominations",
+  "status": "active",
+  "domain": "spicycongress",
+  "dataProduct": "spicycongress",
+  "description": {
+    "purpose": "Deterministic ODCS v3.2.0 DataContract for spicy-regs publication family 'nominations' (2 table(s)), targeting DDK domain 'spicycongress'.",
+    "usage": "Verify Parquet Arrow schema parity before publishing or consuming generations."
+  },
+  "tags": [
+    "ddk-domain:spicycongress",
+    "ddk-secondary-domain:spicygov",
+    "family:nominations",
+    "pilot-wave",
+    "subject:congress"
+  ],
+  "schema": [
+    {
+      "id": "nominations",
+      "name": "nominations",
+      "physicalName": "nominations.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Nominations",
+      "description": "One row per nomination or part, as the Congress.gov nomination list route states it, keyed `(congress, citation)`; the citation carries the part number.",
+      "properties": [
+        {
+          "name": "nomination_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:identifier:congress-nomination-id"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:nomination-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "Canonical nomination key ({congress}-pn-{number}, plus -{part} when part_number is non-zero)."
+        },
+        {
+          "name": "citation",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 2,
+          "description": "The publisher's citation, its own display key, with the part where one exists (PN730-20)."
+        },
+        {
+          "name": "congress",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "The numbered Congress the nomination was received in."
+        },
+        {
+          "name": "number",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The PN number."
+        },
+        {
+          "name": "part_number",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The part number, as the publisher spells it."
+        },
+        {
+          "name": "description",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The publisher's description of the nomination."
+        },
+        {
+          "name": "organization",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The organization the nominee would serve in."
+        },
+        {
+          "name": "received_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The date the Senate received the nomination."
+        },
+        {
+          "name": "is_civilian",
+          "logicalType": "boolean",
+          "physicalType": "Boolean",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BOOLEAN"
+            }
+          ],
+          "description": "Whether the nomination is civilian, as the publisher's nominationType states it: `true` where it states isCivilian true (or isMilitary false), `false` where it states isMilitary true (or isCivilian false). The list route states exactly one of the two keys (2,287 of 2,287 rows of the 119th, 2026-10-03). NULL where it states neither, or both with contradicting values; nomination_type_json keeps what it stated, so `is_civilian IS NULL AND nomination_type_json IS NOT NULL` counts the contradictions."
+        },
+        {
+          "name": "is_military",
+          "logicalType": "boolean",
+          "physicalType": "Boolean",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BOOLEAN"
+            }
+          ],
+          "description": "The publisher's nominationType object, as JSON. This column retains the source property isMilitary."
+        },
+        {
+          "name": "latest_action_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Date of the publisher's latestAction entry."
+        },
+        {
+          "name": "latest_action_text",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Text of the publisher's latestAction entry."
+        },
+        {
+          "name": "update_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The publisher's updateDate; the merge prefers the larger value."
+        },
+        {
+          "name": "committees_json",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Every committee returned by the nomination committees route, in source order; NULL when unread, [] on a complete empty response."
+        },
+        {
+          "name": "hearings_json",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Every printed hearing returned by the nomination hearings route, including jacket number and chamber; NULL when unread, [] on a complete empty response."
+        }
+      ],
+      "dataGranularityDescription": "One row per nomination or part, as the Congress.gov nomination list route states it.",
+      "tags": [
+        "subject:congress",
+        "coverage:sampled"
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "2031ca8700e0fcf81483640d5edefb55d4a0dd13b7f0b7eb6e220d0b77734218"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "congress",
+            "citation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "nominations_detail_reads",
+      "name": "nominations_detail_reads",
+      "physicalName": "nominations_detail_reads.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Nomination source reads",
+      "description": "Recorded nomination detail, committee, and hearing reads. A missing row means no recorded attempt; an empty response is a completed read.",
+      "properties": [
+        {
+          "name": "generation_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "Generation that recorded this attempt; retained attempts keep their original generation."
+        },
+        {
+          "name": "attempt_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 2,
+          "description": "Recorded journal event identity within its generation."
+        },
+        {
+          "name": "source_table",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Main table whose source record was read."
+        },
+        {
+          "name": "congress",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "Source record Congress as a native integer."
+        },
+        {
+          "name": "citation",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Literal nomination citation, including any partition suffix."
+        },
+        {
+          "name": "number",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Source record number in its original spelling."
+        },
+        {
+          "name": "part_number",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Literal nomination partition; no partition is inferred."
+        },
+        {
+          "name": "chamber",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Source-stated chamber in the complete meeting identity."
+        },
+        {
+          "name": "event_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:identifier:congress-event-id"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:event-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "Source-stated event identifier, scoped by Congress and chamber."
+        },
+        {
+          "name": "communication_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Original main House communication identity."
+        },
+        {
+          "name": "source_url",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Exact requested source URL recorded for this read, with credentials removed."
+        },
+        {
+          "name": "read_field",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Detail or relationship field read by this attempt."
+        },
+        {
+          "name": "outcome",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Recorded result; no attempt means unread, and completed empty responses remain separate from failure."
+        },
+        {
+          "name": "error_type",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Recorded failure class; empty after a successful read."
+        },
+        {
+          "name": "recorded_at",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "UTC time the source journal recorded the attempt."
+        },
+        {
+          "name": "shape_version",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Recorded source-shaping rule version."
+        },
+        {
+          "name": "field_states",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "object",
+            "properties": [
+              {
+                "name": "field",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "state",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              }
+            ]
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "STRUCT(field VARCHAR, state VARCHAR)[]"
+            }
+          ],
+          "description": "Each read field is stated, stated-empty, or source-not-stated; absent field evidence stays unknown."
+        },
+        {
+          "name": "source_witnesses",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "object",
+            "properties": [
+              {
+                "name": "source_url",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "sha256",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "capture_id",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              }
+            ]
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "STRUCT(source_url VARCHAR, sha256 VARCHAR, capture_id VARCHAR)[]"
+            }
+          ],
+          "description": "Retained response locators and exact body digests for this requested source read."
+        }
+      ],
+      "tags": [
+        "subject:congress",
+        "coverage:not_a_range"
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "a7092af8eaf457cd4c2ac22a579042a0345605eeab49718e0f80ebff88dcbb8e"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "generation_id",
+            "attempt_id"
+          ]
+        }
+      ]
+    }
+  ],
+  "customProperties": [
+    {
+      "vendor": "ddk",
+      "property": "targetDomain",
+      "value": "spicycongress"
+    },
+    {
+      "vendor": "ddk",
+      "property": "secondaryDomains",
+      "value": [
+        "spicygov"
+      ]
+    },
+    {
+      "vendor": "ddk",
+      "property": "arrowSchemaProfile",
+      "value": "urn:ddk:odcs:arrow-declaration:3"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "family",
+      "value": "nominations"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "pilotWave",
+      "value": true
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "tableMetadataSha256",
+      "value": "fec8c91d6d23614bb73b62edd28066d37c56d8ed860c2965e1398a1550f8a12d"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "tableJoinsSha256",
+      "value": "8ec6cda0366dbadfc80a6e3a9162162953d3a24d38a5a44f91eba7bbe6c24507"
+    }
+  ]
+}
