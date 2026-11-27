@@ -12,6 +12,7 @@ index through the same conditional pointer write, a dry run unless told the inde
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable, Mapping
 from contextlib import contextmanager
 from datetime import UTC, datetime
 import hashlib
@@ -19,7 +20,9 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 from tempfile import TemporaryDirectory
+from typing import Any
 
 from spicy_regs.catalog_refresh_request import REQUEST_ENV
 from spicy_regs.generations import implementation_id
@@ -65,6 +68,8 @@ LOCAL_FAMILIES = frozenset({
 RAW_ROOT_ENV = "SPICYGOV_RAW_ROOT"
 #: Either one loosens the publisher's shrink guard (``r2._assert_upload_safe``).
 SHRINK_OVERRIDES = ("R2_ALLOW_SHRINK", "R2_MIN_SIZE_RATIO")
+#: Free space that ``publish-local-generation --dry-run`` must leave on the target volume (40 GiB).
+DRY_RUN_FREE_FLOOR_BYTES = 40 * 1024**3
 
 
 def _family_schemas(family: str) -> dict | None:
@@ -349,6 +354,227 @@ def _unrelated_changes(before: dict, after: dict, family: str) -> list[str]:
     return sorted(name for name in names if before["families"].get(name) != after["families"].get(name))
 
 
+def _existing_ancestor(path: Path) -> Path:
+    """Walk up ``path`` to the nearest existing ancestor so ``disk_usage`` probes before creating directories."""
+    current = path.resolve(strict=False)
+    while not current.exists():
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    return current
+
+
+def _file_opener(path: Path):
+    return lambda: path.open("rb")
+
+
+def _member_opener(source, key: str):
+    return lambda: source.open(key)
+
+
+def _manifest_member_sizes(directory: Path, root: Mapping) -> dict[str, int]:
+    sizes: dict[str, int] = {}
+    for reference in root.get("memberManifests", ()):
+        object_key = reference.get("objectKey")
+        if not isinstance(object_key, str):
+            continue
+        manifest_path = directory / object_key
+        if not manifest_path.is_file():
+            continue
+        try:
+            manifest = json.loads(manifest_path.read_bytes())
+        except (OSError, ValueError):
+            continue
+        for member in manifest.get("members", ()):
+            key, byte_size = member.get("objectKey"), member.get("byteSize")
+            if isinstance(key, str) and isinstance(byte_size, int) and byte_size >= 0:
+                sizes[key] = byte_size
+    return sizes
+
+
+def _dry_run_local_sources(
+    generation: Path,
+    family: str,
+    root: Mapping,
+    live: Mapping | None,
+    evidence: tuple[Path, ...],
+) -> dict[str, Any]:
+    """Map dry-run store object keys to read-only local sources so multi-GB blobs are verified without copying."""
+    from rulespec_artifacts import LocalMemberSource
+
+    from spicy_regs.source_evidence import EvidenceMemberSource, SourceEvidenceError
+    from spicy_regs.sources.disk_store import LocalObjectSource
+
+    digest = root["artifactDigest"].removeprefix("sha256:")
+    prefix = f"generations/{family}/{digest}"
+    proof_prefix = f"generation-inputs/{family}/{digest}"
+    sources: dict[str, LocalObjectSource] = {}
+
+    for key in LocalMemberSource(generation).keys():
+        path = generation / key
+        if path.is_file():
+            local_source = LocalObjectSource(size=path.stat().st_size, open_stream=_file_opener(path), path=path)
+            sources[f"{prefix}/{key}"] = local_source
+            if key == "artifact.json" or any(ref.get("objectKey") == key for ref in root.get("memberManifests", ())):
+                sources[f"{proof_prefix}/generation/{key}"] = local_source
+
+    for key, member in publication.generation_files(live or {"prefix": "", "tables": {}}).items():
+        local = generation / key
+        if member.sha256 is not None and local.is_file() and local.stat().st_size == member.byte_size:
+            sources[member.path] = LocalObjectSource(size=local.stat().st_size, open_stream=_file_opener(local), path=local)
+
+    for index, ev_dir in enumerate(evidence):
+        ev_root_path = ev_dir / "artifact.json"
+        if not ev_root_path.is_file():
+            continue
+        try:
+            ev_root = json.loads(ev_root_path.read_bytes())
+            ev_source = EvidenceMemberSource(ev_dir)
+        except (OSError, ValueError, SourceEvidenceError):
+            continue
+        ev_digest = str(ev_root.get("artifactDigest", "")).removeprefix("sha256:")
+        manifest_sizes = _manifest_member_sizes(ev_dir, ev_root)
+        for key in ev_source.keys():
+            if publication._BLOB_KEY.fullmatch(key):
+                remote_key = f"{publication.EVIDENCE_PREFIX}/{key}"
+                blob_hex = key.rsplit("/", 1)[1]
+                if key in ev_source.blobs:
+                    size = manifest_sizes.get(key)
+                    if size is None:
+                        recorded = ev_source.blobs[key].get("byte_size")
+                        size = int(recorded) if isinstance(recorded, int) and recorded >= 0 else 0
+                    raw_path: Path | None = None
+                    if ev_source.store is not None:
+                        candidate = ev_source.store.root / "objects" / "sha256" / blob_hex[:2] / blob_hex
+                        if candidate.is_file():
+                            raw_path = candidate
+                    blob_source = LocalObjectSource(size=size, open_stream=_member_opener(ev_source, key), path=raw_path)
+                else:
+                    blob_path = ev_dir / key
+                    if not blob_path.is_file():
+                        continue
+                    blob_source = LocalObjectSource(
+                        size=blob_path.stat().st_size, open_stream=_file_opener(blob_path), path=blob_path
+                    )
+                sources[remote_key] = blob_source
+                sources[f"{proof_prefix}/inventories/{blob_hex}.parquet"] = blob_source
+            else:
+                meta_path = ev_dir / key
+                if not meta_path.is_file():
+                    continue
+                meta_source = LocalObjectSource(
+                    size=meta_path.stat().st_size, open_stream=_file_opener(meta_path), path=meta_path
+                )
+                if ev_digest:
+                    sources[f"{publication.EVIDENCE_PREFIX}/{ev_digest}/{key}"] = meta_source
+                sources[f"{proof_prefix}/evidence-{index}/{key}"] = meta_source
+    return sources
+
+
+def _projected_dry_run_bytes(
+    generation: Path,
+    family: str,
+    root: Mapping,
+    evidence: tuple[Path, ...],
+    raw_index: bytes,
+    *,
+    local_sources: Mapping[str, Any] | None = None,
+) -> int:
+    """Upper bound on temporary bytes a dry run will write under ``--output``'s volume."""
+    from rulespec_artifacts import LocalMemberSource
+
+    from spicy_regs.source_evidence import EvidenceMemberSource, SourceEvidenceError
+
+    digest = root["artifactDigest"].removeprefix("sha256:")
+    prefix = f"generations/{family}/{digest}"
+    root_size = (generation / "artifact.json").stat().st_size
+    index_seed = len(raw_index)
+    index_update = min(len(raw_index) + root_size + 4096, publication.INDEX_LIMIT)
+    receipt_bytes = max(root_size + 4096, 16 * 1024)
+
+    control_bytes = root_size
+    for ref in root.get("memberManifests", ()):
+        object_key = ref.get("objectKey")
+        if isinstance(object_key, str) and (generation / object_key).is_file():
+            control_bytes += (generation / object_key).stat().st_size
+
+    unreferenced: list[int] = []
+    for key in LocalMemberSource(generation).keys():
+        path = generation / key
+        if path.is_file() and (local_sources is None or f"{prefix}/{key}" not in local_sources):
+            unreferenced.append(path.stat().st_size)
+
+    for ev_dir in evidence:
+        ev_root_path = ev_dir / "artifact.json"
+        if not ev_root_path.is_file():
+            continue
+        control_bytes += ev_root_path.stat().st_size
+        try:
+            ev_root = json.loads(ev_root_path.read_bytes())
+        except (OSError, ValueError):
+            continue
+        for ref in ev_root.get("memberManifests", ()):
+            object_key = ref.get("objectKey")
+            if isinstance(object_key, str) and (ev_dir / object_key).is_file():
+                control_bytes += (ev_dir / object_key).stat().st_size
+        if (ev_dir / JOURNAL).is_file():
+            control_bytes += (ev_dir / JOURNAL).stat().st_size
+        ev_digest = str(ev_root.get("artifactDigest", "")).removeprefix("sha256:")
+        manifest_sizes = _manifest_member_sizes(ev_dir, ev_root)
+        try:
+            ev_source = EvidenceMemberSource(ev_dir)
+        except (OSError, ValueError, SourceEvidenceError):
+            continue
+        for key in ev_source.keys():
+            if publication._BLOB_KEY.fullmatch(key):
+                remote_key = f"{publication.EVIDENCE_PREFIX}/{key}"
+                if local_sources is None or remote_key not in local_sources:
+                    size = manifest_sizes.get(key)
+                    if size is None and key in ev_source.blobs:
+                        recorded = ev_source.blobs[key].get("byte_size")
+                        size = int(recorded) if isinstance(recorded, int) and recorded >= 0 else 0
+                    elif size is None and (ev_dir / key).is_file():
+                        size = (ev_dir / key).stat().st_size
+                    if size:
+                        unreferenced.append(size)
+            elif ev_digest:
+                remote_key = f"{publication.EVIDENCE_PREFIX}/{ev_digest}/{key}"
+                if (local_sources is None or remote_key not in local_sources) and (ev_dir / key).is_file():
+                    unreferenced.append((ev_dir / key).stat().st_size)
+
+    inputs_json_bound = max(2 * control_bytes, 64 * 1024)
+    # Any blob not backed by local_sources may traverse multipart scratch + reassembly (~2x peak of largest).
+    unreferenced_peak = sum(unreferenced) + (max(unreferenced) if unreferenced else 0)
+    return index_seed + index_update + inputs_json_bound + receipt_bytes + unreferenced_peak
+
+
+def _require_dry_run_headroom(
+    target_dir: Path,
+    projected_bytes: int,
+    *,
+    disk_usage: Callable[[Path], Any] | None = None,
+    floor_bytes: int = DRY_RUN_FREE_FLOOR_BYTES,
+) -> dict[str, int]:
+    """Refuse a dry run before writing when projected temporary bytes would leave less than ``floor_bytes`` free."""
+    probe = _existing_ancestor(target_dir)
+    usage = (shutil.disk_usage if disk_usage is None else disk_usage)(probe)
+    free_bytes = int(usage.free)
+    remaining_bytes = free_bytes - projected_bytes
+    if remaining_bytes < floor_bytes:
+        gib = 1024**3
+        raise PublicationError(
+            f"Refusing dry run on {probe}: projected {projected_bytes / gib:.3f} GiB of temporary writes "
+            f"would leave {remaining_bytes / gib:.2f} GiB free, below the {floor_bytes / gib:.0f} GiB floor "
+            f"(currently {free_bytes / gib:.2f} GiB free)"
+        )
+    return {
+        "free_bytes": free_bytes,
+        "projected_temp_bytes": projected_bytes,
+        "floor_bytes": floor_bytes,
+    }
+
+
 def _seed_unchanged_members(store, live: dict | None, generation: Path) -> None:
     """Give the dry-run store each live member the candidate holds unchanged, from the candidate's own file.
 
@@ -363,7 +589,7 @@ def _seed_unchanged_members(store, live: dict | None, generation: Path) -> None:
                 store.put_object(Bucket=store.bucket, Key=member.path, Body=body)
 
 
-def dry_run(args, root: dict) -> dict:
+def dry_run(args, root: dict, *, disk_usage: Callable[[Path], Any] | None = None) -> dict:
     """Every guard of a real publish, against a disk store holding a copy of the public index."""
     from spicy_regs.sources.disk_store import DiskStore
 
@@ -377,9 +603,14 @@ def dry_run(args, root: dict) -> dict:
     stored = publication.parse_index(raw)
     live = stored["families"].get(args.family)
     _require_prior(live, args.expect_prior, args.family)
+    local_sources = _dry_run_local_sources(args.generation, args.family, root, live, tuple(args.evidence))
+    projected_bytes = _projected_dry_run_bytes(
+        args.generation, args.family, root, tuple(args.evidence), raw, local_sources=local_sources
+    )
+    _require_dry_run_headroom(args.output.parent, projected_bytes, disk_usage=disk_usage)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(dir=args.output.parent, prefix=".dry-run-store-") as scratch, _no_local_side_effects():
-        store = DiskStore(Path(scratch) / "store", bucket="dry-run")
+        store = DiskStore(Path(scratch) / "store", bucket="dry-run", local_sources=local_sources)
         store.put_object(Bucket=store.bucket, Key=publication.INDEX_V2_KEY, Body=raw)
         _seed_unchanged_members(store, live, args.generation)
         seeded = len(store.calls)
@@ -390,12 +621,14 @@ def dry_run(args, root: dict) -> dict:
         # Bytes a publish would upload: the pointer and every member and evidence blob it does not copy.
         puts = [call for call in store.calls[seeded:] if call["method"] in ("put_object", "upload_part")]
         copies = [call for call in store.calls if call["method"] == "copy_object"]
+        disk_bytes_written = store.disk_bytes_written
     return _receipt(
         "dry_run_accepted", root, after["families"][args.family], live,
         added_tables=sorted(args.added_table),
         other_family_changes=_unrelated_changes(stored, after, args.family),
         raw_archive="scratch: not publishable" if args.scratch_raw else "shared",
         store_bytes_written=sum(call["bytes"] for call in puts),
+        store_disk_bytes_written=disk_bytes_written,
         store_members_copied=len(copies),
     )
 

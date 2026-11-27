@@ -317,7 +317,7 @@ def test_build_reads_evidence_from_real_source_native_release_reader(tmp_path):
     }
 
 
-def test_atomic_multi_table_county_and_congressional_district_generation(tmp_path, monkeypatch):
+def test_atomic_multi_table_county_and_congressional_district_generation(tmp_path, monkeypatch, ample_disk_space):
     from spicy_regs import local_publication
     from spicy_regs.explorer_metadata import build_bundle
 

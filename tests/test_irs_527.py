@@ -75,7 +75,7 @@ def _sample_zip_bytes(*, malformed: bool = False) -> bytes:
     return buf.getvalue()
 
 
-def test_irs_527_acquire_build_preserves_literals_latin1_types_and_dry_run(tmp_path, monkeypatch):
+def test_irs_527_acquire_build_preserves_literals_latin1_types_and_dry_run(tmp_path, monkeypatch, ample_disk_space):
     raw = tmp_path / "raw"
     monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(raw))
     zip_bytes = _sample_zip_bytes()

@@ -203,7 +203,7 @@ def test_window_cap_never_yields_a_partial_selection(tmp_path):
         )
 
 
-def test_local_publication_cli_accepts_declared_cohort_and_keeps_guards(tmp_path, monkeypatch):
+def test_local_publication_cli_accepts_declared_cohort_and_keeps_guards(tmp_path, monkeypatch, ample_disk_space):
     """Fixtures prove CLI admission; real retained-source qualification is separate lane evidence."""
     from rulespec_artifacts import ArtifactInput
 
