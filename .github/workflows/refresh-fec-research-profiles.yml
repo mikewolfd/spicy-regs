@@ -1,0 +1,324 @@
+name: Refresh — fec_research_profiles
+# Manual-dispatch refresh workflow for the fec-research-profiles family (ss-wjvp).
+# build-fec-research-profiles builds strictly offline from explicitly retained FEC
+# originals in CentralRawArchiveStore with no network acquisition (live API scaling
+# is tracked separately in ss-44um). This workflow fails closed when no retained
+# selection_path or archive_root is present on the runner, validates the built
+# candidate generation, and publishes via publish-local-generation only when
+# inputs.skip_upload == false.
+on:
+  workflow_dispatch:
+    inputs:
+      selection_path:
+        description: 'Path on the runner to a retained FEC research profiles selection JSON (required; fails closed if omitted or missing)'
+        required: false
+        default: ''
+        type: string
+      archive_root:
+        description: 'Path on the runner to the retained CentralRawArchiveStore root holding the pinned FEC originals (required; fails closed if omitted or missing)'
+        required: false
+        default: ''
+        type: string
+      expect_prior:
+        description: 'Optional live fec-research-profiles digest (8-64 hex chars) required when skip_upload is false; blank re-reads live publication.v2.json'
+        required: false
+        default: ''
+        type: string
+      skip_upload:
+        description: 'Build and validate candidate generation without publishing to R2 (dry run)'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-fec-research-profiles
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install pinned dependencies
+        run: uv sync --frozen
+
+      - name: Retain invocation scope
+        env:
+          WORKFLOW_INPUTS: ${{ toJSON(inputs) }}
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          python3 - <<'PY'
+          import datetime
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          receipt = {
+              "started_at": datetime.datetime.now(datetime.UTC).isoformat(),
+              "family": "fec-research-profiles",
+              "code_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "workflow_revision": os.environ["GITHUB_SHA"],
+              "run_id": os.environ["GITHUB_RUN_ID"],
+              "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "inputs": json.loads(os.environ["WORKFLOW_INPUTS"]),
+          }
+          Path("output/invocation.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Validate required retained inputs
+        id: validate
+        env:
+          SELECTION_PATH: ${{ inputs.selection_path }}
+          ARCHIVE_ROOT: ${{ inputs.archive_root }}
+          EXPECT_PRIOR: ${{ inputs.expect_prior }}
+          SKIP_UPLOAD: ${{ inputs.skip_upload }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          WORK_DIR="$RUNNER_TEMP/fec-research-profiles"
+          rm -rf "$WORK_DIR"
+          mkdir -p "$WORK_DIR"
+          uv run --frozen python - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          from spicy_docs.storage.raw_archive import CentralRawArchiveStore, default_raw_archive_root
+
+          selection_raw = os.environ.get("SELECTION_PATH", "").strip()
+          archive_raw = os.environ.get("ARCHIVE_ROOT", "").strip()
+          if not selection_raw:
+              raise SystemExit(
+                  "Refusing run: selection_path is required. fec-research-profiles builds strictly offline from "
+                  "retained FEC originals (CentralRawArchiveStore) with no network acquisition."
+              )
+          if not archive_raw:
+              raise SystemExit(
+                  "Refusing run: archive_root is required. Provide the retained CentralRawArchiveStore root "
+                  "holding the pinned FEC originals on the runner."
+              )
+
+          selection_path = Path(selection_raw).expanduser().resolve()
+          if not selection_path.is_file():
+              raise SystemExit(
+                  f"Refusing run: selection_path does not exist on this runner: {selection_path}"
+              )
+          archive_root = Path(archive_raw).expanduser().resolve()
+          if not archive_root.is_dir():
+              raise SystemExit(
+                  f"Refusing run: archive_root does not exist as a directory on this runner: {archive_root}"
+              )
+
+          expect_prior = os.environ.get("EXPECT_PRIOR", "").strip()
+          if expect_prior and not re.fullmatch(r"(sha256:)?[0-9a-f]{8,64}", expect_prior):
+              raise SystemExit("expect_prior must be 8-64 lowercase hex chars (optional sha256: prefix)")
+
+          try:
+              selection = json.loads(selection_path.read_text(encoding="utf-8"))
+          except Exception as exc:
+              raise SystemExit(f"Refusing run: selection_path is not valid JSON ({exc})") from exc
+          required_keys = {"committees", "outside", "outside_candidate", "outside_cycle", "contribution"}
+          if not isinstance(selection, dict) or not required_keys <= set(selection):
+              missing = sorted(required_keys - set(selection if isinstance(selection, dict) else ()))
+              raise SystemExit(f"Refusing run: selection JSON is missing required keys: {', '.join(missing)}")
+
+          def _pin(entry: object, label: str) -> tuple[str, int | None]:
+              if not isinstance(entry, dict):
+                  raise SystemExit(f"Refusing run: {label} entry must be a JSON object")
+              digest = entry.get("response_sha256") or entry.get("sha256")
+              if not isinstance(digest, str) or not digest.strip():
+                  raise SystemExit(f"Refusing run: {label} entry is missing response_sha256/sha256")
+              byte_size = entry["byte_size"] if "byte_size" in entry else entry.get("bytes")
+              return digest, byte_size
+
+          store = CentralRawArchiveStore(archive_root, create=False)
+          pinned: list[tuple[str, int | None]] = []
+          for item in selection["committees"]:
+              pinned.append(_pin(item, "committees"))
+          for query in selection["outside"]:
+              for page in query["pages"]:
+                  pinned.append(_pin(page, f"outside[{query.get('name', '?')}]"))
+          pinned.append(_pin(selection["contribution"]["original"], "contribution.original"))
+          for query in selection["contribution"]["queries"]:
+              for page in query["pages"]:
+                  pinned.append(_pin(page, f"contribution.queries[{query.get('name', '?')}]"))
+          missing_digests = []
+          for digest, byte_size in pinned:
+              try:
+                  store.describe_blob(digest, byte_size)
+              except FileNotFoundError:
+                  missing_digests.append(digest)
+          if missing_digests:
+              raise SystemExit(
+                  f"Refusing run: {len(missing_digests)} pinned original(s) missing from archive_root "
+                  f"(first: {missing_digests[0]})"
+              )
+
+          if os.environ.get("SKIP_UPLOAD") == "false":
+              shared = default_raw_archive_root().resolve()
+              if archive_root != shared:
+                  raise SystemExit(
+                      f"Refusing publish: archive_root ({archive_root}) must match the shared raw archive "
+                      f"({shared}) required by publish-local-generation; use skip_upload=true for scratch builds."
+                  )
+
+          work_dir = Path(os.environ["RUNNER_TEMP"]) / "fec-research-profiles"
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
+              out.write(f"work_dir={work_dir}\n")
+              out.write(f"selection_path={selection_path}\n")
+              out.write(f"archive_root={archive_root}\n")
+          PY
+
+      - name: Build and validate candidate generation
+        id: build
+        env:
+          WORK_DIR: ${{ steps.validate.outputs.work_dir }}
+          SELECTION_PATH: ${{ steps.validate.outputs.selection_path }}
+          ARCHIVE_ROOT: ${{ steps.validate.outputs.archive_root }}
+          SKIP_UPLOAD: ${{ inputs.skip_upload }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          if [ "$SKIP_UPLOAD" = "true" ]; then
+            export SPICYGOV_RAW_ROOT="$ARCHIVE_ROOT"
+          else
+            unset SPICYGOV_RAW_ROOT
+          fi
+
+          uv run --frozen build-fec-research-profiles \
+            --selection "$SELECTION_PATH" \
+            --output-dir "$WORK_DIR/build" \
+            | tee "$WORK_DIR/build-result.json"
+
+          mkdir -p output
+          uv run --frozen python - "$WORK_DIR/build-result.json" "$WORK_DIR/build/generation" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          from rulespec_artifacts import LocalMemberSource, admit_artifact
+          from spicy_regs import local_publication
+
+          lines = [line for line in Path(sys.argv[1]).read_text(encoding="utf-8").splitlines() if line.strip()]
+          result = json.loads(lines[-1])
+          generation_dir = Path(sys.argv[2])
+          evidence_dir = Path(result["evidence"])
+
+          root = local_publication._candidate(generation_dir, "fec-research-profiles", (evidence_dir,))
+          admitted = admit_artifact(LocalMemberSource(generation_dir))
+          if admitted.pin.artifact_digest != result["artifactDigest"]:
+              raise SystemExit("Admitted generation digest differs from build output")
+
+          validation = {
+              "status": "candidate_validated",
+              "family": "fec-research-profiles",
+              "artifact_digest": admitted.pin.artifact_digest,
+              "logical_id": admitted.pin.logical_id,
+              "tables": sorted(root["spec"]["tables"].keys()),
+              "rows": {key: spec["rows"] for key, spec in sorted(root["spec"]["tables"].items())},
+              "skip_upload": os.environ.get("SKIP_UPLOAD") == "true",
+          }
+          Path("output/candidate-validation.json").write_text(json.dumps(validation, indent=2) + "\n", encoding="utf-8")
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
+              out.write(f"generation_dir={generation_dir}\n")
+              out.write(f"evidence_dir={evidence_dir}\n")
+              out.write(f"artifact_digest={admitted.pin.artifact_digest}\n")
+          PY
+
+      - name: Publish candidate generation
+        if: inputs.skip_upload == false
+        env:
+          WORK_DIR: ${{ steps.validate.outputs.work_dir }}
+          GENERATION_DIR: ${{ steps.build.outputs.generation_dir }}
+          EVIDENCE_DIR: ${{ steps.build.outputs.evidence_dir }}
+          EXPECT_PRIOR: ${{ inputs.expect_prior }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicygov.ai') }}
+          WORKFLOW_USER_AGENT: 'spicy-regs-refresh-fec-research-profiles/1.0'
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          INDEX_URL="${R2_PUBLIC_URL%/}/publication.v2.json"
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+            --retry 3 --connect-timeout 30 --max-time 60 \
+            -H "User-Agent: $WORKFLOW_USER_AGENT" \
+            -H "Cache-Control: no-cache" \
+            --output "$WORK_DIR/live-before-publish.v2.json" "$INDEX_URL"
+          LIVE_PRIOR=$(uv run --frozen python - "$WORK_DIR/live-before-publish.v2.json" <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+          from spicy_regs.sources import publication
+
+          index = publication.parse_index(Path(sys.argv[1]).read_bytes())
+          live = index["families"].get("fec-research-profiles")
+          expected = os.environ.get("EXPECT_PRIOR", "").strip().removeprefix("sha256:")
+          held = live["artifactDigest"].removeprefix("sha256:") if live else ""
+          if expected and (not held or not held.startswith(expected)):
+              raise SystemExit(
+                  f"Live fec-research-profiles digest {held or 'absent'} does not match expect_prior {expected}"
+              )
+          print(held)
+          PY
+          )
+          PUBLISH_ARGS=(
+            --generation "$GENERATION_DIR"
+            --family fec-research-profiles
+            --evidence "$EVIDENCE_DIR"
+            --output "$WORK_DIR/publish-receipt"
+          )
+          if [ -n "$LIVE_PRIOR" ]; then
+            PUBLISH_ARGS+=(--expect-prior "$LIVE_PRIOR")
+          fi
+          uv run --frozen publish-local-generation "${PUBLISH_ARGS[@]}"
+          mkdir -p output/publish-receipt
+          cp "$WORK_DIR/publish-receipt/receipt.json" output/publish-receipt/receipt.json
+
+      - name: Retain invocation and audit receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: refresh-fec-research-profiles-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            output/invocation.json
+            output/candidate-validation.json
+            output/publish-receipt/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Retain build-only candidate outputs and failures
+        if: failure() || (success() && inputs.skip_upload)
+        uses: actions/upload-artifact@v4
+        with:
+          name: refresh-fec-research-profiles-output-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/fec-research-profiles/build/generation/
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 30

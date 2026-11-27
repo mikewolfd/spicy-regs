@@ -22,6 +22,6 @@ Short summaries of a decision written by the courts that later cite it, the text
 | `describing_opinion_id` | `VARCHAR` | CourtListener opinion ID of the opinion that wrote the parenthetical. Joins court_opinions.opinion_id. |
 | `text` | `VARCHAR` | The parenthetical as the describing opinion wrote it. |
 | `score` | `DOUBLE` | Publisher's 0-to-1 estimate of how descriptive the text is. |
-| `group_id` | `VARCHAR` | Publisher's group of parentheticals making the same point; NULL when ungrouped. |
+| `group_id` | `VARCHAR` | Publisher's group label for parentheticals making the same point; NULL when ungrouped. Compare within this table only: the publisher declares but never exports its group table. |
 | `dump_date` | `VARCHAR` | The CourtListener bulk export the row was copied from (ISO date). |
 | `source_sha256` | `VARCHAR` | SHA-256 of the CourtListener export file the row was read from (`sha256:` and 64 hex digits): the original, kept in the raw archive and the run's source evidence. |

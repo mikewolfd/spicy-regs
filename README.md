@@ -51,9 +51,12 @@ welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 Set the GitHub Actions **repository variable** `SPICYREGS_DOMAIN` to your bare
 base domain (for example, `spicygov.ai`). Unset or empty uses the upstream
 `spicy-regs.dev` domain. Builds and deployments derive `data.`, `docs.` and
-`mcp.` service addresses from it; the public links below show upstream defaults.
-See [domain setup and override precedence](deploy/public-domain.md), including
-local runs and the separate DNS and GitHub Pages settings.
+`mcp.` service addresses from it; this fork's canonical public MCP endpoint is
+`https://mcp.spicygov.ai/mcp` (setup guide at
+[spicygov.ai/mcp/](https://spicygov.ai/mcp/)), while the other public links
+below show upstream defaults. See
+[domain setup and override precedence](deploy/public-domain.md), including local
+runs and the separate DNS and GitHub Pages settings.
 
 ## Contents
 
@@ -74,7 +77,7 @@ local runs and the separate DNS and GitHub Pages settings.
 |---|---|
 | Browse dockets, agencies, and comment activity | **[app.spicy-regs.dev](https://app.spicy-regs.dev)** |
 | Read every column of every published table | **[docs.spicy-regs.dev](https://docs.spicy-regs.dev/)** |
-| Ask an AI assistant questions about the data | **[MCP server](#use-it-from-an-ai-assistant)** (`https://mcp.spicy-regs.dev/mcp`) |
+| Ask an AI assistant questions about the data | **[MCP server](#use-it-from-an-ai-assistant)** (`https://mcp.spicygov.ai/mcp`) |
 | Run SQL in a notebook | **[Binder](https://mybinder.org/v2/gh/civictechdc/spicy-regs/HEAD)** or [`docs/querying-python.md`](docs/querying-python.md) |
 
 One line of SQL against the public bucket — no credentials, no download:
@@ -467,10 +470,26 @@ outputs went with `docs/research` on 2026-11-11 (git history keeps it).
 
 | Client | Setup |
 |---|---|
-| **Claude.ai** or any remote MCP client | Add `https://mcp.spicy-regs.dev/mcp` as a Custom Connector. Copy-paste setup for every client is at [mcp.spicy-regs.dev](https://mcp.spicy-regs.dev/). |
+| **Claude.ai** or any remote MCP client | Add `https://mcp.spicygov.ai/mcp` as a Custom Connector (or run `claude mcp add --transport http spicygov https://mcp.spicygov.ai/mcp` in Claude Code). Copy-paste setup is at [spicygov.ai/mcp/](https://spicygov.ai/mcp/). |
 | **Claude Code** (plugin) | `/plugin marketplace add civictechdc/spicy-regs` then `/plugin install spicyregs@spicy-regs-local` |
 | **Claude Code** (stdio, no deploy) | `claude mcp add spicy-regs -- uvx --from "spicy-regs @ git+https://github.com/civictechdc/spicy-regs" spicy-regs-mcp` |
 | **Cursor / Continue / OpenAI / others** | See [`plugins/spicyregs/INSTALL.md`](plugins/spicyregs/INSTALL.md) for the full matrix, including a prompt-only fallback for assistants without MCP support. |
+
+### Public MCP clients and `User-Agent` policy
+
+The public Streamable HTTP endpoint (`https://mcp.spicygov.ai/mcp`, guide at
+[spicygov.ai/mcp/](https://spicygov.ai/mcp/)) requires no API key and works out
+of the box with tested clients including the official MCP SDK (`mcp`),
+Claude.ai, Claude Code, `curl`, Node `fetch`, and Python `httpx`, `requests`,
+`urllib3`, and `aiohttp`.
+
+Bare Python standard-library `urllib` requests using the default
+`Python-urllib/3.x` user agent are refused with `HTTP 403` (Cloudflare managed
+edge check Error 1010) and are **unsupported as-is**. Programmatic Python
+callers should use the official MCP SDK (`mcp`) or `httpx`/`requests`, or send
+an explicit identifying `User-Agent` header (for example,
+`User-Agent: my-research-script/1.0`). Do not spoof browser `User-Agent`
+strings.
 
 ## Project layout
 

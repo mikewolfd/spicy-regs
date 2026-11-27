@@ -1,0 +1,446 @@
+name: Refresh — house_disclosures
+# Manual-dispatch refresh workflow for the house-disclosures family (ss-wjvp).
+# Unlike hosted RollupPipeline families (rollup-*.yml), house-disclosures stays in
+# LOCAL_FAMILIES and publishes through publish-local-generation using the existing
+# spicy_regs.pipelines.house_disclosures CLI. Default skip_upload=true performs a
+# bounded build and candidate validation into $RUNNER_TEMP without touching R2.
+on:
+  workflow_dispatch:
+    inputs:
+      years:
+        description: 'Comma-separated House disclosure index years to acquire (2008-2026; e.g. 2025 or 2024,2025)'
+        required: false
+        default: '2025'
+        type: string
+      doc_ids:
+        description: 'Optional comma-separated PTR DocIDs (or YEAR:DOC_ID) to acquire; blank skips PTR PDFs unless max_ptrs > 0'
+        required: false
+        default: ''
+        type: string
+      max_ptrs:
+        description: 'Optional bounded cap (0-64) of native FilingType=P PTRs to acquire when doc_ids is blank (0 = index-only)'
+        required: false
+        default: '0'
+        type: string
+      max_requests:
+        description: 'Bounded HTTP request cap (1-64) passed to house_disclosures acquire steps'
+        required: false
+        default: '16'
+        type: string
+      expect_prior:
+        description: 'Optional live house-disclosures digest (8-64 hex chars) required when skip_upload is false; blank re-reads live publication.v2.json'
+        required: false
+        default: ''
+        type: string
+      skip_upload:
+        description: 'Build and validate candidate generation without publishing to R2 (dry run)'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-house-disclosures
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install pinned dependencies
+        run: uv sync --frozen
+
+      - name: Retain invocation scope
+        env:
+          WORKFLOW_INPUTS: ${{ toJSON(inputs) }}
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          python3 - <<'PY'
+          import datetime
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          receipt = {
+              "started_at": datetime.datetime.now(datetime.UTC).isoformat(),
+              "family": "house-disclosures",
+              "code_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "workflow_revision": os.environ["GITHUB_SHA"],
+              "run_id": os.environ["GITHUB_RUN_ID"],
+              "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "inputs": json.loads(os.environ["WORKFLOW_INPUTS"]),
+          }
+          Path("output/invocation.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Validate inputs
+        id: validate
+        env:
+          HOUSE_YEARS: ${{ inputs.years }}
+          HOUSE_DOC_IDS: ${{ inputs.doc_ids }}
+          HOUSE_MAX_PTRS: ${{ inputs.max_ptrs }}
+          HOUSE_MAX_REQUESTS: ${{ inputs.max_requests }}
+          HOUSE_EXPECT_PRIOR: ${{ inputs.expect_prior }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          WORK_DIR="$RUNNER_TEMP/house-disclosures"
+          rm -rf "$WORK_DIR"
+          mkdir -p "$WORK_DIR"
+          uv run --frozen python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          from spicy_docs.sources.house_disclosures import DEFAULT_MAX_INDEX_YEAR, DEFAULT_MAX_REQUESTS, MIN_INDEX_YEAR
+
+          raw_years = [item.strip() for item in os.environ.get("HOUSE_YEARS", "").split(",") if item.strip()]
+          if not raw_years:
+              raise SystemExit("years is required: specify one or more House index years (e.g. 2025)")
+          years: list[int] = []
+          for item in raw_years:
+              if not re.fullmatch(r"\d{4}", item):
+                  raise SystemExit(f"Invalid House index year: {item!r}")
+              year = int(item)
+              if not MIN_INDEX_YEAR <= year <= DEFAULT_MAX_INDEX_YEAR:
+                  raise SystemExit(f"House index year {year} out of supported range {MIN_INDEX_YEAR}-{DEFAULT_MAX_INDEX_YEAR}")
+              if year in years:
+                  raise SystemExit(f"Duplicate House index year: {year}")
+              years.append(year)
+
+          raw_max_ptrs = os.environ.get("HOUSE_MAX_PTRS", "0").strip() or "0"
+          if not re.fullmatch(r"\d+", raw_max_ptrs):
+              raise SystemExit(f"Invalid max_ptrs: {raw_max_ptrs!r}")
+          max_ptrs = int(raw_max_ptrs)
+          if not 0 <= max_ptrs <= DEFAULT_MAX_REQUESTS:
+              raise SystemExit(f"max_ptrs must be between 0 and {DEFAULT_MAX_REQUESTS}, got {max_ptrs}")
+
+          raw_max_req = os.environ.get("HOUSE_MAX_REQUESTS", "16").strip()
+          if not re.fullmatch(r"[1-9]\d*", raw_max_req):
+              raise SystemExit(f"Invalid max_requests: {raw_max_req!r}")
+          max_requests = int(raw_max_req)
+          if not 1 <= max_requests <= DEFAULT_MAX_REQUESTS:
+              raise SystemExit(f"max_requests must be between 1 and {DEFAULT_MAX_REQUESTS}, got {max_requests}")
+
+          raw_docs = [item.strip() for item in os.environ.get("HOUSE_DOC_IDS", "").split(",") if item.strip()]
+          for doc in raw_docs:
+              if not re.fullmatch(r"(\d{4}:)?[A-Za-z0-9_-]+", doc):
+                  raise SystemExit(f"Invalid doc_id entry: {doc!r}")
+          if raw_docs and max_ptrs > 0:
+              raise SystemExit("Specify either doc_ids or max_ptrs > 0, not both")
+          if len(years) > 1 and len(years) > max_requests:
+              raise SystemExit(f"Requested {len(years)} House index years, exceeding max_requests={max_requests}")
+          if max_ptrs > max_requests:
+              raise SystemExit(f"max_ptrs ({max_ptrs}) exceeds max_requests ({max_requests})")
+          if len(raw_docs) > max_requests:
+              raise SystemExit(f"Requested {len(raw_docs)} doc_ids, exceeding max_requests={max_requests}")
+
+          expect_prior = os.environ.get("HOUSE_EXPECT_PRIOR", "").strip()
+          if expect_prior and not re.fullmatch(r"(sha256:)?[0-9a-f]{8,64}", expect_prior):
+              raise SystemExit("expect_prior must be 8-64 lowercase hex chars (optional sha256: prefix)")
+
+          work_dir = Path(os.environ["RUNNER_TEMP"]) / "house-disclosures"
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
+              out.write(f"work_dir={work_dir}\n")
+              out.write(f"years_csv={','.join(str(y) for y in years)}\n")
+              out.write(f"doc_ids_csv={','.join(raw_docs)}\n")
+              out.write(f"max_ptrs={max_ptrs}\n")
+              out.write(f"max_requests={max_requests}\n")
+          PY
+
+      - name: Read live publication index
+        id: live
+        env:
+          WORK_DIR: ${{ steps.validate.outputs.work_dir }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicygov.ai') }}
+          WORKFLOW_USER_AGENT: 'spicy-regs-refresh-house-disclosures/1.0'
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          INDEX_URL="${R2_PUBLIC_URL%/}/publication.v2.json"
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+            --retry 3 --connect-timeout 30 --max-time 60 \
+            -H "User-Agent: $WORKFLOW_USER_AGENT" \
+            -H "Cache-Control: no-cache" \
+            --output "$WORK_DIR/live-publication.v2.json" "$INDEX_URL"
+          LIVE_PRESENT=$(uv run --frozen python - "$WORK_DIR/live-publication.v2.json" <<'PY'
+          import sys
+          from pathlib import Path
+          from spicy_regs.sources import publication
+
+          index = publication.parse_index(Path(sys.argv[1]).read_bytes())
+          print("true" if "house-disclosures" in index["families"] else "false")
+          PY
+          )
+          READ_INDEX=""
+          if [ "$LIVE_PRESENT" = "true" ]; then
+            SPICY_REGS_R2_URL="$R2_PUBLIC_URL" uv run --frozen spicy-regs mirror "$WORK_DIR/live-mirror" \
+              --family house-disclosures --min-free-gib 4 > "$WORK_DIR/mirror-output.jsonl"
+            READ_INDEX=$(uv run --frozen python - "$WORK_DIR/live-mirror" "$WORK_DIR/mirror-output.jsonl" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          lines = [json.loads(line) for line in Path(sys.argv[2]).read_text().splitlines() if line.strip()]
+          snapshot = next(item["snapshot"] for item in reversed(lines) if "snapshot" in item)
+          print(root / snapshot)
+          PY
+            )
+          fi
+          echo "read_index=$READ_INDEX" >> "$GITHUB_OUTPUT"
+
+      - name: Acquire House disclosure index and selected PTRs
+        env:
+          WORK_DIR: ${{ steps.validate.outputs.work_dir }}
+          YEARS_CSV: ${{ steps.validate.outputs.years_csv }}
+          DOC_IDS_CSV: ${{ steps.validate.outputs.doc_ids_csv }}
+          MAX_PTRS: ${{ steps.validate.outputs.max_ptrs }}
+          MAX_REQUESTS: ${{ steps.validate.outputs.max_requests }}
+          SKIP_UPLOAD: ${{ inputs.skip_upload }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+
+          IDX_ARGS=(--output-dir "$WORK_DIR/acquire-index" --captures-out "$WORK_DIR/selection.json")
+          PTR_ARGS=(
+            --selection "$WORK_DIR/selection.json"
+            --max-requests "$MAX_REQUESTS"
+            --output-dir "$WORK_DIR/acquire-ptrs"
+            --captures-out "$WORK_DIR/captures.json"
+          )
+          if [ "$SKIP_UPLOAD" = "true" ]; then
+            export SPICYGOV_RAW_ROOT="$WORK_DIR/raw-archive"
+            IDX_ARGS+=(--archive-root "$WORK_DIR/raw-archive")
+            PTR_ARGS+=(--archive-root "$WORK_DIR/raw-archive")
+          else
+            unset SPICYGOV_RAW_ROOT
+          fi
+
+          IFS=',' read -r -a YEARS <<< "$YEARS_CSV"
+          if [ "${#YEARS[@]}" -eq 1 ]; then
+            uv run --frozen python -m spicy_regs.pipelines.house_disclosures acquire-index \
+              --year "${YEARS[0]}" \
+              "${IDX_ARGS[@]}"
+          else
+            for year in "${YEARS[@]}"; do
+              IDX_ARGS+=(--year "$year")
+            done
+            IDX_ARGS+=(--max-requests "$MAX_REQUESTS")
+            uv run --frozen python -m spicy_regs.pipelines.house_disclosures acquire-indexes \
+              "${IDX_ARGS[@]}"
+          fi
+
+          HAS_DOCS=0
+          if [ -n "$DOC_IDS_CSV" ]; then
+            IFS=',' read -r -a DOC_IDS <<< "$DOC_IDS_CSV"
+            for doc_id in "${DOC_IDS[@]}"; do
+              if [ -n "$doc_id" ]; then
+                PTR_ARGS+=(--doc-id "$doc_id")
+                HAS_DOCS=1
+              fi
+            done
+          elif [ "$MAX_PTRS" -gt 0 ]; then
+            SELECTED_DOCS=$(uv run --frozen python - "$WORK_DIR/selection.json" "$MAX_PTRS" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          from spicy_docs.sources.house_disclosures import is_native_ptr_candidate
+          from spicy_regs.pipelines import house_disclosures as house
+
+          selection = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          limit = int(sys.argv[2])
+          store = house.open_raw()
+          _, rows = house._indexes(store, selection)
+          groups: dict[tuple[int, str], list] = {}
+          for row in rows:
+              groups.setdefault((row.index_year, row.doc_id), []).append(row)
+          candidates = sorted(
+              (year, doc_id)
+              for (year, doc_id), group in groups.items()
+              if len(group) == 1 and is_native_ptr_candidate(group[0])
+          )[:limit]
+          if not candidates:
+              raise SystemExit("No unambiguous native PTR (FilingType=P) filings found in acquired index")
+          for year, doc_id in candidates:
+              print(f"{year}:{doc_id}")
+          PY
+            )
+            while IFS= read -r pair; do
+              if [ -n "$pair" ]; then
+                PTR_ARGS+=(--doc-id "$pair")
+                HAS_DOCS=1
+              fi
+            done <<< "$SELECTED_DOCS"
+          fi
+
+          if [ "$HAS_DOCS" -eq 1 ]; then
+            uv run --frozen python -m spicy_regs.pipelines.house_disclosures acquire "${PTR_ARGS[@]}"
+          else
+            cp "$WORK_DIR/selection.json" "$WORK_DIR/captures.json"
+          fi
+
+      - name: Build and validate candidate generation
+        id: build
+        env:
+          WORK_DIR: ${{ steps.validate.outputs.work_dir }}
+          READ_INDEX: ${{ steps.live.outputs.read_index }}
+          SKIP_UPLOAD: ${{ inputs.skip_upload }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          BUILD_ARGS=(
+            --selection "$WORK_DIR/captures.json"
+            --output-dir "$WORK_DIR/build"
+          )
+          if [ "$SKIP_UPLOAD" = "true" ]; then
+            export SPICYGOV_RAW_ROOT="$WORK_DIR/raw-archive"
+            BUILD_ARGS+=(--archive-root "$WORK_DIR/raw-archive")
+          else
+            unset SPICYGOV_RAW_ROOT
+          fi
+          if [ -n "$READ_INDEX" ]; then
+            BUILD_ARGS+=(--read-index "$READ_INDEX")
+          fi
+          uv run --frozen python -m spicy_regs.pipelines.house_disclosures build "${BUILD_ARGS[@]}" \
+            | tee "$WORK_DIR/build-result.json"
+
+          mkdir -p output
+          cp "$WORK_DIR/build/summary.json" output/summary.json
+          uv run --frozen python - "$WORK_DIR/build-result.json" "$WORK_DIR/build/generation" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          from rulespec_artifacts import LocalMemberSource, admit_artifact
+          from spicy_regs import local_publication
+
+          lines = [line for line in Path(sys.argv[1]).read_text(encoding="utf-8").splitlines() if line.strip()]
+          result = json.loads(lines[-1])
+          generation_dir = Path(sys.argv[2])
+          evidence_dir = Path(result["evidence"])
+
+          root = local_publication._candidate(generation_dir, "house-disclosures", (evidence_dir,))
+          admitted = admit_artifact(LocalMemberSource(generation_dir))
+          if admitted.pin.artifact_digest != result["artifact_digest"]:
+              raise SystemExit("Admitted generation digest differs from build output")
+          filings_rows = result.get("rows", {}).get("house_disclosure_filings", 0)
+          if not isinstance(filings_rows, int) or filings_rows <= 0:
+              raise SystemExit(f"Expected positive house_disclosure_filings rows, got {filings_rows!r}")
+
+          validation = {
+              "status": "candidate_validated",
+              "family": "house-disclosures",
+              "artifact_digest": admitted.pin.artifact_digest,
+              "logical_id": admitted.pin.logical_id,
+              "tables": sorted(root["spec"]["tables"].keys()),
+              "rows": result["rows"],
+              "skip_upload": os.environ.get("SKIP_UPLOAD") == "true",
+          }
+          Path("output/candidate-validation.json").write_text(json.dumps(validation, indent=2) + "\n", encoding="utf-8")
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
+              out.write(f"generation_dir={generation_dir}\n")
+              out.write(f"evidence_dir={evidence_dir}\n")
+              out.write(f"artifact_digest={admitted.pin.artifact_digest}\n")
+          PY
+
+      - name: Publish candidate generation
+        if: inputs.skip_upload == false
+        env:
+          WORK_DIR: ${{ steps.validate.outputs.work_dir }}
+          GENERATION_DIR: ${{ steps.build.outputs.generation_dir }}
+          EVIDENCE_DIR: ${{ steps.build.outputs.evidence_dir }}
+          EXPECT_PRIOR: ${{ inputs.expect_prior }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicygov.ai') }}
+          WORKFLOW_USER_AGENT: 'spicy-regs-refresh-house-disclosures/1.0'
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          INDEX_URL="${R2_PUBLIC_URL%/}/publication.v2.json"
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+            --retry 3 --connect-timeout 30 --max-time 60 \
+            -H "User-Agent: $WORKFLOW_USER_AGENT" \
+            -H "Cache-Control: no-cache" \
+            --output "$WORK_DIR/live-before-publish.v2.json" "$INDEX_URL"
+          LIVE_PRIOR=$(uv run --frozen python - "$WORK_DIR/live-before-publish.v2.json" <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+          from spicy_regs.sources import publication
+
+          index = publication.parse_index(Path(sys.argv[1]).read_bytes())
+          live = index["families"].get("house-disclosures")
+          expected = os.environ.get("EXPECT_PRIOR", "").strip().removeprefix("sha256:")
+          held = live["artifactDigest"].removeprefix("sha256:") if live else ""
+          if expected and (not held or not held.startswith(expected)):
+              raise SystemExit(
+                  f"Live house-disclosures digest {held or 'absent'} does not match expect_prior {expected}"
+              )
+          print(held)
+          PY
+          )
+          PUBLISH_ARGS=(
+            --generation "$GENERATION_DIR"
+            --family house-disclosures
+            --evidence "$EVIDENCE_DIR"
+            --output "$WORK_DIR/publish-receipt"
+          )
+          if [ -n "$LIVE_PRIOR" ]; then
+            PUBLISH_ARGS+=(--expect-prior "$LIVE_PRIOR")
+          fi
+          uv run --frozen publish-local-generation "${PUBLISH_ARGS[@]}"
+          mkdir -p output/publish-receipt
+          cp "$WORK_DIR/publish-receipt/receipt.json" output/publish-receipt/receipt.json
+
+      - name: Retain invocation and audit receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: refresh-house-disclosures-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            output/invocation.json
+            output/candidate-validation.json
+            output/summary.json
+            output/publish-receipt/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Retain build-only candidate outputs and failures
+        if: failure() || (success() && inputs.skip_upload)
+        uses: actions/upload-artifact@v4
+        with:
+          name: refresh-house-disclosures-output-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/house-disclosures/build/generation/
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 30
