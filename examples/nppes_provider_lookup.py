@@ -1,6 +1,6 @@
 """Build an offline NPPES excerpt table and left join caller-supplied identifiers.
 
-Run with coordinated SpicyDocs and RefSpec on PYTHONPATH (see docs/tables/nppes_provider_observations.md).
+Run with coordinated SpicyDocs and RefSpec on PYTHONPATH (see docs/nppes-providers.md).
 The source pins and member identity are mandatory; this example never fetches.
 """
 
@@ -15,8 +15,7 @@ from pathlib import Path
 
 import duckdb
 import pyarrow as pa
-from spicy_docs.sources.nppes import read_csv_cohort
-from spicy_regs.transforms.build_nppes_providers import build_observations
+from spicy_regs.transforms.build_nppes_providers import build_observations, read_v2_csv_cohort
 
 
 def main():
@@ -40,7 +39,7 @@ def main():
     cohort = tuple(dict.fromkeys(validate_npi(r["identifier"]) for r in requests if r["identifier_kind"] == "NPI"))
     columns = tuple(next(csv.reader(io.StringIO(args.header.read_text()))))
     with args.csv.open("rb") as stream:
-        data = read_csv_cohort(
+        data = read_v2_csv_cohort(
             stream,
             kind="main",
             scope="excerpt",

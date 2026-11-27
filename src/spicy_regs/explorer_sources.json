@@ -372,6 +372,13 @@
       "url": "https://www.oge.gov/web/OGE.nsf/publicresources_disclosure-faq",
       "kind": "government",
       "note": "Explicitly selected publicly posted archived White House OGE Form 278e annual packages (Kamala D. Harris 2021 and 2024 releases). Part 6 is qualified for the 2024 package only; the amended 2021 package remains lookup-only. Not complete executive or person-profile coverage."
+    },
+    "cms-nppes": {
+      "id": "cms-nppes",
+      "name": "Centers for Medicare & Medicaid Services NPPES",
+      "url": "https://download.cms.gov/nppes/NPI_Files.html",
+      "kind": "government",
+      "note": "Version 2 (V.2) National Plan and Provider Enumeration System monthly replacement and weekly incremental CSV bundles (main provider file plus other-name, practice-location, and endpoint reference sidecars). NPI issuance does not establish state licensure, credentials, Medicare participation, or practice affiliation; NPIs remain distinct from CMS Certification Numbers (CCNs)."
     }
   },
   "families": {
@@ -868,6 +875,13 @@
       ],
       "transformation": "Retains selected publicly posted archived White House OGE Form 278e filings, qualified Part 6 observations, and page/slot reconciliation from digest-pinned PDFs without inferring person profiles or net wealth.",
       "evidence": "src/spicy_regs/pipelines/executive_disclosures.py"
+    },
+    "nppes-providers": {
+      "sources": [
+        "cms-nppes"
+      ],
+      "transformation": "Reads digest-pinned CMS NPPES Version 2 main and reference sidecar CSV members with RefSpec NPI validation, literal cells, byte coordinates, and qualified deactivation/reactivation lifecycle checks without conflating NPIs with CCNs.",
+      "evidence": "src/spicy_regs/transforms/build_nppes_providers.py"
     }
   },
   "tables": {

@@ -5,7 +5,7 @@
   "arrow_profile": "urn:ddk:odcs:arrow-declaration:3",
   "scope": "pilot",
   "source_digests": {
-    "table_metadata_sha256": "e7f9877ec5a4957aa6a963ff3581db231bd734334c40a81e10f6ec83847644d6",
+    "table_metadata_sha256": "34707ebbc3e02e6af18ea096f50381a86fddf4c89095c3fcdb5e0cf047e8b0e8",
     "table_joins_sha256": "0af5448b2a6c9c0163410edaa103c058469191bc294eeb08be68a05770e884b5"
   },
   "pilot_families": [
@@ -32,7 +32,7 @@
     "amendments": {
       "family": "amendments",
       "path": "families/amendments.odcs.json",
-      "sha256": "5c4393c116ca24b86ec9f9dc930f93bc5428ef86f6a4ac35ac757fce1c4522c2",
+      "sha256": "b2daf8b67c271291dcb82f266232efb03dd889839b14272ccc5b9bd9f3e1cb29",
       "contract_id": "urn:spicy-regs:odcs:family:amendments",
       "domain": "spicycongress",
       "secondary_domains": [],
@@ -48,7 +48,7 @@
     "bill-family": {
       "family": "bill-family",
       "path": "families/bill-family.odcs.json",
-      "sha256": "2439531b37d9332187a53b5869fa2cf5019287fab9441203c2c95d5ea55a04d6",
+      "sha256": "4721489bbc50343586f2e22f4cda2962217bfc96f165d7eacebc6b7aa25212b5",
       "contract_id": "urn:spicy-regs:odcs:family:bill-family",
       "domain": "spicycongress",
       "secondary_domains": [
@@ -85,7 +85,7 @@
     "committee-rosters": {
       "family": "committee-rosters",
       "path": "families/committee-rosters.odcs.json",
-      "sha256": "9e88e7a76ebc7b698cfafdf78f09539a7fb8ad6196e1f3947690498f475561d1",
+      "sha256": "5c31bc0bf4ae00587c1c5e6ec0b070549efeea2faafd1748529f43b0e4b6e8b3",
       "contract_id": "urn:spicy-regs:odcs:family:committee-rosters",
       "domain": "spicycongress",
       "secondary_domains": [
@@ -105,7 +105,7 @@
     "federal-register": {
       "family": "federal-register",
       "path": "families/federal-register.odcs.json",
-      "sha256": "7ee29a6b27990096e8f48210b7ea1e427a19f2c20fb76d4ab38e5fc7c1f41099",
+      "sha256": "255fe27ec113c5b18ee4506a416cd15d5a739b67f061e415e2ff05bfb786c169",
       "contract_id": "urn:spicy-regs:odcs:family:federal-register",
       "domain": "spicygov",
       "secondary_domains": [
@@ -123,7 +123,7 @@
     "members": {
       "family": "members",
       "path": "families/members.odcs.json",
-      "sha256": "5c0aa3b9166c00b6232a3e87d2906c53509ce2c9fc74db5cf113e228fb598242",
+      "sha256": "f3acb3ae6451b12c781742c8e885a2c406a5cbe1973478239c98c48ebbd5194a",
       "contract_id": "urn:spicy-regs:odcs:family:members",
       "domain": "spicycongress",
       "secondary_domains": [
@@ -143,7 +143,7 @@
     "nominations": {
       "family": "nominations",
       "path": "families/nominations.odcs.json",
-      "sha256": "be0d3381623cf519fdd3d13b6f8e21e93e0fdd8490feef9657d56c928b05fb94",
+      "sha256": "ec8d41877f8114066c2d8ea23b83810670102433ff908fb002cd6857b2bdd877",
       "contract_id": "urn:spicy-regs:odcs:family:nominations",
       "domain": "spicycongress",
       "secondary_domains": [
@@ -162,7 +162,7 @@
     "roll-call-votes": {
       "family": "roll-call-votes",
       "path": "families/roll-call-votes.odcs.json",
-      "sha256": "cf01d319e7588d13f02a5240716fdb2db4e1c53df15bbb3b4c3f323fdaadd878",
+      "sha256": "110d8e2c91f0ec23a1932248739ea13b4f46de6e2d9a8b4cffa31a38b991157f",
       "contract_id": "urn:spicy-regs:odcs:family:roll-call-votes",
       "domain": "spicycongress",
       "secondary_domains": [],
@@ -179,7 +179,7 @@
     "rulemaking": {
       "family": "rulemaking",
       "path": "families/rulemaking.odcs.json",
-      "sha256": "fdece4907e32e2605e52e620252c434324ebbde054a2241221e4fe40af576f1a",
+      "sha256": "ece243460cb942435e78473adc685e623ad0543a07e1d49b5b45f076aa8fa4da",
       "contract_id": "urn:spicy-regs:odcs:family:rulemaking",
       "domain": "spicygov",
       "secondary_domains": [
@@ -247,6 +247,7 @@
       "house_mailing_summary_pages",
       "house_mailing_summary_rows",
       "house_mailing_summary_values",
+      "nppes_provider_observations",
       "senate_financial_summary_pages",
       "senate_financial_summary_rows",
       "senate_financial_summary_values"
