@@ -141,18 +141,26 @@ jobs:
               missing = sorted(required_keys - set(selection if isinstance(selection, dict) else ()))
               raise SystemExit(f"Refusing run: selection JSON is missing required keys: {', '.join(missing)}")
 
+          def _pin(entry: object, label: str) -> tuple[str, int | None]:
+              if not isinstance(entry, dict):
+                  raise SystemExit(f"Refusing run: {label} entry must be a JSON object")
+              digest = entry.get("response_sha256") or entry.get("sha256")
+              if not isinstance(digest, str) or not digest.strip():
+                  raise SystemExit(f"Refusing run: {label} entry is missing response_sha256/sha256")
+              byte_size = entry["byte_size"] if "byte_size" in entry else entry.get("bytes")
+              return digest, byte_size
+
           store = CentralRawArchiveStore(archive_root, create=False)
           pinned: list[tuple[str, int | None]] = []
           for item in selection["committees"]:
-              pinned.append((item["response_sha256"], item.get("byte_size")))
+              pinned.append(_pin(item, "committees"))
           for query in selection["outside"]:
               for page in query["pages"]:
-                  pinned.append((page.get("response_sha256", page["sha256"]), page.get("byte_size", page.get("bytes"))))
-          original = selection["contribution"]["original"]
-          pinned.append((original["response_sha256"], original.get("byte_size")))
+                  pinned.append(_pin(page, f"outside[{query.get('name', '?')}]"))
+          pinned.append(_pin(selection["contribution"]["original"], "contribution.original"))
           for query in selection["contribution"]["queries"]:
               for page in query["pages"]:
-                  pinned.append((page.get("response_sha256", page["sha256"]), page.get("byte_size", page.get("bytes"))))
+                  pinned.append(_pin(page, f"contribution.queries[{query.get('name', '?')}]"))
           missing_digests = []
           for digest, byte_size in pinned:
               try:

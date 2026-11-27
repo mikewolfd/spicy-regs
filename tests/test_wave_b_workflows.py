@@ -149,6 +149,12 @@ def test_workflow_cli_flags_match_live_help_parsers():
         ({"HOUSE_YEARS": "2025,2025"}, "Duplicate House index year"),
         ({"HOUSE_YEARS": "2025", "HOUSE_DOC_IDS": "20030591", "HOUSE_MAX_PTRS": "2"}, "not both"),
         ({"HOUSE_YEARS": "2025", "HOUSE_MAX_REQUESTS": "0"}, "Invalid max_requests"),
+        ({"HOUSE_YEARS": "2024,2025", "HOUSE_MAX_REQUESTS": "1"}, "exceeding max_requests=1"),
+        ({"HOUSE_YEARS": "2025", "HOUSE_MAX_PTRS": "3", "HOUSE_MAX_REQUESTS": "2"}, "exceeds max_requests"),
+        (
+            {"HOUSE_YEARS": "2025", "HOUSE_DOC_IDS": "20030591,20030594,8220747", "HOUSE_MAX_REQUESTS": "2"},
+            "exceeding max_requests=2",
+        ),
         ({"HOUSE_YEARS": "2025", "HOUSE_EXPECT_PRIOR": "not-hex"}, "expect_prior"),
     ],
 )
@@ -493,3 +499,215 @@ def test_fec_research_profiles_workflow_validates_and_builds_end_to_end_on_retai
     assert validation["rows"]["fec_outside_spending_spenders.parquet"] == 73
     assert validation["skip_upload"] is True
     assert "artifact_digest=sha256:" in build_out.read_text(encoding="utf-8")
+
+
+def test_house_acquire_step_max_ptrs_branch_selects_bounded_native_ptrs(tmp_path: Path):
+    """Exercise the MAX_PTRS > 0 branch against the real retained 2025FD.zip index fixture."""
+    runner_temp = tmp_path.resolve() / "runner-temp"
+    work_dir = runner_temp / "house-disclosures"
+    raw_root = work_dir / "raw-archive"
+    work_dir.mkdir(parents=True)
+
+    manifest = json.loads((HOUSE_FIXTURES / "manifest.json").read_text(encoding="utf-8"))
+    evidence = CaptureEvidence(tmp_path / "seed-idx", "house-disclosures", archive_root=raw_root)
+    evidence.retain_file(
+        HOUSE_FIXTURES / "2025FD.zip",
+        stage="original-test-input",
+        raw_source=True,
+        original_location=manifest["2025FD.zip"]["url"],
+    )
+    evidence.finish()
+
+    selection = {
+        "format": "house-disclosures-captures",
+        "version": 1,
+        "scope": "Retained 2025 index fixture for MAX_PTRS branch test.",
+        "index": {**manifest["2025FD.zip"], "year": 2025},
+        "reports": [],
+    }
+    (work_dir / "selection.json").write_text(json.dumps(selection), encoding="utf-8")
+
+    step = _steps_by_name(_load_workflow(HOUSE_WORKFLOW))["Acquire House disclosure index and selected PTRs"]
+    log = tmp_path / "uv-max-ptrs-calls.jsonl"
+    # Execute the real inline Python selector (`uv run --frozen python - ...`) while stubbing network acquire CLIs.
+    stub = (
+        "uv() {\n"
+        '  if [ "${3:-}" = "python" ] && [ "${4:-}" = "-" ]; then\n'
+        '    command uv "$@"\n'
+        "    return $?\n"
+        "  fi\n"
+        f'  python3 -c "import json, sys; open({str(log)!r}, \'a\').write(json.dumps(sys.argv[1:]) + \'\\n\')" "$@"\n'
+        "}\n"
+    )
+    subprocess.run(
+        ["bash", "-c", stub + step["run"]],
+        cwd=REPO_ROOT,
+        env=_clean_env(
+            {
+                "RUNNER_TEMP": str(runner_temp),
+                "WORK_DIR": str(work_dir),
+                "YEARS_CSV": "2025",
+                "DOC_IDS_CSV": "",
+                "MAX_PTRS": "3",
+                "MAX_REQUESTS": "8",
+                "SKIP_UPLOAD": "true",
+            }
+        ),
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    calls = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(calls) == 2
+    assert calls[0][5] == "acquire-index"
+    assert calls[1][5] == "acquire"
+    selected_docs = [calls[1][idx + 1] for idx, token in enumerate(calls[1]) if token == "--doc-id"]
+    assert len(selected_docs) == 3
+    assert selected_docs == sorted(selected_docs)
+    assert all(re.fullmatch(r"2025:[A-Za-z0-9_-]+", item) for item in selected_docs)
+    assert "--max-requests" in calls[1] and calls[1][calls[1].index("--max-requests") + 1] == "8"
+
+
+def test_fec_research_profiles_validation_handles_response_sha256_only_pages_and_missing_digests(tmp_path: Path):
+    """Regression: outside/contribution pages using response_sha256 without sha256 validate and build cleanly."""
+    import hashlib
+
+    runner_temp = tmp_path.resolve() / "runner-temp"
+    runner_temp.mkdir()
+    raw_root = tmp_path.resolve() / "retained-raw"
+    workspace = tmp_path.resolve() / "workspace"
+    workspace.mkdir()
+
+    selection = json.loads((FEC_FIXTURES / "selection.json").read_text(encoding="utf-8"))
+    evidence = CaptureEvidence(tmp_path / "seed-fec-resp", "fec-research-profiles", archive_root=raw_root)
+
+    committee_url = "https://api.open.fec.gov/v1/committees/?cycle=2024&cycle=2026&sort=committee_id&per_page=100&page=1"
+    committee_body = json.dumps(
+        {
+            "pagination": {"page": 1, "pages": 1, "per_page": 100, "count": 1, "is_count_exact": True},
+            "results": [{"committee_id": "C00000001", "name": "Fixture Committee", "sponsor_candidate_ids": []}],
+        }
+    ).encode("utf-8")
+    committee_sha = "sha256:" + hashlib.sha256(committee_body).hexdigest()
+    evidence.retain_bytes(
+        committee_body,
+        stage="fec-fixture",
+        raw_source=True,
+        source_url=committee_url,
+        original_location=committee_url,
+        observed_at="2026-09-12T16:57:29.402394+00:00",
+    )
+    selection["committees"] = [
+        {
+            "response_sha256": committee_sha,
+            "byte_size": len(committee_body),
+            "request_url": committee_url,
+            "observed_at": "2026-09-12T16:57:29.402394+00:00",
+            "expected_results": 1,
+        }
+    ]
+
+    # Convert every outside & contribution query page to response_sha256/byte_size ONLY (no sha256/bytes keys).
+    orig = selection["contribution"]["original"]
+    orig_file = FEC_FIXTURES / orig["response_sha256"].removeprefix("sha256:")
+    evidence.retain_file(
+        orig_file,
+        stage="fec-fixture",
+        raw_source=True,
+        source_url=orig["request_url"],
+        original_location=orig["request_url"],
+    )
+    for query in [*selection["outside"], *selection["contribution"]["queries"]]:
+        for page in query["pages"]:
+            digest = page.pop("sha256")
+            size = page.pop("bytes")
+            page["response_sha256"] = digest
+            page["byte_size"] = size
+            blob_file = FEC_FIXTURES / digest.removeprefix("sha256:")
+            evidence.retain_file(
+                blob_file,
+                stage="fec-fixture",
+                raw_source=True,
+                source_url=page["request_url"],
+                original_location=page["request_url"],
+            )
+    evidence.finish()
+
+    selection_file = tmp_path / "selection-response-sha256.json"
+    selection_file.write_text(json.dumps(selection), encoding="utf-8")
+
+    steps = _steps_by_name(_load_workflow(FEC_WORKFLOW))
+    validate_out = tmp_path / "validate_out.txt"
+    validate_out.write_text("", encoding="utf-8")
+
+    # 1. response_sha256-only pages pass validation without KeyError('sha256') and build end-to-end.
+    subprocess.run(
+        ["bash", "-c", steps["Validate required retained inputs"]["run"]],
+        cwd=REPO_ROOT,
+        env=_clean_env(
+            {
+                "RUNNER_TEMP": str(runner_temp),
+                "GITHUB_OUTPUT": str(validate_out),
+                "SELECTION_PATH": str(selection_file),
+                "ARCHIVE_ROOT": str(raw_root),
+                "EXPECT_PRIOR": "",
+                "SKIP_UPLOAD": "true",
+            }
+        ),
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    outputs = dict(line.split("=", 1) for line in validate_out.read_text(encoding="utf-8").splitlines() if "=" in line)
+    build_out = tmp_path / "build_out.txt"
+    build_out.write_text("", encoding="utf-8")
+    subprocess.run(
+        ["bash", "-c", steps["Build and validate candidate generation"]["run"]],
+        cwd=workspace,
+        env=_clean_env(
+            {
+                "RUNNER_TEMP": str(runner_temp),
+                "WORK_DIR": outputs["work_dir"],
+                "SELECTION_PATH": outputs["selection_path"],
+                "ARCHIVE_ROOT": outputs["archive_root"],
+                "SKIP_UPLOAD": "true",
+                "GITHUB_OUTPUT": str(build_out),
+                "UV_PROJECT": str(REPO_ROOT),
+            }
+        ),
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=60,
+    )
+    validation = json.loads((workspace / "output" / "candidate-validation.json").read_text(encoding="utf-8"))
+    assert validation["status"] == "candidate_validated"
+    assert validation["rows"]["fec_contribution_decisions.parquet"] == 404
+
+    # 2. A page missing both response_sha256 and sha256 fails closed cleanly without KeyError.
+    broken = json.loads(selection_file.read_text(encoding="utf-8"))
+    broken["outside"][0]["pages"][0].pop("response_sha256")
+    broken_file = tmp_path / "selection-missing-digest.json"
+    broken_file.write_text(json.dumps(broken), encoding="utf-8")
+    missing_digest = subprocess.run(
+        ["bash", "-c", steps["Validate required retained inputs"]["run"]],
+        cwd=REPO_ROOT,
+        env=_clean_env(
+            {
+                "RUNNER_TEMP": str(runner_temp),
+                "GITHUB_OUTPUT": str(validate_out),
+                "SELECTION_PATH": str(broken_file),
+                "ARCHIVE_ROOT": str(raw_root),
+                "EXPECT_PRIOR": "",
+                "SKIP_UPLOAD": "true",
+            }
+        ),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert missing_digest.returncode != 0
+    assert "missing response_sha256/sha256" in (missing_digest.stderr + missing_digest.stdout)
+    assert "KeyError" not in (missing_digest.stderr + missing_digest.stdout)

@@ -146,6 +146,12 @@ jobs:
                   raise SystemExit(f"Invalid doc_id entry: {doc!r}")
           if raw_docs and max_ptrs > 0:
               raise SystemExit("Specify either doc_ids or max_ptrs > 0, not both")
+          if len(years) > 1 and len(years) > max_requests:
+              raise SystemExit(f"Requested {len(years)} House index years, exceeding max_requests={max_requests}")
+          if max_ptrs > max_requests:
+              raise SystemExit(f"max_ptrs ({max_ptrs}) exceeds max_requests ({max_requests})")
+          if len(raw_docs) > max_requests:
+              raise SystemExit(f"Requested {len(raw_docs)} doc_ids, exceeding max_requests={max_requests}")
 
           expect_prior = os.environ.get("HOUSE_EXPECT_PRIOR", "").strip()
           if expect_prior and not re.fullmatch(r"(sha256:)?[0-9a-f]{8,64}", expect_prior):
