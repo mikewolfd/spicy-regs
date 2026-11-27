@@ -443,18 +443,83 @@ def _client_row(filing: dict) -> dict | None:
     }
 
 
-_NEVER = datetime.min.replace(tzinfo=timezone.utc)
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+_FILING_PERIOD_ORDER: dict[str, int] = {
+    "first_quarter": 1,
+    "q1": 1,
+    "second_quarter": 2,
+    "mid_year": 2,
+    "q2": 2,
+    "h1": 2,
+    "third_quarter": 3,
+    "q3": 3,
+    "fourth_quarter": 4,
+    "year_end": 4,
+    "q4": 4,
+    "h2": 4,
+}
+_FILING_PERIOD_RANK_SQL = (
+    "CASE lower(COALESCE({col}, '')) "
+    + " ".join(f"WHEN '{name}' THEN {rank}" for name, rank in _FILING_PERIOD_ORDER.items())
+    + " ELSE 0 END"
+)
 
 
-def _profile_rank(row: dict) -> tuple[datetime, datetime]:
-    """The publisher's later ``dt_updated`` first (clients carry none), then the later capture.
+def _timestamp_key(value: Any) -> tuple[bool, datetime]:
+    """Null-safe UTC timestamp comparison key matching the DuckDB profile recency SQL."""
+    if value is None or value == "":
+        return (False, _EPOCH)
+    if isinstance(value, datetime):
+        moment = value
+    elif isinstance(value, str):
+        try:
+            moment = datetime.fromisoformat(value)
+        except ValueError:
+            return (False, _EPOCH)
+    else:
+        return (False, _EPOCH)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return (True, moment.astimezone(timezone.utc))
 
-    The publisher's own version outranks capture time because 1,190 of the 80,523 retained pages carry only a
-    capture day (ss-hqoi manifest bases). A nightly or year window needs no rank against its prior: LDA embeds its current record in
-    every filing it serves, so whatever a window fetches is the newest state and the native merge keeps it.
+
+def _filing_year_key(value: Any) -> tuple[bool, int]:
+    if value is None or isinstance(value, bool):
+        return (False, 0)
+    if isinstance(value, int):
+        return (True, value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped and (stripped.isdigit() or (stripped.startswith("-") and stripped[1:].isdigit())):
+            return (True, int(stripped))
+    return (False, 0)
+
+
+def _filing_period_rank(value: Any) -> int:
+    if not isinstance(value, str):
+        return 0
+    return _FILING_PERIOD_ORDER.get(value.strip().lower(), 0)
+
+
+def _profile_rank(
+    row: Mapping[str, Any],
+    filing: Mapping[str, Any] | None = None,
+) -> tuple[tuple[bool, datetime], tuple[bool, int], int, tuple[bool, datetime], tuple[bool, datetime], str]:
+    """Order registrant/client snapshots by filing recency first, then profile update/capture metadata.
+
+    Backfilling an older filing year runs later in wall-clock time (higher ``captured_at``) than an already-published
+    newer year, so filing recency (``dt_posted``, ``filing_year``, ``filing_period``) outranks ``dt_updated`` and
+    ``captured_at``. Equal timestamps fall to ``captured_filing_uuid`` for a deterministic, order-independent winner.
     """
-    updated = row.get("dt_updated")
-    return (datetime.fromisoformat(updated) if updated else _NEVER, datetime.fromisoformat(row["captured_at"]))
+    source = filing or {}
+    return (
+        _timestamp_key(source.get("dt_posted")),
+        _filing_year_key(source.get("filing_year")),
+        _filing_period_rank(source.get("filing_period")),
+        _timestamp_key(row.get("dt_updated")),
+        _timestamp_key(row.get("captured_at")),
+        str(row.get("captured_filing_uuid") or ""),
+    )
 
 
 _TABLES = (
@@ -467,12 +532,13 @@ _TABLES = (
      _entry_rows("affiliated_organizations", "affiliated_organization_index", AFFILIATED_ORGANIZATION_COLUMNS)),
     (CONVICTION_DISCLOSURES_OUTPUT, CONVICTION_DISCLOSURE_COLUMNS, _conviction_rows),
 )
-#: One row per LDA id, the latest observation of it in this read (``_profile_rank``; an equal rank keeps the first
-#: seen). At most one row per registrant and client is held: 14,881 and 129,462 over the whole archive.
+#: One row per LDA id, the most recent observation of it in this read (``_profile_rank``; an equal rank keeps the
+#: first seen). At most one row per registrant and client is held: 14,881 and 129,462 over the whole archive.
 _PROFILES = (
     (REGISTRANTS_OUTPUT, REGISTRANT_COLUMNS, _registrant_row),
     (CLIENTS_OUTPUT, CLIENT_COLUMNS, _client_row),
 )
+_PROFILE_KEYS = frozenset(key for key, _, _ in _PROFILES)
 
 
 def _write_fresh(filings: Iterable[dict], output_dir: Path) -> dict[str, Path]:
@@ -484,7 +550,7 @@ def _write_fresh(filings: Iterable[dict], output_dir: Path) -> dict[str, Path]:
     paths = {key: output_dir / f"_{key.removesuffix('.parquet')}_new.parquet" for key, _, _ in (*_TABLES, *_PROFILES)}
     schemas = {key: pa.schema([(c, pa.string()) for c in columns]) for key, columns, _ in (*_TABLES, *_PROFILES)}
     pending: dict[str, list[dict]] = {key: [] for key, _, _ in _TABLES}
-    latest: dict[str, dict[str, dict]] = {key: {} for key, _, _ in _PROFILES}
+    latest: dict[str, dict[str, tuple[Any, dict]]] = {key: {} for key, _, _ in _PROFILES}
     counts = dict.fromkeys(paths, 0)
     try:
         with ExitStack() as stack:
@@ -504,11 +570,12 @@ def _write_fresh(filings: Iterable[dict], output_dir: Path) -> dict[str, Path]:
                 for key, columns, profile in _PROFILES:
                     row = profile(filing)
                     if row is not None:
+                        rank = _profile_rank(row, filing)
                         held = latest[key].get(row[columns[0]])
-                        if held is None or _profile_rank(row) > _profile_rank(held):
-                            latest[key][row[columns[0]]] = row
+                        if held is None or rank > held[0]:
+                            latest[key][row[columns[0]]] = (rank, row)
             for key, _, _ in _PROFILES:
-                pending[key] = list(latest.pop(key).values())
+                pending[key] = [row for _, row in latest.pop(key).values()]
             for key in paths:
                 if pending[key]:
                     flush(key)
@@ -626,6 +693,101 @@ def _with_promoted(dataset: str, prior: Path, session: SelectedInputs, work: Pat
     return filled
 
 
+def _profile_rank_sql(side: str, filing_alias: str, *, has_dt_updated: bool) -> str:
+    """DuckDB tuple expression matching :func:`_profile_rank` (every element non-NULL)."""
+    parts = [
+        f"{filing_alias}.dt_posted IS NOT NULL",
+        f"COALESCE({filing_alias}.dt_posted, TIMESTAMPTZ '1970-01-01 00:00:00+00')",
+        f"{filing_alias}.filing_year IS NOT NULL",
+        f"COALESCE({filing_alias}.filing_year, CAST(0 AS BIGINT))",
+        f"COALESCE({filing_alias}.period_rank, 0)",
+    ]
+    if has_dt_updated:
+        parts.extend([
+            f"o.{side}_upd IS NOT NULL",
+            f"COALESCE(o.{side}_upd, TIMESTAMPTZ '1970-01-01 00:00:00+00')",
+        ])
+    parts.extend([
+        f"o.{side}_cap IS NOT NULL",
+        f"COALESCE(o.{side}_cap, TIMESTAMPTZ '1970-01-01 00:00:00+00')",
+        f"COALESCE(o.{side}_uuid, '')",
+    ])
+    return "(" + ", ".join(parts) + ")"
+
+
+def _filter_newer_profiles(
+    dataset: str,
+    *,
+    fresh: Path,
+    prior: Path,
+    filings: Path,
+    filtered: Path,
+    work: Path,
+) -> Path:
+    """Drop fresh registrant/client rows whose filing recency loses to an existing prior snapshot.
+
+    Returns ``fresh`` unchanged when every overlapping fresh row is at least as recent as its prior (the common
+    nightly case). Otherwise writes only the surviving fresh rows to ``filtered`` under ``SUBJECT_SCHEMAS[dataset]``.
+    """
+    if pq.ParquetFile(fresh).metadata.num_rows == 0 or pq.ParquetFile(prior).metadata.num_rows == 0:
+        return fresh
+    from spicy_regs import etl_bulk
+
+    schema = SUBJECT_SCHEMAS[dataset]
+    id_col = IDENTITY_FIELDS[dataset][0]
+    has_dt_updated = "dt_updated" in schema.names
+    lit = etl_bulk._literal
+    extra_cols = ", dt_updated" if has_dt_updated else ""
+    extra_overlap = ", f.dt_updated AS f_upd, p.dt_updated AS p_upd" if has_dt_updated else ""
+    fresh_rank = _profile_rank_sql("f", "ff", has_dt_updated=has_dt_updated)
+    prior_rank = _profile_rank_sql("p", "pf", has_dt_updated=has_dt_updated)
+    period_sql = _FILING_PERIOD_RANK_SQL.format(col="fl.filing_period")
+    with etl_bulk.bulk_connection(work) as (con, _):
+        con.execute("SET preserve_insertion_order = false")
+        con.execute(
+            f"CREATE VIEW fresh_p AS SELECT file_row_number AS _o, {id_col}, captured_at, captured_filing_uuid"
+            f"{extra_cols} FROM read_parquet({lit(str(fresh))}, file_row_number = true)"
+        )
+        con.execute(
+            f"CREATE VIEW prior_p AS SELECT {id_col}, captured_at, captured_filing_uuid"
+            f"{extra_cols} FROM read_parquet({lit(str(prior))})"
+        )
+        stale_ordinals = {
+            row[0]
+            for row in con.execute(
+                f"WITH overlap AS ("
+                f"    SELECT f._o, f.captured_at AS f_cap, f.captured_filing_uuid AS f_uuid, "
+                f"           p.captured_at AS p_cap, p.captured_filing_uuid AS p_uuid{extra_overlap} "
+                f"    FROM fresh_p f JOIN prior_p p USING ({id_col})"
+                f"), needed AS ("
+                f"    SELECT f_uuid AS filing_uuid FROM overlap WHERE f_uuid IS NOT NULL "
+                f"    UNION "
+                f"    SELECT p_uuid AS filing_uuid FROM overlap WHERE p_uuid IS NOT NULL"
+                f"), filing_recency AS ("
+                f"    SELECT fl.filing_uuid, fl.dt_posted, fl.filing_year, {period_sql} AS period_rank "
+                f"    FROM read_parquet({lit(str(filings))}) fl SEMI JOIN needed n USING (filing_uuid)"
+                f") "
+                f"SELECT o._o "
+                f"FROM overlap o "
+                f"LEFT JOIN filing_recency ff ON ff.filing_uuid = o.f_uuid "
+                f"LEFT JOIN filing_recency pf ON pf.filing_uuid = o.p_uuid "
+                f"WHERE {fresh_rank} < {prior_rank}"
+            ).fetchall()
+        }
+    if not stale_ordinals:
+        return fresh
+    logger.info("{}: kept {:,} newer prior snapshots over older backfill rows", dataset, len(stale_ordinals))
+    with pq.ParquetWriter(filtered, schema, compression="zstd") as writer:
+        offset = 0
+        for batch in pq.ParquetFile(fresh).iter_batches(batch_size=_FLUSH_ROWS):
+            mask = pa.array([offset + i not in stale_ordinals for i in range(batch.num_rows)], type=pa.bool_())
+            offset += batch.num_rows
+            kept = batch.filter(mask)
+            if kept.num_rows:
+                writer.write_table(pa.Table.from_batches([kept], schema=schema))
+    return filtered
+
+
 def _upserted(output_dir: Path, window: dict[str, Path], session: SelectedInputs | None,
               evidence: CaptureEvidence | None) -> tuple[Path, ...]:
     """Each table: the window, mapped, upserted over its selected prior on the table's key in ``NATIVE_ORDERS``.
@@ -654,11 +816,23 @@ def _upserted(output_dir: Path, window: dict[str, Path], session: SelectedInputs
             if len(selected.subjects) != 1:
                 raise LobbyingFilingsError(f"{dataset}: its prior must be one published file")
             prior = _with_promoted(dataset, selected.subjects[0], session, work)
-            merged = upsert_subjects(SUBJECT_SCHEMAS[dataset], identity=IDENTITY_FIELDS[dataset], fresh=fresh,
+            candidate = fresh
+            if key in _PROFILE_KEYS:
+                candidate = _filter_newer_profiles(
+                    dataset,
+                    fresh=fresh,
+                    prior=prior,
+                    filings=staged[OUTPUT],
+                    filtered=work / f"_{dataset}_newer.parquet",
+                    work=work,
+                )
+            merged = upsert_subjects(SUBJECT_SCHEMAS[dataset], identity=IDENTITY_FIELDS[dataset], fresh=candidate,
                                      prior=prior, order_by=NATIVE_ORDERS[dataset], subjects=out,
                                      replace_scope=(("filing_uuid", parents)
                                                     if dataset != "lobbying_filings" and "filing_uuid" in IDENTITY_FIELDS[dataset]
                                                     else None))
+            if candidate != fresh:
+                candidate.unlink(missing_ok=True)
             fresh.unlink()
             counts[dataset] = {"prior_rows": merged.kept + merged.replaced, "read_rows": merged.replaced + merged.added,
                                "new_rows": merged.added}

@@ -726,3 +726,226 @@ def test_the_rebuild_command_seals_evidence_and_admits_the_whole_family(tmp_path
     assert any("1 repeat occurrences tied on capture time" in message for message in messages)
     evidence = [path for path in (tmp_path / "out").rglob("artifact.json")]
     assert evidence, "the rebuild seals its source evidence"
+
+
+def _profile_filing(
+    filing_uuid: str,
+    *,
+    filing_year: int,
+    filing_period: str,
+    dt_posted: str,
+    registrant_id: int = 7,
+    registrant_name: str,
+    registrant_city: str = "Washington",
+    dt_updated: str | None = None,
+    client_id: int = 9,
+    client_name: str,
+    client_state: str = "DC",
+) -> dict[str, Any]:
+    registrant: dict[str, Any] = {
+        "id": registrant_id,
+        "name": registrant_name,
+        "city": registrant_city,
+        "url": f"https://lda.gov/api/v1/registrants/{registrant_id}/",
+    }
+    if dt_updated is not None:
+        registrant["dt_updated"] = dt_updated
+    return {
+        "filing_uuid": filing_uuid,
+        "filing_type": "Q1",
+        "filing_year": filing_year,
+        "filing_period": filing_period,
+        "dt_posted": dt_posted,
+        "filing_document_url": f"https://lda.gov/filings/public/filing/{filing_uuid}/print/",
+        "registrant": registrant,
+        "client": {
+            "id": client_id,
+            "client_id": client_id,
+            "name": client_name,
+            "state": client_state,
+            "url": f"https://lda.gov/api/v1/clients/{client_id}/",
+        },
+        "lobbying_activities": [],
+    }
+
+
+def test_historical_backfill_does_not_overwrite_newer_registrant_or_client_snapshots(tmp_path, monkeypatch):
+    """Out-of-order year backfills keep newer registrant/client profiles while still adding older-only entities."""
+    _no_prior(monkeypatch)
+    page: list[dict[str, Any]] = [
+        _profile_filing(
+            "f-2025-q4",
+            filing_year=2025,
+            filing_period="fourth_quarter",
+            dt_posted="2026-01-20T12:00:00Z",
+            registrant_name="ACME 2025",
+            registrant_city="Arlington",
+            dt_updated="2025-12-01T00:00:00Z",
+            client_name="WIDGET 2025",
+            client_state="VA",
+        ),
+    ]
+    _serve(monkeypatch, page)
+    bld.build_lobbying_filings(tmp_path, since=date(2026, 1, 1), until=date(2026, 1, 31))
+
+    # Run a 2022 historical backfill later in wall-clock time (higher captured_at, and even a newer dt_updated).
+    page[:] = [
+        _profile_filing(
+            "f-2022-q2",
+            filing_year=2022,
+            filing_period="second_quarter",
+            dt_posted="2022-07-15T12:00:00Z",
+            registrant_name="ACME 2022",
+            registrant_city="Alexandria",
+            dt_updated="2026-06-01T00:00:00Z",
+            client_name="WIDGET 2022",
+            client_state="MD",
+        ),
+        _profile_filing(
+            "f-2022-only",
+            filing_year=2022,
+            filing_period="first_quarter",
+            dt_posted="2022-04-20T12:00:00Z",
+            registrant_id=8,
+            registrant_name="HISTORICAL ONLY",
+            registrant_city="Richmond",
+            client_id=10,
+            client_name="OLD CLIENT",
+            client_state="VA",
+        ),
+    ]
+    backfilled = bld.build_lobbying_filings(tmp_path, filing_year=2022)
+    filings = {row["filing_uuid"] for row in pq.read_table(backfilled[0]).to_pylist()}
+    assert filings == {"f-2025-q4", "f-2022-q2", "f-2022-only"}
+    registrants = {row["registrant_id"]: row for row in pq.read_table(backfilled[6]).to_pylist()}
+    assert (registrants["7"]["name"], registrants["7"]["city"], registrants["7"]["captured_filing_uuid"]) == (
+        "ACME 2025", "Arlington", "f-2025-q4",
+    )
+    assert (registrants["8"]["name"], registrants["8"]["captured_filing_uuid"]) == ("HISTORICAL ONLY", "f-2022-only")
+    clients = {row["client_id"]: row for row in pq.read_table(backfilled[7]).to_pylist()}
+    assert (clients["9"]["name"], clients["9"]["state"], clients["9"]["captured_filing_uuid"]) == (
+        "WIDGET 2025", "VA", "f-2025-q4",
+    )
+    assert (clients["10"]["name"], clients["10"]["captured_filing_uuid"]) == ("OLD CLIENT", "f-2022-only")
+
+    # A newer 2026 filing supersedes the 2025 registrant and client snapshots while preserving 2022-only rows.
+    page[:] = [
+        _profile_filing(
+            "f-2026-q1",
+            filing_year=2026,
+            filing_period="first_quarter",
+            dt_posted="2026-04-20T12:00:00Z",
+            registrant_name="ACME 2026",
+            registrant_city="Washington",
+            dt_updated="2026-04-01T00:00:00Z",
+            client_name="WIDGET 2026",
+            client_state="DC",
+        ),
+    ]
+    updated = bld.build_lobbying_filings(tmp_path, since=date(2026, 4, 1), until=date(2026, 4, 30))
+    registrants = {row["registrant_id"]: row for row in pq.read_table(updated[6]).to_pylist()}
+    assert (registrants["7"]["name"], registrants["7"]["city"], registrants["7"]["captured_filing_uuid"]) == (
+        "ACME 2026", "Washington", "f-2026-q1",
+    )
+    assert registrants["8"]["name"] == "HISTORICAL ONLY"
+    clients = {row["client_id"]: row for row in pq.read_table(updated[7]).to_pylist()}
+    assert (clients["9"]["name"], clients["9"]["state"], clients["9"]["captured_filing_uuid"]) == (
+        "WIDGET 2026", "DC", "f-2026-q1",
+    )
+    assert clients["10"]["name"] == "OLD CLIENT"
+
+
+def test_same_year_profile_recency_orders_dt_posted_period_and_deterministic_tiebreaker(tmp_path, monkeypatch):
+    """Within the same year: later dt_posted wins; tied dt_posted prefers later quarter; ties break by UUID."""
+    _no_prior(monkeypatch)
+    # 1. Cross-run: Q3 beats Q1 on equal dt_posted, and backfilling Q1 later cannot regress Q3.
+    page: list[dict[str, Any]] = [
+        _profile_filing(
+            "f-2026-q3",
+            filing_year=2026,
+            filing_period="third_quarter",
+            dt_posted="2026-10-15T12:00:00Z",
+            registrant_name="ACME Q3",
+            client_name="WIDGET Q3",
+        ),
+    ]
+    _serve(monkeypatch, page)
+    bld.build_lobbying_filings(tmp_path, since=date(2026, 10, 1), until=date(2026, 10, 20))
+
+    page[:] = [
+        _profile_filing(
+            "f-2026-q1",
+            filing_year=2026,
+            filing_period="first_quarter",
+            dt_posted="2026-10-15T12:00:00Z",
+            registrant_name="ACME Q1",
+            client_name="WIDGET Q1",
+        ),
+    ]
+    after_q1 = bld.build_lobbying_filings(tmp_path, filing_year=2026)
+    assert pq.read_table(after_q1[6]).to_pylist()[0]["name"] == "ACME Q3"
+    assert pq.read_table(after_q1[7]).to_pylist()[0]["name"] == "WIDGET Q3"
+
+    # 2. Cross-run: same year, later dt_posted wins (including a late amendment to an earlier quarter).
+    page[:] = [
+        _profile_filing(
+            "f-2026-q2-amd",
+            filing_year=2026,
+            filing_period="second_quarter",
+            dt_posted="2026-11-05T12:00:00Z",
+            registrant_name="ACME NOV AMENDMENT",
+            client_name="WIDGET NOV AMENDMENT",
+        ),
+    ]
+    after_amd = bld.build_lobbying_filings(tmp_path, since=date(2026, 11, 1), until=date(2026, 11, 10))
+    assert pq.read_table(after_amd[6]).to_pylist()[0]["name"] == "ACME NOV AMENDMENT"
+    assert pq.read_table(after_amd[7]).to_pylist()[0]["name"] == "WIDGET NOV AMENDMENT"
+
+    # 3. Single-run order independence: out-of-order years and exact-tie UUIDs give the same winner either way.
+    older = _profile_filing(
+        "f-2022",
+        filing_year=2022,
+        filing_period="fourth_quarter",
+        dt_posted="2023-01-10T12:00:00Z",
+        registrant_name="OLD YEAR",
+        client_name="OLD CLIENT",
+    )
+    newer = _profile_filing(
+        "f-2025",
+        filing_year=2025,
+        filing_period="first_quarter",
+        dt_posted="2025-04-10T12:00:00Z",
+        registrant_name="NEW YEAR",
+        client_name="NEW CLIENT",
+    )
+    tie_a = _profile_filing(
+        "f-tie-a",
+        filing_year=2025,
+        filing_period="second_quarter",
+        dt_posted="2025-07-10T12:00:00Z",
+        registrant_id=20,
+        registrant_name="TIE A",
+        client_id=21,
+        client_name="CLIENT TIE A",
+    )
+    tie_b = _profile_filing(
+        "f-tie-b",
+        filing_year=2025,
+        filing_period="second_quarter",
+        dt_posted="2025-07-10T12:00:00Z",
+        registrant_id=20,
+        registrant_name="TIE B",
+        client_id=21,
+        client_name="CLIENT TIE B",
+    )
+    for label, ordering in (("forward", [older, newer, tie_a, tie_b]), ("reverse", [newer, older, tie_b, tie_a])):
+        run_dir = tmp_path / label
+        run_dir.mkdir()
+        page[:] = ordering
+        out = bld.build_lobbying_filings(run_dir, since=date(2025, 1, 1), until=date(2025, 1, 2))
+        regs = {row["registrant_id"]: row for row in pq.read_table(out[6]).to_pylist()}
+        clis = {row["client_id"]: row for row in pq.read_table(out[7]).to_pylist()}
+        assert (regs["7"]["name"], regs["7"]["captured_filing_uuid"]) == ("NEW YEAR", "f-2025")
+        assert (clis["9"]["name"], clis["9"]["captured_filing_uuid"]) == ("NEW CLIENT", "f-2025")
+        assert (regs["20"]["name"], regs["20"]["captured_filing_uuid"]) == ("TIE B", "f-tie-b")
+        assert (clis["21"]["name"], clis["21"]["captured_filing_uuid"]) == ("CLIENT TIE B", "f-tie-b")

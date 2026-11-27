@@ -588,3 +588,61 @@ def test_acquisition_failure_receipt_pins_shared_evidence_without_exception_text
     assert attempt["diagnostics"] == {"stage": "rollup", "error_type": "RuntimeError"}
     assert attempt["witnesses"][0]["sha256"] == _digest(evidence.artifact_dir / "artifact.json")
     assert b"arbitrary message" not in receipts.read_bytes()
+
+
+def test_government_table_rollup_enforces_retired_receipts_declaration():
+    """GovernmentTableRollup mirrors SubjectTableRollup: every subclass must declare only retired-receipt datasets."""
+    from spicy_regs.pipelines.rollups.crs_reports import CrsReportsRollup
+    from spicy_regs.pipelines.rollups.fcc_filings import FccFilingsRollup
+    from spicy_regs.pipelines.rollups.fcc_proceedings import FccProceedingsRollup
+    from spicy_regs.pipelines.rollups.gao_recommendations import GaoRecommendationsRollup
+    from spicy_regs.pipelines.rollups.gao_reports import GaoReportsRollup
+    from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup, GovernmentTableRollup
+    from spicy_regs.pipelines.rollups.lobbying_filings import LobbyingFilingsRollup, LobbyingRetainedRebuild
+    from spicy_regs.pipelines.rollups.sam_entities import SamEntitiesRollup
+    from spicy_regs.pipelines.rollups.usaspending_recipients import UsaSpendingRecipientsRollup
+    from spicy_regs.subject_catalog import retired_receipt_datasets
+
+    retired = retired_receipt_datasets()
+    for rollup in (FccProceedingsRollup, LobbyingFilingsRollup, LobbyingRetainedRebuild):
+        assert issubclass(rollup, GovernmentTableRollup)
+        assert not issubclass(rollup, GovernmentReceiptRollup)
+        assert rollup.receipt_policies == ()
+        keys = rollup.outputs or (rollup.output,)
+        assert all(isinstance(key, str) for key in keys)
+        assert {key.removesuffix(".parquet") for key in keys if isinstance(key, str)} <= retired
+
+    for rollup in (
+        CrsReportsRollup,
+        FccFilingsRollup,
+        GaoRecommendationsRollup,
+        GaoReportsRollup,
+        SamEntitiesRollup,
+        UsaSpendingRecipientsRollup,
+    ):
+        assert issubclass(rollup, GovernmentReceiptRollup)
+        assert not issubclass(rollup, GovernmentTableRollup)
+        assert rollup.receipt_policies
+
+    with pytest.raises(ValueError, match=r"UnguardedCrs: \['crs_reports'\] still publish receipts; use GovernmentReceiptRollup"):
+        class UnguardedCrs(GovernmentTableRollup):  # noqa: F841
+            name = "crs-reports"
+            output = "crs_reports.parquet"
+
+            def build(self, output_dir):
+                raise NotImplementedError
+
+    with pytest.raises(ValueError, match=r"MixedGovernment: \['fcc_filings'\] still publish receipts; use GovernmentReceiptRollup"):
+        class MixedGovernment(GovernmentTableRollup):  # noqa: F841
+            name = "mixed-government"
+            outputs = ("fcc_proceedings.parquet", "fcc_filings.parquet")
+
+            def build(self, output_dir):
+                raise NotImplementedError
+
+    with pytest.raises(TypeError, match="must declare their output table names"):
+        class UnnamedGovernment(GovernmentTableRollup):  # noqa: F841
+            name = "unnamed-government"
+
+            def build(self, output_dir):
+                raise NotImplementedError
