@@ -5,6 +5,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+from pathlib import Path
 import tracemalloc
 import zlib
 
@@ -15,7 +16,13 @@ from spicy_docs.transport.captured import CapturedBodyResponse
 from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_regs.source_catalog.input_proof import input_proof
-from spicy_regs.source_evidence import CaptureEvidence, EvidenceMemberSource, SourceEvidenceError, verify_evidence
+from spicy_regs.source_evidence import (
+    _CHUNK,
+    CaptureEvidence,
+    EvidenceMemberSource,
+    SourceEvidenceError,
+    verify_evidence,
+)
 from spicy_regs.sources.unified_agenda import EDITION_REPORT_URL
 
 AGENDA_LISTING_HTML = (
@@ -36,6 +43,13 @@ def _sha(data: bytes) -> str:
 
 def _journal(evidence: CaptureEvidence) -> list[dict]:
     return [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
+
+
+def _stored_objects(evidence: CaptureEvidence) -> list[Path]:
+    objects_dir = evidence.store.root / "objects"
+    if not objects_dir.exists():
+        return []
+    return [path for path in objects_dir.rglob("*") if path.is_file()]
 
 
 class _Chunks(httpx.SyncByteStream):
@@ -164,7 +178,7 @@ def test_direct_capture_binds_wire_and_decoded_digests_and_rejects_mismatches(tm
 def test_transport_rejects_wire_or_decoded_expected_digest_mismatch(tmp_path, bad_kind):
     wire = gzip.compress(AGENDA_LISTING_HTML, mtime=0)
     wire_sha, decoded_sha = _sha(wire), _sha(AGENDA_LISTING_HTML)
-    evidence = CaptureEvidence(tmp_path, "unified-agenda")
+    evidence = CaptureEvidence(tmp_path / bad_kind, "unified-agenda", archive_root=tmp_path / f"raw-{bad_kind}")
     transport = evidence.transport(
         httpx.MockTransport(
             lambda _: httpx.Response(
@@ -182,6 +196,7 @@ def test_transport_rejects_wire_or_decoded_expected_digest_mismatch(tmp_path, ba
     with httpx.Client(transport=transport) as client, pytest.raises(SourceEvidenceError, match=match):
         client.get(EDITION_REPORT_URL)
     assert not any(row["event"] == "capture" for row in _journal(evidence))
+    assert _stored_objects(evidence) == []
     with pytest.raises(SourceEvidenceError, match="retention failed"):
         evidence.seal(outcome="build-complete")
 
@@ -488,7 +503,7 @@ def test_compressed_credential_echo_and_max_decoded_bytes_refuse_before_retentio
     secret = "compressed-secret-token-987654"
     payload = b"prefix-" + secret.encode() + b"-suffix"
     wire_secret = gzip.compress(payload, mtime=0)
-    ev_cred = CaptureEvidence(tmp_path / "cred", "unified-agenda")
+    ev_cred = CaptureEvidence(tmp_path / "cred", "unified-agenda", archive_root=tmp_path / "raw-cred")
     ev_cred.credential = secret
     transport = ev_cred.transport(
         httpx.MockTransport(
@@ -504,12 +519,13 @@ def test_compressed_credential_echo_and_max_decoded_bytes_refuse_before_retentio
     with httpx.Client(transport=transport) as client, pytest.raises(CredentialRefusedError):
         client.get(EDITION_REPORT_URL)
     assert not any(row["event"] == "capture" for row in _journal(ev_cred))
+    assert _stored_objects(ev_cred) == []
 
     # Gzip bomb / oversized decoded payload refused by max_decoded_bytes.
     big = b"A" * (2 * 1024 * 1024)
     wire_big = gzip.compress(big, mtime=0)
     assert len(wire_big) < 10_000
-    ev_bomb = CaptureEvidence(tmp_path / "bomb", "unified-agenda")
+    ev_bomb = CaptureEvidence(tmp_path / "bomb", "unified-agenda", archive_root=tmp_path / "raw-bomb")
     bomb_transport = ev_bomb.transport(
         httpx.MockTransport(
             lambda _: httpx.Response(
@@ -525,6 +541,7 @@ def test_compressed_credential_echo_and_max_decoded_bytes_refuse_before_retentio
     with httpx.Client(transport=bomb_transport) as client, pytest.raises(SourceEvidenceError, match="Decoded source response"):
         client.get(EDITION_REPORT_URL)
     assert not any(row["event"] == "capture" for row in _journal(ev_bomb))
+    assert _stored_objects(ev_bomb) == []
 
 
 @pytest.mark.parametrize("policy", ["hash_only", "metadata_only"])
@@ -607,3 +624,293 @@ def test_streaming_compressed_digest_bounds_memory_well_below_decoded_size(tmp_p
     assert peak_bytes < 6 * 1024 * 1024, f"Expected streaming O(_CHUNK) peak (<6 MiB), got {peak_bytes / 1024**2:.2f} MiB"
     artifact = evidence.seal(outcome="build-complete")
     verify_evidence(evidence.artifact_dir, expected_pin=artifact.pin)
+
+
+def test_transport_refuses_credential_echo_across_1mib_decoded_chunk_boundary(tmp_path):
+    """Decoded credential straddling the 1 MiB _CHUNK boundary refuses with zero blobs retained."""
+    secret = "chunk-boundary-secret-token-123456"
+    payload = b"A" * (_CHUNK - 5) + secret.encode() + b"B" * 100
+    wire = gzip.compress(payload, mtime=0)
+    evidence = CaptureEvidence(tmp_path / "boundary", "unified-agenda", archive_root=tmp_path / "raw-boundary")
+    evidence.credential = secret
+    transport = evidence.transport(
+        httpx.MockTransport(
+            lambda _: httpx.Response(
+                200,
+                headers={"content-type": "text/plain", "content-encoding": "gzip"},
+                stream=_Chunks([wire]),
+            )
+        ),
+        stage="unified-agenda-listing",
+        max_bytes=len(wire) + 64,
+    )
+    with httpx.Client(transport=transport) as client, pytest.raises(CredentialRefusedError):
+        client.get(EDITION_REPORT_URL)
+    assert not any(row["event"] == "capture" for row in _journal(evidence))
+    assert _stored_objects(evidence) == []
+
+
+def test_retained_file_raw_source_with_decoded_digest_seals_and_verifies(tmp_path):
+    """raw_source=True retained-file inputs accept matching decoded_sha256/decoded_bytes through seal()."""
+    input_path = tmp_path / "input.xml"
+    input_path.write_bytes(AGENDA_XML)
+    digest = _sha(AGENDA_XML)
+    raw_root = tmp_path / "raw-retained"
+
+    ev = CaptureEvidence(tmp_path / "ok", "unified-agenda", archive_root=raw_root)
+    ev.retain_file(input_path, stage="local", raw_source=True)
+    ev.declare_used_inputs(
+        [
+            {
+                "location": "input.xml",
+                "sha256": digest,
+                "bytes": len(AGENDA_XML),
+                "decoded_sha256": digest,
+                "decoded_bytes": len(AGENDA_XML),
+                "asset_kind": "unified-agenda-edition",
+            }
+        ],
+        scope_id="scope-retained-file",
+    )
+    artifact = ev.seal(outcome="build-complete")
+    assert verify_evidence(ev.artifact_dir, expected_pin=artifact.pin, archive_root=raw_root).pin == artifact.pin
+
+    # Mismatched decoded digest on a retained-file input still refuses.
+    ev_bad = CaptureEvidence(tmp_path / "bad", "unified-agenda", archive_root=tmp_path / "raw-retained-bad")
+    ev_bad.retain_file(input_path, stage="local", raw_source=True)
+    ev_bad.declare_used_inputs(
+        [
+            {
+                "location": "input.xml",
+                "sha256": digest,
+                "bytes": len(AGENDA_XML),
+                "decoded_sha256": _sha(b"different"),
+                "decoded_bytes": len(AGENDA_XML),
+                "asset_kind": "unified-agenda-edition",
+            }
+        ],
+        scope_id="scope-retained-file-bad",
+    )
+    with pytest.raises(SourceEvidenceError, match="recorded decoded digest"):
+        ev_bad.seal(outcome="build-complete")
+
+
+@pytest.mark.parametrize("split_mode", ["opening-1-byte", "all-1-byte"])
+def test_raw_deflate_with_valid_zlib_cmf_byte_1byte_opening_chunk_seals_cleanly(tmp_path, split_mode):
+    """Raw RFC 1951 deflate starting with 0x78 decodes identically regardless of 1-byte chunk splits."""
+    wire = bytes([0x78, 0x00, 0x00, 0xFF, 0xFF, 0x01, 0x05, 0x00, 0xFA, 0xFF]) + b"hello"
+    parts = [wire[:1], wire[1:]] if split_mode == "opening-1-byte" else [bytes([b]) for b in wire]
+    raw_root = tmp_path / f"raw-{split_mode}"
+    evidence = CaptureEvidence(tmp_path / split_mode, "unified-agenda", archive_root=raw_root)
+    transport = evidence.transport(
+        httpx.MockTransport(
+            lambda _: httpx.Response(
+                200,
+                headers={"content-type": "text/plain", "content-encoding": "deflate"},
+                stream=_Chunks(parts),
+            )
+        ),
+        stage="unified-agenda-listing",
+        max_bytes=len(wire) + 64,
+        expected_wire_sha256=_sha(wire),
+        expected_decoded_sha256=_sha(b"hello"),
+    )
+    with httpx.Client(transport=transport) as client:
+        # Drain the retained stream through HTTPX (HTTPX's own DeflateDecoder may fail on 1-byte chunks).
+        try:
+            client.get(EDITION_REPORT_URL)
+        except httpx.DecodingError:
+            pass
+    [event] = [row for row in _journal(evidence) if row["event"] == "capture"]
+    assert event["wire_sha256"] == event["sha256"] == _sha(wire)
+    assert event["decoded_sha256"] == _sha(b"hello")
+    assert event["decoded_byte_size"] == 5
+    assert "decoded_status" not in event
+    artifact = evidence.seal(outcome="build-complete")
+    assert verify_evidence(evidence.artifact_dir, expected_pin=artifact.pin, archive_root=raw_root).pin == artifact.pin
+
+
+def test_empty_gzip_member_binds_zero_byte_decoded_digest(tmp_path):
+    wire = gzip.compress(b"", mtime=0)
+    raw_root = tmp_path / "raw-empty-gzip"
+    evidence = CaptureEvidence(tmp_path / "empty-gzip", "unified-agenda", archive_root=raw_root)
+    captured = CapturedBodyResponse(
+        requested_url=EDITION_REPORT_URL,
+        resolved_url=EDITION_REPORT_URL,
+        status_code=200,
+        content_type="text/plain",
+        observed_at="2026-11-27T00:00:00Z",
+        body=wire,
+        content_encoding="gzip",
+    )
+    receipt = evidence.capture(
+        captured,
+        stage="unified-agenda-listing",
+        expected_wire_sha256=_sha(wire),
+        expected_decoded_sha256=_sha(b""),
+    )
+    assert receipt["decoded_byte_size"] == 0
+    assert receipt["decoded_sha256"] == _sha(b"")
+    assert "decoded_status" not in receipt
+    artifact = evidence.seal(outcome="build-complete")
+    assert verify_evidence(evidence.artifact_dir, expected_pin=artifact.pin, archive_root=raw_root).pin == artifact.pin
+
+
+@pytest.mark.parametrize("bad_bound", [0, -1, True])
+def test_capture_validates_max_decoded_bytes_without_poisoning_retention(tmp_path, bad_bound):
+    wire = gzip.compress(AGENDA_XML, mtime=0)
+    raw_root = tmp_path / f"raw-bad-{bad_bound}"
+    evidence = CaptureEvidence(tmp_path / f"bad-{bad_bound}", "unified-agenda", archive_root=raw_root)
+    captured = CapturedBodyResponse(
+        requested_url=EDITION_REPORT_URL,
+        resolved_url=EDITION_REPORT_URL,
+        status_code=200,
+        content_type="application/xml",
+        observed_at="2026-11-27T00:00:00Z",
+        body=wire,
+        content_encoding="gzip",
+    )
+    with pytest.raises(ValueError, match="max_decoded_bytes must be positive"):
+        evidence.capture(captured, stage="bad-bound", max_decoded_bytes=bad_bound)
+    assert evidence.retention_failure is None
+    assert _stored_objects(evidence) == []
+    receipt = evidence.capture(captured, stage="valid-after-bad-bound", max_decoded_bytes=len(AGENDA_XML))
+    assert receipt["decoded_sha256"] == _sha(AGENDA_XML)
+    artifact = evidence.seal(outcome="build-complete")
+    assert verify_evidence(evidence.artifact_dir, expected_pin=artifact.pin, archive_root=raw_root).pin == artifact.pin
+
+
+@pytest.mark.parametrize("via", ["capture", "transport"])
+def test_unsupported_content_encoding_br_records_status_and_refuses_used_input(tmp_path, via):
+    wire = b"\x8b\x02\x80hello\x03"
+    raw_root = tmp_path / f"raw-br-{via}"
+    evidence = CaptureEvidence(tmp_path / f"br-{via}", "unified-agenda", archive_root=raw_root)
+    if via == "capture":
+        captured = CapturedBodyResponse(
+            requested_url=EDITION_REPORT_URL,
+            resolved_url=EDITION_REPORT_URL,
+            status_code=200,
+            content_type="text/html",
+            observed_at="2026-11-27T00:00:00Z",
+            body=wire,
+            content_encoding="br",
+        )
+        evidence.capture(captured, stage="unified-agenda-listing")
+    else:
+        transport = evidence.transport(
+            httpx.MockTransport(
+                lambda _: httpx.Response(
+                    200,
+                    headers={"content-type": "text/html", "content-encoding": "br"},
+                    stream=_Chunks([wire]),
+                )
+            ),
+            stage="unified-agenda-listing",
+            max_bytes=len(wire) + 64,
+        )
+        with httpx.Client(transport=transport) as client:
+            try:
+                client.get(EDITION_REPORT_URL)
+            except httpx.DecodingError:
+                pass
+    [event] = [row for row in _journal(evidence) if row["event"] == "capture"]
+    assert event["wire_sha256"] == event["sha256"] == _sha(wire)
+    assert event["wire_byte_size"] == len(wire)
+    assert event["decoded_status"] == "unsupported_encoding"
+    assert "decoded_sha256" not in event and "decoded_byte_size" not in event
+
+    # Audit-only seal and verification succeed cleanly.
+    artifact = evidence.seal(outcome="build-complete")
+    assert verify_evidence(evidence.artifact_dir, expected_pin=artifact.pin, archive_root=raw_root).pin == artifact.pin
+
+    # Declaring an unsupported_encoding capture as a used input refuses at seal().
+    ev_used = CaptureEvidence(tmp_path / f"br-used-{via}", "unified-agenda", archive_root=tmp_path / f"raw-br-used-{via}")
+    ev_used.capture(
+        CapturedBodyResponse(
+            requested_url=EDITION_REPORT_URL,
+            resolved_url=EDITION_REPORT_URL,
+            status_code=200,
+            content_type="text/html",
+            observed_at="2026-11-27T00:00:00Z",
+            body=wire,
+            content_encoding="br",
+        ),
+        stage="unified-agenda-listing",
+    )
+    ev_used.declare_used_inputs(
+        [
+            {
+                "location": EDITION_REPORT_URL,
+                "sha256": _sha(wire),
+                "bytes": len(wire),
+                "asset_kind": "unified-agenda-listing",
+            }
+        ],
+        scope_id="scope-br-used",
+    )
+    with pytest.raises(SourceEvidenceError, match="could not be decoded"):
+        ev_used.seal(outcome="build-complete")
+
+    # Expecting a decoded digest on unsupported encoding refuses before retaining any blob.
+    ev_exp = CaptureEvidence(tmp_path / f"br-exp-{via}", "unified-agenda", archive_root=tmp_path / f"raw-br-exp-{via}")
+    exp_transport = ev_exp.transport(
+        httpx.MockTransport(
+            lambda _: httpx.Response(
+                200,
+                headers={"content-type": "text/html", "content-encoding": "br"},
+                stream=_Chunks([wire]),
+            )
+        ),
+        stage="unified-agenda-listing",
+        max_bytes=len(wire) + 64,
+        expected_decoded_sha256=_sha(b"hello"),
+    )
+    with httpx.Client(transport=exp_transport) as client, pytest.raises(SourceEvidenceError, match="could not be decoded"):
+        client.get(EDITION_REPORT_URL)
+    assert _stored_objects(ev_exp) == []
+
+
+@pytest.mark.parametrize("case", ["identity_status", "metadata_only_bad_status", "metadata_only_both_size_and_status"])
+def test_verify_evidence_rejects_invalid_decoded_status_on_identity_and_metadata_only(tmp_path, case):
+    raw_root = tmp_path / f"raw-{case}"
+    evidence = CaptureEvidence(tmp_path / case, "unified-agenda", archive_root=raw_root)
+    if case == "identity_status":
+        evidence.capture(
+            CapturedBodyResponse(
+                requested_url=EDITION_REPORT_URL,
+                resolved_url=EDITION_REPORT_URL,
+                status_code=200,
+                content_type="text/html",
+                observed_at="2026-11-27T00:00:00Z",
+                body=AGENDA_LISTING_HTML,
+                content_encoding="identity",
+            ),
+            stage="unified-agenda-listing",
+        )
+        rows = _journal(evidence)
+        next(row for row in rows if row["event"] == "capture")["decoded_status"] = "undecodable"
+    else:
+        wire = gzip.compress(AGENDA_LISTING_HTML, mtime=0)
+        source = evidence.for_source("reginfo", "metadata_only", parser_version="test/1", policy_decision_id="rights-v1")
+        source.capture(
+            CapturedBodyResponse(
+                requested_url=EDITION_REPORT_URL,
+                resolved_url=EDITION_REPORT_URL,
+                status_code=200,
+                content_type="text/html",
+                observed_at="2026-11-27T00:00:00Z",
+                body=wire,
+                content_encoding="gzip",
+            ),
+            stage="unified-agenda-listing",
+        )
+        rows = _journal(evidence)
+        cap_row = next(row for row in rows if row["event"] == "capture")
+        if case == "metadata_only_bad_status":
+            cap_row.pop("decoded_byte_size")
+            cap_row["decoded_status"] = "bogus"
+        else:
+            cap_row["decoded_status"] = "undecodable"
+    (evidence.artifact_dir / "journal.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    with pytest.raises(SourceEvidenceError):
+        evidence.seal(outcome="build-complete")

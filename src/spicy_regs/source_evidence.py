@@ -15,6 +15,7 @@ import os
 import re
 import tempfile
 import zlib
+from collections.abc import Callable
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -222,12 +223,103 @@ def _is_valid_sha256(value: Any) -> bool:
     return isinstance(value, str) and bool(_SHA256_RE.fullmatch(value))
 
 
-def _new_decompressor(encoding: str) -> Any:
-    if encoding in ("gzip", "x-gzip"):
-        return zlib.decompressobj(16 + zlib.MAX_WBITS)
-    if encoding == "deflate":
-        return zlib.decompressobj(zlib.MAX_WBITS)
-    return None
+def _validate_positive_bound(value: int | None, name: str) -> None:
+    if value is not None and (type(value) is not int or value < 1):
+        raise ValueError(f"{name} must be positive")
+
+
+class _CompressedDecoder:
+    """Chunk-boundary-invariant streaming decompressor for gzip, x-gzip, and deflate.
+
+    Shared by ``_StreamCheck`` (capture/transport) and ``_stream_verify_compressed``
+    (seal/verification) so both paths make the exact same decoding decision.
+    For ``deflate``, the opening 2 wire bytes are buffered before selecting
+    RFC 1950 zlib vs RFC 1951 raw deflate, making the fallback invariant to
+    chunk splits (including 1-byte opening chunks).
+    """
+
+    def __init__(self, encoding: str, on_decoded: Callable[[bytes], None]):
+        self.encoding = encoding
+        self._is_gzip = encoding in ("gzip", "x-gzip")
+        self._on_decoded = on_decoded
+        self._decoder: Any = zlib.decompressobj(16 + zlib.MAX_WBITS) if self._is_gzip else None
+        self._deflate_probe = bytearray()
+        self._wire_seen = False
+        self.failed = False
+
+    def _feed(self, pending: bytes) -> None:
+        while pending:
+            assert self._decoder is not None
+            if self._decoder.eof:
+                if not self._is_gzip:
+                    self.failed = True
+                    self._decoder = None
+                    return
+                self._decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+            try:
+                decoded = self._decoder.decompress(pending, _CHUNK)
+            except zlib.error:
+                self.failed = True
+                self._decoder = None
+                return
+            if decoded:
+                self._on_decoded(decoded)
+            if self._decoder.unconsumed_tail:
+                pending = self._decoder.unconsumed_tail
+            elif self._decoder.eof and self._decoder.unused_data:
+                pending = self._decoder.unused_data
+            else:
+                pending = b""
+
+    def update(self, chunk: bytes) -> None:
+        if self.failed or not chunk:
+            return
+        self._wire_seen = True
+        if self.encoding == "deflate" and self._decoder is None:
+            need = 2 - len(self._deflate_probe)
+            self._deflate_probe.extend(chunk[:need])
+            chunk = chunk[need:]
+            if len(self._deflate_probe) < 2:
+                return
+            probe = bytes(self._deflate_probe)
+            self._deflate_probe.clear()
+            decoder = zlib.decompressobj(zlib.MAX_WBITS)
+            try:
+                decoded = decoder.decompress(probe, _CHUNK)
+            except zlib.error:
+                # RFC 1951 raw deflate fallback on the fixed 2-byte opening probe.
+                self._decoder = zlib.decompressobj(-zlib.MAX_WBITS)
+                self._feed(probe)
+            else:
+                self._decoder = decoder
+                if decoded:
+                    self._on_decoded(decoded)
+                if decoder.unconsumed_tail:
+                    self._feed(decoder.unconsumed_tail)
+                elif decoder.eof and decoder.unused_data:
+                    self._feed(decoder.unused_data)
+            if not chunk or self.failed:
+                return
+        self._feed(chunk)
+
+    def finish(self) -> None:
+        if self.failed:
+            return
+        if self._decoder is None or not self._wire_seen:
+            self.failed = True
+            self._decoder = None
+            return
+        try:
+            rest = self._decoder.flush()
+        except zlib.error:
+            self.failed = True
+            self._decoder = None
+            return
+        if rest:
+            self._on_decoded(rest)
+        if not self._decoder.eof or self._decoder.unused_data:
+            self.failed = True
+            self._decoder = None
 
 
 class _StreamCheck:
@@ -251,6 +343,7 @@ class _StreamCheck:
         content_encoding: str | None = "identity",
         max_decoded_bytes: int | None = None,
     ):
+        _validate_positive_bound(max_decoded_bytes, "max_decoded_bytes")
         self.evidence, self.max_bytes = evidence, max_bytes
         self.secret = evidence.credential.encode()
         self.digest, self.size, self.tail = hashlib.sha256(), 0, b""
@@ -262,9 +355,13 @@ class _StreamCheck:
         self.decoded_digest = hashlib.sha256()
         self.decoded_size = 0
         self.decoded_tail = b""
-        self.decoded_failed = False
-        self._decoder: Any = _new_decompressor(self.encoding) if self.supported_compression else None
-        self._deflate_started = False
+        self._decoder: _CompressedDecoder | None = (
+            _CompressedDecoder(self.encoding, self._update_decoded) if self.supported_compression else None
+        )
+
+    @property
+    def decoded_failed(self) -> bool:
+        return self._decoder.failed if self._decoder is not None else False
 
     def _scan_secret(self, data: bytes, *, decoded: bool) -> None:
         if not self.secret or not data:
@@ -290,40 +387,6 @@ class _StreamCheck:
         self._scan_secret(decoded, decoded=True)
         self.decoded_digest.update(decoded)
 
-    def _decompress_chunk(self, chunk: bytes) -> None:
-        if not self.supported_compression or self._decoder is None or self.decoded_failed or not chunk:
-            return
-        pending = chunk
-        is_gzip = self.encoding in ("gzip", "x-gzip")
-        try:
-            while pending:
-                if self._decoder.eof:
-                    if not is_gzip:
-                        raise zlib.error("Trailing data after deflate stream")
-                    self._decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
-                try:
-                    decoded = self._decoder.decompress(pending, _CHUNK)
-                except zlib.error:
-                    if self.encoding == "deflate" and not self._deflate_started:
-                        # RFC 1951 raw deflate fallback on the opening chunk, matching HTTPX.
-                        self._decoder = zlib.decompressobj(-zlib.MAX_WBITS)
-                        self._deflate_started = True
-                        decoded = self._decoder.decompress(pending, _CHUNK)
-                    else:
-                        raise
-                self._deflate_started = True
-                if decoded:
-                    self._update_decoded(decoded)
-                if self._decoder.unconsumed_tail:
-                    pending = self._decoder.unconsumed_tail
-                elif self._decoder.eof and self._decoder.unused_data:
-                    pending = self._decoder.unused_data
-                else:
-                    pending = b""
-        except zlib.error:
-            self.decoded_failed = True
-            self._decoder = None
-
     def update(self, chunk: bytes) -> None:
         self.size += len(chunk)
         if self.size > self.max_bytes:
@@ -338,28 +401,13 @@ class _StreamCheck:
             self.local_path = bool(_LOCAL_PATH_BYTES.search(chunk) or _LOCAL_PATH_BYTES.search(window))
             self.path_tail = (self.path_tail + chunk[-24:])[-24:]
         self.digest.update(chunk)
-        if self.compressed:
-            self._decompress_chunk(chunk)
+        if self._decoder is not None:
+            self._decoder.update(chunk)
 
     def finish(self) -> None:
         """Finalize streaming decompression and verify stream completion (catching truncated payloads)."""
-        if not self.supported_compression or self.decoded_failed:
-            return
-        if self._decoder is None or self.size == 0:
-            self.decoded_failed = True
-            self._decoder = None
-            return
-        try:
-            rest = self._decoder.flush()
-            if rest:
-                self._update_decoded(rest)
-        except zlib.error:
-            self.decoded_failed = True
-            self._decoder = None
-            return
-        if not self._decoder.eof or self._decoder.unused_data:
-            self.decoded_failed = True
-            self._decoder = None
+        if self._decoder is not None:
+            self._decoder.finish()
 
     @property
     def sha256(self) -> str:
@@ -662,6 +710,7 @@ class CaptureEvidence:
 
         if not isinstance(capture, CapturedBodyResponse):
             raise SourceEvidenceError("Source result has no owner capture")
+        _validate_positive_bound(max_decoded_bytes, "max_decoded_bytes")
         access_refused = capture.status_code in (401, 403)
         if access_refused or (
             self.credential
@@ -956,8 +1005,7 @@ class CaptureEvidence:
         evidence = self
         if type(max_bytes) is not int or max_bytes < 1:
             raise ValueError("max_bytes must be positive")
-        if max_decoded_bytes is not None and (type(max_decoded_bytes) is not int or max_decoded_bytes < 1):
-            raise ValueError("max_decoded_bytes must be positive")
+        _validate_positive_bound(max_decoded_bytes, "max_decoded_bytes")
 
         class RetainedStream(httpx.SyncByteStream):
             def __init__(self, stream, request, request_body, response, observed_at):
@@ -1010,28 +1058,28 @@ class CaptureEvidence:
                                 for chunk in self.stream:
                                     check.update(chunk)
                                     yield chunk
+                                check.finish()
+                                _check_expected_digests(
+                                    evidence,
+                                    check,
+                                    expected_wire_sha256=expected_wire_sha256,
+                                    expected_decoded_sha256=expected_decoded_sha256,
+                                )
                             except BaseException as error:
                                 source_error = error
                                 raise
 
                         try:
                             # Rulespec's private .pending file replaces the old
-                            # evidence spool; no public blob appears before EOF
-                            # and the complete credential scan.
+                            # evidence spool; no public blob appears before EOF,
+                            # the complete credential scan, and digest checks.
                             result = evidence.store.put_stream(checked_chunks(), max_bytes=max_bytes)
                         except BaseException as error:
                             if error is source_error or not isinstance(error, Exception):
                                 raise
                             raise evidence._failure("Cannot retain source response bytes") from error
-                        check.finish()
                         if result.blob_ref != check.sha256 or result.byte_size != check.size:
                             raise evidence._failure("Retained wire bytes differ from observed stream digest")
-                        _check_expected_digests(
-                            evidence,
-                            check,
-                            expected_wire_sha256=expected_wire_sha256,
-                            expected_decoded_sha256=expected_decoded_sha256,
-                        )
                         receipt = evidence._record_capture(
                             {
                                 "sha256": result.blob_ref,
@@ -1678,61 +1726,25 @@ def _stream_verify_compressed(source: MemberSource, key: str, event: dict) -> No
     wire_size = 0
     decoded_digest = hashlib.sha256()
     decoded_size = 0
-    is_gzip = encoding in ("gzip", "x-gzip")
-    decoder = _new_decompressor(encoding)
-    deflate_started = False
-    decode_failed = False
+
+    def on_decoded(decoded: bytes) -> None:
+        nonlocal decoded_size
+        decoded_size += len(decoded)
+        decoded_digest.update(decoded)
+
+    decoder = _CompressedDecoder(encoding, on_decoded) if encoding in _COMPRESSED_ENCODINGS else None
 
     with source.open(key) as stream:
         while chunk := stream.read(_CHUNK):
             wire_size += len(chunk)
             wire_digest.update(chunk)
-            if decoder is None or decode_failed:
-                continue
-            pending = chunk
-            try:
-                while pending:
-                    if decoder.eof:
-                        if not is_gzip:
-                            raise zlib.error("Trailing data after deflate stream")
-                        decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
-                    try:
-                        decoded = decoder.decompress(pending, _CHUNK)
-                    except zlib.error:
-                        if encoding == "deflate" and not deflate_started:
-                            decoder = zlib.decompressobj(-zlib.MAX_WBITS)
-                            deflate_started = True
-                            decoded = decoder.decompress(pending, _CHUNK)
-                        else:
-                            raise
-                    deflate_started = True
-                    if decoded:
-                        decoded_size += len(decoded)
-                        decoded_digest.update(decoded)
-                    if decoder.unconsumed_tail:
-                        pending = decoder.unconsumed_tail
-                    elif decoder.eof and decoder.unused_data:
-                        pending = decoder.unused_data
-                    else:
-                        pending = b""
-            except zlib.error:
-                decode_failed = True
-                decoder = None
+            if decoder is not None:
+                decoder.update(chunk)
 
-    if decoder is not None and not decode_failed:
-        if wire_size == 0:
-            decode_failed = True
-        else:
-            try:
-                rest = decoder.flush()
-                if rest:
-                    decoded_size += len(rest)
-                    decoded_digest.update(rest)
-            except zlib.error:
-                decode_failed = True
-            else:
-                if not decoder.eof or decoder.unused_data:
-                    decode_failed = True
+    decode_failed = False
+    if decoder is not None:
+        decoder.finish()
+        decode_failed = decoder.failed
 
     actual_wire = "sha256:" + wire_digest.hexdigest()
     if actual_wire != event["wire_sha256"] or wire_size != event["wire_byte_size"]:
@@ -1805,6 +1817,11 @@ def _verify_receipts(source: MemberSource, artifact) -> None:
     def compression_binding(event, policy):
         encoding = _normalize_encoding(event.get("content_encoding"))
         compressed = encoding != "identity"
+        if "decoded_status" in event:
+            require(
+                event["decoded_status"] in {"undecodable", "unsupported_encoding"},
+                "Invalid decoded capture status",
+            )
         if policy == "metadata_only":
             require(
                 "wire_sha256" not in event and "decoded_sha256" not in event,
@@ -1815,10 +1832,26 @@ def _verify_receipts(source: MemberSource, artifact) -> None:
                     type(event["wire_byte_size"]) is int and event["wire_byte_size"] == event["byte_size"],
                     "Wire byte size differs from captured byte size",
                 )
-            if "decoded_byte_size" in event:
+            has_decoded_size = "decoded_byte_size" in event
+            if has_decoded_size:
                 require(
                     type(event["decoded_byte_size"]) is int and event["decoded_byte_size"] >= 0,
                     "Invalid decoded byte size",
+                )
+                require("decoded_status" not in event, "Decoded capture cannot also claim a decode failure status")
+            if not compressed:
+                require("decoded_status" not in event, "Uncompressed capture cannot claim a decode failure status")
+                return
+            require("wire_byte_size" in event, "Compressed capture must bind wire_byte_size")
+            if encoding in _COMPRESSED_ENCODINGS:
+                require(
+                    has_decoded_size or event.get("decoded_status") == "undecodable",
+                    "Compressed capture must bind decoded_byte_size or explicit undecodable status",
+                )
+            else:
+                require(
+                    event.get("decoded_status") == "unsupported_encoding",
+                    "Unsupported compressed encoding must record unsupported_encoding status",
                 )
             return
         if "wire_sha256" in event:
@@ -1841,12 +1874,8 @@ def _verify_receipts(source: MemberSource, artifact) -> None:
                 "Invalid decoded byte size",
             )
             require("decoded_status" not in event, "Decoded capture cannot also claim a decode failure status")
-        if "decoded_status" in event:
-            require(
-                event["decoded_status"] in {"undecodable", "unsupported_encoding"},
-                "Invalid decoded capture status",
-            )
         if not compressed:
+            require("decoded_status" not in event, "Uncompressed capture cannot claim a decode failure status")
             if has_decoded_sha:
                 require(
                     event["decoded_sha256"] == event["sha256"] and event["decoded_byte_size"] == event["byte_size"],
@@ -1924,8 +1953,8 @@ def _verify_receipts(source: MemberSource, artifact) -> None:
                 body(event, policy, event_record=True)
                 if kind == "capture":
                     compression_binding(event, policy)
-                    if policy != "metadata_only":
-                        verified_captures.setdefault((event["sha256"], event["byte_size"]), []).append(event)
+                if policy != "metadata_only" and is_original(event):
+                    verified_captures.setdefault((event["sha256"], event["byte_size"]), []).append(event)
                 if event.get("request_body") is not None:
                     body(event["request_body"], policy)
             elif kind == "capture-incomplete":

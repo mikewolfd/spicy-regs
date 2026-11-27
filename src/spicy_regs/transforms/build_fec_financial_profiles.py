@@ -219,8 +219,9 @@ def profile(
 
     Reduces ``rows`` in a single streaming pass so only the lead witness dict
     and the bounded serialized ``witnesses_json`` bytes stay live in Python.
-    Refuses duplicate physical ``record_id`` witnesses and groups exceeding
-    ``max_witness_bytes``.
+    Assumes ``rows`` is ordered by ``record_id`` (as ``_profiles()`` guarantees)
+    so duplicate physical ``record_id`` witnesses are refused in O(1) memory,
+    and refuses groups exceeding ``max_witness_bytes``.
     """
     if type(max_witness_bytes) is not int or max_witness_bytes <= 0:
         raise ValueError("max_witness_bytes must be a positive integer")
