@@ -66,6 +66,9 @@ PAGE_SIZE = 20
 #: The most pages one id window is sized for. A window is published whole or not at all, so this bounds what a
 #: failed one costs, and how long (38 minutes) its membership must hold still while it is walked.
 WINDOW_PAGES = 30
+#: Requests held back when sizing a window so a timed-out or refused page can retry inside it instead of voiding
+#: the whole window.
+WINDOW_RETRY_RESERVE = 2
 #: Ids left unread below the newest id the backlog count proves assigned, where clusters are still being listed.
 FRONTIER_MARGIN = 20
 
@@ -398,8 +401,10 @@ def daily_catch_up(output_dir: Path, *, evidence: CaptureEvidence, source_editio
     backlog; only then is the prior downloaded and checked against ``above``.
 
     The run walks id windows upward. Search orders by filing date, so only a window walked to its end joins the
-    table. A window of ``W`` ids lists at most ``W`` clusters, so one sized to the pages left always completes;
-    a window that lists nothing doubles the next, and one that then lists too much is halved. No window reaches
+    table. A window of ``W`` ids lists at most ``W`` clusters, so one sized to the pages left (holding back
+    ``WINDOW_RETRY_RESERVE`` requests down to a one-page floor so a timed-out or refused page can retry inside it)
+    completes within the remaining budget; a window that lists nothing doubles the next, and one that then lists too
+    much is halved. No window reaches
     past ``above + backlog - FRONTIER_MARGIN``: that many clusters above ``above`` prove every id up to
     ``above + backlog`` assigned, so no cluster created during the walk can join a window and change its count,
     and a window that lists nothing has shown its ids hold nothing listed. The table is therefore complete
@@ -452,6 +457,8 @@ def daily_catch_up(output_dir: Path, *, evidence: CaptureEvidence, source_editio
     if limit <= above:
         raise NothingToCatchUp(f"Search lists {backlog:,} clusters above id {above:,}; the newest "
                                f"{FRONTIER_MARGIN} wait for later ones")
+    if spend.attempts >= allowed:
+        raise NothingToCatchUp(f"The day's {spend.attempts} requests ended on the backlog request above id {above:,}")
 
     directory = output_dir / ".catchup-prior"
     directory.mkdir(parents=True, exist_ok=True)
@@ -479,12 +486,13 @@ def daily_catch_up(output_dir: Path, *, evidence: CaptureEvidence, source_editio
     deadline = time.monotonic() + (allowed - spend.attempts) * DAILY_REQUEST_INTERVAL_SECONDS + retry_wait
     floor, widened, walked = above, 0, 0
     while spend.attempts < allowed and floor < limit:
-        pages = min(allowed - spend.attempts, WINDOW_PAGES)
+        remaining = allowed - spend.attempts
+        pages = min(max(remaining - WINDOW_RETRY_RESERVE, 1), WINDOW_PAGES)
         span = min(max(widened, PAGE_SIZE * pages), limit - floor)
         # Each walk paces its own requests; its first follows the previous walk's last by the same interval.
         time.sleep(max(DAILY_REQUEST_INTERVAL_SECONDS - (time.monotonic() - last), 0.0))
         try:
-            found, _ = _walk(floor, floor + span, pages=pages, attempts=allowed - spend.attempts,
+            found, _ = _walk(floor, floor + span, pages=pages, attempts=remaining,
                              seconds=deadline - time.monotonic(), spend=spend, evidence=evidence)
         except _WindowOverflow as overflow:
             last = time.monotonic()

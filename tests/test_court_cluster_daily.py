@@ -47,6 +47,8 @@ class Search:
         self.ids = sorted({*self.ids, *self.arrivals.get(len(self.asked), ())}, reverse=True)
         if len(self.asked) in self.answers:
             answer = self.answers[len(self.asked)]
+            if isinstance(answer, BaseException):
+                raise answer
             return answer(request) if callable(answer) else answer
         asked = re.fullmatch(r"cluster_id:\[(\d+) TO (\d+|\*)\]", params["q"])
         assert asked is not None, params["q"]
@@ -84,20 +86,25 @@ def events(evidence, name):
 def daily(selected, monkeypatch):  # noqa: F811
     """The real daily route over a two-row published prior (ids 2 and 1); only the publisher and R2 are fakes.
 
-    Two results a page, two pages a window, four requests a day and a two-id margin below the newest proven id
-    keep every expectation countable by hand. The 75-second pacing is real; the clock it sleeps on is not, and
-    ``sleeps`` records each wait.
+    Two results a page, two pages a window, one retry request in reserve, four requests a day and a two-id margin
+    below the newest proven id keep every expectation countable by hand. The 75-second pacing is real; the clock
+    it sleeps on is not, and ``sleeps`` records each wait.
     """
     from spicy_docs.transport import capture
 
     work, kwargs = selected
     monkeypatch.setenv("R2_PUBLIC_URL", "https://fixture.invalid")
     monkeypatch.setenv("COURTLISTENER_API_TOKEN", "fixture-token")
-    for name, value in (("PAGE_SIZE", 2), ("WINDOW_PAGES", 2), ("DAILY_REQUESTS", 4), ("FRONTIER_MARGIN", 2)):
+    scaled = (
+        ("PAGE_SIZE", 2), ("WINDOW_PAGES", 2), ("WINDOW_RETRY_RESERVE", 1), ("DAILY_REQUESTS", 4), ("FRONTIER_MARGIN", 2),
+    )
+    defaults = {name: getattr(delta, name) for name, _ in scaled}
+    for name, value in scaled:
         monkeypatch.setattr(delta, name, value)
     state = SimpleNamespace(
         work=work, evidence=kwargs["evidence"], usage=usage(), fetched=[], sleeps=[], clock=0.0,
         generations={kwargs["expected_prior"].removeprefix("sha256:"): kwargs["prior_directory"]},
+        defaults=defaults,
     )
 
     def sleep(seconds):
@@ -135,16 +142,17 @@ def test_a_day_appends_whole_id_windows_without_restoring_the_prior(daily, monke
     monkeypatch.setattr("spicy_regs.court_receipts.restore_processing_input",
                         lambda *args, **options: pytest.fail("The daily append must not restore the prior"))
     candidate, fault = daily.run()
-    # One request states the backlog (10 above id 2); the other three are the pages of two windows of four ids.
-    assert search.asked == ["cluster_id:[3 TO *]", "cluster_id:[3 TO 6]", "cluster_id:[7 TO 10]", "cluster_id:[7 TO 10] +2"]
+    # One request states the backlog (10 above id 2); the first window (3 left, 1 in reserve) takes two pages (3-6),
+    # the next (2 left, 1 in reserve) holds back one retry request (7-8), and the last request reads 9-10.
+    assert search.asked == ["cluster_id:[3 TO *]", "cluster_id:[3 TO 6]", "cluster_id:[7 TO 8]", "cluster_id:[9 TO 10]"]
     assert fault is None
-    assert pq.read_table(candidate)["cluster_id"].to_pylist() == ["2", "1", "6", "4", "9", "8", "7"]
+    assert pq.read_table(candidate)["cluster_id"].to_pylist() == ["2", "1", "6", "4", "8", "7", "9"]
     (stated,) = events(daily.evidence, delta.CATCH_UP_EVENT)
     # ``through`` is the end of the last whole window. Id 10 lists nothing, and ten clusters above 2 prove it assigned.
     assert {name: stated[name] for name in ("source_edition", "above", "through", "declared_backlog", "clusters",
                                              "windows", "requests", "max_requests")} == {
         "source_edition": "2026-06-30", "above": 2, "through": 10, "declared_backlog": 10, "clusters": 5,
-        "windows": 2, "requests": 4, "max_requests": 4}
+        "windows": 3, "requests": 4, "max_requests": 4}
     assert daily.fetched == [delta.OUTPUT]
     assert not list((daily.work / ".catchup-prior").iterdir())  # The downloaded prior is released once appended.
 
@@ -190,6 +198,137 @@ def test_a_refused_attempt_is_waited_out_and_counted_against_the_day(daily):
     assert pq.read_table(candidate)["cluster_id"].to_pylist() == ["2", "1", "6", "4", "7"]
     (stated,) = events(daily.evidence, delta.CATCH_UP_EVENT)
     assert (stated["requests"], stated["through"]) == (4, 8)
+
+
+@pytest.mark.parametrize(
+    ("failure", "check_retry_after"),
+    [
+        (httpx.ReadTimeout("timed out"), False),
+        (refused(30), True),
+        (httpx.Response(503), False),
+    ],
+    ids=["timeout", "429-retry-after", "503"],
+)
+def test_a_transient_failure_retries_inside_a_small_allowance_and_appends_the_window(
+    daily, monkeypatch, failure, check_retry_after
+):
+    """Hosted run 42819765241 (ss-l56o): max_requests=10 at full density survives a failed page inside the window."""
+    for name, value in daily.defaults.items():
+        monkeypatch.setattr(delta, name, value)
+    # 300 contiguous ids (full density: 20 clusters per page) above id 2. With max_requests=10, 9 remain after
+    # backlog; holding back WINDOW_RETRY_RESERVE=2 sizes window 1 to 7 pages (ids 3-142) with 2 retries in hand.
+    search = daily.serve(Search(range(3, 303), answers={5: failure}))
+    candidate, fault = daily.run(max_requests=10)
+    assert fault is None
+    assert len(search.asked) == 10
+    assert search.asked == [
+        "cluster_id:[3 TO *]",
+        "cluster_id:[3 TO 142]",
+        "cluster_id:[3 TO 142] +20",
+        "cluster_id:[3 TO 142] +40",
+        "cluster_id:[3 TO 142] +60",
+        "cluster_id:[3 TO 142] +60",
+        "cluster_id:[3 TO 142] +80",
+        "cluster_id:[3 TO 142] +100",
+        "cluster_id:[3 TO 142] +120",
+        "cluster_id:[143 TO 162]",
+    ]
+    if check_retry_after:
+        assert 30.0 in daily.sleeps
+    written = pq.read_table(candidate)["cluster_id"].to_pylist()
+    assert written[:2] == ["2", "1"]
+    assert set(written[2:]) == set(map(str, range(3, 163)))
+    assert len(written[2:]) == 160
+    (stated,) = events(daily.evidence, delta.CATCH_UP_EVENT)
+    assert {name: stated[name] for name in ("above", "through", "clusters", "windows", "requests", "max_requests")} == {
+        "above": 2, "through": 162, "clusters": 160, "windows": 2, "requests": 10, "max_requests": 10,
+    }
+
+
+def test_two_timeouts_inside_one_window_still_complete_within_the_reserve(daily, monkeypatch):
+    for name, value in daily.defaults.items():
+        monkeypatch.setattr(delta, name, value)
+    timeout = httpx.ReadTimeout("timed out")
+    search = daily.serve(Search(range(3, 303), answers={3: timeout, 7: timeout}))
+    candidate, fault = daily.run(max_requests=10)
+    assert fault is None
+    assert len(search.asked) == 10
+    written = pq.read_table(candidate)["cluster_id"].to_pylist()
+    assert written[:2] == ["2", "1"]
+    assert set(written[2:]) == set(map(str, range(3, 143)))
+    (stated,) = events(daily.evidence, delta.CATCH_UP_EVENT)
+    assert (stated["through"], stated["clusters"], stated["windows"], stated["requests"], stated["max_requests"]) == (
+        142, 140, 1, 10, 10,
+    )
+
+
+@pytest.mark.parametrize(
+    ("stuck_cursor", "expected_error", "expected_requests"),
+    [
+        # Page 2 fails 6 times (hitting _MAX_REQUESTS_PER_PAGE=6 before max_requests=10): surfaces as a fault.
+        ("20", ValueError, 8),
+        # Page 5 fails 5 times (hitting max_requests=10 after 4 pages): clean budget stop, partial window dropped.
+        ("80", delta.NothingToCatchUp, 10),
+    ],
+    ids=["page-retry-bound-exhausted", "max-requests-exhausted-mid-window"],
+)
+def test_persistent_page_failure_never_appends_a_partial_window_and_respects_max_requests(
+    daily, monkeypatch, stuck_cursor, expected_error, expected_requests
+):
+    for name, value in daily.defaults.items():
+        monkeypatch.setattr(delta, name, value)
+
+    class PersistentTimeout(Search):
+        def __call__(self, request):
+            if request.url.params.get("cursor") == stuck_cursor:
+                self.asked.append(request.url.params["q"] + " +" + stuck_cursor)
+                raise httpx.ReadTimeout("persistent timeout", request=request)
+            return super().__call__(request)
+
+    search = daily.serve(PersistentTimeout(range(3, 303)))
+    monkeypatch.setattr(delta, "_append_native", lambda *args, **options: pytest.fail("Partial window must not append"))
+    with pytest.raises(expected_error) as raised:
+        daily.run(max_requests=10)
+    assert raised.type is expected_error or expected_error is ValueError
+    assert len(search.asked) == expected_requests <= 10
+    assert not events(daily.evidence, delta.CATCH_UP_EVENT)
+    assert events(daily.evidence, "refusal")
+
+
+def test_persistent_failure_in_second_window_keeps_first_window_and_drops_partial_second(daily, monkeypatch):
+    for name, value in daily.defaults.items():
+        monkeypatch.setattr(delta, name, value)
+    monkeypatch.setattr(delta, "WINDOW_PAGES", 4)
+
+    class SecondWindowTimeout(Search):
+        def __call__(self, request):
+            if request.url.params["q"] == "cluster_id:[83 TO 142]" and request.url.params.get("cursor") == "20":
+                self.asked.append(request.url.params["q"] + " +20")
+                raise httpx.ReadTimeout("persistent timeout", request=request)
+            return super().__call__(request)
+
+    # Backlog (1) + window 1 (4 pages, ids 3-82) = 5 requests; 5 remain, so window 2 sizes to 3 pages (ids 83-142).
+    # Window 2 reads page 1, then page 2 times out for the remaining 4 attempts (total 10 == max_requests).
+    search = daily.serve(SecondWindowTimeout(range(3, 303)))
+    candidate, fault = daily.run(max_requests=10)
+    assert fault is None
+    assert len(search.asked) == 10
+    written = pq.read_table(candidate)["cluster_id"].to_pylist()
+    assert written[:2] == ["2", "1"]
+    assert set(written[2:]) == set(map(str, range(3, 83)))
+    assert len(written[2:]) == 80
+    (stated,) = events(daily.evidence, delta.CATCH_UP_EVENT)
+    assert (stated["through"], stated["clusters"], stated["windows"], stated["requests"], stated["max_requests"]) == (
+        82, 80, 1, 10, 10,
+    )
+
+
+def test_backlog_retries_that_spend_the_whole_allowance_stop_before_downloading_prior(daily):
+    search = daily.serve(Search(TEN, answers={1: httpx.ReadTimeout("timed out")}))
+    with pytest.raises(delta.NothingToCatchUp, match="ended on the backlog request"):
+        daily.run(max_requests=2)
+    assert search.asked == ["cluster_id:[3 TO *]", "cluster_id:[3 TO *]"]
+    assert daily.fetched == []
 
 
 @pytest.mark.parametrize(("answer", "is_fault"), [(refused(80_000), False), (httpx.Response(500), True),

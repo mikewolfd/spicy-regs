@@ -82,10 +82,12 @@ download to the upload, for a tenth of a day.
 4. Walks **id windows** upward. Search can only be ordered by filing date, so a
    half-read range cannot be resumed by id; a window is therefore read whole or
    not kept. A window of `W` ids lists at most `W` clusters, so one sized at 20
-   ids for each page left always fits; no window is sized for more than 30
-   pages. A window that lists nothing doubles the next; a doubled window that
-   lists more than its pages is left after one request and halved. A count
-   larger than the window has ids is a fault.
+   ids per page always fits; each window holds back a small retry reserve (2
+   requests, down to a 1-page floor) from the requests left and is sized for at
+   most 30 pages, so a timed-out or refused page can retry inside the window
+   instead of voiding it. A window that lists nothing doubles the next; a
+   doubled window that lists more than its pages is left after one request and
+   halved. A count larger than the window has ids is a fault.
 5. Appends the rows to the prior without restoring it (`_append_native`,
    `combine_receipts`), and the ordinary generation admission and publication
    follow.
