@@ -2239,13 +2239,22 @@ def discover_retained_mur_captures(
 ) -> list[dict[str, Any]]:
     """Discover retained HTTP-200 ``api_key=<redacted>`` MUR captures from ``fec_collections`` + ``store``.
 
-    Selects disposition/context rows whose ``callerContext.source_capture`` points to
+    Selects disposition/context rows whose ``callerContext.facts.source_capture``
+    (or unwrapped ``callerContext.source_capture``) points to
     ``https://api.open.fec.gov/v1/legal/docs/murs/<id>?...api_key=...`` with HTTP 200
-    and non-truncated responses, validates each URL through :func:`sanitize_redacted_mur_url`
-    (failing closed on non-``<redacted>`` credentials), and loads verified payload bytes from ``store``.
+    and non-truncated responses, validates EVERY candidate URL through
+    :func:`sanitize_redacted_mur_url` before deduplicating by payload SHA-256
+    (preferring ``native-context-*`` over ``coverage-capture-*``), and loads
+    verified payload bytes from ``store``.
     """
     captures: list[dict[str, Any]] = []
-    for col in sorted(collections, key=lambda c: str(c.get("collection_id") or "")):
+    seen_shas: set[str] = set()
+
+    def _mur_sort_key(c: Mapping[str, Any]) -> tuple[int, str]:
+        cid = str(c.get("collection_id") or "")
+        return (0 if cid.startswith("native-context-") else 1, cid)
+
+    for col in sorted(collections, key=_mur_sort_key):
         raw_outcome = col.get("collection_outcome_json")
         if not isinstance(raw_outcome, str) or not raw_outcome:
             continue
@@ -2255,7 +2264,8 @@ def discover_retained_mur_captures(
         caller_ctx = (outcome.get("receiverDisposition") or {}).get("callerContext") or outcome.get("callerContext")
         if not isinstance(caller_ctx, dict):
             continue
-        sc = caller_ctx.get("source_capture")
+        facts = caller_ctx.get("facts") if isinstance(caller_ctx.get("facts"), dict) else caller_ctx
+        sc = facts.get("source_capture")
         if not isinstance(sc, dict):
             continue
         url = sc.get("url")
@@ -2272,9 +2282,12 @@ def discover_retained_mur_captures(
         truncated = sc.get("truncated")
         if isinstance(truncated, list) and any(t is True for t in truncated):
             continue
-        # Fail closed if any retained HTTP-200 MUR URL carries a non-<redacted> credential value.
+        # Fail closed if ANY retained HTTP-200 MUR URL (including duplicate coverage rows) carries a real credential.
         sanitize_redacted_mur_url(url)
         sha = _digest(sc["sha256"])
+        if sha in seen_shas:
+            continue
+        seen_shas.add(sha)
         expected_bytes = sc.get("bytes") if isinstance(sc.get("bytes"), int) else None
         payload_bytes = _read_store_blob(store, sha, expected_bytes=expected_bytes)
         obs_raw = sc.get("observed_at")

@@ -1206,20 +1206,24 @@ def test_discover_and_qualify_retained_mur_captures_in_build_fec_query_generatio
     store.put_blob(mur_sha, len(mur_payload), (mur_payload,))
 
     def _disp_col(cid: str, url: str, statuses: list[int], sha: str, size: int) -> dict:
+        # Match live 4cb0dffa nesting: callerContext = {"pin": ..., "facts": {"version": 1, "source_capture": ...}}
         outcome = {
             "providerOutcome": None,
             "receiverDisposition": {
                 "status": "selection_context",
                 "reason": "Literal retained JSON response context",
                 "callerContext": {
-                    "version": 1,
-                    "source_capture": {
-                        "url": url,
-                        "sha256": sha,
-                        "bytes": size,
-                        "observed_at": ["2026-09-11T18:30:44+00:00"],
-                        "http_statuses": statuses,
-                        "truncated": [False],
+                    "pin": {"path": f"context/{cid}.json", "sha256": "sha256:" + "0" * 64},
+                    "facts": {
+                        "version": 1,
+                        "source_capture": {
+                            "url": url,
+                            "sha256": sha,
+                            "bytes": size,
+                            "observed_at": ["2026-09-11T18:30:44+00:00"],
+                            "http_statuses": statuses,
+                            "truncated": [False],
+                        },
                     },
                 },
             },
@@ -1239,7 +1243,10 @@ def test_discover_and_qualify_retained_mur_captures_in_build_fec_query_generatio
             "artifact_sha256": None,
         }
 
+    # Include both coverage-capture-* and native-context-* sharing the exact same SHA (matching live 4cb0dffa):
+    # discovery must deduplicate by SHA and prefer native-context-* over coverage-capture-*.
     col_rows = [
+        _disp_col("coverage-capture-mur-1604", "https://api.open.fec.gov/v1/legal/docs/murs/1604?api_key=<redacted>", [200], mur_sha, len(mur_payload)),
         _disp_col("native-context-mur-1604", "https://api.open.fec.gov/v1/legal/docs/murs/1604?api_key=<redacted>", [200], mur_sha, len(mur_payload)),
         _disp_col("native-context-mur-1366-404", "https://api.open.fec.gov/v1/legal/docs/murs/1366?api_key=<redacted>", [404], mur_sha, len(mur_payload)),
         _disp_col("native-context-mur-empty", "https://api.open.fec.gov/v1/legal/docs/murs/1999?api_key=<redacted>", [], mur_sha, len(mur_payload)),
@@ -1253,10 +1260,13 @@ def test_discover_and_qualify_retained_mur_captures_in_build_fec_query_generatio
     discovered = discover_retained_mur_captures(col_rows, store=ro_store)
     assert [c["collection_id"] for c in discovered] == ["native-context-mur-1604"]
 
-    # Non-<redacted> credential value MUST fail closed.
+    # Non-<redacted> credential value MUST fail closed, even on a duplicate coverage-capture-* row with the same SHA!
     leaked_col = _disp_col("native-context-mur-bad", "https://api.open.fec.gov/v1/legal/docs/murs/1604?api_key=REAL_SECRET", [200], mur_sha, len(mur_payload))
     with pytest.raises(ValueError, match="redacted|credential|api_key"):
         discover_retained_mur_captures([leaked_col], store=ro_store)
+    leaked_dup = _disp_col("coverage-capture-mur-1604-leaked", "https://api.open.fec.gov/v1/legal/docs/murs/1604?api_key=REAL_SECRET", [200], mur_sha, len(mur_payload))
+    with pytest.raises(ValueError, match="redacted|credential|api_key"):
+        discover_retained_mur_captures([col_rows[1], leaked_dup], store=ro_store)
 
     # End-to-end build_fec_query_generation() auto-discovers and qualifies MUR 1604.
     result = build_fec_query_generation(
