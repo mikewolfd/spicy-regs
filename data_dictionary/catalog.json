@@ -1533,7 +1533,7 @@
       {
         "dataset": "native_legal_references",
         "receipt_only": false,
-        "policy_version": "legislative-documents/2",
+        "policy_version": "legislative-documents/3",
         "identity_columns": [
           "scope_id",
           "body_version_id",
@@ -12686,7 +12686,7 @@
     {
       "table": "native_legal_references",
       "label": "Native legal-reference observations",
-      "summary": "Original legal references and source passages with recorded target matches. Inspect every candidate's complete keys, target pin, match count and reason. Found, missing, ambiguous, unsupported and not-checked remain separate. Source paths and interpretation rules stay visible. A complete read replaces its selected source/edition scope, including a successful empty correction. U.S. Code section matches identify held classification rows, not Code text.",
+      "summary": "Original legal references and source passages with recorded target matches. Inspect every candidate's complete keys, target pin, match count and reason. Found, missing, ambiguous, unsupported and not-checked remain separate. Source paths and interpretation rules stay visible. A complete read replaces its selected source/edition scope, including a successful empty correction. U.S. Code section matches identify held OLRC release-point sections or range stubs under selected-target-lookup/2 (or legacy classification rows on carried /1 scopes), not Code text or current legal applicability.",
       "coverage": "Sampled. Selected retained U.S. Code and eCFR XML inputs only. Read scopes state the edition, input digest and forms checked; they do not establish source-wide completeness.",
       "kind": "sampled",
       "measured_on": "2026-09-27",

@@ -4465,7 +4465,9 @@ tables:
       Found, missing, ambiguous, unsupported and not-checked remain separate.
       Source paths and interpretation rules stay visible. A complete read replaces
       its selected source/edition scope, including a successful empty correction.
-      U.S. Code section matches identify held classification rows, not Code text.
+      U.S. Code section matches identify held OLRC release-point sections or range stubs
+      under selected-target-lookup/2 (or legacy classification rows on carried /1 scopes),
+      not Code text or current legal applicability.
     columns_from: spicy_docs
 
   court_opinion_pdf_extractions:

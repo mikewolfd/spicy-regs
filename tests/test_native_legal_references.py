@@ -133,25 +133,105 @@ def test_failed_or_incomplete_reads_do_not_replace_prior(tmp_path, failure):
     assert not list((tmp_path / "failed").glob("*.parquet"))
 
 
-def test_pinned_classification_lookup_and_unknown_href_retained(tmp_path):
-    target = tmp_path / "classifications.parquet"
+def test_pinned_release_point_lookup_range_stub_cross_title_and_unknown_href(tmp_path):
+    target = tmp_path / "release_point_sections.parquet"
     pq.write_table(
-        pa.table({"usc_title": ["5"], "usc_section_key": ["401"], "congress": ["117"], "session": ["2"], "seq": ["1"]}),
+        pa.table({"usc_title": ["5", "25"], "usc_section_key": ["401", "2601...2606"]}),
         target,
     )
     manifest = manifest_for(
         tmp_path,
-        b'<section><ref href="/us/usc/t5/s401"/><ref href="opaque:other"/><ref href="/us/usc/t5/s401#x"/></section>',
-        targets={"law_code_sections": {"path": target.name, "sha256": digest(target.read_bytes())}},
+        b'<section><ref href="/us/usc/t5/s401"/><ref href="/us/usc/t25/s2603"/>'
+        b'<ref href="/us/usc/t1/s2603"/><ref href="/us/usc/t2/s184a"/>'
+        b'<ref href="opaque:other"/><ref href="/us/usc/t5/s401#x"/></section>',
+        targets={"usc_release_point_sections": {"path": target.name, "sha256": digest(target.read_bytes())}},
     )
     files, _ = run(manifest, tmp_path / "output")
     rows = sorted(pq.read_table(files[0]).to_pylist(), key=lambda r: int(r["occurrence_index"]))
     found = json.loads(rows[0]["target_candidates_json"])[0]
+    assert found["resolution_rule"] == "selected-target-lookup/2"
+    assert found["target_table_selected"] == "usc_release_point_sections"
     assert found["target_status"] == "found" and found["expected_cardinality"] == "many"
-    assert "classification" in found["target_grain"] and found["target_snapshot"]["sha256"] == digest(
+    assert found["match_basis"] == "printed_section"
+    assert found["candidate_keys"] == [{"usc_title": "5", "usc_section_key": "401"}]
+    assert "release point" in found["target_grain"] and found["target_snapshot"]["sha256"] == digest(
         target.read_bytes()
     )
-    assert [r["interpretation_status"] for r in rows[1:]] == ["unsupported_href", "unsupported_href"]
+    assert "disposition" not in found
+    stub = json.loads(rows[1]["target_candidates_json"])[0]
+    assert stub["target_status"] == "found" and stub["match_basis"] == "range_stub"
+    assert stub["candidate_keys"] == [{"usc_title": "25", "usc_section_key": "2601...2606"}]
+    # Cross-title range negative control: 1-2603 must NOT match Title 25's 2601...2606 stub.
+    cross_title = json.loads(rows[2]["target_candidates_json"])[0]
+    assert cross_title["target_status"] == "missing" and cross_title["match_count"] == 0
+    assert "disposition" not in cross_title
+    # Letter-suffix negative control: 2-184a is never auto-repaired.
+    letter_suffix = json.loads(rows[3]["target_candidates_json"])[0]
+    assert letter_suffix["target_status"] == "missing" and letter_suffix["match_count"] == 0
+    assert [r["interpretation_status"] for r in rows[4:]] == ["unsupported_href", "unsupported_href"]
+
+
+def test_pinned_uscode_edition_sections_target_and_legacy_or_conflicting_target_refusals(tmp_path):
+    editions_dir = tmp_path / "editions"
+    editions_dir.mkdir()
+    editions = editions_dir / "uscode_edition_sections.parquet"
+    pq.write_table(
+        pa.table({
+            "observation_id": ["o1"],
+            "edition_id": ["rp-119-102"],
+            "source_kind": ["release-point-corpus"],
+            "source_context": ["main-body-candidate"],
+            "native_identifier": ["/us/usc/t5/s401"],
+        }),
+        editions,
+    )
+    manifest = manifest_for(
+        editions_dir,
+        b'<section><ref href="/us/usc/t5/s401"/></section>',
+        targets={"uscode_edition_sections": {"path": editions.name, "sha256": digest(editions.read_bytes())}},
+    )
+    files, _ = run(manifest, tmp_path / "editions_out")
+    [row] = pq.read_table(files[0]).to_pylist()
+    [found] = json.loads(row["target_candidates_json"])
+    assert found["resolution_rule"] == "selected-target-lookup/2"
+    assert found["target_table_selected"] == "usc_release_point_sections"
+    assert found["target_status"] == "found" and found["match_basis"] == "printed_section"
+    assert found["candidate_keys"] == [{"usc_title": "5", "usc_section_key": "401"}]
+    assert found["target_snapshot"]["sha256"] == digest(editions.read_bytes())
+
+    # Legacy /1 law_code_sections target fails closed under selected-target-lookup/2.
+    legacy_dir = tmp_path / "legacy_refused"
+    legacy_dir.mkdir()
+    legacy_target = legacy_dir / "law_code_sections.parquet"
+    pq.write_table(
+        pa.table({"usc_title": ["5"], "usc_section_key": ["401"], "congress": ["117"], "session": ["2"], "seq": ["1"]}),
+        legacy_target,
+    )
+    bad_legacy = manifest_for(
+        legacy_dir,
+        b'<section><ref href="/us/usc/t5/s401"/></section>',
+        targets={"law_code_sections": {"path": legacy_target.name, "sha256": digest(legacy_target.read_bytes())}},
+    )
+    with pytest.raises(ValueError, match="unsupported target table"):
+        run(bad_legacy, tmp_path / "legacy_out")
+
+    # Supplying both usc_release_point_sections and uscode_edition_sections refuses explicitly.
+    conflict_dir = tmp_path / "conflict"
+    conflict_dir.mkdir()
+    rp_target = conflict_dir / "rp.parquet"
+    pq.write_table(pa.table({"usc_title": ["5"], "usc_section_key": ["401"]}), rp_target)
+    editions_copy = conflict_dir / "uscode_edition_sections.parquet"
+    shutil.copyfile(editions, editions_copy)
+    bad_conflict = manifest_for(
+        conflict_dir,
+        b'<section><ref href="/us/usc/t5/s401"/></section>',
+        targets={
+            "usc_release_point_sections": {"path": rp_target.name, "sha256": digest(rp_target.read_bytes())},
+            "uscode_edition_sections": {"path": editions_copy.name, "sha256": digest(editions_copy.read_bytes())},
+        },
+    )
+    with pytest.raises(ValueError, match="conflicting U.S. Code target tables"):
+        run(bad_conflict, tmp_path / "conflict_out")
 
 
 def test_part_only_cfr_and_unsupported_source_shapes_are_not_sections(tmp_path):
@@ -169,13 +249,13 @@ def test_part_only_cfr_and_unsupported_source_shapes_are_not_sections(tmp_path):
 
 def test_same_source_rechecks_new_target_selection_without_stacking(tmp_path):
     target = tmp_path / "targets.parquet"
-    fields = {"usc_title": ["5"], "usc_section_key": ["999"], "congress": ["117"], "session": ["2"], "seq": ["1"]}
+    fields = {"usc_title": ["5"], "usc_section_key": ["999"]}
     pq.write_table(pa.table(fields), target)
     body = b'<section><ref href="/us/usc/t5/s401"/><ref href="/us/usc/t5/s401"/></section>'
 
     def manifest():
         return manifest_for(
-            tmp_path, body, targets={"law_code_sections": {"path": target.name, "sha256": digest(target.read_bytes())}}
+            tmp_path, body, targets={"usc_release_point_sections": {"path": target.name, "sha256": digest(target.read_bytes())}}
         )
 
     files, _ = run(manifest(), tmp_path / "first")
@@ -264,7 +344,7 @@ def test_wave1_declared_cohort_manifest_respects_bounds_and_publish_hygiene():
     from spicy_regs.citation_resolution import NATIVE_RESOLUTION_RULE
     from spicy_regs.source_evidence import _LOCAL_PATH_BYTES
 
-    assert NATIVE_RESOLUTION_RULE == "selected-target-lookup/1"
+    assert NATIVE_RESOLUTION_RULE == "selected-target-lookup/2"
     assert NATIVE_LEGAL_REFERENCE_RULE == "native-legal-reference/003"
 
     manifest_path = Path(__file__).resolve().parents[1] / "manifests/native_legal_wave1.json"

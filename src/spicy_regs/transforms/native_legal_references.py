@@ -36,6 +36,9 @@ from spicy_docs.sources.congress.native_references import scan_bill_references
 from spicy_docs.sources.govinfo.native_references import scan_law_references
 
 from spicy_regs.citation_resolution import NATIVE_RESOLUTION_RULE, NATIVE_ROUTES, resolve_citations
+from spicy_regs.identifiers import section_order_sql
+from spicy_regs.relationship_views.sql_views import install_sql_views
+from spicy_regs.relationship_views.uscode import USCODE_VIEWS
 from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceContext
 from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
 
@@ -98,7 +101,11 @@ def build_native_legal_references(
     with duckdb.connect() as cursor:
         snapshots = {}
         targets = selection.get("targets", {})
-        allowed = {route.table for route in NATIVE_ROUTES.values()}
+        allowed = {route.table for route in NATIVE_ROUTES.values()} | {
+            route.pinned_by for route in NATIVE_ROUTES.values() if route.pinned_by
+        }
+        if {"usc_release_point_sections", "uscode_edition_sections"} <= set(targets):
+            raise ValueError("conflicting U.S. Code target tables")
         for table, spec in targets.items():
             if table not in allowed:
                 raise ValueError("unsupported target table")
@@ -109,8 +116,32 @@ def build_native_legal_references(
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(body)
             escaped = str(path).replace("'", "''")
-            cursor.execute(f"CREATE VIEW \"{table}\" AS SELECT * FROM read_parquet('{escaped}')")
+            if table == "usc_release_point_sections":
+                cols = {row[0] for row in cursor.execute(f"DESCRIBE SELECT * FROM read_parquet('{escaped}')").fetchall()}
+                if not {"usc_title", "usc_section_key"} <= cols:
+                    raise ValueError("usc_release_point_sections target requires usc_title and usc_section_key")
+                if {"range_low", "range_high"} <= cols:
+                    cursor.execute(f"CREATE VIEW \"{table}\" AS SELECT * FROM read_parquet('{escaped}')")
+                else:
+                    low_sql = section_order_sql("split_part(usc_section_key, '...', 1)")
+                    high_sql = section_order_sql("split_part(usc_section_key, '...', 2)")
+                    cursor.execute(
+                        f"CREATE VIEW \"{table}\" AS SELECT usc_title, usc_section_key, "
+                        f"CASE WHEN usc_section_key LIKE '%...%' THEN {low_sql} END AS range_low, "
+                        f"CASE WHEN usc_section_key LIKE '%...%' THEN {high_sql} END AS range_high "
+                        f"FROM read_parquet('{escaped}')"
+                    )
+            else:
+                cursor.execute(f"CREATE VIEW \"{table}\" AS SELECT * FROM read_parquet('{escaped}')")
             snapshots[table] = {"status": "retained_file", "sha256": _digest(body)}
+            if table == "uscode_edition_sections":
+                rp_views = [v for v in USCODE_VIEWS if v.name == "usc_release_point_sections"]
+                installed = install_sql_views(cursor, ("uscode_edition_sections",), rp_views)
+                if installed["usc_release_point_sections"]["status"] != "available":
+                    raise ValueError(
+                        "uscode_edition_sections target missing required columns: "
+                        + str(installed["usc_release_point_sections"]["reason"])
+                    )
         for spec in sources:
             family, record, edition = spec["source_family"], spec["source_record_key"], spec["edition"]
             if family not in {"ecfr", "uscode", "bill", "law"} or not isinstance(record, str) or not record:
@@ -203,7 +234,8 @@ def build_native_legal_references(
 
         def lookup(candidates: list[dict[str, Any]], texts: dict[tuple[str, str], str]) -> list[dict[str, Any]]:
             resolved = resolve_citations(cursor, candidates, snapshots, source_digests=texts,
-                                         routes=NATIVE_ROUTES, rule=NATIVE_RESOLUTION_RULE)
+                                         routes=NATIVE_ROUTES, rule=NATIVE_RESOLUTION_RULE,
+                                         enrich_dispositions=False)
             coverage.update(resolved["coverage"])
             return resolved["occurrences"]
 

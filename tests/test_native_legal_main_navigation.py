@@ -4,7 +4,7 @@ import json
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_regs.citation_resolution import NATIVE_RESOLUTION_RULE, NATIVE_ROUTES
+from spicy_regs.citation_resolution import LEGACY_USC_SECTION_ROUTE, NATIVE_RESOLUTION_RULE, NATIVE_ROUTES
 from spicy_regs.legislative_documents import (
     LegislativeShapeError, NATIVE_TARGET_KEY_FIELDS, map_subject, recorded_subject,
 )
@@ -50,8 +50,11 @@ def test_every_maintained_route_keeps_its_complete_identity_and_recorded_pin(kin
 
 
 def test_typed_key_union_is_exactly_the_native_route_identities():
-    """native_legal_references records candidates under NATIVE_ROUTES, so its typed keys are their identities."""
-    assert set(NATIVE_TARGET_KEY_FIELDS) == {name for route in NATIVE_ROUTES.values() for name in route.identity}
+    """native_legal_references records candidates under NATIVE_ROUTES (/2) plus carried LEGACY_USC_SECTION_ROUTE (/1)."""
+    assert NATIVE_RESOLUTION_RULE == "selected-target-lookup/2"
+    assert set(NATIVE_TARGET_KEY_FIELDS) == {
+        name for route in (*NATIVE_ROUTES.values(), LEGACY_USC_SECTION_ROUTE) for name in route.identity
+    }
 
 
 @pytest.mark.parametrize("status,reason,count,keys", [
@@ -209,3 +212,81 @@ def test_actual_hosted_family_writes_main_scopes_and_reuses_selected_originals(t
     assert {p.name for p in repeated} == set(before)
     for name in ("native_legal_references.parquet", "native_legal_reference_reads.parquet"):
         assert before[name].equals(pq.read_table(work / name))
+
+
+def test_v2_rule1_prior_restores_and_coexists_with_v3_rule2_and_explorer_navigation(tmp_path, monkeypatch):
+    """Prior legislative-documents/2 generations (/1 law_code_sections keys) restore cleanly and coexist in /3."""
+    import pyarrow as pa
+    from spicy_regs import legislative_receipts as receipts
+    from spicy_regs.explorer_navigation import declarations, target_keys
+    from spicy_regs.policy_migrations import earlier_policy
+
+    assert receipts.policy("native_legal_references").policy_version == "legislative-documents/3"
+    v2 = earlier_policy("native_legal_references", "legislative-documents/2")
+
+    legacy_candidate = {
+        "cite_kind": "usc_section", "target_kind": "usc_section", "target_key": "5-401",
+        "normalized_key": "5-401", "target_resolved": True,
+        "candidate_keys": [{"congress": "117", "session": "2", "seq": "1"}],
+        "expected_cardinality": "many", "target_table_selected": "law_code_sections",
+        "target_status": "found", "match_count": 1, "resolution_rule": "selected-target-lookup/1",
+        "source_status": "native_field", "occurrence_key": "legacy:0",
+    }
+    raw_v2 = observation([legacy_candidate]) | {"scope_id": "legacy-scope", "occurrence_index": "0"}
+    raw_v2_path = tmp_path / "v2_source" / "native_legal_references.parquet"
+    raw_v2_path.parent.mkdir(parents=True)
+    pq.write_table(pa.Table.from_pylist([raw_v2]), raw_v2_path)
+
+    current_policy, current_map = receipts.policy, receipts.map_subject
+
+    def v2_map(dataset, raw):
+        if dataset != "native_legal_references":
+            return current_map(dataset, raw)
+        return recorded_subject(dataset, raw, dict.fromkeys(v2.subject_schema.names), policy_version=v2.policy_version)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(receipts, "policy", lambda name: v2 if name == "native_legal_references" else current_policy(name))
+        patch.setattr(receipts, "map_subject", v2_map)
+        write_legislative_outputs([raw_v2_path], tmp_path / "v2-bundle", generation_id="v2-gen")
+
+    # Restore exact /2 prior under current /3 code.
+    restored = restore_prior(tmp_path / "v2-bundle", tmp_path / "v2-restored")
+    assert pq.read_table(restored["native_legal_references"]).equals(pq.read_table(raw_v2_path))
+
+    # Merge carried /1 row alongside fresh /2 usc_release_point_sections row in a /3 bundle.
+    v3_candidate = {
+        "cite_kind": "usc_section", "target_kind": "usc_section", "target_key": "5-553",
+        "normalized_key": "5-553", "target_resolved": True,
+        "candidate_keys": [{"usc_title": "5", "usc_section_key": "553"}],
+        "expected_cardinality": "many", "target_table_selected": "usc_release_point_sections",
+        "target_status": "found", "match_count": 1, "match_basis": "printed_section",
+        "resolution_rule": "selected-target-lookup/2",
+        "source_status": "native_field", "occurrence_key": "v3:0",
+    }
+    raw_v3 = observation([v3_candidate]) | {"scope_id": "fresh-scope", "occurrence_index": "0"}
+    merged_path = tmp_path / "v3_source" / "native_legal_references.parquet"
+    merged_path.parent.mkdir(parents=True)
+    pq.write_table(pa.Table.from_pylist([raw_v2, raw_v3]), merged_path)
+    manifest = write_legislative_outputs([merged_path], tmp_path / "v3-bundle", generation_id="v3-gen")
+    assert manifest["refused_rows"]["native_legal_references"] == 0
+    restored_v3 = restore_prior(tmp_path / "v3-bundle", tmp_path / "v3-restored")
+    assert pq.read_table(restored_v3["native_legal_references"]).num_rows == 2
+
+    # Explorer navigation resolves BOTH /2 usc_release_point_sections and carried /1 law_code_sections links.
+    targets = {
+        t["table"]: t
+        for t in next(s for s in declarations() if s["id"] == "native_legal_targets")["targets"]
+    }
+    assert "usc_release_point_sections" in targets and "law_code_sections" in targets
+    assert target_keys(
+        targets["usc_release_point_sections"],
+        {"target_table_selected": "usc_release_point_sections", "target_status": "found",
+         "usc_title": "5", "usc_section_key": "553"},
+        {},
+    ) == ["5", "553"]
+    assert target_keys(
+        targets["law_code_sections"],
+        {"target_table_selected": "law_code_sections", "target_status": "found",
+         "congress": "117", "session": "2", "seq": "1"},
+        {},
+    ) == ["117", "2", "1"]
