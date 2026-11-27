@@ -101,6 +101,7 @@ OBSERVED_SNAPSHOT_FILENAME = "observed-domain-snapshot-2026-10-30.json"
 OBSERVED_SNAPSHOT_FILENAMES = (
     OBSERVED_SNAPSHOT_FILENAME,
     "observed-domain-snapshot-2026-10-30-unified-agenda.json",
+    "observed-domain-snapshot-2026-11-27-lda-government-entities.json",
 )
 _REFSPEC_LISTS = Path(__file__).resolve().parents[1] / "reference" / "refspec"
 #: RefSpec's parse of each publisher's HTML captures, by capture ``publisher``; see the module docstring.
@@ -339,6 +340,43 @@ def lda_constant_values(payload: bytes) -> tuple[tuple[str, ...], dict[str, str]
     return values, {item["value"]: item["name"] for item in items}
 
 
+def lda_government_entity_values(payload: bytes) -> tuple[tuple[str, ...], dict[str, str]]:
+    """An LDA governmententities response: a JSON list of exact ``{"id": positive int, "name": str}`` objects.
+
+    Returns stringified integer IDs in publisher order (matching ``lobbying_activities.government_entities.id``'s
+    ``VARCHAR`` member type) alongside the publisher's exact label for each ID. Any changed or unsupported
+    shape (non-integer/boolean/non-positive ``id``, missing or extra fields, blank or padded labels, duplicate
+    IDs or duplicate labels) refuses with :class:`SourceDomainError`.
+    """
+
+    try:
+        items = json.loads(payload)
+    except ValueError as error:
+        raise SourceDomainError(f"LDA governmententities capture is not JSON: {error}") from error
+    if not isinstance(items, list) or not items:
+        raise SourceDomainError("LDA governmententities capture is not a nonempty JSON list")
+    values_list: list[str] = []
+    labels: dict[str, str] = {}
+    for item in items:
+        if not isinstance(item, Mapping) or set(item) != {"id", "name"}:
+            raise SourceDomainError(f"LDA governmententities capture carries a drifted item {item!r}")
+        raw_id = item["id"]
+        name = item["name"]
+        if not isinstance(raw_id, int) or isinstance(raw_id, bool) or raw_id <= 0:
+            raise SourceDomainError(f"LDA governmententities capture carries a non-positive/non-integer id {raw_id!r}")
+        if not isinstance(name, str) or not name.strip() or name != name.strip():
+            raise SourceDomainError(f"LDA governmententities capture carries a malformed label {name!r}")
+        code = str(raw_id)
+        values_list.append(code)
+        labels[code] = name
+    values = tuple(values_list)
+    if len(set(values)) != len(values):
+        raise SourceDomainError("LDA governmententities capture repeats an id")
+    if len(set(labels.values())) != len(values):
+        raise SourceDomainError("LDA governmententities capture repeats a name")
+    return values, labels
+
+
 def vendored_code_values(
     capture: DocumentedEnumerationCapture, resource: str, *, lists: Path | None = None
 ) -> tuple[tuple[str, ...], dict[str, str]]:
@@ -433,8 +471,6 @@ class _DomainDeclaration:
 #   (:data:`_LABEL_ONLY_DECLARATIONS`), for the reasons stated there.
 # * ``origin_chamber`` and ``bill_committees.chamber`` have no publisher list:
 #   the BILLSTATUS guide's chamber column belongs to its summary-version table.
-# * LDA covered government entities: no capture states their list (live data
-#   holds 255 distinct ids), so there is nothing to check them against.
 # * ``gao_reports.topics`` mixes published topics with free keywords (12,100
 #   distinct values), and ``gao_decisions.topics`` holds decision-type labels,
 #   not topics; neither is GAO's topic list. CBO's taxonomy waits for its archive
@@ -550,6 +586,16 @@ _DECLARATIONS: tuple[_DomainDeclaration, ...] = (
         element="value",
         expected_values=50,
         expected_raw_options=50,
+    ),
+    _DomainDeclaration(
+        key="lda-government-entity",
+        table="lobbying_activities",
+        column="government_entities.id",
+        capture_key="lda-government-entities",
+        locator="constants/filing/governmententities/ (id, name)",
+        element="id",
+        expected_values=257,
+        expected_raw_options=257,
     ),
     _DomainDeclaration(
         key="fec-committee-type",
@@ -712,7 +758,12 @@ def _parse_declarations(
             if capture.media_type == "text/markdown":
                 values, labels = guide_table_values(payload, element)
             elif capture.media_type == "application/json":
-                values, labels = lda_constant_values(payload)
+                if element == "value":
+                    values, labels = lda_constant_values(payload)
+                elif element == "id":
+                    values, labels = lda_government_entity_values(payload)
+                else:
+                    raise SourceDomainError(f"capture {capture.key} names unsupported JSON key element {element!r}")
             elif capture.media_type == "text/html":
                 values, labels = vendored_code_values(capture, element)
             else:
@@ -1145,6 +1196,26 @@ ACCEPTED_DOMAIN_FINDINGS: tuple[AcceptedFinding, ...] = (
             "'the history and mission of GAO and its programs and services. GAO publications and guidance', i.e. "
             "GAO about itself, not an area of agency recommendations; a listed topic no recommendation carries is "
             "the list's breadth, not a retired value (owner, 2026-10-31)."
+        ),
+    ),
+    AcceptedFinding(
+        domain_key="lda-government-entity",
+        kind=UNOBSERVED,
+        value="194",
+        reason=(
+            "The Senate LDA governmententities constants list publishes id 194 with the literal label "
+            "'PLEASE DO NOT USE THIS ONE', an explicit do-not-use placeholder carried by zero rows across "
+            "13,233,280 observed lobbying_activities.government_entities elements (ss-a5vb, 2026-11-27)."
+        ),
+    ),
+    AcceptedFinding(
+        domain_key="lda-government-entity",
+        kind=UNOBSERVED,
+        value="195",
+        reason=(
+            "The Senate LDA governmententities constants list publishes id 195 with the literal label 'NONE', "
+            "an explicit no-entity placeholder carried by zero rows across 13,233,280 observed "
+            "lobbying_activities.government_entities elements (ss-a5vb, 2026-11-27)."
         ),
     ),
 )

@@ -2924,21 +2924,25 @@ def _tools() -> list[Tool]:
         identifier: Annotated[str, Field(min_length=1, max_length=256)],
         on_date: Annotated[str | None, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None,
     ) -> dict[str, Any]:
-        """Look up an exact agency identifier in the pinned reviewed RefSpec mapping.
+        """Look up an agency identifier or reviewed alias in RefSpec Agency Registry View 1.4.
 
-        Namespaces are regulations.gov:agency (e.g. OPM) and
-        federal_register_agency (e.g. 406). Labels are not identifiers.
-        Return mapping evidence, publication pins and documented abstentions.
-        Parent relationships and succession events are not identity: whether
-        two names are one agency is the registry's own judgment, stated in each
-        evidence row's reasoning sentence. parent_labels gives each parent's
-        name where the registry's rows state one (null where none does).
-        REF-072 bridge and event evidence stays separate from REF-038
-        candidates. registry_evidence.current_lineage is computed for
-        federal_register_agency ids only (a regulations.gov code reads
-        not_applicable) and follows the owner policy without dates; on_date
-        preserves evidence but cannot establish historical identity.
-        No acquisition, new adjudication, or money attribution is performed.
+        Namespaces are regulations.gov:agency (e.g. OPM), federal_register_agency
+        (e.g. 406), and name (e.g. Bureau of Land Management, USMC). Labels are
+        not identifiers under regulations.gov:agency or federal_register_agency;
+        name matches strictly by RefSpec's published name_key against the 157
+        owner-reviewed aliases and 472 pinned Federal Register organizations,
+        never fuzzy. Return mapping evidence, publication pins and documented
+        abstentions. Parent relationships, partOf aliases, and succession events
+        are not identity: whether two names are one agency is the registry's own
+        judgment, stated in each evidence row's reasoning sentence. parent_labels
+        gives each parent's name where the registry's rows state one (null where
+        none does). REF-072 bridge and event evidence and REF-075/REF-077 alias
+        evidence stay separate from REF-038 candidates.
+        registry_evidence.current_lineage is computed for federal_register_agency
+        ids only (regulations.gov:agency and name read not_applicable) and
+        follows the owner policy without dates; on_date preserves evidence but
+        cannot establish historical identity. No acquisition, new adjudication,
+        or money attribution is performed.
         """
         from spicy_regs.vocabulary_mapping import lookup_agency as lookup
 

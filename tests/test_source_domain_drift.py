@@ -41,6 +41,7 @@ from spicy_regs.sources.source_domains import (
     vendored_code_values,
     label_only_domains,
     lda_constant_values,
+    lda_government_entity_values,
     load_capture_manifest,
     load_observed_snapshot,
     load_observed_snapshots,
@@ -144,6 +145,8 @@ def test_the_findings_are_the_ones_this_snapshot_carries(findings):
         "fec-organization-type/undocumented-value/H",
         "fec-organization-type/undocumented-value/I",
         "gao-recommendation-topic/unobserved-value/GAO Mission and Operations",
+        "lda-government-entity/unobserved-value/194",
+        "lda-government-entity/unobserved-value/195",
         "regulations-gov-comment-document-type/undocumented-value/Public Submission",
         "regulations-gov-comment-document-type/unobserved-value/Notice",
         "regulations-gov-comment-document-type/unobserved-value/Proposed Rule",
@@ -274,6 +277,7 @@ def test_captures_verify_against_their_pins():
         "gao-topics-listing",
         "lda-filing-types",
         "lda-general-issue-codes",
+        "lda-government-entities",
         "reginfo-rin-data-xsd",
         "regulations-gov-openapi-v4",
     ]
@@ -460,6 +464,47 @@ def test_a_drifted_lda_constants_response_is_refused(payload):
         lda_constant_values(payload)
 
 
+def test_lda_government_entities_capture_is_parsed_directly_and_exposes_authoritative_labels(documented, observed):
+    """ss-a5vb: 257 authoritative LDA government entities, 255 observed live, 194/195 sentinel placeholders unobserved."""
+
+    items = json.loads((DOMAIN_DIR / "lda-government-entities-2026-11-27.json").read_bytes())
+    domain = documented["lda-government-entity"]
+    assert len(items) == 257
+    assert (domain.table, domain.column) == ("lobbying_activities", "government_entities.id")
+    assert domain.values == tuple(str(item["id"]) for item in items)
+    assert dict(domain.labels) == {str(item["id"]): item["name"] for item in items}
+    assert domain.labels["1"] == "SENATE"
+    assert domain.labels["2"] == "HOUSE OF REPRESENTATIVES"
+    assert domain.labels["211"] == "Access Board"
+    assert domain.labels["194"] == "PLEASE DO NOT USE THIS ONE"
+    assert domain.labels["195"] == "NONE"
+    obs = observed["lda-government-entity"]
+    assert len(obs.value_counts) == 255
+    assert obs.null_count == 0
+    assert obs.row_count == 13_233_280
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b'{"id": 1, "name": "SENATE"}',
+        b"[]",
+        b'[{"value": "1", "name": "SENATE"}]',
+        b'[{"id": "1", "name": "SENATE"}]',
+        b'[{"id": true, "name": "SENATE"}]',
+        b'[{"id": 0, "name": "SENATE"}]',
+        b'[{"id": -1, "name": "SENATE"}]',
+        b'[{"id": 1, "name": " SENATE "}]',
+        b'[{"id": 1, "name": "SENATE", "extra": "x"}]',
+        b'[{"id": 1, "name": "A"}, {"id": 1, "name": "B"}]',
+        b'[{"id": 1, "name": "A"}, {"id": 2, "name": "A"}]',
+    ],
+)
+def test_a_drifted_lda_government_entities_response_is_refused(payload):
+    with pytest.raises(SourceDomainError):
+        lda_government_entity_values(payload)
+
+
 def test_fec_lists_come_from_refspecs_parse_of_the_pinned_pages(documented, labels_only):
     assert documented["fec-committee-designation"].values == ("A", "B", "D", "J", "P", "U")
     assert len(documented["fec-committee-type"].values) == 16
@@ -549,6 +594,13 @@ def test_documented_values_carry_the_accepted_disagreements():
     }
     lda = values["lobbying_filings"]["filing_type"]
     assert (lda["observed_off_list"], lda["unobserved"]) == ([], [])
+    gov = values["lobbying_activities"]["government_entities.id"]
+    assert gov["checked"] is True
+    assert gov["source_url"] == "https://lda.gov/api/v1/constants/filing/governmententities/"
+    assert {"value": "1", "label": "SENATE"} in gov["values"]
+    assert {"value": "211", "label": "Access Board"} in gov["values"]
+    assert gov["observed_off_list"] == []
+    assert gov["unobserved"] == ["194", "195"]
     assert {"observed_off_list", "unobserved", "observed_at"}.isdisjoint(values["bill_actions"]["action_code"])
 
 
@@ -722,8 +774,8 @@ def test_the_snapshot_file_is_small_enough_to_read():
 def test_the_tool_passes_on_the_committed_inputs():
     result = subprocess.run([sys.executable, str(TOOL)], capture_output=True, text=True, cwd=ROOT)
     assert result.returncode == 0, result.stderr
-    assert "16 documented domains" in result.stdout
-    assert "38 findings" in result.stdout
+    assert "17 documented domains" in result.stdout
+    assert "40 findings" in result.stdout
     assert "UNRECORDED" not in result.stdout
 
 

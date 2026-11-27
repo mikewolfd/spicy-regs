@@ -97,9 +97,13 @@ def test_an_unknown_argument_a_bad_value_and_a_missing_one_are_said_together(mon
 def test_an_unsupported_namespace_is_refused_naming_the_supported_ones(monkeypatch):
     """Reverses rounds 4-5: an unsupported namespace answered success with status unsupported_namespace."""
     message = _refusal(monkeypatch, "lookup_agency", {"namespace": "sec.gov:cik", "identifier": "OPM"})
-    assert "namespace: Input should be 'regulations.gov:agency' or 'federal_register_agency'" in message
+    assert "namespace: Input should be 'regulations.gov:agency', 'federal_register_agency' or 'name'" in message
     [tool] = [t for t in asyncio.run(server.build_server().list_tools()) if t.name == "lookup_agency"]
-    assert tool.input_schema["properties"]["namespace"]["enum"] == ["regulations.gov:agency", "federal_register_agency"]
+    assert tool.input_schema["properties"]["namespace"]["enum"] == [
+        "regulations.gov:agency",
+        "federal_register_agency",
+        "name",
+    ]
 
 
 # M8: a held field's read recorded before rule sets were kept is a read, and status words are defined where used.

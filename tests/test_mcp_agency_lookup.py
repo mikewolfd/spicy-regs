@@ -1,7 +1,7 @@
 """Exact reviewed lookups through MCP need no source table connection."""
 
 import asyncio
-from pathlib import Path
+import json
 import shutil
 
 import pytest
@@ -23,39 +23,37 @@ def test_real_lookup_namespaces_and_temporal_abstention(monkeypatch):
 
     assert lookup("regulations.gov:agency", "OPM")["candidates"][0]["org"] == "urn:ref:federal-register-agency:406"
     assert lookup("federal_register_agency", "406")["status"] == "reviewed_mapping"
+    assert lookup("federal_register_agency", "406")["registry_evidence"]["organization"]["short_name"] == "OPM"
     assert lookup("regulations.gov:agency", "Office of Personnel Management")["status"] == "unmatched"
     assert lookup("regulations.gov:agency", "ARCTICGAS")["abstentions"]
     assert lookup("regulations.gov:agency", "OPM", on_date="1990-01-01")["status"] == "temporal_scope_unqualified"
-    # Round 6 reversed the round-4/5 success reply: an agent took "unsupported_namespace" as an answer. The schema
-    # advertises the two namespaces, so another one is a malformed argument, refused naming both.
-    with pytest.raises(ToolError, match="'regulations.gov:agency' or 'federal_register_agency'"):
+    # View 1.4 reviewed alias lookup through MCP without opening source tables.
+    blm = lookup("name", "Bureau of Land Management")
+    assert blm["status"] == "reviewed_alias"
+    assert blm["registry_evidence"]["organization"]["fr_id"] == 275
+    assert blm["publication"]["schema_version"] == "1.4"
+    # High-alias agency (DoD, 33 aliases) stays compact and well below REPLY_CHARS.
+    dod = lookup("federal_register_agency", "103")
+    assert len(dod["registry_evidence"]["aliases"]) == 33
+    assert len(json.dumps(dod, separators=(",", ":"))) < mcp_server.REPLY_CHARS
+    # Round 6 + View 1.4: another namespace is refused naming all three closed namespaces.
+    with pytest.raises(ToolError, match="'regulations.gov:agency', 'federal_register_agency' or 'name'"):
         lookup("gao_topic", "OPM")
     with pytest.raises(ToolError):
         lookup("regulations.gov:agency", "OPM", on_date="2026-02-30")
 
 
-@pytest.mark.parametrize("filename", ["view-manifest.json", "agency-projection-unresolved.parquet"])
-def test_lookup_refuses_tampered_vendored_evidence(tmp_path, monkeypatch, filename):
-    root = tmp_path / "reference/refspec"
-    root.mkdir(parents=True)
-    original = Path(__file__).parents[1] / "src/spicy_regs/reference/refspec"
-    for source in original.iterdir():
-        if source.is_file():
-            shutil.copyfile(source, root / source.name)
-    file = root / filename
-    data = bytearray(file.read_bytes())
-    data[len(data) // 2] ^= 1
-    file.write_bytes(data)
-    monkeypatch.setattr(vocabulary_mapping, "files", lambda _: tmp_path)
-    monkeypatch.setattr(agencies, "AGENCY_PROJECTION_UNRESOLVED_PATH", root / "agency-projection-unresolved.parquet")
-    with pytest.raises(ValueError, match="differs|not RefSpec"):
-        vocabulary_mapping.lookup_agency("regulations.gov:agency", "ARCTICGAS")
-
-
-@pytest.mark.parametrize("filename", ["view-manifest.json", "tables/agency-registry-events.parquet"])
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "view-manifest.json",
+        "tables/agency-projection-unresolved.parquet",
+        "tables/agency-registry-events.parquet",
+        "tables/agency-registry-aliases.parquet",
+        "tables/agency-registry-organizations.parquet",
+    ],
+)
 def test_registry_lookup_refuses_tampered_owner_artifacts(tmp_path, monkeypatch, filename):
-    from spicy_regs.ontology import agencies
-
     root = tmp_path / "registry"
     shutil.copytree(str(agencies.AGENCY_REGISTRY_VIEW_PATH), root)
     file = root / filename

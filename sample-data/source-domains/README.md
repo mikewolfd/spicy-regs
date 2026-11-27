@@ -45,6 +45,7 @@ nothing exercises is a claim nobody checked.
 | `billstatus-xml-user-guide-2026-08-03.md` | 38,802 | `a10909696b2ed2244d75c76e75fa32bc3e4eb926deab7e4e00592a6a01c3ad3a` | `https://raw.githubusercontent.com/usgpo/bill-status/master/BILLSTATUS-XML_User_User-Guide.md` |
 | `lda-general-issue-codes-2026-07-30.json` | 3,596 | `e1820ef17f3e63048ae50e526c2f56e507b2cf60d720fc227c76ee7c3610d5bf` | `https://lda.gov/api/v1/constants/filing/lobbyingactivityissues/` |
 | `lda-filing-types-2026-07-30.json` | 2,803 | `49fbd39383b0be63fb474878aa229d4e397880a30c2e0dac1a0905bc660a3149` | `https://lda.gov/api/v1/constants/filing/filingtypes/` |
+| `lda-government-entities-2026-11-27.json` | 13,891 | `044ed01ef94d79b0f71751c0cbc543bd61256b7668603e8a602d345af7a1d9f0` | `https://lda.gov/api/v1/constants/filing/governmententities/` |
 | `fec-committee-master-file-description-2026-08-03.html` | 29,343 | `dda49be2e360d39bb1b7dcbc53239e627109a26fbaefe172688aca84abc4ff66` | `https://www.fec.gov/campaign-finance-data/committee-master-file-description/` |
 | `fec-committee-type-code-descriptions-2026-08-03.html` | 28,121 | `84e9f16628fd2475750cd89a3947f2c737a5f66c8ced04aea6b1118ac2aecaa4` | `https://www.fec.gov/campaign-finance-data/committee-type-code-descriptions/` |
 | `fec-party-code-descriptions-2026-08-03.html` | 29,578 | `e17420381df0e5709449a8c9702600fde97503ea378ef357beef4c40ed6a6b09` | `https://www.fec.gov/campaign-finance-data/party-code-descriptions/` |
@@ -142,7 +143,10 @@ Since 2026-10-31 the history builders fold a case variant of exactly one code
 keep every other off-list value as filed; each receipt keeps the original in
 `conversion_inputs` and the reason in `conversion_diagnostics`. Published rows
 change at the next build of those families.
-LDA covered government entities have no captured list at all.
+LDA covered government entities (`lda-government-entity`, 257 entries in `lda-government-entities-2026-11-27.json`,
+matching RefSpec's `LDA_GOVERNMENT_ENTITIES_2026_11_27` pin) are gated on `lobbying_activities.government_entities.id`
+via `observed-domain-snapshot-2026-11-27-lda-government-entities.json` (255 observed IDs across 13,233,280 elements,
+0 undocumented IDs, and 2 unobserved publisher placeholders: `194` `'PLEASE DO NOT USE THIS ONE'` and `195` `'NONE'`).
 
 Every documented list, gated or not, reaches `describe_table` as the table's
 `metadata.documented_values` with `detail=true`, each column marked `checked`

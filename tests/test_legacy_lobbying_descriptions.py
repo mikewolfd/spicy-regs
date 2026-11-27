@@ -85,6 +85,35 @@ def test_documented_filing_types_are_detail_only(monkeypatch):
     assert len(filing_type['values']) == 50
 
 
+def test_documented_lda_government_entities_reach_describe_table_detail_only(monkeypatch):
+    """ss-a5vb: lobbying_activities detail reply serves the selected 257-entry LDA governmententities registry."""
+    con = duckdb.connect()
+    schema = installed_policies()['lobbying_activities'].subject_schema
+    con.register('subjects', pa.Table.from_batches([], schema=schema))
+    con.execute('CREATE TABLE lobbying_activities AS SELECT * FROM subjects')
+    monkeypatch.setattr(mcp_server, '_get_connection', lambda: con)
+    monkeypatch.setattr(mcp_server, '_connection_index', lambda cursor: copy.deepcopy(LEGACY))
+    monkeypatch.setattr(mcp_server, '_input_lineage', lambda *args: {})
+    mcp_server._table_metadata.cache_clear()
+    server = mcp_server.build_server()
+    compact = asyncio.run(server.call_tool('describe_table', {'table': 'lobbying_activities', 'detail': False}))
+    full = asyncio.run(server.call_tool('describe_table', {'table': 'lobbying_activities', 'detail': True}))
+    con.close()
+    assert isinstance(compact, CallToolResult) and not compact.is_error
+    assert isinstance(full, CallToolResult) and not full.is_error
+    assert 'documented_values' not in compact.structured_content['metadata']
+    gov = full.structured_content['metadata']['documented_values']['government_entities.id']
+    assert gov['domain'] == 'lda-government-entity'
+    assert gov['checked'] is True
+    assert gov['source_url'] == 'https://lda.gov/api/v1/constants/filing/governmententities/'
+    assert len(gov['values']) == 257
+    assert {'value': '1', 'label': 'SENATE'} in gov['values']
+    assert {'value': '2', 'label': 'HOUSE OF REPRESENTATIVES'} in gov['values']
+    assert {'value': '211', 'label': 'Access Board'} in gov['values']
+    assert gov['observed_off_list'] == []
+    assert gov['unobserved'] == ['194', '195']
+
+
 def test_labels_only_lists_say_they_gate_nothing():
     """The generated dictionary marks FEC party and BILLSTATUS action codes as unchecked, with the guide's caveat."""
     mcp_server._table_metadata.cache_clear()

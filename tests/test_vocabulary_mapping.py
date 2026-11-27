@@ -2,7 +2,7 @@
 
 import pytest
 
-from spicy_regs.vocabulary_mapping import FEDERAL_REGISTER, REGULATIONS, lookup_agency
+from spicy_regs.vocabulary_mapping import FEDERAL_REGISTER, NAME, REGULATIONS, lookup_agency
 
 
 def test_native_identifier_mapping_carries_actual_review_and_capture_pins():
@@ -34,8 +34,10 @@ def test_retained_different_office_abstention_and_unqualified_history():
     historical = lookup_agency(REGULATIONS, "OPM", on_date="1990-01-01")
     assert historical["status"] == "temporal_scope_unqualified"
     assert historical["candidates"]  # Evidence retained, but not an assertion for that date.
-    # Round 6: another namespace is refused, not answered with a status a caller can mistake for a lookup.
-    with pytest.raises(ValueError, match="the namespaces are regulations.gov:agency and federal_register_agency"):
+    # Round 6 + View 1.4: another namespace is refused, not answered with a status a caller can mistake for a lookup.
+    with pytest.raises(
+        ValueError, match="the namespaces are regulations.gov:agency, federal_register_agency, and name"
+    ):
         lookup_agency("topic_label", "Transportation")
 
 
@@ -80,5 +82,48 @@ def test_the_mapping_reads_refspec_through_the_agencies_modules_public_names():
     assert private == [] and agencies.FR_AGENCY_URN not in source
     result = lookup_agency("regulations.gov:agency", "OPM")
     assert result["registry_evidence"]["publication"] == agencies.registry_publication()
+    assert result["publication"]["schema_version"] == "1.4"
+    assert result["publication"]["manifest_sha256"] == "sha256:" + agencies.AGENCY_REGISTRY_MANIFEST_SHA256
     assert result["publication"]["unresolved_sha256"] == "sha256:" + agencies.AGENCY_PROJECTION_UNRESOLVED_SHA256
     assert agencies.unresolved_rows() and all("source_value" in row for row in agencies.unresolved_rows())
+
+
+def test_all_157_view_14_aliases_and_rejected_names_resolve_accurately():
+    from spicy_regs.ontology import agencies
+
+    aliases = agencies.alias_rows()
+    assert len(aliases) == 157
+    for alias in aliases:
+        res = lookup_agency(NAME, alias["name_key"])
+        assert res["status"] == "reviewed_alias", alias["alias_id"]
+        assert res["candidates"] == []
+        assert len(res["registry_evidence"]["aliases"]) == 1
+        assert res["registry_evidence"]["aliases"][0]["alias_id"] == alias["alias_id"]
+        assert res["registry_evidence"]["current_lineage"]["status"] == "not_applicable"
+        if alias["fr_resource"] is not None:
+            assert res["registry_evidence"]["organization"]["resource_iri"] == alias["fr_resource"]
+        else:
+            assert res["registry_evidence"]["organization"] is None
+
+    # Normalized name_key lookup (punctuation/qualifier variants) + partOf stays non-identity.
+    usmc = lookup_agency(NAME, "The U.S. Marine Corps (USMC)")
+    assert usmc["status"] == "reviewed_alias"
+    assert usmc["registry_evidence"]["aliases"][0]["fr_relation"] == "partOf"
+    assert usmc["registry_evidence"]["organization"]["fr_id"] == 378
+    # Non-FR statutory entity alias held in FH/OPM (fr_resource is None).
+    capitol_police = lookup_agency(NAME, "United States Capitol Police")
+    assert capitol_police["status"] == "reviewed_alias"
+    assert capitol_police["registry_evidence"]["aliases"][0]["target"] == "urn:ref:federal-hierarchy-org:500193110"
+    assert capitol_police["registry_evidence"]["organization"] is None
+    # Pinned FR organization direct name match (when not an alias).
+    epa = lookup_agency(NAME, "U.S. Environmental Protection Agency")
+    assert epa["status"] == "reviewed_organization"
+    assert epa["registry_evidence"]["organization"]["fr_id"] == 145
+    # Owner-rejected alias returns unmatched with its non-emission reasoning.
+    rejected = lookup_agency(NAME, "Energy")
+    assert rejected["status"] == "unmatched"
+    assert rejected["registry_evidence"]["non_emissions"][0]["reason"] == "aliasRejectedByOwner"
+    # Temporal abstention on name lookup preserves alias evidence.
+    dated = lookup_agency(NAME, "Bureau of Land Management", on_date="1995-01-01")
+    assert dated["status"] == "temporal_scope_unqualified"
+    assert dated["registry_evidence"]["aliases"][0]["fr_resource"] == "urn:ref:federal-register-agency:275"

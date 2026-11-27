@@ -16,7 +16,7 @@
       {
         "column_name": "agency_code",
         "column_type": "VARCHAR",
-        "description": "Posting agency's short code (e.g. `EPA`, `FDA`, `ACF`). `lookup_agency` resolves it to Federal Register, eCFR and Federal Hierarchy organizations through RefSpec's REF-038 projection (vendored `reference/refspec/agency-projection.parquet`): measured 2026-10-30, 189 of 196 codes on 279,595 of 279,719 rows; `TRAIN`, `PCSCOTUS`, `USC`, `ERULE`, `EOA`, `BSC` and `GAPFAC` have no projection row."
+        "description": "Posting agency's short code (e.g. `EPA`, `FDA`, `ACF`). `lookup_agency` resolves it to Federal Register, eCFR and Federal Hierarchy organizations through RefSpec's REF-038 projection inside Agency Registry View 1.4 (vendored `reference/refspec/agency-registry-view/tables/agency-projection.parquet`): measured 2026-10-30, 189 of 196 codes on 279,595 of 279,719 rows; `TRAIN`, `PCSCOTUS`, `USC`, `ERULE`, `EOA`, `BSC` and `GAPFAC` have no projection row."
       },
       {
         "column_name": "title",
@@ -3395,6 +3395,1048 @@
         "observed_at": "2026-10-31T07:37:10Z",
         "observed_off_list": [],
         "unobserved": []
+      },
+      "government_entities.id": {
+        "domain": "lda-government-entity",
+        "checked": true,
+        "source_url": "https://lda.gov/api/v1/constants/filing/governmententities/",
+        "locator": "lda-government-entities-2026-11-27.json constants/filing/governmententities/ (id, name)",
+        "values": [
+          {
+            "value": "211",
+            "label": "Access Board"
+          },
+          {
+            "value": "131",
+            "label": "Administration for Children & Families (ACF)"
+          },
+          {
+            "value": "130",
+            "label": "Administration on Aging"
+          },
+          {
+            "value": "214",
+            "label": "Advisory Council on Historic Preservation (ACHP)"
+          },
+          {
+            "value": "43",
+            "label": "African Development Foundation"
+          },
+          {
+            "value": "132",
+            "label": "Agency for Healthcare Research & Quality (AHRQ)"
+          },
+          {
+            "value": "133",
+            "label": "Agency for Toxic Substances & Disease Registry"
+          },
+          {
+            "value": "23",
+            "label": "Agriculture, Dept of (USDA)"
+          },
+          {
+            "value": "29",
+            "label": "Air Force, Dept of"
+          },
+          {
+            "value": "225",
+            "label": "Alcohol & Tobacco Tax & Trade Bureau (TTB)"
+          },
+          {
+            "value": "104",
+            "label": "Alternative Agricultural Research & Commercialization Center"
+          },
+          {
+            "value": "224",
+            "label": "American Battle Monuments Commission"
+          },
+          {
+            "value": "75",
+            "label": "AMTRAK - Natl Railroad Passenger Corporation"
+          },
+          {
+            "value": "226",
+            "label": "Appalachian Regional Commission"
+          },
+          {
+            "value": "3",
+            "label": "Architect of the Capitol (AOC)"
+          },
+          {
+            "value": "227",
+            "label": "Architectural & Transportation Barriers Compliance Board"
+          },
+          {
+            "value": "200",
+            "label": "Army, Dept of (Corps of Engineers)"
+          },
+          {
+            "value": "30",
+            "label": "Army, Dept of (Other)"
+          },
+          {
+            "value": "115",
+            "label": "Ballistic Missile Defense Organization"
+          },
+          {
+            "value": "182",
+            "label": "Bureau of Alcohol Tobacco Firearms & Explosives"
+          },
+          {
+            "value": "228",
+            "label": "Bureau of Arms Control"
+          },
+          {
+            "value": "154",
+            "label": "Bureau of Citizenship & Immigration Services (BCIS)"
+          },
+          {
+            "value": "106",
+            "label": "Bureau of Economic Analysis"
+          },
+          {
+            "value": "185",
+            "label": "Bureau of Engraving & Printing"
+          },
+          {
+            "value": "146",
+            "label": "Bureau of Indian Affairs (BIA)"
+          },
+          {
+            "value": "107",
+            "label": "Bureau of Industry and Security (BIS)"
+          },
+          {
+            "value": "157",
+            "label": "Bureau of Justice Assistance"
+          },
+          {
+            "value": "158",
+            "label": "Bureau of Justice Statistics"
+          },
+          {
+            "value": "169",
+            "label": "Bureau of Labor Statistics (BLS)"
+          },
+          {
+            "value": "148",
+            "label": "Bureau of Land Management (BLM)"
+          },
+          {
+            "value": "151",
+            "label": "Bureau of Prisons (BOP)"
+          },
+          {
+            "value": "149",
+            "label": "Bureau of Reclamation"
+          },
+          {
+            "value": "105",
+            "label": "Bureau of the Census"
+          },
+          {
+            "value": "190",
+            "label": "Bureau of the Public Debt"
+          },
+          {
+            "value": "180",
+            "label": "Bureau of Transportation Statistics"
+          },
+          {
+            "value": "134",
+            "label": "Centers For Disease Control & Prevention (CDC)"
+          },
+          {
+            "value": "136",
+            "label": "Centers For Medicare and Medicaid Services (CMS)"
+          },
+          {
+            "value": "44",
+            "label": "Central Intelligence Agency (CIA)"
+          },
+          {
+            "value": "24",
+            "label": "Commerce, Dept of (DOC)"
+          },
+          {
+            "value": "45",
+            "label": "Commodity Futures Trading Commission (CFTC)"
+          },
+          {
+            "value": "8",
+            "label": "Congressional Budget Office (CBO)"
+          },
+          {
+            "value": "255",
+            "label": "Consumer Financial Protection Bureau (CFPB)"
+          },
+          {
+            "value": "46",
+            "label": "Consumer Product Safety Commission (CPSC)"
+          },
+          {
+            "value": "47",
+            "label": "Corporation for Natl & Community Service"
+          },
+          {
+            "value": "205",
+            "label": "Corporation for Public Broadcasting"
+          },
+          {
+            "value": "164",
+            "label": "Corrections Program Office"
+          },
+          {
+            "value": "14",
+            "label": "Council of Economic Advisers (CEA)"
+          },
+          {
+            "value": "15",
+            "label": "Council on Environmental Quality (CEQ)"
+          },
+          {
+            "value": "116",
+            "label": "Defense Advanced Research Projects Agency (DARPA)"
+          },
+          {
+            "value": "229",
+            "label": "Defense Business Transformation Agency (BTA)"
+          },
+          {
+            "value": "117",
+            "label": "Defense Commissary Agency"
+          },
+          {
+            "value": "118",
+            "label": "Defense Contract Audit Agency (DCAA)"
+          },
+          {
+            "value": "28",
+            "label": "Defense Department Field Activities"
+          },
+          {
+            "value": "25",
+            "label": "Defense, Dept of (DOD)"
+          },
+          {
+            "value": "230",
+            "label": "Defense Finance & Accounting Service (DFAS)"
+          },
+          {
+            "value": "119",
+            "label": "Defense Information Systems Agency"
+          },
+          {
+            "value": "120",
+            "label": "Defense Intelligence Agency (DIA)"
+          },
+          {
+            "value": "121",
+            "label": "Defense Investigative Service (DIS)"
+          },
+          {
+            "value": "122",
+            "label": "Defense Legal Services Agency"
+          },
+          {
+            "value": "123",
+            "label": "Defense Logistics Agency"
+          },
+          {
+            "value": "48",
+            "label": "Defense Nuclear Facilities Safety Board"
+          },
+          {
+            "value": "124",
+            "label": "Defense Security Assistance Agency"
+          },
+          {
+            "value": "231",
+            "label": "Defense Security Cooperation Agency (DSCA)"
+          },
+          {
+            "value": "125",
+            "label": "Defense Special Weapons Agency"
+          },
+          {
+            "value": "236",
+            "label": "Defense Threat Reduction Agency (DTRA)"
+          },
+          {
+            "value": "215",
+            "label": "Director of National Intelligence (ODNI)"
+          },
+          {
+            "value": "163",
+            "label": "Drug Court Program Office"
+          },
+          {
+            "value": "155",
+            "label": "Drug Enforcement Administration (DEA)"
+          },
+          {
+            "value": "108",
+            "label": "Economic Development Administration"
+          },
+          {
+            "value": "32",
+            "label": "Education, Dept of"
+          },
+          {
+            "value": "217",
+            "label": "Election Assistance Commission (EAC)"
+          },
+          {
+            "value": "166",
+            "label": "Employment Standards Administration"
+          },
+          {
+            "value": "232",
+            "label": "Employment & Training Administration"
+          },
+          {
+            "value": "33",
+            "label": "Energy, Dept of"
+          },
+          {
+            "value": "49",
+            "label": "Environmental Protection Agency (EPA)"
+          },
+          {
+            "value": "50",
+            "label": "Equal Employment Opportunity Commission (EEOC)"
+          },
+          {
+            "value": "11",
+            "label": "Executive Office of the President (EOP)"
+          },
+          {
+            "value": "51",
+            "label": "Export-Import Bank of the United States (EXIM Bank)"
+          },
+          {
+            "value": "52",
+            "label": "Farm Credit Administration"
+          },
+          {
+            "value": "233",
+            "label": "Federal Accounting Standards Advisory Board (FASAB)"
+          },
+          {
+            "value": "172",
+            "label": "Federal Aviation Administration (FAA)"
+          },
+          {
+            "value": "150",
+            "label": "Federal Bureau of Investigation (FBI)"
+          },
+          {
+            "value": "53",
+            "label": "Federal Communications Commission (FCC)"
+          },
+          {
+            "value": "54",
+            "label": "Federal Deposit Insurance Corporation (FDIC)"
+          },
+          {
+            "value": "55",
+            "label": "Federal Election Commission (FEC)"
+          },
+          {
+            "value": "56",
+            "label": "Federal Emergency Management Agency (FEMA)"
+          },
+          {
+            "value": "197",
+            "label": "Federal Energy Regulatory Commission (FERC)"
+          },
+          {
+            "value": "173",
+            "label": "Federal Highway Administration (FHA)"
+          },
+          {
+            "value": "57",
+            "label": "Federal Housing Finance Agency (FHFA)"
+          },
+          {
+            "value": "58",
+            "label": "Federal Labor Relations Authority (FLRA)"
+          },
+          {
+            "value": "186",
+            "label": "Federal Law Enforcement Training Center"
+          },
+          {
+            "value": "187",
+            "label": "Federal Management Service"
+          },
+          {
+            "value": "59",
+            "label": "Federal Maritime Commission"
+          },
+          {
+            "value": "60",
+            "label": "Federal Mediation & Conciliation Service"
+          },
+          {
+            "value": "234",
+            "label": "Federal Mine Safety Health Review Commission (FMSHRC)"
+          },
+          {
+            "value": "218",
+            "label": "Federal Motor Carrier Safety Administration"
+          },
+          {
+            "value": "174",
+            "label": "Federal Railroad Administration"
+          },
+          {
+            "value": "62",
+            "label": "Federal Reserve System"
+          },
+          {
+            "value": "63",
+            "label": "Federal Retirement Thrift Investment Board"
+          },
+          {
+            "value": "64",
+            "label": "Federal Trade Commission (FTC)"
+          },
+          {
+            "value": "176",
+            "label": "Federal Transit Administration (FTA)"
+          },
+          {
+            "value": "235",
+            "label": "Financial Crimes Enforcement Network (FinCEN)"
+          },
+          {
+            "value": "237",
+            "label": "Financial Management Service (FMS)"
+          },
+          {
+            "value": "135",
+            "label": "Food & Drug Administration (FDA)"
+          },
+          {
+            "value": "65",
+            "label": "General Services Administration (GSA)"
+          },
+          {
+            "value": "238",
+            "label": "Ginnie Mae"
+          },
+          {
+            "value": "5",
+            "label": "Government Accountability Office (GAO)"
+          },
+          {
+            "value": "6",
+            "label": "Government Printing Office (GPO)"
+          },
+          {
+            "value": "34",
+            "label": "Health & Human Services, Dept of (HHS)"
+          },
+          {
+            "value": "137",
+            "label": "Health Resources & Services Administration (HRSA)"
+          },
+          {
+            "value": "201",
+            "label": "Homeland Security, Dept of (DHS)"
+          },
+          {
+            "value": "2",
+            "label": "HOUSE OF REPRESENTATIVES"
+          },
+          {
+            "value": "35",
+            "label": "Housing & Urban Development, Dept of (HUD)"
+          },
+          {
+            "value": "138",
+            "label": "Indian Health Service"
+          },
+          {
+            "value": "209",
+            "label": "Institute of Museum and Library Services (IMLS)"
+          },
+          {
+            "value": "66",
+            "label": "Inter-American Foundation"
+          },
+          {
+            "value": "36",
+            "label": "Interior, Dept of (DOI)"
+          },
+          {
+            "value": "188",
+            "label": "Internal Revenue Service (IRS)"
+          },
+          {
+            "value": "109",
+            "label": "Intl Trade Administration (ITA)"
+          },
+          {
+            "value": "239",
+            "label": "Job Corps"
+          },
+          {
+            "value": "27",
+            "label": "Joint Chiefs of Staff"
+          },
+          {
+            "value": "129",
+            "label": "Joint Service Schools"
+          },
+          {
+            "value": "37",
+            "label": "Justice, Dept of (DOJ)"
+          },
+          {
+            "value": "38",
+            "label": "Labor, Dept of (DOL)"
+          },
+          {
+            "value": "100",
+            "label": "Legal Services Corporation"
+          },
+          {
+            "value": "7",
+            "label": "Library of Congress (LOC)"
+          },
+          {
+            "value": "216",
+            "label": "Marine Mammal Commission"
+          },
+          {
+            "value": "177",
+            "label": "Maritime Administration (MARAD)"
+          },
+          {
+            "value": "253",
+            "label": "Medicare Payment Advisory Commission (MedPAC)"
+          },
+          {
+            "value": "67",
+            "label": "Merit Systems Protection Board"
+          },
+          {
+            "value": "147",
+            "label": "Minerals Management Service"
+          },
+          {
+            "value": "168",
+            "label": "Mine Safety & Health Administration (MSHA)"
+          },
+          {
+            "value": "61",
+            "label": "Mine Safety & Health Review Commission"
+          },
+          {
+            "value": "110",
+            "label": "Minority Business Development Agency"
+          },
+          {
+            "value": "68",
+            "label": "Natl Aeronautics & Space Administration (NASA)"
+          },
+          {
+            "value": "69",
+            "label": "Natl Archives & Records Administration (NARA)"
+          },
+          {
+            "value": "240",
+            "label": "Natl Bioethics Advisory Commission"
+          },
+          {
+            "value": "70",
+            "label": "Natl Capital Planning Commission (NCPC)"
+          },
+          {
+            "value": "241",
+            "label": "Natl Commission Libraries & Information Science (NCLS)"
+          },
+          {
+            "value": "222",
+            "label": "Natl Council on Disability"
+          },
+          {
+            "value": "71",
+            "label": "Natl Credit Union Administration (NCUA)"
+          },
+          {
+            "value": "198",
+            "label": "Natl Economic Council (NEC)"
+          },
+          {
+            "value": "206",
+            "label": "Natl Endowment for the Arts"
+          },
+          {
+            "value": "223",
+            "label": "Natl Endowment for the Humanities"
+          },
+          {
+            "value": "72",
+            "label": "Natl Foundation on the Arts & Humanities"
+          },
+          {
+            "value": "126",
+            "label": "Natl Geospatial Intelligence Agency"
+          },
+          {
+            "value": "242",
+            "label": "Natl Guard"
+          },
+          {
+            "value": "175",
+            "label": "Natl Highway Traffic Safety Administration (NHTSA)"
+          },
+          {
+            "value": "208",
+            "label": "Natl Indian Gaming Commission"
+          },
+          {
+            "value": "159",
+            "label": "Natl Institute of Justice"
+          },
+          {
+            "value": "243",
+            "label": "Natl Institute of Mental Health (NIMH)"
+          },
+          {
+            "value": "219",
+            "label": "Natl Institute of Standards & Technology (NIST)"
+          },
+          {
+            "value": "193",
+            "label": "Natl Institute on Alcohol Abuse & Alcoholism (NIAA)"
+          },
+          {
+            "value": "139",
+            "label": "Natl Institutes of Health (NIH)"
+          },
+          {
+            "value": "73",
+            "label": "Natl Labor Relations Board (NLRB)"
+          },
+          {
+            "value": "74",
+            "label": "Natl Mediation Board"
+          },
+          {
+            "value": "111",
+            "label": "Natl Oceanic & Atmospheric Administration (NOAA)"
+          },
+          {
+            "value": "143",
+            "label": "Natl Park Service (NPS)"
+          },
+          {
+            "value": "76",
+            "label": "Natl Science Foundation (NSF)"
+          },
+          {
+            "value": "127",
+            "label": "Natl Security Agency (NSA)"
+          },
+          {
+            "value": "16",
+            "label": "Natl Security Council (NSC)"
+          },
+          {
+            "value": "244",
+            "label": "Natl Technical Information Service"
+          },
+          {
+            "value": "112",
+            "label": "Natl Telecommunications & Information Administration (NTIA)"
+          },
+          {
+            "value": "77",
+            "label": "Natl Transportation Safety Board (NTSB)"
+          },
+          {
+            "value": "31",
+            "label": "Navy, Dept of"
+          },
+          {
+            "value": "195",
+            "label": "NONE"
+          },
+          {
+            "value": "78",
+            "label": "Nuclear Regulatory Commission (NRC)"
+          },
+          {
+            "value": "167",
+            "label": "Occupational Safety & Health Administration (OSHA)"
+          },
+          {
+            "value": "79",
+            "label": "Occupational Safety & Health Review Commission"
+          },
+          {
+            "value": "161",
+            "label": "Office for Victims of Crime"
+          },
+          {
+            "value": "17",
+            "label": "Office of Administration"
+          },
+          {
+            "value": "202",
+            "label": "Office of Faith-Based & Community Initiatives"
+          },
+          {
+            "value": "80",
+            "label": "Office of Government Ethics (OGE)"
+          },
+          {
+            "value": "156",
+            "label": "Office of Justice Program"
+          },
+          {
+            "value": "160",
+            "label": "Office of Juvenile Justice & Delinquency Prevention"
+          },
+          {
+            "value": "18",
+            "label": "Office of Management & Budget (OMB)"
+          },
+          {
+            "value": "245",
+            "label": "Office of Natl AIDS Policy"
+          },
+          {
+            "value": "19",
+            "label": "Office of Natl Drug Control Policy (NDCP)"
+          },
+          {
+            "value": "81",
+            "label": "Office of Personnel Management (OPM)"
+          },
+          {
+            "value": "20",
+            "label": "Office of Policy Development"
+          },
+          {
+            "value": "21",
+            "label": "Office of Science & Technology Policy (OSTP)"
+          },
+          {
+            "value": "82",
+            "label": "Office of Special Counsel"
+          },
+          {
+            "value": "145",
+            "label": "Office of Surface Mining Reclamation & Enforcement"
+          },
+          {
+            "value": "256",
+            "label": "Office of Technology Policy (OTP)"
+          },
+          {
+            "value": "183",
+            "label": "Office of the Comptroller of the Currency (OCC)"
+          },
+          {
+            "value": "26",
+            "label": "Office of the Secretary of Defense"
+          },
+          {
+            "value": "13",
+            "label": "Office of the Vice President of the United States"
+          },
+          {
+            "value": "192",
+            "label": "Office of Thrift Supervision (OTS)"
+          },
+          {
+            "value": "162",
+            "label": "Office on Violence Against Women"
+          },
+          {
+            "value": "128",
+            "label": "On-Site Inspection Agency"
+          },
+          {
+            "value": "203",
+            "label": "Overseas Private Investment Corp (OPIC)"
+          },
+          {
+            "value": "83",
+            "label": "Panama Canal Commission"
+          },
+          {
+            "value": "113",
+            "label": "Patent & Trademark Office (PTO)"
+          },
+          {
+            "value": "84",
+            "label": "Peace Corps"
+          },
+          {
+            "value": "85",
+            "label": "Pension Benefit Guaranty Corporation (PBGC)"
+          },
+          {
+            "value": "165",
+            "label": "Pension & Welfare Benefits Administration"
+          },
+          {
+            "value": "246",
+            "label": "Pentagon Force Protection Agency"
+          },
+          {
+            "value": "247",
+            "label": "Pipeline & Hazardous Materials Safety Administration"
+          },
+          {
+            "value": "194",
+            "label": "PLEASE DO NOT USE THIS ONE"
+          },
+          {
+            "value": "86",
+            "label": "Postal Rate Commission"
+          },
+          {
+            "value": "213",
+            "label": "Postal Regulatory Commission"
+          },
+          {
+            "value": "9",
+            "label": "President of the U.S."
+          },
+          {
+            "value": "140",
+            "label": "Program Support Center"
+          },
+          {
+            "value": "87",
+            "label": "Railroad Retirement Board"
+          },
+          {
+            "value": "179",
+            "label": "Research & Special Programs Administration"
+          },
+          {
+            "value": "248",
+            "label": "Risk Management Agency"
+          },
+          {
+            "value": "88",
+            "label": "Securities & Exchange Commission (SEC)"
+          },
+          {
+            "value": "89",
+            "label": "Selective Service System"
+          },
+          {
+            "value": "1",
+            "label": "SENATE"
+          },
+          {
+            "value": "90",
+            "label": "Small Business Administration (SBA)"
+          },
+          {
+            "value": "101",
+            "label": "Smithsonian Institution"
+          },
+          {
+            "value": "91",
+            "label": "Social Security Administration (SSA)"
+          },
+          {
+            "value": "39",
+            "label": "State, Dept of (DOS)"
+          },
+          {
+            "value": "102",
+            "label": "State Justice Institute"
+          },
+          {
+            "value": "178",
+            "label": "St. Lawrence Seaway Development Corporation"
+          },
+          {
+            "value": "141",
+            "label": "Substance Abuse & Mental Health Services Administration (SAMHSA)"
+          },
+          {
+            "value": "181",
+            "label": "Surface Transportation Board (STB)"
+          },
+          {
+            "value": "114",
+            "label": "Technology Administration"
+          },
+          {
+            "value": "92",
+            "label": "Tennessee Valley Authority (TVA)"
+          },
+          {
+            "value": "40",
+            "label": "Transportation, Dept of (DOT)"
+          },
+          {
+            "value": "204",
+            "label": "Transportation Security Administration (TSA)"
+          },
+          {
+            "value": "41",
+            "label": "Treasury, Dept of"
+          },
+          {
+            "value": "300",
+            "label": "UNDETERMINED"
+          },
+          {
+            "value": "249",
+            "label": "USA Freedom Corps"
+          },
+          {
+            "value": "196",
+            "label": "U.S. Agency for International Development (USAID)"
+          },
+          {
+            "value": "199",
+            "label": "U.S. Architectural & Transportation Barriers Compliance Board (ACCESS)"
+          },
+          {
+            "value": "94",
+            "label": "U.S. Arms Control & Disarmament Agency"
+          },
+          {
+            "value": "4",
+            "label": "U.S. Botanic Garden"
+          },
+          {
+            "value": "221",
+            "label": "U.S. Chemical Safety & Hazard Investigation Board"
+          },
+          {
+            "value": "171",
+            "label": "U.S. Coast Guard (USCG)"
+          },
+          {
+            "value": "250",
+            "label": "U.S. Commission of Fine Arts"
+          },
+          {
+            "value": "95",
+            "label": "U.S. Commission on Civil Rights"
+          },
+          {
+            "value": "220",
+            "label": "U.S. Commission on International Religious Freedom"
+          },
+          {
+            "value": "207",
+            "label": "U.S. Copyright Office"
+          },
+          {
+            "value": "184",
+            "label": "U.S. Customs & Border Protection"
+          },
+          {
+            "value": "142",
+            "label": "U.S. Fish & Wildlife Service (USFWS)"
+          },
+          {
+            "value": "212",
+            "label": "U.S. Forest Service"
+          },
+          {
+            "value": "144",
+            "label": "U.S. Geological Survey (USGS)"
+          },
+          {
+            "value": "251",
+            "label": "U.S. Immigration & Customs Enforcement (ICE)"
+          },
+          {
+            "value": "96",
+            "label": "U.S. Information Agency (USIA)"
+          },
+          {
+            "value": "103",
+            "label": "U.S. Institute of Peace"
+          },
+          {
+            "value": "97",
+            "label": "U.S. International Development Cooperation Agency"
+          },
+          {
+            "value": "301",
+            "label": "U.S. International Development Finance Corporation (DFC)"
+          },
+          {
+            "value": "98",
+            "label": "U.S. International Trade Commission (ITC)"
+          },
+          {
+            "value": "210",
+            "label": "U.S. Marines"
+          },
+          {
+            "value": "152",
+            "label": "U.S. Marshals Service"
+          },
+          {
+            "value": "189",
+            "label": "U.S. Mint"
+          },
+          {
+            "value": "153",
+            "label": "U.S. Natl Central Bureau - Intl Criminal Police Organization"
+          },
+          {
+            "value": "99",
+            "label": "U.S. Postal Service (USPS)"
+          },
+          {
+            "value": "191",
+            "label": "U.S. Secret Service"
+          },
+          {
+            "value": "93",
+            "label": "U.S. Trade & Development Agency (USTDA)"
+          },
+          {
+            "value": "22",
+            "label": "U.S. Trade Representative (USTR)"
+          },
+          {
+            "value": "42",
+            "label": "Veterans Affairs, Dept of (VA)"
+          },
+          {
+            "value": "170",
+            "label": "Veterans Employment & Training Service"
+          },
+          {
+            "value": "10",
+            "label": "Vice President of the U.S."
+          },
+          {
+            "value": "252",
+            "label": "Voice of America"
+          },
+          {
+            "value": "12",
+            "label": "White House Office"
+          }
+        ],
+        "observed_at": "2026-11-27T14:03:28Z",
+        "observed_off_list": [],
+        "unobserved": [
+          "194",
+          "195"
+        ]
       }
     }
   },

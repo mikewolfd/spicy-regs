@@ -1,19 +1,30 @@
-"""Regulations.gov agency codes for Federal Register agencies, through RefSpec's projection and agency registry.
+"""Regulations.gov agency codes, Federal Register organizations, and reviewed aliases from RefSpec View 1.4.
 
-REF-038 projects each code onto one roster organization. The agency registry view (REF-072,
-batch 1 and the FNS -> FNA succession batch) adds identity bridges from Federal Register agencies
-to organizations codes select, and successions from defunct agencies to the organizations holding
-their functions now, with each original's current successors sealed by RefSpec. The rule reads no
-date, the view's effective dates included: every document takes today's lineage whatever its own
-date, so a 1998 Health Care Finance Administration notice is CMS.
-Both are RefSpec's bytes, vendored in ``reference/refspec/`` and never edited here; the loader
-refuses any copy whose sha256 is not the pinned one.
+Agency Registry View 1.4 (REF-072 / REF-075 / REF-077, release ``agency-registry-2026-09-26``)
+is the single digest-pinned agency artifact vendored under ``reference/refspec/agency-registry-view/``.
+It unifies:
+
+- REF-038's one-way projection from Regulations.gov agency codes onto Federal Register, eCFR, and
+  Federal Hierarchy organizations (321 resolved rows and 10 documented abstentions);
+- 13 owner-reviewed identity bridges (``sameEntityAs``) from Federal Register agencies to eCFR or
+  Federal Hierarchy organizations;
+- 10 dated succession events (15 result rows) plus RefSpec's sealed current-successors table (15 rows);
+- 11 recorded non-emissions (4 bridge/no-FR items plus 7 owner-rejected aliases);
+- 157 owner-reviewed free-text aliases (63 batch 1 + 94 batch 2, keyed by RefSpec ``name_key`` v1);
+- all 472 pinned Federal Register organizations (names, short names, parents, REF-038 codes, successors).
+
+The lineage rule reads no date, the view's effective dates included: every document takes today's
+lineage whatever its own date, so a 1998 Health Care Finance Administration notice is CMS. All
+files are RefSpec's bytes, vendored in ``reference/refspec/agency-registry-view/`` and never edited
+here; the loader refuses any copy whose sha256 is not the pinned one.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
+import unicodedata
 from collections import defaultdict
 from functools import cache, lru_cache
 from importlib.resources import files
@@ -24,33 +35,51 @@ from typing import Any, Iterable, Mapping, NamedTuple, Sequence
 
 import duckdb
 
-#: Pinned digests of the three vendored REF-038 files; see ``reference/refspec/README.md``.
-AGENCY_PROJECTION_SHA256 = "c9ec0fde1bf5fda17402983880bc091e9caa417845178f232214606e264c049f"
-AGENCY_PROJECTION_UNRESOLVED_SHA256 = "e32e814c3c7489d82df6dbdbc00fd6e16694628c08e7300a9473bcaa0659b065"
-VIEW_MANIFEST_SHA256 = "991acd29368b17fb66eea770f36c71385c5faee1a368008a4240281e4c8536d8"
+#: Published match-key contract version for View 1.4 aliases (RefSpec REF-075 D6).
+NAME_KEY_VERSION = "1"
 
-#: Pinned digests of the vendored agency registry view (RefSpec f1c23b91, schema 1.2); the
-#: manifest's is the pin RefSpec's build tool names. See ``reference/refspec/README.md``.
-AGENCY_REGISTRY_MANIFEST_SHA256 = "0b39812de31930f267dea2d7d51039d71b0a1852606387d5aba64aa75d25ec17"
+#: Pinned digests of the vendored Agency Registry View 1.4 (RefSpec REF-077, commit a3e7f5a6 / PR #2
+#: 96c62e00, schema 1.4); the manifest's is the pin RefSpec's build tool names. See
+#: ``reference/refspec/README.md``.
+AGENCY_REGISTRY_MANIFEST_SHA256 = "c89935debe320e35aaf748ea0519457c1618b49e13d79ddb33cbc30051b5a118"
 AGENCY_REGISTRY_BRIDGES_SHA256 = "2e33905b475c6a1adf27960ecf170a1b4c82df2baf20ac13df9307bb687dd898"
 AGENCY_REGISTRY_EVENTS_SHA256 = "fce2b80a184fd0de98e2d15ba2d3a68d47f84eb9b9ba1c2678bc8787af3e0c07"
-AGENCY_REGISTRY_NON_EMISSIONS_SHA256 = "da863e467f00f16a6b7a9ff1a3e1182fb8e7488f8b7d33f0d7f0c403a0663e24"
+AGENCY_REGISTRY_NON_EMISSIONS_SHA256 = "7819b99bd132cd48a08f4c918e8faf20ae78cac8c0ec9ad41a6cb6327b8f2f3e"
 AGENCY_REGISTRY_CURRENT_SUCCESSORS_SHA256 = "857abd0ca7c42a50bab7225d1036df2e498d91e1840a2007440fd10acdf97160"
+AGENCY_REGISTRY_ALIASES_SHA256 = "74bba3bdccaf3e2b6111b8320d695f74c777d3a405de73e04a0475c28df834a9"
+AGENCY_REGISTRY_ORGANIZATIONS_SHA256 = "426f3082277f07f8b75d3e154d3065d6f478f09de789393ecdcd647116d76177"
+AGENCY_PROJECTION_SHA256 = "9b0296b69a8d009199607929841fe8dc9a20f528319988e8d70eaaeab88c5303"
+AGENCY_PROJECTION_UNRESOLVED_SHA256 = "7aa01a441ba254575aac427d72f0c593ace5a1f3d177b6bc8f927c1967a43ca6"
 
-#: The vendored projection table and its abstentions, and the registry view's directory (manifest plus ``tables/``).
-AGENCY_PROJECTION_PATH = files("spicy_regs").joinpath("reference/refspec/agency-projection.parquet")
-AGENCY_PROJECTION_UNRESOLVED_PATH = files("spicy_regs").joinpath("reference/refspec/agency-projection-unresolved.parquet")
+#: The vendored Agency Registry View 1.4 directory (manifest plus all 8 tables under ``tables/``).
 AGENCY_REGISTRY_VIEW_PATH = files("spicy_regs").joinpath("reference/refspec/agency-registry-view")
 
-_REGISTRY_TABLE_SHA256 = {
-    "bridges": AGENCY_REGISTRY_BRIDGES_SHA256,
-    "events": AGENCY_REGISTRY_EVENTS_SHA256,
-    "non-emissions": AGENCY_REGISTRY_NON_EMISSIONS_SHA256,
-    "current-successors": AGENCY_REGISTRY_CURRENT_SUCCESSORS_SHA256,
+_REGISTRY_TABLE_FILES: Mapping[str, tuple[str, str]] = {
+    "bridges": ("tables/agency-registry-bridges.parquet", AGENCY_REGISTRY_BRIDGES_SHA256),
+    "events": ("tables/agency-registry-events.parquet", AGENCY_REGISTRY_EVENTS_SHA256),
+    "non-emissions": ("tables/agency-registry-non-emissions.parquet", AGENCY_REGISTRY_NON_EMISSIONS_SHA256),
+    "current-successors": ("tables/agency-registry-current-successors.parquet", AGENCY_REGISTRY_CURRENT_SUCCESSORS_SHA256),
+    "aliases": ("tables/agency-registry-aliases.parquet", AGENCY_REGISTRY_ALIASES_SHA256),
+    "organizations": ("tables/agency-registry-organizations.parquet", AGENCY_REGISTRY_ORGANIZATIONS_SHA256),
+    "projection": ("tables/agency-projection.parquet", AGENCY_PROJECTION_SHA256),
+    "projection-unresolved": ("tables/agency-projection-unresolved.parquet", AGENCY_PROJECTION_UNRESOLVED_SHA256),
 }
 
 #: The RefSpec URN prefix of a Federal Register agency, followed by its FR agency id.
 FR_AGENCY_URN = "urn:ref:federal-register-agency:"
+
+
+def name_key(text: str) -> str:
+    """RefSpec's published alias match key (version ``1``, REF-075 D6).
+
+    NFKC-normalized and case-folded; ``&`` read as ``and``; parentheticals dropped; every run of
+    non-alphanumeric characters collapsed to one space; then ``the``, ``u s``, ``us``, ``united
+    states``, and ``of america`` dropped wherever they stand. Two strings name the same alias
+    exactly when their keys are equal.
+    """
+    folded = unicodedata.normalize("NFKC", text).casefold().replace("&", " and ")
+    folded = " ".join(re.sub(r"[^a-z0-9]+", " ", re.sub(r"\([^)]*\)", " ", folded)).split())
+    return " ".join(re.sub(r"\b(the|u s|us|united states|of america)\b", " ", folded).split())
 
 
 @cache
@@ -62,10 +91,9 @@ def _read_pinned(path: Any, sha256: str) -> tuple[Mapping[str, Any], ...]:
         raise ValueError(f"{path.name} is not RefSpec's file: sha256 {digest}, pinned {sha256}")
     # DuckDB, not pyarrow: the MCP image installs no pyarrow (deploy/cloudflare/Dockerfile;
     # tests/test_mcp_lightweight_imports.py), and lookup_agency reads these files. It reads the
-    # admitted bytes, not the caller's path again. Rows equal pyarrow's on all four pinned files
-    # (2026-09-27); pyarrow's single-thread read, which avoided its CPU pool hanging at exit, is gone.
+    # admitted bytes, not the caller's path again.
     with TemporaryDirectory(prefix="spicy-regs-agency-") as directory:
-        admitted = Path(directory) / "projection.parquet"
+        admitted = Path(directory) / "table.parquet"
         admitted.write_bytes(data)
         with duckdb.connect() as connection:
             cursor = connection.execute("SELECT * FROM read_parquet(?)", [str(admitted)])
@@ -73,18 +101,8 @@ def _read_pinned(path: Any, sha256: str) -> tuple[Mapping[str, Any], ...]:
             return tuple(MappingProxyType(dict(zip(columns, row, strict=True))) for row in cursor.fetchall())
 
 
-def projection_rows() -> tuple[Mapping[str, Any], ...]:
-    """The vendored REF-038 projection rows, read once and cached."""
-    return _read_pinned(AGENCY_PROJECTION_PATH, AGENCY_PROJECTION_SHA256)
-
-
-def unresolved_rows() -> tuple[Mapping[str, Any], ...]:
-    """The vendored REF-038 abstentions (codes the projection declined to map), read once and cached."""
-    return _read_pinned(AGENCY_PROJECTION_UNRESOLVED_PATH, AGENCY_PROJECTION_UNRESOLVED_SHA256)
-
-
 def registry_publication() -> dict[str, Any]:
-    """The vendored registry view's identity: its view id, release and digest, and every pinned table digest.
+    """The vendored Agency Registry View 1.4 identity: view id, schema version, release, digest, and table pins.
 
     The manifest is read and its bytes held to the pinned digest on every call, as a lookup always did.
     """
@@ -94,18 +112,81 @@ def registry_publication() -> dict[str, Any]:
     manifest = json.loads(raw)
     return {
         "view_id": manifest["viewId"],
+        "schema_version": manifest["schemaVersion"],
         "manifest_sha256": "sha256:" + AGENCY_REGISTRY_MANIFEST_SHA256,
         "release": manifest["release"],
         "digest": manifest["digest"],
-        "table_sha256": {name: "sha256:" + digest for name, digest in _REGISTRY_TABLE_SHA256.items()},
+        "counts": manifest["counts"],
+        "table_sha256": {name: "sha256:" + sha256 for name, (_, sha256) in _REGISTRY_TABLE_FILES.items()},
     }
 
 
 def registry_rows(table: str) -> tuple[Mapping[str, Any], ...]:
-    """The vendored registry view's ``bridges``, ``events``, ``non-emissions`` or ``current-successors`` rows, read once
-    and cached."""
-    path = AGENCY_REGISTRY_VIEW_PATH.joinpath(f"tables/agency-registry-{table}.parquet")
-    return _read_pinned(path, _REGISTRY_TABLE_SHA256[table])
+    """Read one vendored View 1.4 table (cached and SHA-256 verified): ``bridges``, ``events``,
+    ``non-emissions``, ``current-successors``, ``aliases``, ``organizations``, ``projection``, or
+    ``projection-unresolved``."""
+    relpath, sha256 = _REGISTRY_TABLE_FILES[table]
+    path = AGENCY_REGISTRY_VIEW_PATH.joinpath(relpath)
+    return _read_pinned(path, sha256)
+
+
+def projection_rows() -> tuple[Mapping[str, Any], ...]:
+    """The vendored REF-038 projection rows inside View 1.4, read once and cached."""
+    return registry_rows("projection")
+
+
+def unresolved_rows() -> tuple[Mapping[str, Any], ...]:
+    """The vendored REF-038 abstentions inside View 1.4, read once and cached."""
+    return registry_rows("projection-unresolved")
+
+
+def alias_rows() -> tuple[Mapping[str, Any], ...]:
+    """The 157 owner-reviewed free-text aliases in View 1.4, read once and cached."""
+    return registry_rows("aliases")
+
+
+def organization_rows() -> tuple[Mapping[str, Any], ...]:
+    """All 472 pinned Federal Register organizations in View 1.4, read once and cached."""
+    return registry_rows("organizations")
+
+
+@cache
+def _alias_index(view_path: Any) -> MappingProxyType[str, Mapping[str, Any]]:
+    del view_path
+    return MappingProxyType({str(row["name_key"]): row for row in alias_rows()})
+
+
+@cache
+def _org_by_fr_id_index(view_path: Any) -> MappingProxyType[int, Mapping[str, Any]]:
+    del view_path
+    return MappingProxyType({int(row["fr_id"]): row for row in organization_rows()})
+
+
+@cache
+def _org_by_name_key_index(view_path: Any) -> MappingProxyType[str, Mapping[str, Any]]:
+    del view_path
+    return MappingProxyType({name_key(str(row["name"])): row for row in organization_rows()})
+
+
+def lookup_alias(name: str) -> Mapping[str, Any] | None:
+    """Return the owner-reviewed View 1.4 alias row matching ``name_key(name)``, or ``None``."""
+    key = name_key(name)
+    if not key:
+        return None
+    return _alias_index(AGENCY_REGISTRY_VIEW_PATH).get(key)
+
+
+def organization_by_fr_id(fr_agency_id: int) -> Mapping[str, Any] | None:
+    """Return the pinned Federal Register organization row for ``fr_agency_id``, or ``None``."""
+    return _org_by_fr_id_index(AGENCY_REGISTRY_VIEW_PATH).get(fr_agency_id)
+
+
+def organization_by_name(name: str) -> Mapping[str, Any] | None:
+    """Return the pinned Federal Register organization row matching ``name_key(name)``, or ``None``."""
+    key = name_key(name)
+    if not key:
+        return None
+    return _org_by_name_key_index(AGENCY_REGISTRY_VIEW_PATH).get(key)
 
 
 class _Projection(NamedTuple):
@@ -186,7 +267,7 @@ def _build_projection(
 
 @lru_cache(maxsize=1)
 def _projection() -> _Projection:
-    """The reverse lookup over the vendored projection and registry view, built once."""
+    """The reverse lookup over the vendored View 1.4 projection and registry tables, built once."""
     return _build_projection(
         projection_rows(), registry_rows("bridges"), registry_rows("events"), registry_rows("current-successors")
     )
