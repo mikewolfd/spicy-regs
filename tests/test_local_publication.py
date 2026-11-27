@@ -717,3 +717,12 @@ def test_dry_run_multipart_preserves_corruption_refusals(tmp_path, monkeypatch, 
         )
     assert not (tmp_path / "corrupt-dry-run").exists()
     assert not list(tmp_path.glob(".dry-run-store-*"))
+
+
+def test_table3_history_family_is_registered_with_schema_and_receipt_enforcement(tmp_path):
+    from spicy_regs.sources import table3_history
+
+    assert "table3-history" in command.LOCAL_FAMILIES
+    assert command._family_schemas("table3-history") == table3_history.SCHEMAS
+    with pytest.raises(ValueError, match="Registered datasets require ETL receipts: \\['table3_historical_records'\\]"):
+        generation(tmp_path, "table3-history", {"table3_historical_records": ["obs-1"]}, family="table3-history")

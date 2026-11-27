@@ -67,6 +67,33 @@ recipe, archive digest and release point. Public archive witnesses use content
 digests. The local `receipt.json` retains the physical source path and remains
 private; select only the subject and fresh ETL receipt Parquet members for a
 public artifact. Earlier path-bearing receipt history must not be inherited.
+`replay` validates the candidate with the bounded disk-backed reference
+validator by default and checks every receipt's `generation_id`.
+
+## Prepare and publish `table3-history`
+
+Package a fresh replay (or an already-validated local candidate via
+`--candidate`) into an admitted `table3-history` generation with shared-archive
+source evidence, dry-run against `publication.v2.json`, and publish through
+`publish-local-generation`:
+
+```sh
+unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO
+uv run --frozen --extra comments-reader build-table3-history prepare \
+  --archive /path/to/shared-raw/objects/sha256/93/93e1f233... \
+  --sha256 sha256:93e1f233e081e47fc3680c4b699151c6d66329988fe21add3b6e9e62746aeea7 \
+  --release-point 119-73 \
+  --output /path/to/fresh/prepared
+
+uv run --frozen --extra comments-reader publish-local-generation \
+  --family table3-history \
+  --generation /path/to/fresh/prepared/generation \
+  --evidence /path/to/fresh/prepared/source-evidence/<run-id>/artifact \
+  --dry-run --output /path/to/fresh/dry-run
+```
+
+Omit `--dry-run` (and pass `--expect-prior <digest>` once `table3-history` is
+already live) to upload and verify public readback on `https://data.spicygov.ai`.
 
 ## Join placements by modern public law
 

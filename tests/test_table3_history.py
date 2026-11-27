@@ -5,6 +5,7 @@ import json
 import zipfile
 from pathlib import Path
 
+import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
@@ -76,3 +77,122 @@ def test_replay_writes_new_candidate_and_refuses_overwrite(tmp_path):
         assert str(tmp_path) not in json.dumps(item)
     with pytest.raises(FileExistsError):
         replay(source, output, expected_sha256=digest(body), release_point="119-73")
+
+
+@pytest.mark.usefixtures("ample_disk_space")
+def test_prepare_generation_from_fresh_replay_and_candidate_passes_local_publication_dry_run(tmp_path):
+    """Both fresh and reused candidates produce an admitted table3-history generation that passes publish dry-run."""
+    import duckdb
+
+    from spicy_regs import local_publication
+    from spicy_regs.sources import publication
+    from spicy_regs.sources.table3_history import FAMILY, prepare_generation
+
+    body = archive(FIXTURE.read_bytes())
+    sha = digest(body)
+    source = tmp_path / "olrc-table3-119-73.zip"
+    source.write_bytes(body)
+
+    live_index = tmp_path / "publication.v2.json"
+    live_index.write_text(json.dumps(publication.empty_index()))
+
+    # 1. Fresh replay -> prepared generation -> publish-local-generation --dry-run.
+    prepared = prepare_generation(
+        source,
+        tmp_path / "prepared-fresh",
+        expected_sha256=sha,
+        release_point="119-73",
+        read_snapshot=publication.empty_index(),
+    )
+    assert prepared["status"] == "prepared-table3-history-generation"
+    assert prepared["family"] == FAMILY
+    assert prepared["reused_candidate"] is False
+    assert prepared["published"] is False
+    assert prepared["records"] > 0
+
+    dry_out = tmp_path / "dry-run-fresh"
+    local_publication.main(
+        [
+            "--generation",
+            prepared["generation"],
+            "--family",
+            FAMILY,
+            "--evidence",
+            prepared["evidence"],
+            "--dry-run",
+            "--scratch-raw",
+            "--live-index",
+            str(live_index),
+            "--output",
+            str(dry_out),
+        ]
+    )
+    dry_receipt = json.loads((dry_out / "dry-run.json").read_text())
+    assert dry_receipt["status"] == "dry_run_accepted"
+    assert dry_receipt["family"] == FAMILY
+    assert dry_receipt["artifactDigest"] == prepared["artifactDigest"]
+    assert dry_receipt["tables"]["table3_historical_records.parquet"]["rows"] == prepared["records"]
+    assert dry_receipt["etlReceipts"]["rows"] == prepared["records"]
+
+    # 2. Consumer SQL join against laws: modern public laws join cleanly while pre-1957 chapters stay separate.
+    gen_parquet = Path(prepared["generation"]) / "table3_historical_records.parquet"
+    with duckdb.connect() as con:
+        con.execute(
+            "CREATE TABLE laws AS SELECT * FROM (VALUES ('119-public-37', 'Law 119-37'), ('87-public-845', 'Law 87-845')) t(law_id, title)"
+        )
+        modern = con.execute(
+            f"""
+            WITH modern AS (
+                SELECT *, replace(act_key, '-', '-public-') AS law_id
+                FROM read_parquet('{gen_parquet}')
+                WHERE release_point = '119-73'
+                  AND source_sha256 = '{sha}'
+                  AND regexp_full_match(act_key, '[1-9][0-9]{{0,2}}-[1-9][0-9]*')
+                  AND split_part(act_key, '-', 1) = congress
+                  AND act_key = act_number
+            )
+            SELECT m.law_id, l.title, count(*) AS placements
+            FROM modern m
+            LEFT JOIN laws l ON l.law_id = m.law_id
+            GROUP BY 1, 2
+            ORDER BY 1
+            """
+        ).fetchall()
+        chapters = con.execute(
+            f"SELECT DISTINCT act_key FROM read_parquet('{gen_parquet}') WHERE NOT regexp_full_match(act_key, '[1-9][0-9]{{0,2}}-[1-9][0-9]*')"
+        ).fetchall()
+    assert ("119-public-37", "Law 119-37", 110) in modern
+    assert ("87-public-845", "Law 87-845", 15) in modern
+    assert ("118-public-2", None, 1) in modern
+    assert chapters == [("1789-08-07:9",)]
+
+    # 3. Reusing an already-verified replay candidate produces an admitted generation too.
+    candidate = tmp_path / "existing-replay"
+    replay(source, candidate, expected_sha256=sha, release_point="119-73")
+    reused = prepare_generation(
+        source,
+        tmp_path / "prepared-reused",
+        expected_sha256=sha,
+        release_point="119-73",
+        candidate=candidate,
+    )
+    assert reused["reused_candidate"] is True
+    assert reused["records"] == prepared["records"]
+    assert reused["receipt_generation_id"] == prepared["receipt_generation_id"]
+
+    # 4. Tampered candidate release_point or receipt generation_id is refused before generation creation.
+    bad_candidate = tmp_path / "tampered-candidate"
+    bad_candidate.mkdir()
+    table = pq.read_table(candidate / "table3_historical_records.parquet")
+    idx = table.schema.get_field_index("release_point")
+    tampered = table.set_column(idx, "release_point", pa.array(["119-99"] * table.num_rows, type=pa.string()))
+    pq.write_table(tampered, bad_candidate / "table3_historical_records.parquet")
+    (bad_candidate / "etl_receipts.parquet").write_bytes((candidate / "etl_receipts.parquet").read_bytes())
+    with pytest.raises(ValueError, match="release_point"):
+        prepare_generation(
+            source,
+            tmp_path / "prepared-tampered",
+            expected_sha256=sha,
+            release_point="119-73",
+            candidate=bad_candidate,
+        )

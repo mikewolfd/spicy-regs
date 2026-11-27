@@ -21,7 +21,7 @@ from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.sources.congress.press_releases import PRESS_RELEASE_FEEDS, parse_press_release_feed
 from spicy_docs.transport.captured import CapturedBodyResponse
 
-from spicy_regs.transforms.build_press_releases import build_press_releases
+from spicy_regs.transforms.build_press_releases import build_press_releases, decode_title_entities
 from spicy_regs.transforms.table_merge import prior_scratch_path
 
 FIXTURES = Path(__file__).parent / "fixtures" / "press_releases"
@@ -288,3 +288,156 @@ def test_rollup_retains_source_evidence_and_passes_it_to_builder(tmp_path, monke
     pipeline.run()
     assert seen["evidence"] is pipeline.source_evidence and pipeline.source_evidence is not None
     assert list((tmp_path / "generations").iterdir())
+
+
+def test_decode_title_entities_handles_double_encoded_entities_without_corrupting_valid_text():
+    assert decode_title_entities(None) is None
+    # Senate RSS feed double-encoded numeric hex entities + literal ampersands.
+    assert (
+        decode_title_entities(
+            "Murray & Kaptur Call for Review of DOE&#x2019;s &#x201c;Rule&#x201d; &#x2014; &#x2018;Unlawful&#x2019;"
+        )
+        == "Murray & Kaptur Call for Review of DOE\u2019s \u201cRule\u201d \u2014 \u2018Unlawful\u2019"
+    )
+    # Decimal numeric and named entities.
+    assert (
+        decode_title_entities("Bill &amp; Melinda Gates&#8217;s &ldquo;Grant&rdquo; &#039;Plan&#039;")
+        == "Bill & Melinda Gates\u2019s \u201cGrant\u201d 'Plan'"
+    )
+    # Bare ampersands, semicolon-less HTML5 legacy tokens, and unknown entities stay untouched.
+    untouched = "Watchdog Concludes Trump & Vought, AT&T, A&reg B&copy C&para D&not=1 &notanentity;"
+    assert decode_title_entities(untouched) == untouched
+    # NUL, surrogate, and out-of-range numeric references stay untouched rather than turning into U+FFFD.
+    invalid = "Keep &#0; and &#xD800; and &#x110000; verbatim"
+    assert decode_title_entities(invalid) == invalid
+    # Single decode pass only: does not recursively strip intentional entity text.
+    assert decode_title_entities("&amp;#x2019;") == "&#x2019;"
+
+
+def test_senate_fixture_double_encoded_titles_and_rotated_prior_rows_are_decoded_with_evidence(tmp_path):
+    """Fresh Senate RSS double-encoded titles and rotated-off prior rows both decode cleanly and journal originals."""
+    import json
+    import re
+
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    _seed_bills(tmp_path)
+    # Seed one rotated-off prior row whose title still has raw entities (as on live R2).
+    contract = TABLE_CONTRACTS["press_releases"]
+    prior_raw_title = "Sen. Collins Calls Administration&#x2019;s Pocket Rescissions Package &#x2018;Unlawful&#x2019;"
+    prior_row = {c: None for c in contract.columns} | {
+        "release_id": "rotated-senate-entity-row",
+        "chamber": "senate",
+        "title": prior_raw_title,
+        "link": "http://www.appropriations.senate.gov/news/majority/sen-collins-calls-administrations-pocket-rescissions-package-unlawful",
+        "pub_date": "Fri, 25 Sep 2026 13:00:00 EST",
+        "pub_date_instant": "2026-09-25T13:00:00-05:00",
+        "observed_at": OBSERVED_AT,
+        "match_rule": "unmatched",
+    }
+    pq.write_table(
+        pa.Table.from_pylist([prior_row], schema=pa.schema([(c, pa.string()) for c in contract.columns])),
+        prior_scratch_path(tmp_path, "press_releases"),
+    )
+
+    evidence = CaptureEvidence(tmp_path, "press-releases")
+    path = build_press_releases(tmp_path, acquirer=StubAcquirer(), download_prior=_no_prior, evidence=evidence)
+    rows = pq.read_table(path).to_pylist()
+
+    entity_re = re.compile(r"&(?:#[0-9]+|#[xX][0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]+);")
+    assert len(rows) == 26
+    assert [row["title"] for row in rows if entity_re.search(row["title"] or "")] == []
+
+    by_id = {row["release_id"]: row for row in rows}
+    assert (
+        by_id["rotated-senate-entity-row"]["title"]
+        == "Sen. Collins Calls Administration\u2019s Pocket Rescissions Package \u2018Unlawful\u2019"
+    )
+    # Confirm literal ampersands survived intact alongside decoded entities in the Senate fixture.
+    senate_titles = {row["title"] for row in rows if row["chamber"] == "senate"}
+    assert (
+        "Murray, Baldwin Sound Alarm on Trump Admin\u2019s Plans to Siphon Away & Likely Impound Healthcare Research Funds"
+        in senate_titles
+    )
+    assert (
+        "\u201cIt\u2019s not 1950\u201d: Senator Murray on Trump\u2019s Outrageous and Backwards Move to Siphon Child Care Funding Away from Single Parents and Working Families"
+        in senate_titles
+    )
+    assert (
+        "NEW: DHS Deploys Freshly Acquired Jets to Shuttle Trump Officials\u2014including Kash Patel & Tom Homan\u2014Around in Luxury"
+        in senate_titles
+    )
+
+    events = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
+    (decoded_event,) = (e for e in events if e["event"] == "press-release-title-decoded")
+    # 5 double-encoded titles in senate-rss-press.xml + 1 rotated-off prior row.
+    assert decoded_event["count"] == 6
+    origins = {c["origin"] for c in decoded_event["changes"]}
+    assert origins == {"fresh", "prior"}
+    prior_change = next(c for c in decoded_event["changes"] if c["release_id"] == "rotated-senate-entity-row")
+    assert prior_change["original_title"] == prior_raw_title
+    assert prior_change["decoded_title"] == by_id["rotated-senate-entity-row"]["title"]
+
+
+def test_bill_matching_succeeds_on_double_encoded_quoted_bill_number_in_title(tmp_path):
+    """Decoding entities before matching lets quoted bill references match cleanly and keeps matched_text in title."""
+    _seed_bills(tmp_path)
+    edit = {"senate": [("Senator Murray on Passage of CR", "Senator Murray on &amp;#x201c;S. 2503&amp;#x201d; Passage")]}
+    rows = _rows(tmp_path, StubAcquirer(edit))
+    linked = [row for row in rows if row["chamber"] == "senate" and row["bill_id"]]
+    assert len(linked) == 1
+    assert linked[0]["bill_id"] == "119-s-2503"
+    assert linked[0]["title"] == "Senator Murray on \u201cS. 2503\u201d Passage"
+    assert linked[0]["matched_text"] in linked[0]["title"]
+
+
+def test_press_releases_rollup_admits_generation_and_carries_receipts_when_prior_title_decodes(tmp_path, monkeypatch):
+    """End-to-end SubjectReceiptRollup proof: decoding a rotated-off prior title passes receipt carry and admission."""
+    import re
+
+    from spicy_regs.congress_receipts import CongressBuild, CongressInput, write_congress_dataset
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    # 1. Build a prior native subject + receipt pair whose rotated-off row carries raw &#x2019; / &#x2018; entities.
+    contract = TABLE_CONTRACTS["press_releases"]
+    prior_raw = {c: None for c in contract.columns} | {
+        "release_id": "rotated-senate-entity-row",
+        "chamber": "senate",
+        "title": "Sen. Collins Calls Administration&#x2019;s Pocket Rescissions Package &#x2018;Unlawful&#x2019;",
+        "link": "http://www.appropriations.senate.gov/news/majority/sen-collins-calls-administrations-pocket-rescissions-package-unlawful",
+        "pub_date": "Fri, 25 Sep 2026 13:00:00 EST",
+        "pub_date_instant": "2026-09-25T13:00:00-05:00",
+        "observed_at": OBSERVED_AT,
+        "match_rule": "unmatched",
+    }
+    prior_source = tmp_path / "prior-source.parquet"
+    pq.write_table(
+        pa.Table.from_pylist([prior_raw], schema=pa.schema([(c, pa.string()) for c in contract.columns])),
+        prior_source,
+    )
+    prior_subject, prior_receipts = write_congress_dataset(
+        prior_source, tmp_path / "prior-native", dataset="press_releases", generation_id="prior-gen-1"
+    )
+    assert prior_subject is not None
+
+    # 2. Run a full CongressBuild with that native prior + StubAcquirer (which also has 5 double-encoded Senate titles).
+    build = CongressBuild(
+        "next-gen-2",
+        inputs={"press_releases": CongressInput(prior_subject, prior_receipts, "prior-gen-1")},
+    )
+    evidence = CaptureEvidence(tmp_path / "run", "press-releases")
+    subject = build_press_releases(
+        tmp_path / "run",
+        acquirer=StubAcquirer(),
+        receipt_build=build,
+        evidence=evidence,
+    )
+    evidence.finish()
+    build.admit(tmp_path / "admitted", family="press-releases", subjects=[subject])
+
+    rows = pq.read_table(tmp_path / "admitted" / "press_releases.parquet").to_pylist()
+    entity_re = re.compile(r"&(?:#[0-9]+|#[xX][0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]+);")
+    assert len(rows) == 26
+    assert [r["title"] for r in rows if entity_re.search(r["title"] or "")] == []
+    rotated = next(r for r in rows if r["release_id"] == "rotated-senate-entity-row")
+    assert rotated["title"] == "Sen. Collins Calls Administration\u2019s Pocket Rescissions Package \u2018Unlawful\u2019"
