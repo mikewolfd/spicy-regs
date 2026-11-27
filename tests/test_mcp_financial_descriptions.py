@@ -21,6 +21,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from spicy_regs import fec_release, mcp_server as server
+from spicy_regs.fec_financial_rules import IDENTITY_VERSION
 from spicy_regs.fec_receipt_adapter import processing_declarations, qualified_views
 from spicy_regs.etl_receipts import ReceiptContext
 from spicy_regs.sources import publication
@@ -37,7 +38,7 @@ POPULATION = "Retained source observations, not deduplicated transactions or a c
 AS_OF = "Sealed 2026-09-30T23:37:04.213958+00:00; not a common publisher-current date."
 OBSERVATION = {
     "record_id": RECORD,
-    "identity_version": "fec-typed-observation/1",
+    "identity_version": IDENTITY_VERSION,
     "mapping_version": "fec-bulk-individual-receipt/2",
     "value_mapping_version": "fec-exact-financial-values/2",
     "mapping_status": "mapped",

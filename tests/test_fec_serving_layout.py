@@ -8,6 +8,7 @@ import pyarrow as pa
 import pytest
 
 from spicy_regs import fec_release, mcp_server
+from spicy_regs.fec_financial_rules import IDENTITY_VERSION, LEGACY_IDENTITY_VERSION
 from spicy_regs.fec_receipt_adapter import ReceiptAdapter, selected_qualified_views
 from spicy_regs.relationship_views.fec_filing_associations import financial_number_association_sql, financial_header_association_sql
 from spicy_regs.relationship_views.sql_views import SQLView
@@ -59,15 +60,17 @@ def test_native_selection_never_falls_back_to_legacy_when_receipts_are_missing(m
         assert con.execute("SHOW TABLES").fetchall() == []
 
 
-@pytest.mark.parametrize("legacy,version,resolved", [
-    (True, "fec-identity-observations/1", True),
-    (True, "fec-identity-observations/2", False),
-    (False, "fec-identity-observations/2", True),
-    (False, "fec-identity-observations/1", False),
+@pytest.mark.parametrize("legacy,identity,version,resolved", [
+    (True, LEGACY_IDENTITY_VERSION, "fec-identity-observations/1", True),
+    (True, IDENTITY_VERSION, "fec-identity-observations/1", False),
+    (True, LEGACY_IDENTITY_VERSION, "fec-identity-observations/2", False),
+    (False, IDENTITY_VERSION, "fec-identity-observations/2", True),
+    (False, LEGACY_IDENTITY_VERSION, "fec-identity-observations/2", False),
+    (False, IDENTITY_VERSION, "fec-identity-observations/1", False),
 ])
-def test_filing_mapping_matches_only_the_selected_layout(legacy, version, resolved):
+def test_filing_mapping_matches_only_the_selected_layout(legacy, identity, version, resolved):
     rows = [financial()]
-    target = {**filing(), "mapping_version": version}
+    target = {**filing(), "identity_version": identity, "mapping_version": version}
     with duckdb.connect() as con:
         con.register("fec_receipts", pa.Table.from_pylist(rows))
         con.register("fec_filings", pa.Table.from_pylist([target]))

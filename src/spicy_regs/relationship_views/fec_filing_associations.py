@@ -8,12 +8,15 @@ No Arrow or source-reader dependency is needed to construct this SQL.
 
 import re
 
+from spicy_regs.fec_financial_rules import (
+    IDENTITY_VERSION as TARGET_IDENTITY_VERSION,
+    LEGACY_IDENTITY_VERSION as LEGACY_TARGET_IDENTITY_VERSION,
+)
 from spicy_regs.fec_versions import INDIVIDUAL_RECEIPT_MAPPING_VERSION
 
 from .core import literal, quoted
 
 POLICY_VERSION = "fec-retained-filing-association/2"
-TARGET_IDENTITY_VERSION = "fec-typed-observation/1"
 TARGET_MAPPING_VERSION = "fec-identity-observations/2"
 FILE_NUMBER_MAPPINGS = {
     "fec-bulk-individual-contributions": INDIVIDUAL_RECEIPT_MAPPING_VERSION,
@@ -60,6 +63,7 @@ def financial_number_association_sql(table, source_generation_pin, namespace_evi
     Release admission validates those source IDs and literal locator JSON.
     """
     policy_version = "fec-retained-filing-association/1" if legacy else POLICY_VERSION
+    target_identity = LEGACY_TARGET_IDENTITY_VERSION if legacy else TARGET_IDENTITY_VERSION
     target_mapping = "fec-identity-observations/1" if legacy else TARGET_MAPPING_VERSION
     _pin(source_generation_pin)
     names = set(columns)
@@ -108,7 +112,7 @@ def financial_number_association_sql(table, source_generation_pin, namespace_evi
             list(record_id ORDER BY record_id) AS witness_ids,
             bool_and(COALESCE(source_authority = 'official-fec'
                 AND source_namespace = 'fec-openfec-file-number'
-                AND identity_version = {literal(TARGET_IDENTITY_VERSION)}
+                AND identity_version = {literal(target_identity)}
                 AND mapping_version = {literal(target_mapping)}
                 AND regexp_full_match(report_number, '-?[1-9][0-9]*')
                 AND filing_key = {literal(_KEY_PREFIX)} || report_number, FALSE)) AS identity_valid,

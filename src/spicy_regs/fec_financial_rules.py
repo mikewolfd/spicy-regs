@@ -8,7 +8,8 @@ from dataclasses import dataclass
 
 from spicy_regs.fec_versions import INDIVIDUAL_RECEIPT_MAPPING_VERSION
 
-IDENTITY_VERSION = "fec-typed-observation/1"
+LEGACY_IDENTITY_VERSION = "fec-typed-observation/1"
+IDENTITY_VERSION = "fec-typed-observation/2"
 VALUE_MAPPING_VERSION = "fec-exact-financial-values/2"
 
 POLICY_VERSION = "fec-financial-meaning/3"

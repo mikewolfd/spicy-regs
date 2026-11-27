@@ -13,7 +13,7 @@ import re
 
 import pyarrow as pa
 
-from spicy_regs.fec_financial_rules import IDENTITY_VERSION, VALUE_MAPPING_VERSION
+from spicy_regs.fec_financial_rules import IDENTITY_VERSION, LEGACY_IDENTITY_VERSION, VALUE_MAPPING_VERSION
 from spicy_regs.fec_versions import INDIVIDUAL_RECEIPT_MAPPING_VERSION as RECEIPT_MAPPING_VERSION
 
 #: The year FEC's first two-year election cycle ended (1975-1976); FEC began administering the law in 1975.
@@ -119,16 +119,55 @@ def bulk_date(raw):
         return None, "invalid_date"
 
 
+def _physical_locator(locator: dict, *, strip_encoding: bool) -> dict:
+    """Drop interpretation-only locator metadata without altering physical byte coordinates."""
+    excluded = {"field_mapping", "encoding"} if strip_encoding else {"field_mapping"}
+    physical = {}
+    for key, value in locator.items():
+        if key in excluded:
+            continue
+        if strip_encoding and key == "embedded_bodies" and isinstance(value, list):
+            physical[key] = [
+                {bk: bv for bk, bv in body.items() if bk != "encoding"}
+                if isinstance(body, dict)
+                else body
+                for body in value
+            ]
+        else:
+            physical[key] = value
+    return physical
+
+
 def observation_id(table, row, authority):
-    """Stable source-observation identity; definition changes do not change it."""
+    """Stable source-observation identity; definition and encoding fixes do not change it."""
     locator = json.loads(row["source_locator_json"])
     for key in ("collection_id", "source_record_id"):
         if locator.get(key) != _text(row[key]):
             raise ValueError("FEC locator differs from its source observation")
-    # This is interpretation evidence, not part of the physical source address.
-    physical = {k: v for k, v in locator.items() if k != "field_mapping"}
+    # Field definitions and character-encoding labels are interpretation evidence,
+    # not part of the physical source byte address (fec-typed-observation/2).
+    physical = _physical_locator(locator, strip_encoding=True)
     identity = [
         IDENTITY_VERSION,
+        _text(table),
+        _text(authority),
+        row["collection_id"],
+        row["source_record_id"],
+        _digest(row["source_sha256"]),
+        physical,
+    ]
+    return "sha256:" + hashlib.sha256(_json(identity).encode()).hexdigest()
+
+
+def legacy_observation_id(table, row, authority):
+    """Legacy fec-typed-observation/1 identity (hashed locator encoding) for old->new parity mapping."""
+    locator = json.loads(row["source_locator_json"])
+    for key in ("collection_id", "source_record_id"):
+        if locator.get(key) != _text(row[key]):
+            raise ValueError("FEC locator differs from its source observation")
+    physical = _physical_locator(locator, strip_encoding=False)
+    identity = [
+        LEGACY_IDENTITY_VERSION,
         _text(table),
         _text(authority),
         row["collection_id"],
