@@ -49,7 +49,7 @@ import sys
 from tempfile import TemporaryDirectory
 from time import monotonic
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlsplit
 
 import duckdb
 import pyarrow as pa
@@ -145,7 +145,7 @@ from spicy_regs.transforms.fec_identity_observations import (
     map_registry,
     resolve_filing_links,
 )
-from spicy_regs.transforms.fec_legal import legal_source_kind, map_legal
+from spicy_regs.transforms.fec_legal import legal_source_kind, map_legal, sanitize_redacted_mur_url
 from spicy_regs.transforms.fec_native_subjects import FIELD_RULES, refuse_c1_controls
 from spicy_regs.transforms.fec_query import (
     CollectionSelection,
@@ -948,6 +948,38 @@ def _align_to_schema(row: Mapping[str, Any], schema: pa.Schema) -> dict[str, Any
     return {name: row.get(name) for name in schema.names}
 
 
+def _hydrate_collection_row(collection: Mapping[str, Any]) -> dict[str, Any]:
+    """Hydrate ``scope`` and ``field_mapping`` dicts from ``fec_collections.parquet`` JSON columns.
+
+    ``fec_bulk_selection.individual_snapshot_selection()`` inspects ``collection["scope"]``
+    and ``collection["field_mapping"]`` directly, whereas ``fec_collections.parquet`` stores
+    them serialized inside ``requested_scope_json`` and ``collection_outcome_json["tableFieldMapping"]``.
+    """
+    hydrated = dict(collection)
+    if "scope" not in hydrated:
+        raw_scope = hydrated.get("requested_scope_json")
+        if isinstance(raw_scope, str) and raw_scope:
+            parsed_scope = json.loads(raw_scope)
+            if isinstance(parsed_scope, dict):
+                hydrated["scope"] = parsed_scope
+    if "field_mapping" not in hydrated:
+        raw_outcome = hydrated.get("collection_outcome_json")
+        if isinstance(raw_outcome, str) and raw_outcome:
+            parsed_outcome = json.loads(raw_outcome)
+            if isinstance(parsed_outcome, dict) and "tableFieldMapping" in parsed_outcome:
+                hydrated["field_mapping"] = parsed_outcome["tableFieldMapping"]
+    return hydrated
+
+
+def _id_mapping_files(path: Path) -> list[Path]:
+    """Return Parquet files for an ``id_mapping`` path (supports both single file and zero-copy directory)."""
+    if path.is_file():
+        return [path]
+    if path.is_dir():
+        return sorted(path.glob("*.parquet"))
+    return []
+
+
 def build_fec_query_from_inputs(
     inputs: FecQueryBuildInputs,
     *,
@@ -983,7 +1015,7 @@ def build_fec_query_from_inputs(
     checkpoints_dir.mkdir(parents=True, exist_ok=True)
     refusals_dir.mkdir(parents=True, exist_ok=True)
 
-    id_mapping_path = output_dir / "id_mapping.parquet"
+    id_mapping_path = output_dir / "id_mapping"
     completed: dict[str, TableCheckpoint] = {}
     resumed_tables: set[str] = set()
     refusal_paths: dict[str, Path] = {}
@@ -995,7 +1027,7 @@ def build_fec_query_from_inputs(
     # Fast path: if all 50 tables + id_mapping already finalized cleanly (e.g. crash during sealing),
     # resume every table directly without needing stage sidecars.
     all_finalized_resume = False
-    if resume and id_mapping_path.is_file():
+    if resume and bool(_id_mapping_files(id_mapping_path)):
         all_cks = {
             t: load_verified_checkpoint(
                 table=t,
@@ -1080,6 +1112,7 @@ def build_fec_query_from_inputs(
     # 1a. fec_collection_selection
     if not _try_resume_stage("1a_collection_selection", ("fec_collection_selection",)):
         with _stage_recorder("1a_collection_selection") as rec:
+            hydrated_cols = [_hydrate_collection_row(col) for col in inputs.collections]
             selection_rows: list[dict[str, Any]] = []
             if inputs.individual_snapshot_proof is not None:
                 proof_bytes, proof_sha = inputs.individual_snapshot_proof
@@ -1088,14 +1121,14 @@ def build_fec_query_from_inputs(
                         proof_bytes,
                         proof_sha256=proof_sha,
                         source_generation_pin=inputs.source_generation_pin,
-                        collections=inputs.collections,
+                        collections=hydrated_cols,
                         source_counts=inputs.source_counts or {},
                     )
                 )
-            if inputs.collections:
+            if hydrated_cols:
                 selection_rows.extend(
                     cross_source_collection_selection(
-                        inputs.collections,
+                        hydrated_cols,
                         source_generation_pin=inputs.source_generation_pin,
                         source_counts=inputs.source_counts,
                         archive_inner_proofs=inputs.archive_inner_proofs,
@@ -1469,11 +1502,8 @@ def build_fec_query_from_inputs(
             _write_rows_table("fec_filing_text_observations", associated_texts)
             stage_metas["2h_filing_text"] = rec.commit()
 
-    # ---- STAGE 3: Large financial & schedule tables (streamed with single-connection associations) ----
-    financial_tables = (
-        "fec_receipts",
-        "fec_intercommittee_transactions",
-        "fec_disbursements",
+    # ---- STAGE 3: Large financial & schedule tables (per-table checkpoints, zero bulk double-write) ----
+    remaining_schedule_tables = (
         "fec_inaugural_donations",
         "fec_account_transfers",
         "fec_allocated_disbursements",
@@ -1489,44 +1519,142 @@ def build_fec_query_from_inputs(
         "fec_loan_terms",
         "fec_loans",
     )
-    if not _try_resume_stage("3_financial_schedules", financial_tables):
-        with _stage_recorder("3_financial_schedules") as rec:
-            # Stage mapped rows per target table into bounded temporary Parquet files so each
-            # table runs ONE streaming association_records connection over its full ordered
-            # stream without buffering rows in RAM.
-            raw_stage_dir = build_root / ".financial_mapped"
-            if raw_stage_dir.exists():
-                shutil.rmtree(raw_stage_dir)
-            raw_stage_dir.mkdir(parents=True)
-            staged_paths: dict[str, Path] = {}
-            staged_counts: dict[str, int] = defaultdict(int)
+    raw_stage_dir = build_root / ".schedules_staged"
+    pre_manifest_path = raw_stage_dir / "manifest.json"
 
-            with ExitStack() as stage_stack:
-                stage_writers: dict[str, pq.ParquetWriter] = {}
-                stage_buffers: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    def _iter_staged_file(path: Path) -> Iterator[dict[str, Any]]:
+        if not path.is_file():
+            return
+        with pq.ParquetFile(path) as pf:
+            for batch in pf.iter_batches(batch_size=batch_rows, use_threads=False):
+                check_resources()
+                yield from batch.to_pylist()
 
-                def _stage_append(table: str, row: dict[str, Any]) -> None:
-                    buf = stage_buffers[table]
-                    buf.append(_align_to_schema(row, schemas[table]))
-                    if len(buf) >= batch_rows:
-                        _stage_flush(table)
+    def _pre_manifest_valid() -> bool:
+        if not pre_manifest_path.is_file():
+            return False
+        manifest = json.loads(pre_manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("source_generation_pin") != inputs.source_generation_pin:
+            return False
+        for rel, expected_sha in (manifest.get("files") or {}).items():
+            target = raw_stage_dir / rel
+            if target.is_symlink() or not target.is_file() or _sha(target) != expected_sha:
+                return False
+        return True
 
-                def _stage_flush(table: str) -> None:
-                    buf = stage_buffers.get(table)
-                    if not buf:
-                        return
-                    check_resources()
-                    writer = stage_writers.get(table)
-                    if writer is None:
-                        path = raw_stage_dir / f"{table}.mapped.parquet"
-                        staged_paths[table] = path
-                        writer = stage_stack.enter_context(pq.ParquetWriter(path, schemas[table], compression="zstd"))
-                        stage_writers[table] = writer
-                    writer.write_batch(typed_batch(buf, schemas[table]))
-                    staged_counts[table] += len(buf)
-                    buf.clear()
+    def _all_stage3_tables_resumable() -> bool:
+        if all_finalized_resume:
+            return True
+        if not resume:
+            return False
+        for s_name, s_tables in (
+            ("3a_fec_receipts", ("fec_receipts",)),
+            ("3b_fec_intercommittee_transactions", ("fec_intercommittee_transactions",)),
+            ("3c_fec_disbursements", ("fec_disbursements",)),
+            ("3d_remaining_schedules", remaining_schedule_tables),
+        ):
+            if _verify_stage_sidecar(
+                stage=s_name,
+                checkpoints_dir=checkpoints_dir,
+                source_generation_pin=inputs.source_generation_pin,
+            ) is None:
+                return False
+            for t in s_tables:
+                if (
+                    load_verified_checkpoint(
+                        table=t,
+                        tables_dir=tables_dir,
+                        checkpoints_dir=checkpoints_dir,
+                        schema=schemas[t],
+                        source_generation_pin=inputs.source_generation_pin,
+                    )
+                    is None
+                ):
+                    return False
+        return True
 
-                # 3a. Bulk individual receipts (34.8M rows on full corpus -> streams directly without RAM retention)
+    # 3_pre_schedules: stage ONLY small multi-table electronic/API schedules (<150 MiB total),
+    # never double-writing bulk receipts (34.8M), bulk intercommittee (10.6M), or oppexp (1.7M).
+    stage_order.append("3_pre_schedules")
+    pre_sidecar = (
+        _verify_stage_sidecar(
+            stage="3_pre_schedules",
+            checkpoints_dir=checkpoints_dir,
+            source_generation_pin=inputs.source_generation_pin,
+        )
+        if resume and not all_finalized_resume
+        else None
+    )
+    if all_finalized_resume:
+        pass
+    elif pre_sidecar is not None and (_all_stage3_tables_resumable() or _pre_manifest_valid()):
+        stage_metas["3_pre_schedules"] = pre_sidecar
+    else:
+        if raw_stage_dir.exists():
+            shutil.rmtree(raw_stage_dir)
+        raw_stage_dir.mkdir(parents=True)
+        staged_files: dict[str, Path] = {}
+        with _stage_recorder("3_pre_schedules") as rec, ExitStack() as stage_stack:
+            stage_writers: dict[str, pq.ParquetWriter] = {}
+            stage_buffers: dict[str, list[dict[str, Any]]] = defaultdict(list)
+
+            def _pre_flush(table: str) -> None:
+                buf = stage_buffers.get(table)
+                if not buf:
+                    return
+                check_resources()
+                writer = stage_writers.get(table)
+                if writer is None:
+                    path = raw_stage_dir / f"{table}.mapped.parquet"
+                    staged_files[table] = path
+                    writer = stage_stack.enter_context(pq.ParquetWriter(path, schemas[table], compression="zstd"))
+                    stage_writers[table] = writer
+                writer.write_batch(typed_batch(buf, schemas[table]))
+                buf.clear()
+
+            def _pre_append(table: str, row: dict[str, Any]) -> None:
+                buf = stage_buffers[table]
+                buf.append(_align_to_schema(row, schemas[table]))
+                if len(buf) >= batch_rows:
+                    _pre_flush(table)
+
+            for row, selection, api_mapping in inputs.api_financial_rows:
+                check_resources()
+                mapped, ev = map_api_financial(row, selection, api_mapping)
+                t = api_mapping.fields.table
+                rec.record_id(t, legacy_record_id_for_row(t, row, selection.source_authority), mapped["record_id"])
+                rec.emit_evidence(ev)
+                _pre_append(t, mapped)
+
+            for row, selection, sched_mapping, layout, header_row in inputs.filing_schedule_rows:
+                check_resources()
+                mapped, ev = map_filing_financial(row, selection, sched_mapping, layout=layout, header_row=header_row)
+                t = sched_mapping.fields.table
+                rec.record_id(t, legacy_record_id_for_row(t, row, selection.source_authority), mapped["record_id"])
+                rec.emit_evidence(ev)
+                _pre_append(t, mapped)
+
+            for t in list(stage_buffers):
+                _pre_flush(t)
+            stage_stack.close()
+            pre_manifest_path.write_text(
+                json.dumps(
+                    {
+                        "source_generation_pin": inputs.source_generation_pin,
+                        "files": {path.name: _sha(path) for path in staged_files.values()},
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            stage_metas["3_pre_schedules"] = rec.commit()
+
+    # 3a. fec_receipts (streams bulk_receipt_rows directly -> zero 2.85 GiB .mapped.parquet copy)
+    if not _try_resume_stage("3a_fec_receipts", ("fec_receipts",)):
+        with _stage_recorder("3a_fec_receipts") as rec:
+            def _iter_fec_receipts() -> Iterator[dict[str, Any]]:
                 for row, selection in inputs.bulk_receipt_rows:
                     check_resources()
                     mapped, ev = bulk_receipt(row, selection)
@@ -1536,9 +1664,44 @@ def build_fec_query_from_inputs(
                         mapped["record_id"],
                     )
                     rec.emit_evidence(ev)
-                    _stage_append("fec_receipts", mapped)
+                    yield _align_to_schema(mapped, schemas["fec_receipts"])
+                yield from _iter_staged_file(raw_stage_dir / "fec_receipts.mapped.parquet")
 
-                # 3b. Bulk financial (intercommittee, pas2, ie, comm costs, electioneering)
+            associated_receipts = _stream_with_filing_associations(
+                _iter_fec_receipts(),
+                table="fec_receipts",
+                schema=schemas["fec_receipts"],
+                filings=filings,
+                headers=header_assocs,
+                source_generation_pin=inputs.source_generation_pin,
+                namespace_evidence=inputs.namespace_evidence,
+                check_resources=check_resources,
+            )
+            _write_rows_table("fec_receipts", associated_receipts)
+            peak_disk = max(peak_disk, _dir_bytes(output_dir))
+            stage_metas["3a_fec_receipts"] = rec.commit()
+
+    # 3b. fec_intercommittee_transactions (streams directly; spills only tiny non-intercommittee bulk rows)
+    if not _try_resume_stage("3b_fec_intercommittee_transactions", ("fec_intercommittee_transactions",)):
+        with _stage_recorder("3b_fec_intercommittee_transactions") as rec, ExitStack() as bulk_other_stack:
+            other_writers: dict[str, pq.ParquetWriter] = {}
+            other_buffers: dict[str, list[dict[str, Any]]] = defaultdict(list)
+
+            def _other_flush(table: str) -> None:
+                buf = other_buffers.get(table)
+                if not buf:
+                    return
+                check_resources()
+                writer = other_writers.get(table)
+                if writer is None:
+                    raw_stage_dir.mkdir(parents=True, exist_ok=True)
+                    path = raw_stage_dir / f"bulk_other_{table}.mapped.parquet"
+                    writer = bulk_other_stack.enter_context(pq.ParquetWriter(path, schemas[table], compression="zstd"))
+                    other_writers[table] = writer
+                writer.write_batch(typed_batch(buf, schemas[table]))
+                buf.clear()
+
+            def _iter_intercommittee() -> Iterator[dict[str, Any]]:
                 for row, selection, mapping in inputs.bulk_financial_rows:
                     check_resources()
                     mapped, ev = map_bulk_financial(row, selection, mapping)
@@ -1548,9 +1711,37 @@ def build_fec_query_from_inputs(
                         mapped["record_id"],
                     )
                     rec.emit_evidence(ev)
-                    _stage_append(mapping.table, mapped)
+                    aligned = _align_to_schema(mapped, schemas[mapping.table])
+                    if mapping.table == "fec_intercommittee_transactions":
+                        yield aligned
+                    else:
+                        buf = other_buffers[mapping.table]
+                        buf.append(aligned)
+                        if len(buf) >= batch_rows:
+                            _other_flush(mapping.table)
+                for t in list(other_buffers):
+                    _other_flush(t)
+                yield from _iter_staged_file(raw_stage_dir / "fec_intercommittee_transactions.mapped.parquet")
 
-                # 3c. Operating expenses (oppexp with repaired trailing empty pipe)
+            associated_ic = _stream_with_filing_associations(
+                _iter_intercommittee(),
+                table="fec_intercommittee_transactions",
+                schema=schemas["fec_intercommittee_transactions"],
+                filings=filings,
+                headers=header_assocs,
+                source_generation_pin=inputs.source_generation_pin,
+                namespace_evidence=inputs.namespace_evidence,
+                check_resources=check_resources,
+            )
+            _write_rows_table("fec_intercommittee_transactions", associated_ic)
+            bulk_other_stack.close()
+            peak_disk = max(peak_disk, _dir_bytes(output_dir))
+            stage_metas["3b_fec_intercommittee_transactions"] = rec.commit()
+
+    # 3c. fec_disbursements (streams operating_expense_rows directly -> zero .mapped.parquet copy)
+    if not _try_resume_stage("3c_fec_disbursements", ("fec_disbursements",)):
+        with _stage_recorder("3c_fec_disbursements") as rec:
+            def _iter_disbursements() -> Iterator[dict[str, Any]]:
                 for row, selection, header_row in inputs.operating_expense_rows:
                     check_resources()
                     mapped, ev = operating_expense(row, selection, header_row)
@@ -1560,57 +1751,53 @@ def build_fec_query_from_inputs(
                         mapped["record_id"],
                     )
                     rec.emit_evidence(ev)
-                    _stage_append("fec_disbursements", mapped)
+                    yield _align_to_schema(mapped, schemas["fec_disbursements"])
+                yield from _iter_staged_file(raw_stage_dir / "fec_disbursements.mapped.parquet")
+                yield from _iter_staged_file(raw_stage_dir / "bulk_other_fec_disbursements.mapped.parquet")
 
-                # 3d. Contribution aggregates (repaired P00000001..P00000003 rollup separation)
-                for row, selection, kind in inputs.contribution_aggregate_rows:
-                    check_resources()
-                    mapped, ev = map_contribution_aggregate(row, selection, kind=kind)
-                    rec.record_id(
-                        "fec_contribution_aggregates",
-                        legacy_record_id_for_row("fec_contribution_aggregates", row, selection.source_authority),
-                        mapped["record_id"],
-                    )
-                    rec.emit_evidence(ev)
-                    _stage_append("fec_contribution_aggregates", mapped)
+            associated_disb = _stream_with_filing_associations(
+                _iter_disbursements(),
+                table="fec_disbursements",
+                schema=schemas["fec_disbursements"],
+                filings=filings,
+                headers=header_assocs,
+                source_generation_pin=inputs.source_generation_pin,
+                namespace_evidence=inputs.namespace_evidence,
+                check_resources=check_resources,
+            )
+            _write_rows_table("fec_disbursements", associated_disb)
+            peak_disk = max(peak_disk, _dir_bytes(output_dir))
+            stage_metas["3c_fec_disbursements"] = rec.commit()
 
-                # 3e. API financial schedules & inaugural aggregates
-                for row, selection, api_mapping in inputs.api_financial_rows:
-                    check_resources()
-                    mapped, ev = map_api_financial(row, selection, api_mapping)
-                    t = api_mapping.fields.table
-                    rec.record_id(t, legacy_record_id_for_row(t, row, selection.source_authority), mapped["record_id"])
-                    rec.emit_evidence(ev)
-                    _stage_append(t, mapped)
-
-                # 3f. Electronic/paper filing schedules
-                for row, selection, sched_mapping, layout, header_row in inputs.filing_schedule_rows:
-                    check_resources()
-                    mapped, ev = map_filing_financial(row, selection, sched_mapping, layout=layout, header_row=header_row)
-                    t = sched_mapping.fields.table
-                    rec.record_id(t, legacy_record_id_for_row(t, row, selection.source_authority), mapped["record_id"])
-                    rec.emit_evidence(ev)
-                    _stage_append(t, mapped)
-
-                for t in list(stage_buffers):
-                    _stage_flush(t)
-
-            # Materialize filing_key / filing_link_status table-by-table with ONE DuckDB connection
-            # per table, deleting each temporary staged file immediately to keep peak disk minimal.
-            for table in financial_tables:
-                stage_file = staged_paths.get(table)
-                if stage_file is None or staged_counts[table] == 0:
-                    _write_rows_table(table, ())
-                    continue
-
-                def _iter_staged(path: Path = stage_file) -> Iterator[dict[str, Any]]:
-                    with pq.ParquetFile(path) as pf:
-                        for batch in pf.iter_batches(batch_size=batch_rows, use_threads=False):
+    # 3d. Remaining 14 schedule & aggregate tables
+    if not _try_resume_stage("3d_remaining_schedules", remaining_schedule_tables):
+        with _stage_recorder("3d_remaining_schedules") as rec:
+            for table in remaining_schedule_tables:
+                if table == "fec_contribution_aggregates":
+                    def _iter_aggs() -> Iterator[dict[str, Any]]:
+                        for row, selection, kind in inputs.contribution_aggregate_rows:
                             check_resources()
-                            yield from batch.to_pylist()
+                            mapped, ev = map_contribution_aggregate(row, selection, kind=kind)
+                            rec.record_id(
+                                "fec_contribution_aggregates",
+                                legacy_record_id_for_row("fec_contribution_aggregates", row, selection.source_authority),
+                                mapped["record_id"],
+                            )
+                            rec.emit_evidence(ev)
+                            yield _align_to_schema(mapped, schemas["fec_contribution_aggregates"])
+                        yield from _iter_staged_file(raw_stage_dir / "fec_contribution_aggregates.mapped.parquet")
+                        yield from _iter_staged_file(raw_stage_dir / "bulk_other_fec_contribution_aggregates.mapped.parquet")
 
-                associated = _stream_with_filing_associations(
-                    _iter_staged(),
+                    row_source: Iterator[dict[str, Any]] = _iter_aggs()
+                else:
+                    def _iter_other_table(tbl: str = table) -> Iterator[dict[str, Any]]:
+                        yield from _iter_staged_file(raw_stage_dir / f"bulk_other_{tbl}.mapped.parquet")
+                        yield from _iter_staged_file(raw_stage_dir / f"{tbl}.mapped.parquet")
+
+                    row_source = _iter_other_table()
+
+                associated_rem = _stream_with_filing_associations(
+                    row_source,
                     table=table,
                     schema=schemas[table],
                     filings=filings,
@@ -1619,20 +1806,20 @@ def build_fec_query_from_inputs(
                     namespace_evidence=inputs.namespace_evidence,
                     check_resources=check_resources,
                 )
-                _write_rows_table(table, associated)
+                _write_rows_table(table, associated_rem)
                 peak_disk = max(peak_disk, _dir_bytes(output_dir))
-                stage_file.unlink()
-            if raw_stage_dir.exists():
-                shutil.rmtree(raw_stage_dir)
-            stage_metas["3_financial_schedules"] = rec.commit()
+            stage_metas["3d_remaining_schedules"] = rec.commit()
 
-    # ---- Stream-merge per-stage evidence & ID-mapping sidecars cleanly ----
+    if raw_stage_dir.exists():
+        shutil.rmtree(raw_stage_dir)
+
+    # ---- Stream-merge evidence & zero-copy adopt per-stage ID-mapping parts ----
     evidence_written_total = 0
     evidence_excluded_total = 0
     id_mapping_total = 0
     if all_finalized_resume:
         evidence_written_total = completed["fec_record_evidence"].rows
-        id_mapping_total = pq.read_metadata(id_mapping_path).num_rows
+        id_mapping_total = sum(pq.read_metadata(p).num_rows for p in _id_mapping_files(id_mapping_path))
     else:
         sdir = _sidecar_dir(checkpoints_dir)
         with _open_table_writer("fec_record_evidence") as ev_writer:
@@ -1647,21 +1834,44 @@ def build_fec_query_from_inputs(
                             ev_writer.append(row)
                             evidence_written_total += 1
             completed["fec_record_evidence"] = ev_writer.finish()
+        # Reclaim evidence sidecar disk immediately before finalizing id_mapping.
+        for stage in stage_order:
+            ev_file = sdir / stage_metas[stage]["evidence"]["path"]
+            if ev_file.is_file():
+                ev_file.unlink()
 
-        id_partial = output_dir / ".id_mapping.partial"
-        if id_partial.exists():
-            id_partial.unlink()
-        with pq.ParquetWriter(id_partial, ID_MAPPING_SCHEMA, compression="zstd") as id_out:
-            for stage in stage_order:
-                meta = stage_metas[stage]
-                id_file = sdir / meta["id_mapping"]["path"]
-                with pq.ParquetFile(id_file) as pf:
-                    for batch in pf.iter_batches(batch_size=batch_rows, use_threads=False):
-                        check_resources()
-                        if batch.num_rows:
-                            id_out.write_batch(batch)
-                            id_mapping_total += batch.num_rows
-        id_partial.rename(id_mapping_path)
+        # Zero-copy rename each committed stage id_mapping Parquet into output_dir/id_mapping/
+        # (eliminates ~3-4 GiB merge duplication on full 49.4M-row corpus).
+        id_staging = output_dir / ".id_mapping.partial"
+        if id_staging.exists():
+            if id_staging.is_dir():
+                shutil.rmtree(id_staging)
+            else:
+                id_staging.unlink()
+        id_staging.mkdir(parents=True)
+        moved_parts = 0
+        for idx, stage in enumerate(stage_order):
+            meta = stage_metas[stage]
+            id_file = sdir / meta["id_mapping"]["path"]
+            rows_in_part = int(pq.read_metadata(id_file).num_rows)
+            if rows_in_part > 0:
+                id_file.rename(id_staging / f"part-{idx:03d}-{stage}.parquet")
+                id_mapping_total += rows_in_part
+                moved_parts += 1
+            elif id_file.is_file():
+                id_file.unlink()
+        if moved_parts == 0:
+            pq.write_table(
+                pa.Table.from_pylist([], schema=ID_MAPPING_SCHEMA),
+                id_staging / "part-000-empty.parquet",
+                compression="zstd",
+            )
+        if id_mapping_path.exists():
+            if id_mapping_path.is_dir():
+                shutil.rmtree(id_mapping_path)
+            else:
+                id_mapping_path.unlink()
+        id_staging.rename(id_mapping_path)
         peak_disk = max(peak_disk, _dir_bytes(output_dir))
         if sdir.exists():
             shutil.rmtree(sdir)
@@ -1749,16 +1959,22 @@ def build_fec_query_from_inputs(
 # ---------------------------------------------------------------------------
 
 def _extract_cycle_from_url(url: str | None) -> int | None:
+    """Extract election cycle matching live ``784b23da`` semantics.
+
+    Presidential_Map (``2024_overall_summary.csv``, ``Contributions_by_Size.csv``,
+    ``Contributions_by_3Zip.csv``) and ``data.fec.gov/leadership<YYYY>.csv`` retain
+    ``source_cycle = None`` matching live ``784b23da``.
+    """
     if not url:
         return None
     path = urlsplit(url).path
     if match := re.search(r"/bulk-downloads/(19[7-9][0-9]|20[0-9]{2})/", path):
         year = int(match[1])
         return year if year % 2 == 0 else None
-    if match := re.search(r"/Presidential_Map/(19[7-9][0-9]|20[0-9]{2})/", path):
-        year = int(match[1])
-        return year if year % 2 == 0 else None
-    if match := re.search(r"(?:leadership|independent_expenditure_|CommunicationCosts_|ElectioneeringComm_|candidate_summary_|committee_summary_)(19[7-9][0-9]|20[0-9]{2})", path):
+    if match := re.search(
+        r"(?:independent_expenditure_|CommunicationCosts_|ElectioneeringComm_|candidate_summary_|committee_summary_)(19[7-9][0-9]|20[0-9]{2})",
+        path,
+    ):
         year = int(match[1])
         return year if year % 2 == 0 else None
     if match := re.search(r"(?:indiv|oth|pas2|oppexp|weball|webl|webk|cm|cn|ccl)([0-9]{2})", path.lower()):
@@ -1896,7 +2112,7 @@ def _authority_for_collection(collection_row: Mapping[str, Any]) -> str:
     scope = json.loads(scope_raw) if isinstance(scope_raw, str) and scope_raw else {}
     url = (scope.get("capture") or {}).get("requestUrl") or ""
     if cid.startswith("senate-unofficial-"):
-        return "unofficial-senate"
+        return "unofficial-senate-retained"
     host = urlsplit(url).hostname or ""
     if host == "www.oversight.gov" or host.endswith(".oversight.gov"):
         return "oversight.gov"
@@ -1999,6 +2215,82 @@ def _iter_collection_records(
     )
 
 
+def _read_store_blob(store: Any, sha256_value: str, *, expected_bytes: int | None = None) -> bytes:
+    """Read raw original bytes from ``CentralRawArchiveStore`` or compatible store with digest/size check."""
+    digest = _digest(sha256_value)
+    bare = digest.removeprefix("sha256:")
+    try:
+        ctx = store.open(bare)
+    except (FileNotFoundError, KeyError, ValueError):
+        ctx = store.open(digest)
+    with ctx as stream:
+        raw = stream.read()
+    if expected_bytes is not None and len(raw) != expected_bytes:
+        raise ValueError(f"Retained blob size mismatch for {digest}: expected {expected_bytes}, got {len(raw)}")
+    if "sha256:" + hashlib.sha256(raw).hexdigest() != digest:
+        raise ValueError(f"Retained blob digest mismatch for {digest}")
+    return raw
+
+
+def discover_retained_mur_captures(
+    collections: Sequence[Mapping[str, Any]],
+    *,
+    store: Any,
+) -> list[dict[str, Any]]:
+    """Discover retained HTTP-200 ``api_key=<redacted>`` MUR captures from ``fec_collections`` + ``store``.
+
+    Selects disposition/context rows whose ``callerContext.source_capture`` points to
+    ``https://api.open.fec.gov/v1/legal/docs/murs/<id>?...api_key=...`` with HTTP 200
+    and non-truncated responses, validates each URL through :func:`sanitize_redacted_mur_url`
+    (failing closed on non-``<redacted>`` credentials), and loads verified payload bytes from ``store``.
+    """
+    captures: list[dict[str, Any]] = []
+    for col in sorted(collections, key=lambda c: str(c.get("collection_id") or "")):
+        raw_outcome = col.get("collection_outcome_json")
+        if not isinstance(raw_outcome, str) or not raw_outcome:
+            continue
+        outcome = json.loads(raw_outcome)
+        if not isinstance(outcome, dict):
+            continue
+        caller_ctx = (outcome.get("receiverDisposition") or {}).get("callerContext") or outcome.get("callerContext")
+        if not isinstance(caller_ctx, dict):
+            continue
+        sc = caller_ctx.get("source_capture")
+        if not isinstance(sc, dict):
+            continue
+        url = sc.get("url")
+        if not isinstance(url, str) or not url:
+            continue
+        parsed = urlsplit(url)
+        if parsed.hostname != "api.open.fec.gov" or not re.fullmatch(r"/v1/legal/docs/murs/[^/]+/?", parsed.path):
+            continue
+        if not any(k.casefold() == "api_key" for k, _ in parse_qsl(parsed.query, keep_blank_values=True)):
+            continue
+        statuses = sc.get("http_statuses")
+        if not isinstance(statuses, list) or not statuses or not all(s == 200 for s in statuses):
+            continue
+        truncated = sc.get("truncated")
+        if isinstance(truncated, list) and any(t is True for t in truncated):
+            continue
+        # Fail closed if any retained HTTP-200 MUR URL carries a non-<redacted> credential value.
+        sanitize_redacted_mur_url(url)
+        sha = _digest(sc["sha256"])
+        expected_bytes = sc.get("bytes") if isinstance(sc.get("bytes"), int) else None
+        payload_bytes = _read_store_blob(store, sha, expected_bytes=expected_bytes)
+        obs_raw = sc.get("observed_at")
+        observed_at = obs_raw[0] if isinstance(obs_raw, list) and obs_raw else (obs_raw if isinstance(obs_raw, str) else None)
+        captures.append(
+            {
+                "collection_id": str(col["collection_id"]),
+                "source_sha256": sha,
+                "source_url": url,
+                "observed_at": observed_at,
+                "payload_bytes": payload_bytes,
+            }
+        )
+    return captures
+
+
 def build_fec_query_generation(
     *,
     observations_dir: Path,
@@ -2009,7 +2301,7 @@ def build_fec_query_generation(
     store: Any,
     full_source_records_path: Path | None = None,
     individual_snapshot_proof: tuple[bytes, str] | None = None,
-    retained_mur_captures: Sequence[dict[str, Any]] = (),
+    retained_mur_captures: Sequence[dict[str, Any]] | None = None,
     include_rebuilt_tables: bool = True,
     verify_rebuilt_expected_rows: bool = True,
     read_snapshot: Mapping[str, Any] | None = None,
@@ -2040,7 +2332,7 @@ def build_fec_query_generation(
             "(supply --full-source-records when observations_dir holds subject-only fec_source_records)"
         )
 
-    collections = pq.read_table(collections_path).to_pylist()
+    collections = [_hydrate_collection_row(col) for col in pq.read_table(collections_path).to_pylist()]
     with TemporaryDirectory(prefix="fec-q-counts-") as temp_root:
         cfg = _duckdb_config(duckdb_memory_limit, duckdb_temp_limit, 2, temp_root)
         with duckdb.connect(config=cfg) as con:
@@ -2082,7 +2374,8 @@ def build_fec_query_generation(
         if (ctx := definition_contexts_from_collections(collections, workbook_sha256=wb))
     }
 
-    # Build archive inner-member proofs (e.g., cm24) directly from store when duplicate cm.txt collections exist
+    # Build archive inner-member proofs (e.g., cm24) directly from store when duplicate cm.txt collections exist.
+    # Fail closed on digest/byte mismatch rather than silently dropping a deduplication family.
     archive_inner_proofs: list[tuple[bytes, str]] = []
     cm24_cols = [
         col
@@ -2096,19 +2389,17 @@ def build_fec_query_generation(
                 scope = json.loads(col["requested_scope_json"])
                 cap = scope["capture"]
                 spool = held_original(store, cap["responseSha256"], cap["byteSize"])
+                spool.seek(0)
                 archive_map[col["collection_id"]] = (cap["responseSha256"], spool.read())
         canonical_cm24 = next((c["collection_id"] for c in cm24_cols if c["collection_id"] == "bulk-cm24-zip"), sorted(archive_map)[0])
-        try:
-            archive_inner_proofs.append(
-                build_archive_inner_member_proof(
-                    archive_map,
-                    member_name="cm.txt",
-                    selected_collection_id=canonical_cm24,
-                    source_generation_pin=source_generation_pin,
-                )
+        archive_inner_proofs.append(
+            build_archive_inner_member_proof(
+                archive_map,
+                member_name="cm.txt",
+                selected_collection_id=canonical_cm24,
+                source_generation_pin=source_generation_pin,
             )
-        except ValueError:
-            pass
+        )
 
     # Filing headers for fec_filing_header_associations (ONE scan across all filing_fec collections).
     filing_col_by_cid = {col["collection_id"]: col for col, _ in routed["filing_fec"]}
@@ -2165,6 +2456,9 @@ def build_fec_query_generation(
             duckdb_memory_limit=duckdb_memory_limit,
             duckdb_temp_limit=duckdb_temp_limit,
         ):
+            native = json.loads(row["metadata_json"])
+            if native.get("kind") == "row" and native.get("fields") == []:
+                continue  # blank line retained by build_fec_observations
             col = by_cid[row["collection_id"]]
             sel = _selection_for_collection(
                 col,
@@ -2566,10 +2860,7 @@ def build_fec_query_generation(
                 }
             )
         if pairs_data:
-            try:
-                weball_webl_proofs.append(build_weball_webl_subset_proof(pairs_data, source_generation_pin=source_generation_pin))
-            except ValueError:
-                pass
+            weball_webl_proofs.append(build_weball_webl_subset_proof(pairs_data, source_generation_pin=source_generation_pin))
 
     foia_edition_proofs: list[tuple[bytes, str]] = []
     foia_cols = [col for col, _ in routed["agency"] if "foia" in col["collection_id"].lower()]
@@ -2587,14 +2878,24 @@ def build_fec_query_generation(
             if fy is not None and metrics:
                 by_fy[fy].append({"collection_id": col["collection_id"], "source_sha256": rows[0]["source_sha256"], "metrics": metrics})
         for fy, editions in sorted(by_fy.items()):
-            if len(editions) >= 2:
-                primary = next((e["collection_id"] for e in editions if "archive" not in e["collection_id"]), editions[0]["collection_id"])
-                try:
-                    foia_edition_proofs.append(
-                        build_foia_dual_edition_proof(editions, selected_collection_id=primary, source_generation_pin=source_generation_pin)
+            primary_editions = [e for e in editions if "archive" not in e["collection_id"]]
+            archive_editions = [e for e in editions if "archive" in e["collection_id"]]
+            # Only prove dual-edition equivalence for fiscal years declaring both primary & archive mirror editions;
+            # fail closed if a declared dual-edition pair's metrics diverge.
+            if primary_editions and archive_editions:
+                foia_edition_proofs.append(
+                    build_foia_dual_edition_proof(
+                        editions,
+                        selected_collection_id=primary_editions[0]["collection_id"],
+                        source_generation_pin=source_generation_pin,
                     )
-                except ValueError:
-                    pass
+                )
+
+    resolved_mur_captures: Sequence[dict[str, Any]]
+    if retained_mur_captures is None:
+        resolved_mur_captures = discover_retained_mur_captures(collections, store=store) if store is not None else ()
+    else:
+        resolved_mur_captures = retained_mur_captures
 
     build_inputs = FecQueryBuildInputs(
         source_generation_pin=source_generation_pin,
@@ -2627,7 +2928,7 @@ def build_fec_query_generation(
         committee_api_rows=_iter_committee_api(),
         history_rows=_iter_history(),
         legal_rows=_iter_legal(),
-        retained_mur_captures=retained_mur_captures,
+        retained_mur_captures=resolved_mur_captures,
         agency_collections=_iter_agency(),
         rebuilt_tables_store=store if include_rebuilt_tables else None,
         verify_rebuilt_expected_rows=verify_rebuilt_expected_rows,
@@ -2754,59 +3055,111 @@ def verify_fec_query_parity(
                 shared_cols = [c for c in prior_cols if c in cand_cols and c not in skip_value_cols]
                 has_record_id = "record_id" in prior_cols and "record_id" in cand_cols
                 has_cid = "collection_id" in shared_cols
-                where_cid = (
-                    "WHERE p.collection_id NOT IN (" + ", ".join("'" + c.replace("'", "''") + "'" for c in changed_cids) + ")"
-                    if (has_cid and changed_cids)
-                    else ""
-                )
-                where_cid_c = where_cid.replace("p.collection_id", "c.collection_id")
                 p_proj = ", ".join(f'p."{c}"' for c in shared_cols)
                 c_proj = ", ".join(f'c."{c}"' for c in shared_cols)
+
+                id_files = [str(p) for p in _id_mapping_files(id_mapping_path)]
+                if has_record_id and shared_cols and not id_files:
+                    raise FileNotFoundError(f"id_mapping Parquet files not found under {id_mapping_path}")
+
+                def _where_clause(alias: str, ns_filter: tuple[bool, str | None] | None) -> tuple[str, list[Any]]:
+                    preds: list[str] = []
+                    params: list[Any] = []
+                    if has_cid and changed_cids:
+                        in_cids = ", ".join("'" + c.replace("'", "''") + "'" for c in changed_cids)
+                        preds.append(f"{alias}.collection_id NOT IN ({in_cids})")
+                    if ns_filter is not None:
+                        is_null, ns_val = ns_filter
+                        if is_null:
+                            preds.append(f"{alias}.source_namespace IS NULL")
+                        else:
+                            preds.append(f"{alias}.source_namespace = ?")
+                            params.append(ns_val)
+                    return (("WHERE " + " AND ".join(preds)) if preds else ""), params
+
+                # Partition large/multi-namespace tables by source_namespace to keep DuckDB temp spill bounded.
+                ns_slices: list[tuple[bool, str | None] | None] = [None]
+                if "source_namespace" in shared_cols and (
+                    (candidate_dir / table).is_dir() or (prior_dir / table).is_dir()
+                ):
+                    p_where_all, _ = _where_clause("p", None)
+                    c_where_all, _ = _where_clause("c", None)
+                    p_ns = {
+                        row[0]
+                        for row in con.execute(
+                            f"SELECT DISTINCT p.source_namespace FROM read_parquet(?, hive_partitioning=false) p {p_where_all}",
+                            [prior_paths],
+                        ).fetchall()
+                    }
+                    c_ns = {
+                        row[0]
+                        for row in con.execute(
+                            f"SELECT DISTINCT c.source_namespace FROM read_parquet(?, hive_partitioning=false) c {c_where_all}",
+                            [cand_paths],
+                        ).fetchall()
+                    }
+                    all_ns = p_ns | c_ns
+                    if all_ns:
+                        ns_slices = [(ns is None, ns) for ns in sorted(all_ns, key=lambda v: (v is None, v or ""))]
 
                 if has_record_id and shared_cols:
                     [(ambiguous_ids,)] = con.execute(
                         'SELECT count(*) FROM ('
                         'SELECT old_record_id FROM read_parquet(?, hive_partitioning=false) '
                         'WHERE "table" = ? GROUP BY old_record_id HAVING count(DISTINCT new_record_id) > 1)',
-                        [str(id_mapping_path), table],
+                        [id_files, table],
                     ).fetchall()
                     if ambiguous_ids != 0:
                         raise ValueError(
-                            f"id_mapping.parquet has {ambiguous_ids} ambiguous old_record_id mappings for {table}"
+                            f"id_mapping has {ambiguous_ids} ambiguous old_record_id mappings for {table}"
                         )
-                    [(prior_only,)] = con.execute(
-                        'WITH m AS (SELECT DISTINCT old_record_id, new_record_id '
-                        'FROM read_parquet(?, hive_partitioning=false) WHERE "table" = ?), '
-                        f"p_mapped AS (SELECT COALESCE(m.new_record_id, p.record_id) AS mapped_id, {p_proj} "
-                        f"FROM read_parquet(?, hive_partitioning=false) p LEFT JOIN m ON p.record_id = m.old_record_id {where_cid}), "
-                        f"c_rows AS (SELECT c.record_id AS mapped_id, {c_proj} FROM read_parquet(?, hive_partitioning=false) c {where_cid_c}) "
-                        f"SELECT count(*) FROM (SELECT * FROM p_mapped EXCEPT ALL SELECT * FROM c_rows)",
-                        [str(id_mapping_path), table, prior_paths, cand_paths],
-                    ).fetchall()
-                    [(cand_only,)] = con.execute(
-                        'WITH m AS (SELECT DISTINCT old_record_id, new_record_id '
-                        'FROM read_parquet(?, hive_partitioning=false) WHERE "table" = ?), '
-                        f"p_mapped AS (SELECT COALESCE(m.new_record_id, p.record_id) AS mapped_id, {p_proj} "
-                        f"FROM read_parquet(?, hive_partitioning=false) p LEFT JOIN m ON p.record_id = m.old_record_id {where_cid}), "
-                        f"c_rows AS (SELECT c.record_id AS mapped_id, {c_proj} FROM read_parquet(?, hive_partitioning=false) c {where_cid_c}) "
-                        f"SELECT count(*) FROM (SELECT * FROM c_rows EXCEPT ALL SELECT * FROM p_mapped)",
-                        [str(id_mapping_path), table, prior_paths, cand_paths],
-                    ).fetchall()
+                    prior_only = 0
+                    cand_only = 0
+                    for ns_slice in ns_slices:
+                        w_p, p_params = _where_clause("p", ns_slice)
+                        w_c, c_params = _where_clause("c", ns_slice)
+                        [(p_diff,)] = con.execute(
+                            'WITH m AS (SELECT DISTINCT old_record_id, new_record_id '
+                            'FROM read_parquet(?, hive_partitioning=false) WHERE "table" = ?), '
+                            f"p_mapped AS (SELECT COALESCE(m.new_record_id, p.record_id) AS mapped_id, {p_proj} "
+                            f"FROM read_parquet(?, hive_partitioning=false) p LEFT JOIN m ON p.record_id = m.old_record_id {w_p}), "
+                            f"c_rows AS (SELECT c.record_id AS mapped_id, {c_proj} FROM read_parquet(?, hive_partitioning=false) c {w_c}) "
+                            "SELECT count(*) FROM (SELECT * FROM p_mapped EXCEPT ALL SELECT * FROM c_rows)",
+                            [id_files, table, prior_paths, *p_params, cand_paths, *c_params],
+                        ).fetchall()
+                        [(c_diff,)] = con.execute(
+                            'WITH m AS (SELECT DISTINCT old_record_id, new_record_id '
+                            'FROM read_parquet(?, hive_partitioning=false) WHERE "table" = ?), '
+                            f"p_mapped AS (SELECT COALESCE(m.new_record_id, p.record_id) AS mapped_id, {p_proj} "
+                            f"FROM read_parquet(?, hive_partitioning=false) p LEFT JOIN m ON p.record_id = m.old_record_id {w_p}), "
+                            f"c_rows AS (SELECT c.record_id AS mapped_id, {c_proj} FROM read_parquet(?, hive_partitioning=false) c {w_c}) "
+                            "SELECT count(*) FROM (SELECT * FROM c_rows EXCEPT ALL SELECT * FROM p_mapped)",
+                            [id_files, table, prior_paths, *p_params, cand_paths, *c_params],
+                        ).fetchall()
+                        prior_only += int(p_diff)
+                        cand_only += int(c_diff)
                 else:
-                    [(prior_only,)] = con.execute(
-                        f"SELECT count(*) FROM ("
-                        f"SELECT {p_proj} FROM read_parquet(?, hive_partitioning=false) p {where_cid} "
-                        f"EXCEPT ALL "
-                        f"SELECT {c_proj} FROM read_parquet(?, hive_partitioning=false) c {where_cid_c})",
-                        [prior_paths, cand_paths],
-                    ).fetchall()
-                    [(cand_only,)] = con.execute(
-                        f"SELECT count(*) FROM ("
-                        f"SELECT {c_proj} FROM read_parquet(?, hive_partitioning=false) c {where_cid_c} "
-                        f"EXCEPT ALL "
-                        f"SELECT {p_proj} FROM read_parquet(?, hive_partitioning=false) p {where_cid})",
-                        [cand_paths, prior_paths],
-                    ).fetchall()
+                    prior_only = 0
+                    cand_only = 0
+                    for ns_slice in ns_slices:
+                        w_p, p_params = _where_clause("p", ns_slice)
+                        w_c, c_params = _where_clause("c", ns_slice)
+                        [(p_diff,)] = con.execute(
+                            f"SELECT count(*) FROM ("
+                            f"SELECT {p_proj} FROM read_parquet(?, hive_partitioning=false) p {w_p} "
+                            f"EXCEPT ALL "
+                            f"SELECT {c_proj} FROM read_parquet(?, hive_partitioning=false) c {w_c})",
+                            [prior_paths, *p_params, cand_paths, *c_params],
+                        ).fetchall()
+                        [(c_diff,)] = con.execute(
+                            f"SELECT count(*) FROM ("
+                            f"SELECT {c_proj} FROM read_parquet(?, hive_partitioning=false) c {w_c} "
+                            f"EXCEPT ALL "
+                            f"SELECT {p_proj} FROM read_parquet(?, hive_partitioning=false) p {w_p})",
+                            [cand_paths, *c_params, prior_paths, *p_params],
+                        ).fetchall()
+                        prior_only += int(p_diff)
+                        cand_only += int(c_diff)
 
                 if prior_only != 0 or cand_only != 0:
                     raise ValueError(

@@ -39,9 +39,12 @@ from spicy_regs.transforms.fec_query import (
 from spicy_regs.transforms.fec_query_builder import (
     RETIRED_FEC_QUERY_TABLES,
     FecQueryBuildInputs,
+    _authority_for_collection,
+    _extract_cycle_from_url,
     build_fec_query_from_inputs,
     build_fec_query_generation,
     classify_collection,
+    discover_retained_mur_captures,
     load_fec_typed_schemas,
     load_verified_checkpoint,
     make_filing_body_reader,
@@ -1025,4 +1028,355 @@ def test_build_fec_query_generation_end_to_end_from_spliced_observations(tmp_pat
             tables=("fec_receipts",),
             threads=2,
             admit_candidate=True,
+        )
+
+
+def test_authority_and_cycle_extraction_match_live_784b23da_semantics():
+    """BLOCKER 2 & BLOCKER 4: senate-unofficial authority and NULL source_cycle on 5 summary/aggregate collections."""
+    # BLOCKER 2: 597 live senate-unofficial-* collections carry 'unofficial-senate-retained'.
+    assert (
+        _authority_for_collection({"collection_id": "senate-unofficial-filing-10", "requested_scope_json": "{}"})
+        == "unofficial-senate-retained"
+    )
+    assert (
+        _authority_for_collection({"collection_id": "retained-filing-1", "requested_scope_json": "{}"})
+        == "official-fec"
+    )
+
+    bucket = "https://cg-519a459a-0ea3-42c2-b7bc-fa1143481f74.s3-us-gov-west-1.amazonaws.com/bulk-downloads"
+    # BLOCKER 4: All 5 live-NULL summary/aggregate collections MUST return None.
+    for url in (
+        f"{bucket}/data.fec.gov/leadership2024.csv",
+        f"{bucket}/data.fec.gov/leadership2026.csv",
+        f"{bucket}/Presidential_Map/2024/2024_overall_summary.csv",
+        f"{bucket}/Presidential_Map/2024/Contributions_by_Size.csv",
+        f"{bucket}/Presidential_Map/2024/Contributions_by_3Zip.csv",
+    ):
+        assert _extract_cycle_from_url(url) is None, url
+
+    # Standard cycle-bearing bulk collections preserve exact even cycles.
+    assert _extract_cycle_from_url(f"{bucket}/2024/candidate_summary_2024.csv") == 2024
+    assert _extract_cycle_from_url(f"{bucket}/2026/committee_summary_2026.csv") == 2026
+    assert _extract_cycle_from_url(f"{bucket}/2026/indiv26.zip") == 2026
+    assert _extract_cycle_from_url(f"{bucket}/2024/weball24.zip") == 2024
+    assert _extract_cycle_from_url(f"{bucket}/2024/webl24.zip") == 2024
+    assert _extract_cycle_from_url(f"{bucket}/2024/cm24.zip") == 2024
+    assert _extract_cycle_from_url(f"{bucket}/data.fec.gov/independent_expenditure_2024.csv") == 2024
+    assert _extract_cycle_from_url(f"{bucket}/data.fec.gov/CommunicationCosts_2024.csv") == 2024
+    assert _extract_cycle_from_url(f"{bucket}/data.fec.gov/ElectioneeringComm_2024.csv") == 2024
+
+
+def test_build_fec_query_generation_hydrates_individual_snapshot_and_skips_blank_indiv_rows(tmp_path):
+    """BLOCKER 3 + NIT 8: hydrate scope/field_mapping from fec_collections.parquet & skip blank indiv rows."""
+    from spicy_regs.transforms.build_fec_observations import COLLECTION_SCHEMA, RECORD_SCHEMA
+
+    bucket = "https://cg-519a459a-0ea3-42c2-b7bc-fa1143481f74.s3-us-gov-west-1.amazonaws.com/bulk-downloads"
+    indiv_url = f"{bucket}/2026/indiv26.zip"
+    field_mapping = {"header_collection_id": "bulk-2026-indiv-header", "header_row_ordinal": 0, "data_has_header": False}
+    seg_bytes = b"line1\nline2\n"
+    seg_sha = "sha256:" + hashlib.sha256(seg_bytes).hexdigest()
+
+    def _scope(ordinal: int, member_name: str) -> dict:
+        return {
+            "capture": {"requestUrl": indiv_url, "responseSha256": INDIV_SHA, "byteSize": 100, "representation": "zip"},
+            "format": "delimited",
+            "delimiter": "|",
+            "quoting": "literal",
+            "encoding": "utf-8",
+            "member": {"ordinal": ordinal, "name": member_name},
+        }
+
+    # Raw Parquet rows: requested_scope_json + collection_outcome_json ONLY (no pre-hydrated scope/field_mapping keys).
+    col_rows = [
+        {
+            "collection_id": "bulk-indiv26-main",
+            "source_family": "fec_bulk",
+            "profile": "positional",
+            "source_system_id": "fec-bulk",
+            "source_state_scope": "retained",
+            "record_count": 2,
+            "relationship_count": 0,
+            "record_outcome": "published",
+            "requested_scope_json": json.dumps(_scope(0, "itcont.txt")),
+            "coverage_limits_json": "[]",
+            "collection_outcome_json": json.dumps({"tableFieldMapping": field_mapping}),
+            "artifact_sha256": None,
+        },
+        {
+            "collection_id": "bulk-indiv26-date-01",
+            "source_family": "fec_bulk",
+            "profile": "positional",
+            "source_system_id": "fec-bulk",
+            "source_state_scope": "retained",
+            "record_count": 2,
+            "relationship_count": 0,
+            "record_outcome": "published",
+            "requested_scope_json": json.dumps(_scope(1, "by_date/itcont_2026_01.txt")),
+            "coverage_limits_json": "[]",
+            "collection_outcome_json": json.dumps({"tableFieldMapping": field_mapping}),
+            "artifact_sha256": None,
+        },
+    ]
+    sample_row, _ = _bulk_indiv_row(0, "45.00")
+
+    def _rec_row(cid: str, rid: str, meta_json: str) -> dict:
+        return {
+            "collection_id": cid,
+            "source_family": "fec_bulk",
+            "profile": "positional",
+            "source_record_id": rid,
+            "committee_id": "C00677286",
+            "candidate_id": None,
+            "filing_id": None,
+            "legal_doc_id": None,
+            "audit_case_id": None,
+            "source_sha256": INDIV_SHA,
+            "source_url": indiv_url,
+            "observed_at": "2026-09-21T00:00:00Z",
+            "source_locator_json": _locator(cid, rid, ordinal=0, encoding="utf-8"),
+            "metadata_json": meta_json,
+            "assets_json": None,
+            "embedded_bodies_json": None,
+            "source_record_json": None,
+        }
+
+    # Include a blank line {"kind":"row","fields":[]} in each member (counts=2 matching proof linefeeds=2, skipped cleanly by mapper).
+    rec_rows = [
+        _rec_row("bulk-indiv26-main", "m/0", sample_row["metadata_json"]),
+        _rec_row("bulk-indiv26-main", "m/1", json.dumps({"kind": "row", "fields": []})),
+        _rec_row("bulk-indiv26-date-01", "d/0", sample_row["metadata_json"]),
+        _rec_row("bulk-indiv26-date-01", "d/1", json.dumps({"kind": "row", "fields": []})),
+    ]
+    obs_dir = tmp_path / "obs"
+    obs_dir.mkdir()
+    pq.write_table(pa.Table.from_pylist(col_rows, schema=COLLECTION_SCHEMA), obs_dir / "fec_collections.parquet")
+    pq.write_table(pa.Table.from_pylist(rec_rows, schema=RECORD_SCHEMA), obs_dir / "fec_source_records.parquet")
+
+    proof_obj = {
+        "status": "passed-exact-complete-member-sequence-equivalence",
+        "source_generation_pin": GEN,
+        "archive_sha256": INDIV_SHA,
+        "main_collection_id": "bulk-indiv26-main",
+        "main_bytes": len(seg_bytes),
+        "main_rows": 2,
+        "date_members": 1,
+        "segments": [
+            {
+                "member_ordinal": 1,
+                "member_name": "by_date/itcont_2026_01.txt",
+                "main_offset": 0,
+                "bytes": len(seg_bytes),
+                "linefeeds": 2,
+                "ends_with_linefeed": True,
+                "sha256": seg_sha,
+            }
+        ],
+    }
+    proof_bytes = json.dumps(proof_obj, sort_keys=True).encode("utf-8")
+    proof_sha = "sha256:" + hashlib.sha256(proof_bytes).hexdigest()
+
+    result = build_fec_query_generation(
+        observations_dir=obs_dir,
+        output_dir=tmp_path / "out_indiv",
+        source_generation_pin=GEN,
+        selection_evidence_sha256=EVIDENCE,
+        namespace_evidence={},
+        store=CentralRawArchiveStore(tmp_path / "raw"),
+        individual_snapshot_proof=(proof_bytes, proof_sha),
+        include_rebuilt_tables=False,
+        c1_threads=2,
+    )
+    admit_generation_for_publication(result.generation_dir)
+    sel_rows = _read_generation_table(result.generation_dir, "fec_collection_selection").to_pylist()
+    indiv_sel = {r["collection_id"]: r["selection_status"] for r in sel_rows if r["purpose"] == "retained-reported-individual-contribution-snapshot"}
+    assert indiv_sel == {"bulk-indiv26-main": "included", "bulk-indiv26-date-01": "duplicate"}
+    # 2 valid rows mapped (2 blank lines cleanly skipped).
+    assert result.table_rows["fec_receipts"] == 2
+
+
+def test_discover_and_qualify_retained_mur_captures_in_build_fec_query_generation(tmp_path):
+    """BLOCKER 5: auto-discover HTTP-200 api_key=<redacted> MUR captures while skipping 404s and refusing real keys."""
+    from spicy_regs.transforms.build_fec_observations import COLLECTION_SCHEMA, RECORD_SCHEMA
+
+    store = CentralRawArchiveStore(tmp_path / "raw")
+    mur_payload = json.dumps(
+        {"docs": [{"type": "murs", "no": "1604", "mur_name": "MUR 1604", "open_date": "2004-01-01", "close_date": None}]}
+    ).encode("utf-8")
+    mur_sha = "sha256:" + hashlib.sha256(mur_payload).hexdigest()
+    store.put_blob(mur_sha, len(mur_payload), (mur_payload,))
+
+    def _disp_col(cid: str, url: str, statuses: list[int], sha: str, size: int) -> dict:
+        outcome = {
+            "providerOutcome": None,
+            "receiverDisposition": {
+                "status": "selection_context",
+                "reason": "Literal retained JSON response context",
+                "callerContext": {
+                    "version": 1,
+                    "source_capture": {
+                        "url": url,
+                        "sha256": sha,
+                        "bytes": size,
+                        "observed_at": ["2026-09-11T18:30:44+00:00"],
+                        "http_statuses": statuses,
+                        "truncated": [False],
+                    },
+                },
+            },
+        }
+        return {
+            "collection_id": cid,
+            "source_family": "fec_legal",
+            "profile": None,
+            "source_system_id": None,
+            "source_state_scope": None,
+            "record_count": 0,
+            "relationship_count": 0,
+            "record_outcome": "selection_context",
+            "requested_scope_json": None,
+            "coverage_limits_json": None,
+            "collection_outcome_json": json.dumps(outcome),
+            "artifact_sha256": None,
+        }
+
+    col_rows = [
+        _disp_col("native-context-mur-1604", "https://api.open.fec.gov/v1/legal/docs/murs/1604?api_key=<redacted>", [200], mur_sha, len(mur_payload)),
+        _disp_col("native-context-mur-1366-404", "https://api.open.fec.gov/v1/legal/docs/murs/1366?api_key=<redacted>", [404], mur_sha, len(mur_payload)),
+        _disp_col("native-context-mur-empty", "https://api.open.fec.gov/v1/legal/docs/murs/1999?api_key=<redacted>", [], mur_sha, len(mur_payload)),
+    ]
+    obs_dir = tmp_path / "obs_mur"
+    obs_dir.mkdir()
+    pq.write_table(pa.Table.from_pylist(col_rows, schema=COLLECTION_SCHEMA), obs_dir / "fec_collections.parquet")
+    pq.write_table(pa.Table.from_pylist([], schema=RECORD_SCHEMA), obs_dir / "fec_source_records.parquet")
+
+    ro_store = CentralRawArchiveStore(tmp_path / "raw", create=False)
+    discovered = discover_retained_mur_captures(col_rows, store=ro_store)
+    assert [c["collection_id"] for c in discovered] == ["native-context-mur-1604"]
+
+    # Non-<redacted> credential value MUST fail closed.
+    leaked_col = _disp_col("native-context-mur-bad", "https://api.open.fec.gov/v1/legal/docs/murs/1604?api_key=REAL_SECRET", [200], mur_sha, len(mur_payload))
+    with pytest.raises(ValueError, match="redacted|credential|api_key"):
+        discover_retained_mur_captures([leaked_col], store=ro_store)
+
+    # End-to-end build_fec_query_generation() auto-discovers and qualifies MUR 1604.
+    result = build_fec_query_generation(
+        observations_dir=obs_dir,
+        output_dir=tmp_path / "out_mur",
+        source_generation_pin=GEN,
+        selection_evidence_sha256=EVIDENCE,
+        namespace_evidence={},
+        store=ro_store,
+        include_rebuilt_tables=False,
+        c1_threads=2,
+    )
+    admit_generation_for_publication(result.generation_dir)
+    assert result.table_rows["fec_legal_matters"] == 1
+    matters = _read_generation_table(result.generation_dir, "fec_legal_matters").to_pylist()
+    assert matters[0]["native_matter_id"] == "1604"
+    assert matters[0]["title"] == "MUR 1604"
+
+
+def test_stage3_per_table_checkpoint_resume_preserves_fec_receipts_on_disbursements_crash(tmp_path):
+    """WARNING 6 + NIT 8: Stage 3a fec_receipts survives crash in 3c fec_disbursements + zero-copy id_mapping/."""
+    fx = _shared_repaired_fixture()
+    fx["bulk_receipt_rows"] = [_bulk_indiv_row(0, "10.00"), _bulk_indiv_row(1, "20.00")]
+
+    clean_result = build_fec_query_from_inputs(
+        FecQueryBuildInputs(**fx),
+        output_dir=tmp_path / "clean_s3",
+        batch_rows=2,
+        c1_threads=2,
+    )
+    assert clean_result.id_mapping_path.is_dir()
+
+    crash_dir = tmp_path / "crash_s3"
+
+    def _crash_in_3c():
+        # Crash AFTER 3a_fec_receipts commits its checkpoint + sidecar, while 3c_fec_disbursements is running.
+        if (crash_dir / "checkpoints" / ".stage_sidecars" / "3a_fec_receipts.sidecar.json").is_file() and (
+            crash_dir / "checkpoints" / ".stage_sidecars" / "3b_fec_intercommittee_transactions.sidecar.json"
+        ).is_file():
+            raise RuntimeError("simulated crash during 3c_fec_disbursements")
+
+    with pytest.raises(RuntimeError, match="simulated crash during 3c_fec_disbursements"):
+        build_fec_query_from_inputs(
+            FecQueryBuildInputs(**fx),
+            output_dir=crash_dir,
+            batch_rows=2,
+            c1_threads=2,
+            check_resources=_crash_in_3c,
+        )
+    assert not (crash_dir / "build" / ".financial_mapped").exists()
+    assert (crash_dir / "checkpoints" / "fec_receipts.checkpoint.json").is_file()
+    assert not (crash_dir / "checkpoints" / "fec_disbursements.checkpoint.json").is_file()
+
+    # Clear bulk_receipt_rows on restart to PROVE 3a_fec_receipts is genuinely resumed, not recomputed!
+    resumed_inputs = FecQueryBuildInputs(**fx)
+    resumed_inputs.bulk_receipt_rows = ()
+    resumed = build_fec_query_from_inputs(
+        resumed_inputs,
+        output_dir=crash_dir,
+        batch_rows=2,
+        c1_threads=2,
+        resume=True,
+    )
+    assert resumed.table_rows == clean_result.table_rows
+    assert resumed.table_rows["fec_receipts"] == 3  # 2 bulk + 1 SA schedule preserved from checkpoint!
+    assert _read_generation_table(resumed.generation_dir, "fec_receipts").equals(
+        _read_generation_table(clean_result.generation_dir, "fec_receipts")
+    )
+    assert pq.read_table(resumed.id_mapping_path).equals(pq.read_table(clean_result.id_mapping_path))
+
+
+def test_build_fec_query_generation_fails_closed_on_cm24_inner_member_mismatch(tmp_path):
+    """WARNING 7: mismatched inner archive bytes in duplicate cm24 collections MUST raise, never silently pass."""
+    from spicy_regs.transforms.build_fec_observations import COLLECTION_SCHEMA, RECORD_SCHEMA
+
+    store = CentralRawArchiveStore(tmp_path / "raw")
+    b1, b2 = io.BytesIO(), io.BytesIO()
+    with ZipFile(b1, "w") as z1:
+        z1.writestr("cm.txt", b"C00000001|ONE\n")
+    with ZipFile(b2, "w") as z2:
+        z2.writestr("cm.txt", b"C00000001|DIFFERENT\n")
+    z1_bytes, z2_bytes = b1.getvalue(), b2.getvalue()
+    z1_sha = "sha256:" + hashlib.sha256(z1_bytes).hexdigest()
+    z2_sha = "sha256:" + hashlib.sha256(z2_bytes).hexdigest()
+    store.put_blob(z1_sha, len(z1_bytes), (z1_bytes,))
+    store.put_blob(z2_sha, len(z2_bytes), (z2_bytes,))
+
+    url = "https://cg-519a459a-0ea3-42c2-b7bc-fa1143481f74.s3-us-gov-west-1.amazonaws.com/bulk-downloads/2024/cm24.zip"
+    col_rows = [
+        {
+            "collection_id": cid,
+            "source_family": "fec_bulk",
+            "profile": "positional",
+            "source_system_id": "fec-bulk",
+            "source_state_scope": "retained",
+            "record_count": 1,
+            "relationship_count": 0,
+            "record_outcome": "published",
+            "requested_scope_json": json.dumps(
+                {"capture": {"requestUrl": url, "responseSha256": sha, "byteSize": size, "representation": "zip"}, "member": {"ordinal": 0, "name": "cm.txt"}}
+            ),
+            "coverage_limits_json": "[]",
+            "collection_outcome_json": "{}",
+            "artifact_sha256": None,
+        }
+        for cid, sha, size in [("bulk-cm24-zip", z1_sha, len(z1_bytes)), ("retained-cm24-dup", z2_sha, len(z2_bytes))]
+    ]
+    obs_dir = tmp_path / "obs_cm24"
+    obs_dir.mkdir()
+    pq.write_table(pa.Table.from_pylist(col_rows, schema=COLLECTION_SCHEMA), obs_dir / "fec_collections.parquet")
+    pq.write_table(pa.Table.from_pylist([], schema=RECORD_SCHEMA), obs_dir / "fec_source_records.parquet")
+
+    with pytest.raises(ValueError, match="Inner archive member bytes differ"):
+        build_fec_query_generation(
+            observations_dir=obs_dir,
+            output_dir=tmp_path / "out_cm24_bad",
+            source_generation_pin=GEN,
+            selection_evidence_sha256=EVIDENCE,
+            namespace_evidence={},
+            store=CentralRawArchiveStore(tmp_path / "raw", create=False),
+            include_rebuilt_tables=False,
+            c1_threads=2,
         )

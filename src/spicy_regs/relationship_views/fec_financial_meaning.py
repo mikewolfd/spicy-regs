@@ -11,6 +11,7 @@ import json
 from spicy_regs.fec_financial_rules import (
     POLICY_VERSION,
     IDENTITY_VERSION,
+    LEGACY_IDENTITY_VERSION,
     VALUE_MAPPING_VERSION,
     ELECTIONEERING_SHARE,
     SUMMARY_NET,
@@ -54,14 +55,16 @@ def _exact(value, status, raw):
     return f"CASE WHEN {valid} THEN {typed} END"
 
 
-def financial_rule_sql(table, query, *, columns, field=None, fields=("total_amount",)):
+def financial_rule_sql(table, query, *, columns, field=None, fields=("total_amount",), legacy=False):
     """One decision for each row, matching the supported Python policy rule.
 
     ``columns`` is the admitted table's column names. State queries evaluate each
     reported state independently; they do not select the latest or period end.
     Summary queries require the maintained typed measures array. The caller must
     retain definition admission and the containing generation's source pins.
+    ``legacy=True`` pins historical ``fec-typed-observation/1`` releases.
     """
+    expected_identity = LEGACY_IDENTITY_VERSION if legacy else IDENTITY_VERSION
     names = set(columns)
     if any(name.lower().startswith("_fm_") for name in names):
         raise ValueError("Financial source columns cannot use reserved _fm_ names")
@@ -84,7 +87,7 @@ def financial_rule_sql(table, query, *, columns, field=None, fields=("total_amou
         for key in _SUMMARY_MAPPINGS
     ]
     supported = f"""COALESCE({col("source_authority")} = 'official-fec'
-        AND {col("identity_version")} = {literal(IDENTITY_VERSION)}
+        AND {col("identity_version")} = {literal(expected_identity)}
         AND {col("value_mapping_version")} = {literal(VALUE_MAPPING_VERSION)}
         AND {col("mapping_status")} IN ('mapped','partial') AND ({" OR ".join("(" + v + ")" for v in identities)}), FALSE)"""
     snapshot = (

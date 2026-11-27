@@ -165,6 +165,8 @@ def build_query_cmd(
     scope_file: Path = DEFAULT_SCOPE_PATH,
     full_source_records: Path | None = None,
     individual_snapshot_proof_path: Path | None = None,
+    retained_mur_manifest: Path | None = None,
+    discover_retained_murs: bool = True,
     include_rebuilt_tables: bool = True,
     verify_rebuilt_expected_rows: bool = True,
     min_free_gib: float = DEFAULT_MIN_FREE_GIB,
@@ -186,6 +188,23 @@ def build_query_cmd(
         raw = individual_snapshot_proof_path.read_bytes()
         indiv_proof = (raw, "sha256:" + hashlib.sha256(raw).hexdigest())
 
+    mur_captures: list[dict[str, Any]] | None
+    if retained_mur_manifest is not None:
+        descriptors = json.loads(Path(retained_mur_manifest).read_text(encoding="utf-8"))
+        if not isinstance(descriptors, list):
+            raise ValueError("retained_mur_manifest must be a JSON array of MUR capture descriptors")
+        mur_captures = []
+        for entry in descriptors:
+            sha = str(entry["source_sha256"])
+            bare = sha.removeprefix("sha256:")
+            with store.open(bare) as stream:
+                payload_bytes = stream.read()
+            mur_captures.append({**entry, "payload_bytes": payload_bytes})
+    elif not discover_retained_murs:
+        mur_captures = []
+    else:
+        mur_captures = None
+
     result = build_fec_query_generation(
         observations_dir=observations_dir,
         output_dir=output_dir,
@@ -195,6 +214,7 @@ def build_query_cmd(
         store=store,
         full_source_records_path=full_source_records,
         individual_snapshot_proof=indiv_proof,
+        retained_mur_captures=mur_captures,
         include_rebuilt_tables=include_rebuilt_tables,
         verify_rebuilt_expected_rows=verify_rebuilt_expected_rows,
         batch_rows=batch_rows,

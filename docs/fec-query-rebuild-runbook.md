@@ -58,8 +58,27 @@ path replaces it with three receipts-free streaming phases exposed by
 
 ## Resource Envelope & Hard Serialization Guards
 
-Measured local envelope for full corpus execution (`4cb0dffa` / `784b23da`):
+Measured local envelope for full corpus execution (`4cb0dffa` / `9c289dfe` / `784b23da`):
 
+- **Full-Schema Source Records Prerequisite (`9c289dfe`, `8.38 GiB`):** Live R2
+  `4cb0dffa/fec_source_records.parquet` (`1.67 GiB`) uses the subject-only
+  schema (14 columns, without `metadata_json`). Full source-derived `fec-query`
+  rebuilds require `metadata_json` from the full-schema `fec_source_records.parquet`
+  (`9c289dfe` = `8.38 GiB`), spliced with the 3 cp1252 filings via
+  `splice-observations` (which supports both `subject` and `full` schemas) and
+  passed via `--full-source-records`.
+- **Stage 3 Per-Table Checkpoints & Zero-Copy `id_mapping/`:** Stage 3 splits
+  into independent checkpoints (`3_pre_schedules`, `3a_fec_receipts`,
+  `3b_fec_intercommittee_transactions`, `3c_fec_disbursements`,
+  `3d_remaining_schedules`). Bulk receipts (34.8M rows), bulk intercommittee
+  (10.6M rows), and operating expenses (1.7M rows) stream directly through
+  `association_records()` into their final partitioned Parquets without
+  `.mapped.parquet` double-writes, and per-stage `id_mapping` parts move via
+  zero-copy `rename()` into `id_mapping/` (reclaiming `~6.7 GiB` peak scratch).
+- **Peak Disk Budget (on 35–37 GiB free host):**
+  - Phase 1 (`splice-observations` on `4cb0dffa` subject Parquets): `~3.6 GiB` peak (`--cleanup-prior` reclaims `1.67 GiB`).
+  - Phase 2 (`build-query`): `8.38 GiB` staged full-schema `fec_source_records.parquet` (spliced from `9c289dfe`) + `1.67 GiB` `G_obs_new` + `3.81 GiB` streamed 50-table outputs + `~2.5–3.0 GiB` zero-copy `id_mapping/` + `<=2 GiB` DuckDB spill (and `2.05 GiB` transient max ZIP spool during Stage `2h_filing_text`, released before Stage 3) = **`~17–19 GiB` total** (`~8.5–10.5 GiB` build scratch beyond the `8.38 GiB` input), leaving **`>=16 GiB` headroom**. Delete the `8.38 GiB` full-schema staging input immediately after Phase 2 seals before starting Phase 3!
+  - Phase 3 (`verify-parity`): chunks partitioned tables (such as `fec_receipts`) by `source_namespace` inside DuckDB `memory_limit='2GiB'` / `max_temp_directory_size='2GiB'`; stage prior `784b23da` tables one table at a time (`<=2.85 GiB` for `fec_receipts`) with `--cleanup-prior`.
 - **Single Heavy-ETL Mutex:** Run only one heavy phase at a time on the host
   (do not run concurrent Docker builds or full-repo pytest partitions while
   holding multi-GiB staging directories).
@@ -135,7 +154,7 @@ incomplete `.partial` outputs are replaced cleanly on restart.
 
 Outputs under `/path/to/work/query-candidate/`:
 - `build/generation/` — sealed receipts-free 50-table `fec-query` generation
-- `id_mapping.parquet` — `(table, old_record_id, new_record_id)` parity proof
+- `id_mapping/` — zero-copy partitioned `(table, old_record_id, new_record_id)` parity proof (`verify-parity` accepts either this directory or a single `.parquet` file)
 - `refusals/<rebuilt_table>.refusals.json` — receipt-gated refusal lists for rebuilt original tables
 - `refusals/<rebuilt_table>.dispositions.json` — validated per-SHA dispositions for excluded HTTP-200 source pages (`ss-j4vz`, when present)
 - `build_receipt.json` — per-table row counts and measured telemetry
@@ -149,7 +168,7 @@ prior-table disk scratch, then run:
 uv run --frozen python -m spicy_regs.pipelines.fec_query_rebuild verify-parity \
   --prior-dir /path/to/work/prior-query \
   --candidate-dir /path/to/work/query-candidate/build/generation \
-  --id-mapping /path/to/work/query-candidate/id_mapping.parquet \
+  --id-mapping /path/to/work/query-candidate/id_mapping \
   --output-report /path/to/work/parity-report.json \
   --cleanup-prior
 ```

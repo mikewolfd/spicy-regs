@@ -13,7 +13,12 @@ from pathlib import Path
 import re
 from typing import Mapping
 
-from spicy_regs.fec_financial_rules import IDENTITY_VERSION, POLICY_VERSION as FINANCIAL_POLICY, _SUMMARY_MAPPINGS
+from spicy_regs.fec_financial_rules import (
+    IDENTITY_VERSION,
+    LEGACY_IDENTITY_VERSION,
+    POLICY_VERSION as FINANCIAL_POLICY,
+    _SUMMARY_MAPPINGS,
+)
 from spicy_regs.fec_release import QualifiedView
 from spicy_regs.fec_versions import INDIVIDUAL_SNAPSHOT_POLICY
 
@@ -223,6 +228,7 @@ def fec_query_views(
     change scope, columns or witnesses. No source processors are imported.
     """
     association_policy = "fec-retained-filing-association/1" if legacy_associations else ASSOCIATION_POLICY
+    default_identity_version = LEGACY_IDENTITY_VERSION if legacy_associations else IDENTITY_VERSION
     if selected_observations_pin is None:
         selected_observations_pin = source_generation_pin
     proofs = _selected_scope(source_generation_pin, selected_observations_pin, population, as_of, namespace_evidence)
@@ -247,7 +253,8 @@ def fec_query_views(
         return tuple(columns)
 
     def add(
-        name, requirements, sql, meaning, keys, version, helper, *, definitions=(), identity_version=IDENTITY_VERSION,
+        name, requirements, sql, meaning, keys, version, helper, *, definitions=(),
+        identity_version=default_identity_version,
         column_descriptions=None,
     ):
         checked = {table: required(table, columns) for table, columns in requirements.items()}
@@ -492,7 +499,9 @@ def fec_query_views(
         else:
             needed.add("measures")
         columns = tuple(name for name in schemas[table] if name in needed)
-        sql = financial_rule_sql(table, query, columns=columns, field=field, fields=fields)
+        sql = financial_rule_sql(
+            table, query, columns=columns, field=field, fields=fields, legacy=legacy_associations
+        )
         add(
             table + "_" + suffix,
             {table: columns},

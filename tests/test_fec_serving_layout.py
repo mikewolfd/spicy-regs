@@ -179,3 +179,82 @@ def test_legacy_filing_reference_refuses_missing_resolution_inputs(missing):
         assert result["status"] == "unsupported"
         assert f"fec_filing_links.{missing}" in result["reason"]
         assert con.execute("SELECT count(*) FROM information_schema.views WHERE table_name=?", [spec.view.name]).fetchone() == (0,)
+
+
+def test_legacy_qualified_views_preserve_v1_identity_in_specs_and_financial_rule_sql():
+    """BLOCKER 1 regression: FEC_LEGACY_QUALIFIED_VIEWS stays 100% /1-clean while native views target /2."""
+    from decimal import Decimal
+    from spicy_regs.relationship_views.fec_financial_meaning import financial_rule_sql
+
+    legacy_views = mcp_server.FEC_LEGACY_QUALIFIED_VIEWS
+    native_views = mcp_server.FEC_QUALIFIED_VIEWS
+    assert len(legacy_views) == len(native_views) >= 71
+
+    legacy_decision_count = 0
+    legacy_native_assoc_count = 0
+    for spec in legacy_views:
+        sql = spec.view.query({})
+        assert IDENTITY_VERSION not in sql, f"Legacy view {spec.view.name} leaked /2 into SQL"
+        assert spec.identity_version != IDENTITY_VERSION, f"Legacy view {spec.view.name} advertised /2"
+        if spec.identity_version not in {"fec-summary-measure/1", "fec-spending-target/1"}:
+            assert spec.identity_version == LEGACY_IDENTITY_VERSION, spec.view.name
+        if spec.view.name.endswith("_decision"):
+            legacy_decision_count += 1
+            assert LEGACY_IDENTITY_VERSION in sql, spec.view.name
+        if spec.view.name.endswith("_native_filing_associations"):
+            legacy_native_assoc_count += 1
+            assert LEGACY_IDENTITY_VERSION in sql, spec.view.name
+    assert legacy_decision_count == 26
+    assert legacy_native_assoc_count == 5
+
+    native_decision_count = 0
+    native_assoc_count = 0
+    for spec in native_views:
+        sql = spec.view.query({})
+        if spec.identity_version not in {"fec-summary-measure/1", "fec-spending-target/1"}:
+            assert spec.identity_version == IDENTITY_VERSION, spec.view.name
+        if spec.view.name.endswith("_decision"):
+            native_decision_count += 1
+            assert IDENTITY_VERSION in sql and LEGACY_IDENTITY_VERSION not in sql, spec.view.name
+        if spec.view.name.endswith("_native_filing_associations"):
+            native_assoc_count += 1
+            assert IDENTITY_VERSION in sql and LEGACY_IDENTITY_VERSION not in sql, spec.view.name
+    assert native_decision_count == 26
+    assert native_assoc_count == 5
+
+    # Execute financial_rule_sql under legacy=True vs legacy=False against /1 and /2 receipt rows.
+    base_row = dict(
+        record_id="sha256:" + "1" * 64,
+        mapping_version="fec-bulk-individual-receipt/2",
+        value_mapping_version="fec-exact-financial-values/2",
+        mapping_status="mapped",
+        source_authority="official-fec",
+        source_namespace="fec-bulk-individual-contributions",
+        source_representation_role="snapshot",
+        correction_operation="none",
+        currency="USD",
+        amount=Decimal("250.000000000"),
+        amount_raw="250.00",
+        amount_status="exact",
+        memo_indicator="",
+    )
+    rows = [
+        {**base_row, "record_id": "sha256:" + "1" * 64, "identity_version": LEGACY_IDENTITY_VERSION},
+        {**base_row, "record_id": "sha256:" + "2" * 64, "identity_version": IDENTITY_VERSION},
+    ]
+    with duckdb.connect() as con:
+        con.register("fec_receipts", pa.Table.from_pylist(rows))
+        legacy_out = {
+            r["target_record_id"]: r["status"]
+            for r in con.sql(
+                financial_rule_sql("fec_receipts", "bulk_source_analysis", columns=tuple(rows[0]), legacy=True)
+            ).to_arrow_table().to_pylist()
+        }
+        native_out = {
+            r["target_record_id"]: r["status"]
+            for r in con.sql(
+                financial_rule_sql("fec_receipts", "bulk_source_analysis", columns=tuple(rows[0]), legacy=False)
+            ).to_arrow_table().to_pylist()
+        }
+    assert legacy_out == {"sha256:" + "1" * 64: "eligible", "sha256:" + "2" * 64: "refused"}
+    assert native_out == {"sha256:" + "1" * 64: "refused", "sha256:" + "2" * 64: "eligible"}
