@@ -1,0 +1,1069 @@
+{
+  "apiVersion": "v3.2.0",
+  "kind": "DataContract",
+  "id": "urn:spicy-regs:odcs:family:federal-register",
+  "version": "1.0.0",
+  "name": "spicy-regs federal-register",
+  "status": "active",
+  "domain": "spicygov",
+  "dataProduct": "spicygov",
+  "description": {
+    "purpose": "Deterministic ODCS v3.2.0 DataContract for spicy-regs publication family 'federal-register' (1 table(s)), targeting DDK domain 'spicygov'.",
+    "usage": "Verify Parquet Arrow schema parity before publishing or consuming generations."
+  },
+  "tags": [
+    "ddk-domain:spicygov",
+    "ddk-secondary-domain:RefSpec",
+    "family:federal-register",
+    "pilot-wave",
+    "subject:rulemaking"
+  ],
+  "schema": [
+    {
+      "id": "federal_register",
+      "name": "federal_register",
+      "physicalName": "federal_register.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Federal Register documents",
+      "description": "One row per dated Federal Register record, keyed by (`document_number`, `publication_date`), ingested from the federalregister.gov REST API by `build_federal_register`. The authoritative rule-publication record — proposed rules, final rules, and notices — complementary to the regulations.gov `dockets`/`documents` view. `regulation_id_numbers` (RIN) and `cfr_references` are the join keys to the Unified Agenda and the CFR.",
+      "properties": [
+        {
+          "name": "document_number",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:rkaf:us:frdoc:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:legal-location"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:federal-register-document-number"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "The Register's document number, spelled as it serves it (`2017-07442`, unpadded before 2013)."
+        },
+        {
+          "name": "title",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The document's title."
+        },
+        {
+          "name": "abstract",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The agency's abstract of the document; often NULL."
+        },
+        {
+          "name": "document_type",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The Register's category as the API states it: `Rule`, `Proposed Rule`, `Notice`, `Presidential Document`, and on older records `Uncategorized Document`, `Correction` (none after 2008-08-08) and `Sunshine Act Document`; NULL on a few records. Since 2008 a correction, an effective-date delay or a confirmation of a rule is itself typed `Rule` and shares the rule's RIN, docket and title; subtype is NULL on recent records, so tell them apart by `action`."
+        },
+        {
+          "name": "publication_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 2,
+          "description": "The date the document was published, canonical YYYY-MM-DD."
+        },
+        {
+          "name": "effective_on",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The `effective_on` date the Federal Register API states for the document. On a rule it is usually the effective date; the API also states one on some proposed rules and notices (a comment-period extension can carry the original proposal's date), so a date here does not by itself show that anything took effect. NULL where the API states none, as on most notices."
+        },
+        {
+          "name": "comments_close_on",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The public comment deadline, for a document that opens a comment period; often NULL."
+        },
+        {
+          "name": "signing_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The date a presidential document was signed; NULL for other documents."
+        },
+        {
+          "name": "agencies",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "object",
+            "properties": [
+              {
+                "name": "id",
+                "logicalType": "integer",
+                "logicalTypeOptions": {
+                  "format": "i64"
+                },
+                "physicalType": "Int64"
+              },
+              {
+                "name": "name",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "raw_name",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "parent_id",
+                "logicalType": "integer",
+                "logicalTypeOptions": {
+                  "format": "i64"
+                },
+                "physicalType": "Int64"
+              },
+              {
+                "name": "slug",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              }
+            ]
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "STRUCT(id BIGINT, \"name\" VARCHAR, raw_name VARCHAR, parent_id BIGINT, slug VARCHAR)[]"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:federal-register-agency"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "attribute"
+            }
+          ],
+          "description": "The issuing agencies as the Register's agency objects, a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "agency_slugs",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:federal-register-agency"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "attribute"
+            }
+          ],
+          "description": "The issuing agencies' Register slugs, comma-separated; NULL when none. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "docket_ids",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:rkaf:us:regsgov:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:docket-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The docket labels the document states, a Native list, as printed (many are agency numbers). Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "regulation_id_numbers",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:rkaf:us:rin:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:rin"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The Regulation Identifier Numbers the API lists, a Native list. `[]` on a large share of Rule documents every year, an API limit: some of those state a RIN in the printed text, and some print it inside docket_ids. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "cfr_references",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "object",
+            "properties": [
+              {
+                "name": "title",
+                "logicalType": "integer",
+                "logicalTypeOptions": {
+                  "format": "i64"
+                },
+                "physicalType": "Int64"
+              },
+              {
+                "name": "part",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "chapter",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              }
+            ]
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "STRUCT(title BIGINT, part VARCHAR, chapter VARCHAR)[]"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:rkaf:us:cfr:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:legal-location"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:cfr-reference"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The CFR citations the document affects, a Native list of `{title, part, chapter, citation_url}`. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "topics",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:atlas-resource-scheme:federal-register-api-topics"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:general-subject"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:federal-register-topic"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "attribute"
+            },
+            {
+              "vendor": "refspec",
+              "property": "authority",
+              "value": "RefSpec Atlas Federal Register API topics scheme"
+            }
+          ],
+          "description": "The Register's CFR index terms for the document (`topics`), a Native list; `[]` when it lists none. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "volume",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The Federal Register volume."
+        },
+        {
+          "name": "start_page",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The document's first page."
+        },
+        {
+          "name": "end_page",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The document's last page."
+        },
+        {
+          "name": "subtype",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The Register's subtype when the API sets it; NULL on recent records, so it does not separate a correction from its rule (`action` does)."
+        },
+        {
+          "name": "executive_order_number",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:rkaf:us:eo:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:legal-location"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:executive-order-number"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The executive order number, for a presidential executive order; NULL otherwise."
+        },
+        {
+          "name": "modify_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Always NULL: the Register's API states no update instant."
+        },
+        {
+          "name": "rin",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:rkaf:us:rin:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:rin"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The host's derived first RIN of `regulation_id_numbers`; NULL when it states none.",
+          "logicalTypeOptions": {
+            "pattern": "^[0-9]{4}-[A-Z]{2}[0-9]{2}$"
+          }
+        },
+        {
+          "name": "regulations_dot_gov_docket_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:rkaf:us:regsgov:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:docket-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The regulations.gov docket the Register states for this document; NULL where it states none, even where it states a document: a docket is never read off the front of a document id."
+        },
+        {
+          "name": "regulations_dot_gov_document_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:rkaf:us:regsgov:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:document-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The regulations.gov document the Register states for this document; NULL where it states none."
+        },
+        {
+          "name": "regulations_dot_gov_comments_count",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "Regulations.gov's comment count for that document as the Register relayed it at regulations_dot_gov_checked_at. The Register stops checking soon after the comment period closes, so the count is as of that check. It can be far higher than the comments regulations.gov posts (IRS-2024-0010-0001: 384,423 against 12 posted, 2026-10-03): a different fact from the posted comment rows this service holds. NULL where the Register states no count."
+        },
+        {
+          "name": "regulations_dot_gov_checked_at",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "When the Register last checked regulations.gov for this document, as it states it (UTC); NULL where it has not checked."
+        },
+        {
+          "name": "action",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The document's action line as the API states it (`Final rule.`, `Final rule; correction.`, `Proposed rule; extension of comment period.`); NULL where it states none, as on many older records. It tells a rule from its later correction, delay or confirmation, which share the rule's type, RIN, docket and title."
+        },
+        {
+          "name": "correction_of",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "For one of the Register's own editorial corrections (numbered like `C1-2012-1234`), the API address of the document it corrects; NULL otherwise. An agency's correction published as a rule carries no such link; its `action` names it a correction."
+        },
+        {
+          "name": "corrections",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            }
+          ],
+          "description": "The API addresses of the corrections the Register links to this document (its own editorial corrections), a Native list; `[]` where it links none. NULL on a row not read since the field was first requested (2026-10-03). Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "significant",
+          "logicalType": "boolean",
+          "physicalType": "Boolean",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BOOLEAN"
+            }
+          ],
+          "description": "Whether the document was deemed significant under Executive Order 12866, as the API states it: `true` or `false`; NULL where the API states neither, which is common, so NULL does not mean `false`."
+        },
+        {
+          "name": "president_json",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The Register's literal presidential attribution object, with identifier and name; no signer inference. NULL means unrequested/missing; JSON null and an empty object remain distinct."
+        },
+        {
+          "name": "disposition_notes",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Literal Register disposition prose; NULL if missing/null, empty text if stated empty."
+        },
+        {
+          "name": "executive_order_notes",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Literal Register executive-order history prose, including spelling and line breaks; not an independently established current legal effect."
+        },
+        {
+          "name": "regulations_dot_gov_agency_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:ref:regulations-gov-agency:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:agency-code"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            },
+            {
+              "vendor": "refspec",
+              "property": "authority",
+              "value": "RefSpec REF-038 Regulations.gov agency projection"
+            }
+          ],
+          "description": "Agency identifier stated by the linked Regulations.gov document metadata."
+        },
+        {
+          "name": "regulations_dot_gov_title",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Title stated by the linked Regulations.gov document metadata."
+        },
+        {
+          "name": "regulations_dot_gov_regulation_id_number",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "urn",
+              "value": "urn:rkaf:us:rin:"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:administrative-process-stage"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:regulatory:concept:rin"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "Regulation identifier number stated by the linked Regulations.gov metadata; no inferred docket or rule match.",
+          "logicalTypeOptions": {
+            "pattern": "^[0-9]{4}-[A-Z]{2}[0-9]{2}$"
+          }
+        },
+        {
+          "name": "regulations_dot_gov_supporting_documents_count",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "Supporting-document count stated by Regulations.gov for the linked document."
+        },
+        {
+          "name": "regulations_dot_gov_supporting_documents",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "object",
+            "properties": [
+              {
+                "name": "document_id",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "title",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              }
+            ]
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "STRUCT(document_id VARCHAR, title VARCHAR)[]"
+            }
+          ],
+          "description": "Supporting document identifiers and titles listed by Regulations.gov, preserving source order and repetition. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "regulations_dot_gov_regulatory_plan_title",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Regulatory-plan title stated in the linked Regulations.gov metadata."
+        },
+        {
+          "name": "html_url",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The document's page on federalregister.gov."
+        },
+        {
+          "name": "pdf_url",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The document's PDF rendition."
+        },
+        {
+          "name": "body_html_url",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The document's full-text HTML body; the XML body the Register also serves carries no boilerplate."
+        },
+        {
+          "name": "source_sha256",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "SHA-256 of the retained Federal Register API page this row was last read from, as the run's source-evidence journal spells it (`sha256:<hex>`); the page is `source-evidence/blobs/sha256/<hex>`. NULL on a row no run has read since the column was added (2026-11). It is a pointer, not part of the record: the scheduled run re-reads the last 120 days, so it changes every night on every row in that window (about 8,700) whether or not the record changed, and a comparison of two generations must leave it out. Where one run reads a document on two pages it names the first."
+        },
+        {
+          "name": "regulations_dot_gov_info_json",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The Register's own statement of the regulations.gov docket and document it matched this document to (the API's `regulations_dot_gov_info`), a JSON object exactly as stated: `{}` where the Register states nothing, the time of its check alone where it checked and found nothing, otherwise any of the docket, the document, the comment count, the supporting documents and their titles. NULL on a row not read since the field was first requested (2026-10-03)."
+        }
+      ],
+      "dataGranularityDescription": "One row per dated Federal Register document: a rule, proposed rule, notice or presidential document.",
+      "tags": [
+        "subject:rulemaking",
+        "coverage:true_range"
+      ],
+      "relationships": [
+        {
+          "id": "fk-federal_register-rin-to-unified_agenda-rin",
+          "type": "foreignKey",
+          "from": "federal_register.rin",
+          "to": "unified_agenda.rin",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "scope"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 35859
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 6090
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 83.0168
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "unified-agenda"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "unified_agenda holds every readable edition, Fall 1995 to the newest. Of the 6,090 RINs no edition lists, 2,211 are NMFS's 0648-X in-season series (every one), 1,409 first appear before Fall 1995, 179 first appear in 2026, after the newest edition, and 460 are malformed as printed (3206-XXXX, 7100 AG80). Receipt join-map-2026-09-26/unified-agenda-rin-after-backfill.json."
+            }
+          ]
+        }
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "6868ddc71c7d7e1df8de73ae0bc7ea7352973c87522ee6f27dc8916b8ce7ca8f"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "document_number",
+            "publication_date"
+          ]
+        }
+      ]
+    }
+  ],
+  "customProperties": [
+    {
+      "vendor": "ddk",
+      "property": "targetDomain",
+      "value": "spicygov"
+    },
+    {
+      "vendor": "ddk",
+      "property": "secondaryDomains",
+      "value": [
+        "RefSpec"
+      ]
+    },
+    {
+      "vendor": "ddk",
+      "property": "arrowSchemaProfile",
+      "value": "urn:ddk:odcs:arrow-declaration:3"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "family",
+      "value": "federal-register"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "pilotWave",
+      "value": true
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "tableMetadataSha256",
+      "value": "fec8c91d6d23614bb73b62edd28066d37c56d8ed860c2965e1398a1550f8a12d"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "tableJoinsSha256",
+      "value": "8ec6cda0366dbadfc80a6e3a9162162953d3a24d38a5a44f91eba7bbe6c24507"
+    }
+  ]
+}

@@ -1,0 +1,1226 @@
+{
+  "apiVersion": "v3.2.0",
+  "kind": "DataContract",
+  "id": "urn:spicy-regs:odcs:family:committee-rosters",
+  "version": "1.0.0",
+  "name": "spicy-regs committee-rosters",
+  "status": "active",
+  "domain": "spicycongress",
+  "dataProduct": "spicycongress",
+  "description": {
+    "purpose": "Deterministic ODCS v3.2.0 DataContract for spicy-regs publication family 'committee-rosters' (3 table(s)), targeting DDK domain 'spicycongress'.",
+    "usage": "Verify Parquet Arrow schema parity before publishing or consuming generations."
+  },
+  "tags": [
+    "ddk-domain:spicycongress",
+    "ddk-secondary-domain:SpicyEntities",
+    "family:committee-rosters",
+    "pilot-wave",
+    "subject:congress"
+  ],
+  "schema": [
+    {
+      "id": "committee_assignments",
+      "name": "committee_assignments",
+      "physicalName": "committee_assignments.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Committee assignments",
+      "description": "One row per member per committee or subcommittee seat: today's from the House Clerk's MemberData.xml and the Senate's cvc_member_data.xml, the 113th-118th Congresses' from one Congressional Directory edition each (the 118th beside archived chamber files).",
+      "properties": [
+        {
+          "name": "congress",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "The Congress the assignment belongs to."
+        },
+        {
+          "name": "congress_basis",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "`file` when the file states that Congress itself (the House file does), `caller` when it states none and the caller supplied it (the Senate file states only its update date), `directory` when the row is from a Congressional Directory edition, whose package MODS states the Congress, `directory-manual` when it is from a reviewed one-off reading of an edition's PDF."
+        },
+        {
+          "name": "session",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The session the House file states; the Senate file states none."
+        },
+        {
+          "name": "chamber",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Which file the seat came from: house or senate; for a directory row, the member's chamber."
+        },
+        {
+          "name": "system_code",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:committee-code"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 2,
+          "description": "Derived join code: House native standing/select type selects hs/hl; the Senate code is lowercased. Verified 119th Congress House joint codes use their Congress.gov counterparts; unresolved House joint codes keep their legacy spelling."
+        },
+        {
+          "name": "committee_code",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The file's own committee code, verbatim; the directory prints none."
+        },
+        {
+          "name": "is_subcommittee",
+          "logicalType": "boolean",
+          "physicalType": "Boolean",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BOOLEAN"
+            }
+          ],
+          "description": "true for a House subcommittee seat; the Senate file lists full committees only."
+        },
+        {
+          "name": "parent_system_code",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:committee-code"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The parent committee's systemCode for a subcommittee seat."
+        },
+        {
+          "name": "committee_name",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The committee's name as the file or directory itself states it."
+        },
+        {
+          "name": "bioguide_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:bioguide-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 3,
+          "description": "The member's bioguide id, which both files state; the key's target is members.bioguide_id.",
+          "logicalTypeOptions": {
+            "pattern": "^[A-Z][0-9]{6}$"
+          }
+        },
+        {
+          "name": "lis_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The Senate file's own LIS id for the senator; the crosswalk table stays the LIS crosswalk."
+        },
+        {
+          "name": "name_last",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The member's last name as the file spells it. A directory row's is the member record's, the surname matched as written (\"Van Hollen\"); the printed form stays in printed_entry."
+        },
+        {
+          "name": "name_first",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The member's first name as the file spells it."
+        },
+        {
+          "name": "party",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The member's party as the file states it."
+        },
+        {
+          "name": "state",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The member's state code as the file states it. A directory row's is the member's own (the term in force or the edition's member record); a misprinted state stays in printed_entry."
+        },
+        {
+          "name": "district",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The House member's district as the file states it."
+        },
+        {
+          "name": "rank",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The House file's rank on the committee; the Senate file states none. A directory row's rank is its print order within its column, the chair first on the majority side; null for another line printed above the columns (a vice chair)."
+        },
+        {
+          "name": "position",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The seat's stated role, verbatim: the House leadership attribute or the Senate position attribute. A directory row's role is normalized (Chairman becomes Chair); see position_basis."
+        },
+        {
+          "name": "source_granule",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The GovInfo directory granule the seat is printed in, which names its edition; for a manual reading, the edition's package; for an archived chamber file, its archive URL."
+        },
+        {
+          "name": "source_line",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The 1-based line of the granule's text where the seat's entry starts; for a manual reading, PDF page:line of its layout text."
+        },
+        {
+          "name": "edition_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "For a directory row, the edition's dateIssued: the date the printed roster describes."
+        },
+        {
+          "name": "position_basis",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "For a directory row with a position: `printed`, or `inferred` for a Ranking Member taken from print position (the first minority-column entry) where none is printed."
+        },
+        {
+          "name": "printed_entry",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "For a directory row, the entry as printed (name and state), kept when a value was corrected."
+        },
+        {
+          "name": "entry_label",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "For a directory row: `corrected` when a printed value was corrected (printed_entry keeps it), `after_departure` when the edition prints a member who had left, `no_congress_gov_code` when the printed body has no Congress.gov code (system_code is then directory-defined)."
+        }
+      ],
+      "dataGranularityDescription": "One row per member per committee or subcommittee seat: today's from a chamber roster file, an earlier Congress's from its Congressional Directory edition.",
+      "tags": [
+        "subject:congress",
+        "coverage:sampled"
+      ],
+      "relationships": [
+        {
+          "id": "fk-committee_assignments-parent_system_code-to-committees-system_code",
+          "type": "foreignKey",
+          "from": "committee_assignments.parent_system_code",
+          "to": "committees.system_code",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "one"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 19
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "committee-rosters"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "Parent committee of the assigned committee. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness."
+            }
+          ]
+        },
+        {
+          "id": "fk-committee_assignments-system_code-to-committees-system_code",
+          "type": "foreignKey",
+          "from": "committee_assignments.system_code",
+          "to": "committees.system_code",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "design"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 163
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 5
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 96.9325
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "committee-rosters"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "28 seats have no Congress.gov code to join and are never matched by name: 25 House seats on the Clerk's joint committees EC00, IT00, JL00 and JP00 (typed joint with no Congress.gov code, so they keep the legacy hs spelling; the Joint Economic Committee has three Congress.gov codes) and 3 Senate seats on JSIK00, the 2024 inaugural committee, which Congress.gov lists in no Congress. Receipt join-gaps-2026-09-26/e/."
+            }
+          ]
+        },
+        {
+          "id": "fk-committee_assignments-bioguide_id-to-members-bioguide_id",
+          "type": "foreignKey",
+          "from": "committee_assignments.bioguide_id",
+          "to": "members.bioguide_id",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 532
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "members"
+            }
+          ]
+        }
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "2367b00185b04833baae2b9adde85dc1697cc4974c73546e3babbb9c02dca382"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "congress",
+            "system_code",
+            "bioguide_id"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "committee_directory_entries",
+      "name": "committee_directory_entries",
+      "physicalName": "committee_directory_entries.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Committee directory non-seat entries",
+      "description": "Printed Congressional Directory roster entries that are not committee seats, each labeled with why.",
+      "properties": [
+        {
+          "name": "congress",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "The Congress of the edition that prints the entry."
+        },
+        {
+          "name": "congress_basis",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "`directory`, or `directory-manual` for a reviewed one-off reading of an edition's PDF."
+        },
+        {
+          "name": "source_granule",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 2,
+          "description": "The GovInfo directory granule (or, for a manual reading, package) that prints it."
+        },
+        {
+          "name": "source_line",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 3,
+          "description": "The 1-based granule line (or, for a manual reading, PDF page:line) where the entry starts."
+        },
+        {
+          "name": "side",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 4,
+          "description": "The printed column: chair, majority, minority, single, or line for text read as a whole line."
+        },
+        {
+          "name": "edition_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The edition's dateIssued."
+        },
+        {
+          "name": "kind",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "`vacancy`, `not_a_committee` (a party organization such as the NRCC), `unread_text` (printed text the reader could not seat), `unresolved_seat` (a seat whose committee or member could not be resolved) or `duplicate_seat` (a second printing of a seat already published)."
+        },
+        {
+          "name": "committee_name",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The committee or organization title the entry is printed under."
+        },
+        {
+          "name": "subcommittee_name",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The subcommittee title, where the entry is printed under one."
+        },
+        {
+          "name": "printed_text",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The entry as printed."
+        },
+        {
+          "name": "note",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Why it is not a seat, where the reader or interpreter states a reason."
+        }
+      ],
+      "dataGranularityDescription": "One row per printed Congressional Directory roster entry that is not a committee seat: a vacancy, a party organization's member, or printed text read but not seated.",
+      "tags": [
+        "subject:congress",
+        "coverage:sampled"
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "4041fc134d073db7e87ee41bc9482518ac744afd80f5870edee1a0233faf2614"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "congress",
+            "source_granule",
+            "source_line",
+            "side"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "committees",
+      "name": "committees",
+      "physicalName": "committees.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Committees",
+      "description": "One row per committee or subcommittee of any Congress the Congress.gov committee list route states, keyed on the publisher's `systemCode`, with the detail record's history, subcommittees, parent and currency folded on where captured.",
+      "properties": [
+        {
+          "name": "system_code",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:committee-code"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "The publisher's systemCode, the identifier every bill, report and communication refers to."
+        },
+        {
+          "name": "chamber",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The chamber as the publisher spells it: House, Senate or Joint."
+        },
+        {
+          "name": "name",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The committee's name as the list route states it."
+        },
+        {
+          "name": "committee_type",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The publisher's committeeTypeCode (Standing, Select, Subcommittee, Joint, and the rest)."
+        },
+        {
+          "name": "parent_system_code",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:committee-code"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The parent committee's systemCode, where the publisher states a parent."
+        },
+        {
+          "name": "parent_name",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The parent committee's name as the publisher states it."
+        },
+        {
+          "name": "is_subcommittee",
+          "logicalType": "boolean",
+          "physicalType": "Boolean",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BOOLEAN"
+            }
+          ],
+          "description": "true when the publisher states a parent, false otherwise."
+        },
+        {
+          "name": "subcommittee_count",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "How many subcommittees the publisher lists under this committee."
+        },
+        {
+          "name": "subcommittees",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            }
+          ],
+          "description": "The listed subcommittees' systemCodes, as a Native list in the publisher's order. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "update_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The list row's updateDate; the merge prefers the larger value."
+        },
+        {
+          "name": "is_current",
+          "logicalType": "boolean",
+          "physicalType": "Boolean",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BOOLEAN"
+            }
+          ],
+          "description": "The detail record's isCurrent, where captured."
+        },
+        {
+          "name": "detail_type",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The detail record's type, where captured."
+        },
+        {
+          "name": "website_url",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The detail record's committeeWebsiteUrl, where captured."
+        },
+        {
+          "name": "history_count",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "How many history entries the detail record carries."
+        },
+        {
+          "name": "history",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "object",
+            "properties": [
+              {
+                "name": "committeeTypeCode",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "establishingAuthority",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "libraryOfCongressName",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "locLinkedDataId",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "naraId",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "officialName",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "startDate",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "superintendentDocumentNumber",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "updateDate",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "endDate",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              }
+            ]
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "STRUCT(committeeTypeCode VARCHAR, establishingAuthority VARCHAR, libraryOfCongressName VARCHAR, locLinkedDataId VARCHAR, naraId VARCHAR, officialName VARCHAR, startDate VARCHAR, superintendentDocumentNumber VARCHAR, updateDate VARCHAR, endDate VARCHAR)[]"
+            }
+          ],
+          "description": "The detail record's history entries, verbatim, as a Native list in the publisher's order. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "bill_count",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "The detail record's stated count of bills referred to this committee, that day's statement."
+        },
+        {
+          "name": "report_count",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "The detail record's stated count of reports, that day's statement."
+        },
+        {
+          "name": "communication_count",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "The detail record's stated count of communications, that day's statement."
+        },
+        {
+          "name": "detail_update_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The detail record's own updateDate."
+        }
+      ],
+      "dataGranularityDescription": "One row per committee or subcommittee the Congress.gov committee list route states, with its detail record where captured.",
+      "tags": [
+        "subject:congress",
+        "coverage:sampled"
+      ],
+      "relationships": [
+        {
+          "id": "fk-committees-parent_system_code-to-committees-system_code",
+          "type": "foreignKey",
+          "from": "committees.parent_system_code",
+          "to": "committees.system_code",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "one"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 40
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "committee-rosters"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "Parent of this committee or subcommittee. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness."
+            }
+          ]
+        }
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "17a706297b6f5ef1d6026e8bef2ddbfa24682c8d1310976ebca8b4cc3c9da094"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "system_code"
+          ]
+        }
+      ]
+    }
+  ],
+  "customProperties": [
+    {
+      "vendor": "ddk",
+      "property": "targetDomain",
+      "value": "spicycongress"
+    },
+    {
+      "vendor": "ddk",
+      "property": "secondaryDomains",
+      "value": [
+        "SpicyEntities"
+      ]
+    },
+    {
+      "vendor": "ddk",
+      "property": "arrowSchemaProfile",
+      "value": "urn:ddk:odcs:arrow-declaration:3"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "family",
+      "value": "committee-rosters"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "pilotWave",
+      "value": true
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "tableMetadataSha256",
+      "value": "fec8c91d6d23614bb73b62edd28066d37c56d8ed860c2965e1398a1550f8a12d"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "tableJoinsSha256",
+      "value": "8ec6cda0366dbadfc80a6e3a9162162953d3a24d38a5a44f91eba7bbe6c24507"
+    }
+  ]
+}

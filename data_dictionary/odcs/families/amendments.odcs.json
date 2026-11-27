@@ -1,0 +1,514 @@
+{
+  "apiVersion": "v3.2.0",
+  "kind": "DataContract",
+  "id": "urn:spicy-regs:odcs:family:amendments",
+  "version": "1.0.0",
+  "name": "spicy-regs amendments",
+  "status": "active",
+  "domain": "spicycongress",
+  "dataProduct": "spicycongress",
+  "description": {
+    "purpose": "Deterministic ODCS v3.2.0 DataContract for spicy-regs publication family 'amendments' (1 table(s)), targeting DDK domain 'spicycongress'.",
+    "usage": "Verify Parquet Arrow schema parity before publishing or consuming generations."
+  },
+  "tags": [
+    "ddk-domain:spicycongress",
+    "family:amendments",
+    "pilot-wave",
+    "subject:congress"
+  ],
+  "schema": [
+    {
+      "id": "amendments",
+      "name": "amendments",
+      "physicalName": "amendments.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Amendments",
+      "description": "One row per amendment, from the Congress.gov amendment list and detail routes. Keyed on the amendment's own identity, not the bill it amends, because an amendment can amend another amendment; `amended_bill_id` and `amended_amendment_id` are foreign keys. All columns are stored as VARCHAR.",
+      "properties": [
+        {
+          "name": "amendment_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:legal-location"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:amendment-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "Natural key: congress, lowercase amendment type and number joined with hyphens."
+        },
+        {
+          "name": "congress",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The numbered Congress this amendment belongs to."
+        },
+        {
+          "name": "amendment_type",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The publisher's amendment type, lowercased (samdt, hamdt, suamdt)."
+        },
+        {
+          "name": "amendment_number",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The amendment's number within its Congress and type."
+        },
+        {
+          "name": "purpose",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The publisher's stated purpose of the amendment."
+        },
+        {
+          "name": "description",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The publisher's description of the amendment."
+        },
+        {
+          "name": "proposed_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The date the amendment was proposed, where the publisher states one."
+        },
+        {
+          "name": "submitted_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The date the amendment was submitted, where the publisher states one."
+        },
+        {
+          "name": "chamber",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The chamber the amendment was offered in."
+        },
+        {
+          "name": "update_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The publisher's updateDate; the merge prefers the larger value."
+        },
+        {
+          "name": "latest_action_date",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Date of the publisher's latestAction entry on this amendment."
+        },
+        {
+          "name": "latest_action_text",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Text of the publisher's latestAction entry on this amendment."
+        },
+        {
+          "name": "sponsor_bioguide_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:bioguide-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "Bioguide id of the first sponsor the publisher lists.",
+          "logicalTypeOptions": {
+            "pattern": "^[A-Z][0-9]{6}$"
+          }
+        },
+        {
+          "name": "sponsor_full_name",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Full name of that sponsor, exactly as the publisher spells it."
+        },
+        {
+          "name": "sponsor_party",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The sponsor's party as the list route states it: a one-letter code (D, R, I); NULL for the House amendments the Rules Committee sponsors, which name no party."
+        },
+        {
+          "name": "amended_bill_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:legal-location"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:bill-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "Natural key of the bill this amendment amends, where it amends a bill.",
+          "logicalTypeOptions": {
+            "pattern": "^[0-9]+-(hr|s|hjres|sjres|hconres|sconres|hres|sres)-[0-9]+$"
+          }
+        },
+        {
+          "name": "amended_amendment_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:legal-location"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:amendment-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "Natural key of the amendment this amendment amends, where it amends one."
+        }
+      ],
+      "dataGranularityDescription": "One row per amendment, as the Congress.gov amendment list route states it.",
+      "tags": [
+        "subject:congress",
+        "coverage:window"
+      ],
+      "relationships": [
+        {
+          "id": "fk-amendments-amended_amendment_id-to-amendments-amendment_id",
+          "type": "foreignKey",
+          "from": "amendments.amended_amendment_id",
+          "to": "amendments.amendment_id",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "one"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 73
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "amendments"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "Amendment that this amendment modifies; null means no such target is supplied. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness."
+            }
+          ]
+        },
+        {
+          "id": "fk-amendments-amended_bill_id-to-congress_bills-bill_id",
+          "type": "foreignKey",
+          "from": "amendments.amended_bill_id",
+          "to": "congress_bills.bill_id",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "one"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 203
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "bill-family"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "Bill that the amendment targets. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness."
+            }
+          ]
+        },
+        {
+          "id": "fk-amendments-sponsor_bioguide_id-to-members-bioguide_id",
+          "type": "foreignKey",
+          "from": "amendments.sponsor_bioguide_id",
+          "to": "members.bioguide_id",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 187
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "members"
+            }
+          ]
+        }
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "14943e1723540feade85c7a3d736e16a9a469038b928e03df67bd2bf02ab06aa"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "amendment_id"
+          ]
+        }
+      ]
+    }
+  ],
+  "customProperties": [
+    {
+      "vendor": "ddk",
+      "property": "targetDomain",
+      "value": "spicycongress"
+    },
+    {
+      "vendor": "ddk",
+      "property": "secondaryDomains",
+      "value": []
+    },
+    {
+      "vendor": "ddk",
+      "property": "arrowSchemaProfile",
+      "value": "urn:ddk:odcs:arrow-declaration:3"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "family",
+      "value": "amendments"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "pilotWave",
+      "value": true
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "tableMetadataSha256",
+      "value": "fec8c91d6d23614bb73b62edd28066d37c56d8ed860c2965e1398a1550f8a12d"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "tableJoinsSha256",
+      "value": "8ec6cda0366dbadfc80a6e3a9162162953d3a24d38a5a44f91eba7bbe6c24507"
+    }
+  ]
+}

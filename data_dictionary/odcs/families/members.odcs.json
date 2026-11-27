@@ -1,0 +1,1079 @@
+{
+  "apiVersion": "v3.2.0",
+  "kind": "DataContract",
+  "id": "urn:spicy-regs:odcs:family:members",
+  "version": "1.0.0",
+  "name": "spicy-regs members",
+  "status": "active",
+  "domain": "spicycongress",
+  "dataProduct": "spicycongress",
+  "description": {
+    "purpose": "Deterministic ODCS v3.2.0 DataContract for spicy-regs publication family 'members' (3 table(s)), targeting DDK domain 'spicycongress'.",
+    "usage": "Verify Parquet Arrow schema parity before publishing or consuming generations."
+  },
+  "tags": [
+    "ddk-domain:spicycongress",
+    "ddk-secondary-domain:SpicyEntities",
+    "family:members",
+    "pilot-wave",
+    "subject:congress"
+  ],
+  "schema": [
+    {
+      "id": "member_party_affiliations",
+      "name": "member_party_affiliations",
+      "physicalName": "member_party_affiliations.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Member party affiliation source intervals",
+      "description": "One member, input digest, term index and affiliation index. Literal dates and their parsing states remain separate from any dated membership decision.",
+      "properties": [
+        {
+          "name": "bioguide_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:bioguide-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "The source's member identifier.",
+          "logicalTypeOptions": {
+            "pattern": "^[A-Z][0-9]{6}$"
+          }
+        },
+        {
+          "name": "term_index",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 2,
+          "description": "Zero-based source term position."
+        },
+        {
+          "name": "affiliation_index",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 3,
+          "description": "Zero-based affiliation position within the source term."
+        },
+        {
+          "name": "party",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Literal nested party; NULL is not filled from the term-level party."
+        },
+        {
+          "name": "affiliation_start",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Literal nested start date; interval boundary policy belongs to the consumer."
+        },
+        {
+          "name": "affiliation_end",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Literal nested end date; a missing end does not imply an open interval."
+        },
+        {
+          "name": "term_party",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The separate term-level party assertion, not a dated fallback."
+        },
+        {
+          "name": "caucus",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Complete affiliation object, retaining absent, null and unknown fields. This column retains the source property caucus."
+        },
+        {
+          "name": "input_sha256",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Digest of the complete retained crosswalk JSON bytes."
+        },
+        {
+          "name": "start_status",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Calendar spelling status: absent, empty, valid or invalid."
+        },
+        {
+          "name": "end_status",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Calendar spelling status: absent, empty, valid or invalid."
+        },
+        {
+          "name": "source_path",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "JSON pointer to the affiliation in the retained capture."
+        },
+        {
+          "name": "observed_at",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Caller-supplied capture instant; not a source affiliation date."
+        },
+        {
+          "name": "source_json",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Complete affiliation object, retaining absent, null and unknown fields."
+        }
+      ],
+      "dataGranularityDescription": "One nested party affiliation in one retained community-crosswalk observation.",
+      "tags": [
+        "subject:congress",
+        "coverage:sampled"
+      ],
+      "relationships": [
+        {
+          "id": "fk-member_party_affiliations-bioguide_id_term_index-to-member_terms-bioguide_id_term_index",
+          "type": "foreignKey",
+          "from": [
+            "member_party_affiliations.bioguide_id",
+            "member_party_affiliations.term_index"
+          ],
+          "to": [
+            "member_terms.bioguide_id",
+            "member_terms.term_index"
+          ],
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "empty"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "members"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "reason",
+              "value": "New source interval occurrences; current roster backfill and public baseline pending."
+            }
+          ]
+        }
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "da9f46c3d3f9fc4717c085ff8d4729a4d66e3742b72c7a0cd2d3c53ff64992fd"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "bioguide_id",
+            "term_index",
+            "affiliation_index"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "member_terms",
+      "name": "member_terms",
+      "physicalName": "member_terms.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Legislator terms",
+      "description": "One row per term a legislator served, in the crosswalk's own order.",
+      "properties": [
+        {
+          "name": "bioguide_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:bioguide-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "The legislator who served this term.",
+          "logicalTypeOptions": {
+            "pattern": "^[A-Z][0-9]{6}$"
+          }
+        },
+        {
+          "name": "term_index",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 2,
+          "description": "Zero-based position in the crosswalk's own terms list; part of the identity."
+        },
+        {
+          "name": "term_type",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Chamber of this term: rep or sen."
+        },
+        {
+          "name": "term_start",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Start date of this term."
+        },
+        {
+          "name": "term_end",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "End date of this term, where the crosswalk states one."
+        },
+        {
+          "name": "term_state",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "State this term was served for."
+        },
+        {
+          "name": "term_party",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The separate source term-level party assertion, not a dated history."
+        },
+        {
+          "name": "term_district",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "District for this term, spelled as the publisher does; absent for a Senate term."
+        },
+        {
+          "name": "observed_at",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The parent capture's instant, carried so a term list versions with the member row it came from."
+        },
+        {
+          "name": "party_affiliations_state",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Nested list state: unread, absent, null, empty or populated."
+        }
+      ],
+      "dataGranularityDescription": "One row per term a legislator served, in the crosswalk's own order.",
+      "tags": [
+        "subject:congress",
+        "coverage:sampled"
+      ],
+      "relationships": [
+        {
+          "id": "fk-member_terms-bioguide_id-to-members-bioguide_id",
+          "type": "foreignKey",
+          "from": "member_terms.bioguide_id",
+          "to": "members.bioguide_id",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "joinKind",
+              "value": "complete"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "expectedCardinality",
+              "value": "unspecified"
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineKeys",
+              "value": 12770
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "baselineMissing",
+              "value": 0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "floorPct",
+              "value": 100.0
+            },
+            {
+              "vendor": "spicy-regs",
+              "property": "targetFamily",
+              "value": "members"
+            }
+          ]
+        }
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "8ae02551b47c3b8058100a1081e1719ca34af75afc8e3ca6c5406fe165b5e379"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "bioguide_id",
+            "term_index"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "members",
+      "name": "members",
+      "physicalName": "members.parquet",
+      "logicalType": "object",
+      "physicalType": "parquet",
+      "businessName": "Legislators",
+      "description": "One row per legislator in one capture of the community crosswalk. Split from `member_terms` because one row cannot hold a chamber switch.",
+      "properties": [
+        {
+          "name": "bioguide_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:bioguide-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "primaryKey": true,
+          "primaryKeyPosition": 1,
+          "description": "The Biographical Directory id, which is this crosswalk's primary identifier.",
+          "logicalTypeOptions": {
+            "pattern": "^[A-Z][0-9]{6}$"
+          }
+        },
+        {
+          "name": "bioguide_previous",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:legislative:concept:bioguide-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "The source list of previous Bioguide ids in its order, as JSON; absent is NULL. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "lis_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The Senate LIS id, which only senators carry."
+        },
+        {
+          "name": "fec_ids",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "string",
+            "physicalType": "Utf8"
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR[]"
+            },
+            {
+              "vendor": "refspec",
+              "property": "facet",
+              "value": "urn:ref:facet:entity"
+            },
+            {
+              "vendor": "ddk",
+              "property": "concept",
+              "value": "urn:ddk:fec:concept:candidate-id"
+            },
+            {
+              "vendor": "ddk",
+              "property": "conceptKind",
+              "value": "identifier"
+            }
+          ],
+          "description": "Every FEC candidate id for this person, as a Native list in the publisher's order. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "icpsr_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The ICPSR id used by roll-call research datasets."
+        },
+        {
+          "name": "govtrack_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The GovTrack id."
+        },
+        {
+          "name": "votesmart_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The Vote Smart person id from the community crosswalk; absent when unstated."
+        },
+        {
+          "name": "opensecrets_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The OpenSecrets id."
+        },
+        {
+          "name": "wikidata_id",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The Wikidata item id."
+        },
+        {
+          "name": "name_first",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The person's first name as the crosswalk spells it."
+        },
+        {
+          "name": "name_last",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The person's last name as the crosswalk spells it."
+        },
+        {
+          "name": "other_names",
+          "logicalType": "array",
+          "items": {
+            "logicalType": "object",
+            "properties": [
+              {
+                "name": "first",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "middle",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "last",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "nickname",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "suffix",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "official_full",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "start",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              },
+              {
+                "name": "end",
+                "logicalType": "string",
+                "physicalType": "Utf8"
+              }
+            ]
+          },
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "STRUCT(\"first\" VARCHAR, middle VARCHAR, \"last\" VARCHAR, nickname VARCHAR, suffix VARCHAR, official_full VARCHAR, \"start\" VARCHAR, \"end\" VARCHAR)[]"
+            }
+          ],
+          "description": "Source other_names patches in order, with literal date bounds and nulls; absent is NULL. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        },
+        {
+          "name": "term_count",
+          "logicalType": "integer",
+          "logicalTypeOptions": {
+            "format": "i64"
+          },
+          "physicalType": "Int64",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "BIGINT"
+            }
+          ],
+          "description": "How many terms the crosswalk lists; the member_terms row count for this person."
+        },
+        {
+          "name": "first_term_start",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Start date of the earliest term listed."
+        },
+        {
+          "name": "last_term_end",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "End date of the latest term listed."
+        },
+        {
+          "name": "current_term_type",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Chamber of the latest term: rep or sen."
+        },
+        {
+          "name": "current_term_state",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "State of the latest term."
+        },
+        {
+          "name": "current_term_party",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Party of the latest term, as the crosswalk states it for that term."
+        },
+        {
+          "name": "current_term_district",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "District of the latest term; absent for a Senate term."
+        },
+        {
+          "name": "name_nickname",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The crosswalk's own name.nickname for the person, as it spells it; NULL means the crosswalk states none, not that the person has none."
+        },
+        {
+          "name": "name_middle",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The crosswalk's own name.middle for the person, as it spells it; NULL means the crosswalk states none, not that the person has none."
+        },
+        {
+          "name": "name_suffix",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The crosswalk's own name.suffix for the person, as it spells it; NULL means the crosswalk states none, not that the person has none."
+        },
+        {
+          "name": "name_official_full",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "The crosswalk's own name.official_full for the person, as it spells it; NULL means the crosswalk states none, not that the person has none."
+        },
+        {
+          "name": "roster",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Which file this record came from: current or historical."
+        },
+        {
+          "name": "observed_at",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "When the file was captured; the merge prefers the larger value."
+        },
+        {
+          "name": "other_names_json",
+          "logicalType": "string",
+          "physicalType": "Utf8",
+          "customProperties": [
+            {
+              "vendor": "spicy-regs",
+              "property": "duckdbType",
+              "value": "VARCHAR"
+            }
+          ],
+          "description": "Source other_names patches in order, with literal date bounds and nulls; absent is NULL."
+        }
+      ],
+      "dataGranularityDescription": "One row per legislator in one capture of the community crosswalk.",
+      "tags": [
+        "subject:congress",
+        "coverage:sampled"
+      ],
+      "customProperties": [
+        {
+          "vendor": "ddk",
+          "property": "arrowSchemaProfile",
+          "value": "urn:ddk:odcs:arrow-declaration:3"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "arrowSchemaSha256",
+          "value": "c234dac6453d7c0bfa62148aadf838527a23cebf020c69ab1f9d46c30bc8897d"
+        },
+        {
+          "vendor": "spicy-regs",
+          "property": "parquetFooterVerified",
+          "value": false
+        },
+        {
+          "vendor": "ddk",
+          "property": "rowIdentity",
+          "value": [
+            "bioguide_id"
+          ]
+        }
+      ]
+    }
+  ],
+  "customProperties": [
+    {
+      "vendor": "ddk",
+      "property": "targetDomain",
+      "value": "spicycongress"
+    },
+    {
+      "vendor": "ddk",
+      "property": "secondaryDomains",
+      "value": [
+        "SpicyEntities"
+      ]
+    },
+    {
+      "vendor": "ddk",
+      "property": "arrowSchemaProfile",
+      "value": "urn:ddk:odcs:arrow-declaration:3"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "family",
+      "value": "members"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "pilotWave",
+      "value": true
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "tableMetadataSha256",
+      "value": "fec8c91d6d23614bb73b62edd28066d37c56d8ed860c2965e1398a1550f8a12d"
+    },
+    {
+      "vendor": "spicy-regs",
+      "property": "tableJoinsSha256",
+      "value": "8ec6cda0366dbadfc80a6e3a9162162953d3a24d38a5a44f91eba7bbe6c24507"
+    }
+  ]
+}
