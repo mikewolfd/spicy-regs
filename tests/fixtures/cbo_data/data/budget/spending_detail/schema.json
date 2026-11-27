@@ -1,0 +1,67 @@
+{
+  "dataset": "spending_detail",
+  "publication_id": "51142",
+  "title": "Spending Projections by Budget Account",
+  "source_url": "https://www.cbo.gov/publication/51142",
+  "description": "CBO's baseline projections of federal spending for approximately 2,000 budget accounts, with metadata including agency, bureau, function, and subfunction codes.",
+  "frequency": "annual_fy",
+  "date_format": "FY (e.g., FY2026, FY2036)",
+  "format": "multi-column tidy (not 3-column long format)",
+  "notes": {
+    "units": "Budget authority and outlays in millions of dollars.",
+    "fiscal_year": "Federal fiscal year (Oct 1 through Sep 30).",
+    "row_structure": "Each row represents one budget account for one fiscal year. An account appears for each projected year.",
+    "tin": "Treasury Identification Number uniquely identifies each budget account."
+  },
+  "columns": {
+    "date": {
+      "description": "Fiscal year (e.g., FY2026)",
+      "type": "string"
+    },
+    "tin": {
+      "description": "Treasury Identification Number (e.g., 017-0730-0-1-051)",
+      "type": "string"
+    },
+    "title": {
+      "description": "Budget account title",
+      "type": "string"
+    },
+    "disc_or_mand": {
+      "description": "Discretionary or Mandatory classification",
+      "type": "string",
+      "values": ["Discretionary", "Mandatory"]
+    },
+    "category": {
+      "description": "Major spending category (Defense, Nondefense, Net interest, etc.)",
+      "type": "string"
+    },
+    "agency": {
+      "description": "Agency name (e.g., Department of Defense--Military Programs)",
+      "type": "string"
+    },
+    "bureau": {
+      "description": "Bureau or sub-agency name",
+      "type": "string"
+    },
+    "function_code": {
+      "description": "Budget function code (3-digit, e.g., 050 for National Defense)",
+      "type": "string"
+    },
+    "subfunction_code": {
+      "description": "Budget subfunction code (3-digit, e.g., 051)",
+      "type": "string"
+    },
+    "off_budget": {
+      "description": "Whether the account is off-budget",
+      "type": "string"
+    },
+    "budget_authority": {
+      "description": "Budget authority in millions of dollars",
+      "type": "number"
+    },
+    "outlays": {
+      "description": "Outlays in millions of dollars",
+      "type": "number"
+    }
+  }
+}

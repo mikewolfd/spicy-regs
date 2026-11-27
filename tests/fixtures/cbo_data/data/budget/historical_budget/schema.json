@@ -1,0 +1,346 @@
+{
+  "dataset": "historical_budget",
+  "publication_id": "51134",
+  "title": "Historical Budget Data",
+  "source_url": "https://www.cbo.gov/publication/51134",
+  "description": "Data on revenues, outlays, and the deficit or surplus from 1962 through the most recent fiscal year completed.",
+  "frequency": "annual_fy",
+  "date_format": "FY (e.g., FY1962, FY2025)",
+  "canonical_columns": ["date", "variable", "value"],
+  "notes": {
+    "units": "Sheets without suffix are in billions_of_dollars; sheets with 'gdp_share' suffix are percentage of GDP.",
+    "fiscal_year": "Federal fiscal year (Oct 1 through Sep 30). FY2025 runs Oct 2024 – Sep 2025."
+  },
+  "fields": {
+    "revenues": {
+      "description": "Total federal revenues",
+      "unit": "billions_of_dollars",
+      "category": "summary"
+    },
+    "outlays": {
+      "description": "Total federal outlays",
+      "unit": "billions_of_dollars",
+      "category": "summary"
+    },
+    "deficit_on_budget": {
+      "description": "On-budget deficit (-) or surplus",
+      "unit": "billions_of_dollars",
+      "category": "summary"
+    },
+    "deficit_social_security": {
+      "description": "Social Security deficit (-) or surplus",
+      "unit": "billions_of_dollars",
+      "category": "summary"
+    },
+    "deficit_postal_service": {
+      "description": "Postal Service deficit (-) or surplus",
+      "unit": "billions_of_dollars",
+      "category": "summary"
+    },
+    "deficit_total": {
+      "description": "Total deficit (-) or surplus",
+      "unit": "billions_of_dollars",
+      "category": "summary"
+    },
+    "debt_held_by_public": {
+      "description": "Debt held by the public",
+      "unit": "billions_of_dollars",
+      "category": "summary"
+    },
+    "rev_individual_income": {
+      "description": "Individual income taxes",
+      "unit": "billions_of_dollars",
+      "category": "revenues"
+    },
+    "rev_payroll": {
+      "description": "Payroll taxes",
+      "unit": "billions_of_dollars",
+      "category": "revenues"
+    },
+    "rev_corporate_income": {
+      "description": "Corporate income taxes",
+      "unit": "billions_of_dollars",
+      "category": "revenues"
+    },
+    "rev_excise": {
+      "description": "Excise taxes",
+      "unit": "billions_of_dollars",
+      "category": "revenues"
+    },
+    "rev_estate_gift": {
+      "description": "Estate and gift taxes",
+      "unit": "billions_of_dollars",
+      "category": "revenues"
+    },
+    "rev_customs": {
+      "description": "Customs duties",
+      "unit": "billions_of_dollars",
+      "category": "revenues"
+    },
+    "rev_miscellaneous": {
+      "description": "Miscellaneous receipts",
+      "unit": "billions_of_dollars",
+      "category": "revenues"
+    },
+    "rev_total": {
+      "description": "Total revenues",
+      "unit": "billions_of_dollars",
+      "category": "revenues"
+    },
+    "outlays_discretionary": {
+      "description": "Discretionary outlays",
+      "unit": "billions_of_dollars",
+      "category": "outlays"
+    },
+    "outlays_mandatory_programmatic": {
+      "description": "Mandatory programmatic outlays (excludes offsetting receipts)",
+      "unit": "billions_of_dollars",
+      "category": "outlays"
+    },
+    "outlays_offsetting_receipts": {
+      "description": "Offsetting receipts",
+      "unit": "billions_of_dollars",
+      "category": "outlays"
+    },
+    "outlays_net_interest": {
+      "description": "Net interest",
+      "unit": "billions_of_dollars",
+      "category": "outlays"
+    },
+    "outlays_total": {
+      "description": "Total outlays",
+      "unit": "billions_of_dollars",
+      "category": "outlays"
+    },
+    "disc_defense": {
+      "description": "Defense discretionary outlays",
+      "unit": "billions_of_dollars",
+      "category": "discretionary"
+    },
+    "disc_nondefense": {
+      "description": "Nondefense discretionary outlays",
+      "unit": "billions_of_dollars",
+      "category": "discretionary"
+    },
+    "disc_total": {
+      "description": "Total discretionary outlays",
+      "unit": "billions_of_dollars",
+      "category": "discretionary"
+    },
+    "mand_social_security": {
+      "description": "Social Security mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory"
+    },
+    "mand_medicare": {
+      "description": "Medicare mandatory outlays (excludes offsetting receipts)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory"
+    },
+    "mand_medicaid": {
+      "description": "Medicaid mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory"
+    },
+    "mand_income_security": {
+      "description": "Income security programs",
+      "unit": "billions_of_dollars",
+      "category": "mandatory"
+    },
+    "mand_federal_retirement": {
+      "description": "Federal civilian and military retirement",
+      "unit": "billions_of_dollars",
+      "category": "mandatory"
+    },
+    "mand_veterans": {
+      "description": "Veterans' programs",
+      "unit": "billions_of_dollars",
+      "category": "mandatory"
+    },
+    "mand_other": {
+      "description": "Other mandatory programs",
+      "unit": "billions_of_dollars",
+      "category": "mandatory"
+    },
+    "mand_offsetting_receipts": {
+      "description": "Offsetting receipts (mandatory)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory"
+    },
+    "mand_total": {
+      "description": "Total mandatory outlays (net of offsetting receipts)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory"
+    },
+    "mand_major_health_care": {
+      "description": "Major health care programs (net)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory"
+    },
+    "revenues_gdp_share": {
+      "description": "Total revenues as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "summary_gdp"
+    },
+    "outlays_gdp_share": {
+      "description": "Total outlays as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "summary_gdp"
+    },
+    "deficit_on_budget_gdp_share": {
+      "description": "On-budget deficit/surplus as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "summary_gdp"
+    },
+    "deficit_social_security_gdp_share": {
+      "description": "Social Security deficit/surplus as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "summary_gdp"
+    },
+    "deficit_postal_service_gdp_share": {
+      "description": "Postal Service deficit/surplus as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "summary_gdp"
+    },
+    "deficit_total_gdp_share": {
+      "description": "Total deficit/surplus as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "summary_gdp"
+    },
+    "debt_held_by_public_gdp_share": {
+      "description": "Debt held by the public as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "summary_gdp"
+    },
+    "rev_individual_income_gdp_share": {
+      "description": "Individual income taxes as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "revenues_gdp"
+    },
+    "rev_payroll_gdp_share": {
+      "description": "Payroll taxes as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "revenues_gdp"
+    },
+    "rev_corporate_income_gdp_share": {
+      "description": "Corporate income taxes as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "revenues_gdp"
+    },
+    "rev_excise_gdp_share": {
+      "description": "Excise taxes as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "revenues_gdp"
+    },
+    "rev_estate_gift_gdp_share": {
+      "description": "Estate and gift taxes as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "revenues_gdp"
+    },
+    "rev_customs_gdp_share": {
+      "description": "Customs duties as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "revenues_gdp"
+    },
+    "rev_miscellaneous_gdp_share": {
+      "description": "Miscellaneous receipts as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "revenues_gdp"
+    },
+    "rev_total_gdp_share": {
+      "description": "Total revenues as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "revenues_gdp"
+    },
+    "outlays_discretionary_gdp_share": {
+      "description": "Discretionary outlays as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "outlays_gdp"
+    },
+    "outlays_mandatory_programmatic_gdp_share": {
+      "description": "Mandatory programmatic outlays as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "outlays_gdp"
+    },
+    "outlays_offsetting_receipts_gdp_share": {
+      "description": "Offsetting receipts as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "outlays_gdp"
+    },
+    "outlays_net_interest_gdp_share": {
+      "description": "Net interest as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "outlays_gdp"
+    },
+    "outlays_total_gdp_share": {
+      "description": "Total outlays as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "outlays_gdp"
+    },
+    "disc_defense_gdp_share": {
+      "description": "Defense discretionary outlays as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "discretionary_gdp"
+    },
+    "disc_nondefense_gdp_share": {
+      "description": "Nondefense discretionary outlays as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "discretionary_gdp"
+    },
+    "disc_total_gdp_share": {
+      "description": "Total discretionary outlays as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "discretionary_gdp"
+    },
+    "mand_social_security_gdp_share": {
+      "description": "Social Security as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "mandatory_gdp"
+    },
+    "mand_medicare_gdp_share": {
+      "description": "Medicare as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "mandatory_gdp"
+    },
+    "mand_medicaid_gdp_share": {
+      "description": "Medicaid as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "mandatory_gdp"
+    },
+    "mand_income_security_gdp_share": {
+      "description": "Income security as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "mandatory_gdp"
+    },
+    "mand_federal_retirement_gdp_share": {
+      "description": "Federal civilian and military retirement as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "mandatory_gdp"
+    },
+    "mand_veterans_gdp_share": {
+      "description": "Veterans' programs as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "mandatory_gdp"
+    },
+    "mand_other_gdp_share": {
+      "description": "Other mandatory programs as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "mandatory_gdp"
+    },
+    "mand_offsetting_receipts_gdp_share": {
+      "description": "Offsetting receipts (mandatory) as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "mandatory_gdp"
+    },
+    "mand_total_gdp_share": {
+      "description": "Total mandatory outlays as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "mandatory_gdp"
+    },
+    "mand_major_health_care_gdp_share": {
+      "description": "Major health care programs (net) as percentage of GDP",
+      "unit": "% of GDP",
+      "category": "mandatory_gdp"
+    }
+  }
+}

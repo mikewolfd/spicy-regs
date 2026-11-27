@@ -1,0 +1,1899 @@
+{
+  "dataset": "ten_year_budget",
+  "publication_id": "51118",
+  "title": "10-Year Budget Projections",
+  "source_url": "https://www.cbo.gov/publication/51118",
+  "description": "CBO's baseline projections of spending and revenues by category and of deficits and debt held by the public, for a 10-year horizon.",
+  "frequency": "annual_fy",
+  "date_format": "FY (e.g., FY2026, FY2036)",
+  "canonical_columns": [
+    "date",
+    "variable",
+    "value"
+  ],
+  "notes": {
+    "units": "Levels are in billions_of_dollars. GDP-share variables are percentage of GDP.",
+    "fiscal_year": "Federal fiscal year (Oct 1 through Sep 30).",
+    "first_year_actual": "The first year in each vintage is actual (realized); subsequent years are CBO projections."
+  },
+  "tables": {
+    "main_projections": "Table 1-1 (2026-02) / Table B-1 (2025-01) - main budget projections by category",
+    "timing_adjusted": "Table 1-2 (2026-02) / Table B-2 (2025-01) - timing-adjusted outlays and deficits",
+    "federal_debt": "Table 1-3 (2026-02) / Table B-3 (2025-01) - federal debt projections",
+    "key_projections": "Table 1-4 (2026-02) / Table B-6 (2025-01) / Table 1-5 (2024-06) - key projections as % of GDP",
+    "outlay_detail": "Table 3-1 (2026-02) - detailed outlay projections with GDP-share (not present in all vintages)",
+    "mandatory_detail": "Table 3-2 (2026-02) / Table B-4 (2025-01) / Table 1-4 (2024-06)  mandatory outlay detail by program",
+    "mandatory_detail_unadj": "Table 3-2 unadj (2026-02) / Table 1-4 Unadjusted (2024-06)  mandatory outlay detail (not timing-adjusted)",
+    "growth_sources": "Table 3-3 (2026-02 only)  sources of growth in mandatory spending",
+    "expiring_programs": "Table 3-4 (2026-02) / Supplemental Table 1 (2025-01) / Supplemental Table 2 (2024-06)  expiring mandatory programs",
+    "sequestration": "Box 3-2 Table (2026-02 only)  sequestration effects on mandatory spending",
+    "disc_defense_changes": "Table 3-5 (2026-02) - defense discretionary funding changes",
+    "disc_nondefense_changes": "Table 3-6 (2026-02) - nondefense discretionary funding changes",
+    "disc_timing_adjusted": "Table 3-7 (2026-02) / Supplemental Table 2 (2025-01) / Supplemental Table 1 (2024-06) - timing-adjusted discretionary spending",
+    "disc_scenarios": "Table 3-8 (2026-02 only) - alternative discretionary funding assumptions",
+    "deficit_changes": "Table 5-1 (2026-02) / Table A-1 (2025-01) / Table 3-1 (2024-06) - changes in deficit since prior baseline",
+    "immigration_effects": "Box Table 1-1 (2024-06 only) - immigration surge effects on revenues and outlays"
+  },
+  "fields": {
+    "proj_rev_individual_income": {
+      "description": "Projected individual income tax revenues",
+      "unit": "billions_of_dollars",
+      "category": "revenues"
+    },
+    "proj_rev_payroll": {
+      "description": "Projected payroll tax revenues",
+      "unit": "billions_of_dollars",
+      "category": "revenues"
+    },
+    "proj_rev_corporate_income": {
+      "description": "Projected corporate income tax revenues",
+      "unit": "billions_of_dollars",
+      "category": "revenues"
+    },
+    "proj_rev_customs": {
+      "description": "Projected customs duties",
+      "unit": "billions_of_dollars",
+      "category": "revenues"
+    },
+    "proj_rev_other": {
+      "description": "Other projected revenues",
+      "unit": "billions_of_dollars",
+      "category": "revenues"
+    },
+    "proj_rev_total": {
+      "description": "Total projected revenues",
+      "unit": "billions_of_dollars",
+      "category": "revenues"
+    },
+    "proj_rev_on_budget": {
+      "description": "On-budget projected revenues",
+      "unit": "billions_of_dollars",
+      "category": "revenues"
+    },
+    "proj_rev_off_budget": {
+      "description": "Off-budget projected revenues",
+      "unit": "billions_of_dollars",
+      "category": "revenues"
+    },
+    "proj_outlays_mandatory": {
+      "description": "Projected mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "outlays"
+    },
+    "proj_outlays_discretionary": {
+      "description": "Projected discretionary outlays",
+      "unit": "billions_of_dollars",
+      "category": "outlays"
+    },
+    "proj_outlays_net_interest": {
+      "description": "Projected net interest outlays",
+      "unit": "billions_of_dollars",
+      "category": "outlays"
+    },
+    "proj_outlays_total": {
+      "description": "Total projected outlays",
+      "unit": "billions_of_dollars",
+      "category": "outlays"
+    },
+    "proj_outlays_on_budget": {
+      "description": "On-budget projected outlays",
+      "unit": "billions_of_dollars",
+      "category": "outlays"
+    },
+    "proj_outlays_off_budget": {
+      "description": "Off-budget projected outlays",
+      "unit": "billions_of_dollars",
+      "category": "outlays"
+    },
+    "proj_deficit_total": {
+      "description": "Total projected deficit (-) or surplus",
+      "unit": "billions_of_dollars",
+      "category": "deficit"
+    },
+    "proj_deficit_on_budget": {
+      "description": "On-budget projected deficit (-) or surplus",
+      "unit": "billions_of_dollars",
+      "category": "deficit"
+    },
+    "proj_deficit_off_budget": {
+      "description": "Off-budget projected deficit (-) or surplus",
+      "unit": "billions_of_dollars",
+      "category": "deficit"
+    },
+    "proj_primary_deficit": {
+      "description": "Primary deficit (-) or surplus (excl. net interest)",
+      "unit": "billions_of_dollars",
+      "category": "deficit"
+    },
+    "proj_debt_held_by_public": {
+      "description": "Projected debt held by the public (end of year)",
+      "unit": "billions_of_dollars",
+      "category": "debt"
+    },
+    "proj_mand_social_security": {
+      "description": "Projected Social Security mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "outlay_detail"
+    },
+    "proj_mand_medicare": {
+      "description": "Projected Medicare mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "outlay_detail"
+    },
+    "proj_mand_medicaid": {
+      "description": "Projected Medicaid mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "outlay_detail"
+    },
+    "proj_mand_other": {
+      "description": "Projected other mandatory spending",
+      "unit": "billions_of_dollars",
+      "category": "outlay_detail"
+    },
+    "proj_mand_offsetting_receipts": {
+      "description": "Projected mandatory offsetting receipts",
+      "unit": "billions_of_dollars",
+      "category": "outlay_detail"
+    },
+    "proj_disc_defense": {
+      "description": "Projected defense discretionary outlays",
+      "unit": "billions_of_dollars",
+      "category": "outlay_detail"
+    },
+    "proj_disc_nondefense": {
+      "description": "Projected nondefense discretionary outlays",
+      "unit": "billions_of_dollars",
+      "category": "outlay_detail"
+    },
+    "proj_mand_social_security_gdp_share": {
+      "description": "Projected Social Security outlays as % of GDP",
+      "unit": "% of GDP",
+      "category": "outlay_detail_gdp"
+    },
+    "proj_mand_medicare_gdp_share": {
+      "description": "Projected Medicare outlays as % of GDP",
+      "unit": "% of GDP",
+      "category": "outlay_detail_gdp"
+    },
+    "proj_mand_medicaid_gdp_share": {
+      "description": "Projected Medicaid outlays as % of GDP",
+      "unit": "% of GDP",
+      "category": "outlay_detail_gdp"
+    },
+    "proj_mand_other_gdp_share": {
+      "description": "Projected other mandatory spending as % of GDP",
+      "unit": "% of GDP",
+      "category": "outlay_detail_gdp"
+    },
+    "proj_mand_offsetting_receipts_gdp_share": {
+      "description": "Projected mandatory offsetting receipts as % of GDP",
+      "unit": "% of GDP",
+      "category": "outlay_detail_gdp"
+    },
+    "proj_outlays_mandatory_gdp_share": {
+      "description": "Projected mandatory outlays subtotal as % of GDP",
+      "unit": "% of GDP",
+      "category": "outlay_detail_gdp"
+    },
+    "proj_disc_defense_gdp_share": {
+      "description": "Projected defense discretionary outlays as % of GDP",
+      "unit": "% of GDP",
+      "category": "outlay_detail_gdp"
+    },
+    "proj_disc_nondefense_gdp_share": {
+      "description": "Projected nondefense discretionary outlays as % of GDP",
+      "unit": "% of GDP",
+      "category": "outlay_detail_gdp"
+    },
+    "proj_outlays_discretionary_gdp_share": {
+      "description": "Projected discretionary outlays subtotal as % of GDP",
+      "unit": "% of GDP",
+      "category": "outlay_detail_gdp"
+    },
+    "proj_outlays_net_interest_gdp_share": {
+      "description": "Projected net interest as % of GDP",
+      "unit": "% of GDP",
+      "category": "outlay_detail_gdp"
+    },
+    "proj_outlays_total_gdp_share": {
+      "description": "Projected total outlays as % of GDP",
+      "unit": "% of GDP",
+      "category": "outlay_detail_gdp"
+    },
+    "proj_outlays_on_budget_gdp_share": {
+      "description": "On-budget projected outlays as % of GDP",
+      "unit": "% of GDP",
+      "category": "outlay_detail_gdp"
+    },
+    "proj_outlays_off_budget_gdp_share": {
+      "description": "Off-budget projected outlays as % of GDP",
+      "unit": "% of GDP",
+      "category": "outlay_detail_gdp"
+    },
+    "proj_timing_adjustment": {
+      "description": "Timing adjustment amount (excluded from adjusted totals)",
+      "unit": "billions_of_dollars",
+      "category": "timing_adjusted"
+    },
+    "proj_outlays_mandatory_timing_adj": {
+      "description": "Projected mandatory outlays, adjusted for timing shifts",
+      "unit": "billions_of_dollars",
+      "category": "timing_adjusted"
+    },
+    "proj_outlays_discretionary_timing_adj": {
+      "description": "Projected discretionary outlays, adjusted for timing shifts",
+      "unit": "billions_of_dollars",
+      "category": "timing_adjusted"
+    },
+    "proj_outlays_net_interest_timing_adj": {
+      "description": "Projected net interest, adjusted for timing shifts",
+      "unit": "billions_of_dollars",
+      "category": "timing_adjusted"
+    },
+    "proj_outlays_total_timing_adj": {
+      "description": "Projected total outlays, adjusted for timing shifts",
+      "unit": "billions_of_dollars",
+      "category": "timing_adjusted"
+    },
+    "proj_deficit_total_timing_adj": {
+      "description": "Total deficit, adjusted for timing shifts",
+      "unit": "billions_of_dollars",
+      "category": "timing_adjusted"
+    },
+    "proj_primary_deficit_timing_adj": {
+      "description": "Primary deficit, adjusted for timing shifts",
+      "unit": "billions_of_dollars",
+      "category": "timing_adjusted"
+    },
+    "proj_outlays_mandatory_timing_adj_gdp_share": {
+      "description": "Projected mandatory outlays (timing-adjusted) as % of GDP",
+      "unit": "% of GDP",
+      "category": "timing_adjusted_gdp"
+    },
+    "proj_outlays_discretionary_timing_adj_gdp_share": {
+      "description": "Projected discretionary outlays (timing-adjusted) as % of GDP",
+      "unit": "% of GDP",
+      "category": "timing_adjusted_gdp"
+    },
+    "proj_outlays_net_interest_timing_adj_gdp_share": {
+      "description": "Projected net interest (timing-adjusted) as % of GDP",
+      "unit": "% of GDP",
+      "category": "timing_adjusted_gdp"
+    },
+    "proj_outlays_total_timing_adj_gdp_share": {
+      "description": "Projected total outlays (timing-adjusted) as % of GDP",
+      "unit": "% of GDP",
+      "category": "timing_adjusted_gdp"
+    },
+    "proj_deficit_total_timing_adj_gdp_share": {
+      "description": "Total deficit (timing-adjusted) as % of GDP",
+      "unit": "% of GDP",
+      "category": "timing_adjusted_gdp"
+    },
+    "proj_primary_deficit_timing_adj_gdp_share": {
+      "description": "Primary deficit (timing-adjusted) as % of GDP",
+      "unit": "% of GDP",
+      "category": "timing_adjusted_gdp"
+    },
+    "proj_debt_held_by_public_begin": {
+      "description": "Debt held by the public at the beginning of the year",
+      "unit": "billions_of_dollars",
+      "category": "debt"
+    },
+    "proj_debt_change_from_deficit": {
+      "description": "Change in debt held by the public resulting from the deficit",
+      "unit": "billions_of_dollars",
+      "category": "debt"
+    },
+    "proj_debt_change_other_financing": {
+      "description": "Change in debt from other means of financing",
+      "unit": "billions_of_dollars",
+      "category": "debt"
+    },
+    "proj_debt_change_total": {
+      "description": "Total change in debt held by the public",
+      "unit": "billions_of_dollars",
+      "category": "debt"
+    },
+    "proj_debt_held_by_public_end": {
+      "description": "Debt held by the public at the end of the year",
+      "unit": "billions_of_dollars",
+      "category": "debt"
+    },
+    "proj_debt_held_by_public_gdp_share": {
+      "description": "Debt held by the public as % of GDP (end of year)",
+      "unit": "% of GDP",
+      "category": "debt"
+    },
+    "proj_debt_financial_assets": {
+      "description": "Federal financial assets",
+      "unit": "billions_of_dollars",
+      "category": "debt"
+    },
+    "proj_debt_minus_financial_assets": {
+      "description": "Debt held by the public minus federal financial assets",
+      "unit": "billions_of_dollars",
+      "category": "debt"
+    },
+    "proj_debt_minus_financial_assets_gdp_share": {
+      "description": "Debt minus financial assets as % of GDP",
+      "unit": "% of GDP",
+      "category": "debt"
+    },
+    "proj_debt_fed_reserve_holdings": {
+      "description": "Federal Reserve's holdings of debt held by the public",
+      "unit": "billions_of_dollars",
+      "category": "debt"
+    },
+    "proj_debt_minus_assets_and_fed": {
+      "description": "Debt minus financial assets and Federal Reserve holdings",
+      "unit": "billions_of_dollars",
+      "category": "debt"
+    },
+    "proj_debt_minus_assets_and_fed_gdp_share": {
+      "description": "Debt minus financial assets and Fed holdings as % of GDP",
+      "unit": "% of GDP",
+      "category": "debt"
+    },
+    "proj_debt_gross": {
+      "description": "Gross federal debt",
+      "unit": "billions_of_dollars",
+      "category": "debt"
+    },
+    "proj_debt_subject_to_limit": {
+      "description": "Debt subject to the statutory limit",
+      "unit": "billions_of_dollars",
+      "category": "debt"
+    },
+    "proj_debt_avg_interest_rate": {
+      "description": "Average interest rate on debt held by the public (percent)",
+      "unit": "%",
+      "category": "debt"
+    },
+    "proj_rev_individual_income_gdp_share": {
+      "description": "Projected individual income tax revenues as % of GDP",
+      "unit": "% of GDP",
+      "category": "key_projections"
+    },
+    "proj_rev_payroll_gdp_share": {
+      "description": "Projected payroll tax revenues as % of GDP",
+      "unit": "% of GDP",
+      "category": "key_projections"
+    },
+    "proj_rev_corporate_income_gdp_share": {
+      "description": "Projected corporate income tax revenues as % of GDP",
+      "unit": "% of GDP",
+      "category": "key_projections"
+    },
+    "proj_rev_customs_gdp_share": {
+      "description": "Projected customs duties as % of GDP",
+      "unit": "% of GDP",
+      "category": "key_projections"
+    },
+    "proj_rev_other_gdp_share": {
+      "description": "Projected other revenues as % of GDP",
+      "unit": "% of GDP",
+      "category": "key_projections"
+    },
+    "proj_rev_total_gdp_share": {
+      "description": "Projected total revenues as % of GDP",
+      "unit": "% of GDP",
+      "category": "key_projections"
+    },
+    "proj_mand_health_care_gdp_share": {
+      "description": "Projected major health care programs outlays as % of GDP",
+      "unit": "% of GDP",
+      "category": "key_projections"
+    },
+    "proj_deficit_total_gdp_share": {
+      "description": "Projected total deficit as % of GDP",
+      "unit": "% of GDP",
+      "category": "key_projections"
+    },
+    "proj_debt_held_by_public_end_gdp_share": {
+      "description": "Debt held by the public at end of period as % of GDP (from key projections table)",
+      "unit": "% of GDP",
+      "category": "key_projections"
+    },
+    "proj_ss_revenues_gdp_share": {
+      "description": "Social Security revenues as % of GDP",
+      "unit": "% of GDP",
+      "category": "key_projections_addendum"
+    },
+    "proj_ss_outlays_gdp_share": {
+      "description": "Social Security outlays as % of GDP",
+      "unit": "% of GDP",
+      "category": "key_projections_addendum"
+    },
+    "proj_ss_deficit_contribution_gdp_share": {
+      "description": "Social Security contribution to the deficit as % of GDP",
+      "unit": "% of GDP",
+      "category": "key_projections_addendum"
+    },
+    "proj_medicare_revenues_gdp_share": {
+      "description": "Medicare revenues as % of GDP",
+      "unit": "% of GDP",
+      "category": "key_projections_addendum"
+    },
+    "proj_medicare_outlays_gdp_share": {
+      "description": "Medicare outlays as % of GDP",
+      "unit": "% of GDP",
+      "category": "key_projections_addendum"
+    },
+    "proj_medicare_offsetting_receipts_gdp_share": {
+      "description": "Medicare offsetting receipts as % of GDP",
+      "unit": "% of GDP",
+      "category": "key_projections_addendum"
+    },
+    "proj_medicare_deficit_contribution_gdp_share": {
+      "description": "Medicare contribution to the deficit as % of GDP",
+      "unit": "% of GDP",
+      "category": "key_projections_addendum"
+    },
+    "proj_gdp_end_of_period": {
+      "description": "GDP at the end of the period (trillions of dollars)",
+      "unit": "Trillions $",
+      "category": "key_projections"
+    },
+    "proj_mand_ss_oasi": {
+      "description": "Projected Old-Age and Survivors Insurance (OASI) mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_ss_oasi_timing_adj": {
+      "description": "Projected Old-Age and Survivors Insurance (OASI) mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_ss_di": {
+      "description": "Projected Disability Insurance (DI) mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_ss_di_timing_adj": {
+      "description": "Projected Disability Insurance (DI) mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_social_security_timing_adj": {
+      "description": "Projected Social Security mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_medicare_timing_adj": {
+      "description": "Projected Medicare mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_medicaid_timing_adj": {
+      "description": "Projected Medicaid mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_premium_tax_credits": {
+      "description": "Projected premium tax credits and related spending",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_premium_tax_credits_timing_adj": {
+      "description": "Projected premium tax credits and related spending (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_chip": {
+      "description": "Projected Children's Health Insurance Program (CHIP) mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_chip_timing_adj": {
+      "description": "Projected Children's Health Insurance Program (CHIP) mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_health_care": {
+      "description": "Projected major health care programs mandatory outlays subtotal",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_health_care_timing_adj": {
+      "description": "Projected major health care programs mandatory outlays subtotal (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_snap": {
+      "description": "Projected Supplemental Nutrition Assistance Program (SNAP) mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_snap_timing_adj": {
+      "description": "Projected Supplemental Nutrition Assistance Program (SNAP) mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_eitc_child_credits": {
+      "description": "Projected earned income, child, and other tax credits",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_eitc_child_credits_timing_adj": {
+      "description": "Projected earned income, child, and other tax credits (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_ssi": {
+      "description": "Projected Supplemental Security Income (SSI) mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_ssi_timing_adj": {
+      "description": "Projected Supplemental Security Income (SSI) mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_unemployment": {
+      "description": "Projected unemployment compensation mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_unemployment_timing_adj": {
+      "description": "Projected unemployment compensation mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_child_nutrition": {
+      "description": "Projected child nutrition mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_child_nutrition_timing_adj": {
+      "description": "Projected child nutrition mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_family_support": {
+      "description": "Projected family support and foster care mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_family_support_timing_adj": {
+      "description": "Projected family support and foster care mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_income_security": {
+      "description": "Projected income security programs mandatory outlays subtotal",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_income_security_timing_adj": {
+      "description": "Projected income security programs mandatory outlays subtotal (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_retire_civilian": {
+      "description": "Projected federal civilian retirement mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_retire_civilian_timing_adj": {
+      "description": "Projected federal civilian retirement mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_retire_military": {
+      "description": "Projected federal military retirement mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_retire_military_timing_adj": {
+      "description": "Projected federal military retirement mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_retirement": {
+      "description": "Projected federal civilian and military retirement mandatory outlays subtotal",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_retirement_timing_adj": {
+      "description": "Projected federal civilian and military retirement mandatory outlays subtotal (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_admin_justice": {
+      "description": "Projected administration of justice mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_admin_justice_timing_adj": {
+      "description": "Projected administration of justice mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_agriculture": {
+      "description": "Projected agriculture mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_agriculture_timing_adj": {
+      "description": "Projected agriculture mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_deposit_insurance": {
+      "description": "Projected deposit insurance mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_deposit_insurance_timing_adj": {
+      "description": "Projected deposit insurance mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_merhcf": {
+      "description": "Projected Medicare-Eligible Retiree Health Care Fund (MERHCF) mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_merhcf_timing_adj": {
+      "description": "Projected Medicare-Eligible Retiree Health Care Fund (MERHCF) mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_higher_education": {
+      "description": "Projected higher education mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_higher_education_timing_adj": {
+      "description": "Projected higher education mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_defense": {
+      "description": "Projected defense mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_defense_timing_adj": {
+      "description": "Projected defense mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_fannie_freddie": {
+      "description": "Projected Fannie Mae and Freddie Mac mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_fannie_freddie_timing_adj": {
+      "description": "Projected Fannie Mae and Freddie Mac mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_pbgc": {
+      "description": "Projected Pension Benefit Guaranty Corporation (PBGC) mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_pbgc_timing_adj": {
+      "description": "Projected Pension Benefit Guaranty Corporation (PBGC) mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_education_stabilization": {
+      "description": "Projected Education Stabilization Fund mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_education_stabilization_timing_adj": {
+      "description": "Projected Education Stabilization Fund mandatory outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_other_programs": {
+      "description": "Projected other mandatory programs outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_other_programs_timing_adj": {
+      "description": "Projected other mandatory programs outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_other_subtotal": {
+      "description": "Projected other programs mandatory outlays subtotal",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_other_subtotal_timing_adj": {
+      "description": "Projected other programs mandatory outlays subtotal (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_excl_offsets": {
+      "description": "Projected mandatory outlays excluding offsetting receipts",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_excl_offsets_timing_adj": {
+      "description": "Projected mandatory outlays excluding offsetting receipts (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_incl_offsets": {
+      "description": "Projected mandatory outlays including offsetting receipts",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_incl_offsets_timing_adj": {
+      "description": "Projected mandatory outlays including offsetting receipts (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_offset_medicare": {
+      "description": "Projected Medicare offsetting receipts",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_offset_medicare_timing_adj": {
+      "description": "Projected Medicare offsetting receipts (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_offset_civil_service": {
+      "description": "Projected civil service retirement offsetting receipts",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_offset_civil_service_timing_adj": {
+      "description": "Projected civil service retirement offsetting receipts (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_offset_military_retire": {
+      "description": "Projected military retirement offsetting receipts",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_offset_military_retire_timing_adj": {
+      "description": "Projected military retirement offsetting receipts (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_offset_social_security": {
+      "description": "Projected Social Security offsetting receipts",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_offset_social_security_timing_adj": {
+      "description": "Projected Social Security offsetting receipts (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_offset_fed_employee_retire": {
+      "description": "Projected federal employees' retirement offsetting receipts subtotal",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_offset_fed_employee_retire_timing_adj": {
+      "description": "Projected federal employees' retirement offsetting receipts subtotal (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_offset_natural_resources": {
+      "description": "Projected offsetting receipts related to natural resources",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_offset_natural_resources_timing_adj": {
+      "description": "Projected offsetting receipts related to natural resources (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_offset_merhcf": {
+      "description": "Projected MERHCF offsetting receipts",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_offset_merhcf_timing_adj": {
+      "description": "Projected MERHCF offsetting receipts (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_offset_fannie_freddie": {
+      "description": "Projected Fannie Mae and Freddie Mac offsetting receipts",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_offset_fannie_freddie_timing_adj": {
+      "description": "Projected Fannie Mae and Freddie Mac offsetting receipts (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_offset_other": {
+      "description": "Projected other offsetting receipts",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_offset_other_timing_adj": {
+      "description": "Projected other offsetting receipts (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_mand_offsetting_receipts_timing_adj": {
+      "description": "Projected total mandatory offsetting receipts (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "offsetting_receipts"
+    },
+    "proj_mand_growth_social_security": {
+      "description": "Projected growth in mandatory spending from Social Security",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_growth"
+    },
+    "proj_mand_growth_medicare": {
+      "description": "Projected growth in mandatory spending from Medicare",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_growth"
+    },
+    "proj_mand_growth_medicaid": {
+      "description": "Projected growth in mandatory spending from Medicaid",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_growth"
+    },
+    "proj_mand_growth_premium_tax_credits": {
+      "description": "Projected growth in mandatory spending from premium tax credits",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_growth"
+    },
+    "proj_mand_growth_veterans": {
+      "description": "Projected growth in mandatory spending from veterans' income security",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_growth"
+    },
+    "proj_mand_growth_retirement": {
+      "description": "Projected growth in mandatory spending from federal retirement",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_growth"
+    },
+    "proj_mand_growth_other": {
+      "description": "Projected growth in mandatory spending from other programs",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_growth"
+    },
+    "proj_exp_snap_ba": {
+      "description": "Expiring SNAP budget authority",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_snap_outlays": {
+      "description": "Expiring SNAP outlays",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_veterans_cola_ba": {
+      "description": "Expiring veterans' cost-of-living adjustment budget authority",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_veterans_cola_outlays": {
+      "description": "Expiring veterans' cost-of-living adjustment outlays",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_tanf_ba": {
+      "description": "Expiring Temporary Assistance for Needy Families (TANF) budget authority",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_tanf_outlays": {
+      "description": "Expiring Temporary Assistance for Needy Families (TANF) outlays",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_chip_ba": {
+      "description": "Expiring Children's Health Insurance Program (CHIP) budget authority",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_chip_outlays": {
+      "description": "Expiring Children's Health Insurance Program (CHIP) outlays",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_ccc_ba": {
+      "description": "Expiring Commodity Credit Corporation (CCC) budget authority",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_ccc_outlays": {
+      "description": "Expiring Commodity Credit Corporation (CCC) outlays",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_rehab_ba": {
+      "description": "Expiring vocational rehabilitation budget authority",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_rehab_outlays": {
+      "description": "Expiring vocational rehabilitation outlays",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_child_nutrition_ba": {
+      "description": "Expiring child nutrition programs budget authority",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_child_nutrition_outlays": {
+      "description": "Expiring child nutrition programs outlays",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_ground_transport_non_oblim_ba": {
+      "description": "Expiring ground transportation (not subject to obligation limitations) budget authority",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_ground_transport_non_oblim_outlays": {
+      "description": "Expiring ground transportation (not subject to obligation limitations) outlays",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_ground_transport_oblim_ba": {
+      "description": "Expiring ground transportation (controlled by obligation limitations) budget authority",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_ground_transport_oblim_outlays": {
+      "description": "Expiring ground transportation (controlled by obligation limitations) outlays",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_safe_families_ba": {
+      "description": "Expiring Promoting Safe and Stable Families budget authority",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_safe_families_outlays": {
+      "description": "Expiring Promoting Safe and Stable Families outlays",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_flood_insurance_ba": {
+      "description": "Expiring National Flood Insurance Program budget authority",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_flood_insurance_outlays": {
+      "description": "Expiring National Flood Insurance Program outlays",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_air_transport_ba": {
+      "description": "Expiring air transportation budget authority",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_air_transport_outlays": {
+      "description": "Expiring air transportation outlays",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_child_care_ba": {
+      "description": "Expiring child care entitlements budget authority",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_child_care_outlays": {
+      "description": "Expiring child care entitlements outlays",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_compact_free_assoc_ba": {
+      "description": "Expiring Compact of Free Association budget authority",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_compact_free_assoc_outlays": {
+      "description": "Expiring Compact of Free Association outlays",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_student_aid_ba": {
+      "description": "Expiring student aid administration budget authority",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_student_aid_outlays": {
+      "description": "Expiring student aid administration outlays",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_natural_resources_ba": {
+      "description": "Expiring natural resources budget authority",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_natural_resources_outlays": {
+      "description": "Expiring natural resources outlays",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_total_ba": {
+      "description": "Total expiring mandatory programs budget authority",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_exp_total_outlays": {
+      "description": "Total expiring mandatory programs outlays",
+      "unit": "billions_of_dollars",
+      "category": "expiring_programs"
+    },
+    "proj_seq_medicare_ba": {
+      "description": "Sequestration change in Medicare budget authority",
+      "unit": "billions_of_dollars",
+      "category": "sequestration"
+    },
+    "proj_seq_medicare_outlays": {
+      "description": "Sequestration change in Medicare outlays",
+      "unit": "billions_of_dollars",
+      "category": "sequestration"
+    },
+    "proj_seq_defense_ba": {
+      "description": "Sequestration change in defense budget authority",
+      "unit": "billions_of_dollars",
+      "category": "sequestration"
+    },
+    "proj_seq_defense_outlays": {
+      "description": "Sequestration change in defense outlays",
+      "unit": "billions_of_dollars",
+      "category": "sequestration"
+    },
+    "proj_seq_other_ba": {
+      "description": "Sequestration change in other budget authority",
+      "unit": "billions_of_dollars",
+      "category": "sequestration"
+    },
+    "proj_seq_other_outlays": {
+      "description": "Sequestration change in other outlays",
+      "unit": "billions_of_dollars",
+      "category": "sequestration"
+    },
+    "proj_seq_total_ba": {
+      "description": "Total sequestration change in budget authority",
+      "unit": "billions_of_dollars",
+      "category": "sequestration"
+    },
+    "proj_seq_total_outlays": {
+      "description": "Total sequestration change in outlays",
+      "unit": "billions_of_dollars",
+      "category": "sequestration"
+    },
+    "proj_mand_vet_income_security": {
+      "description": "Projected veterans income security outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_vet_income_security_timing_adj": {
+      "description": "Projected veterans income security outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_vet_other_timing_adj": {
+      "description": "Projected other veterans programs outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_vet_toxic_exposures": {
+      "description": "Projected Toxic Exposures Fund outlays",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_vet_toxic_exposures_timing_adj": {
+      "description": "Projected Toxic Exposures Fund outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_veterans": {
+      "description": "Projected veterans programs subtotal",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "proj_mand_veterans_timing_adj": {
+      "description": "Projected veterans programs subtotal (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "mandatory_outlays"
+    },
+    "chg_deficit_net_total": {
+      "description": "Total increase/decrease in the deficit",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_deficit_prior_baseline": {
+      "description": "Deficit in CBO's prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_disc_def_mil_personnel": {
+      "description": "Change in defense discretionary funding: military personnel",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_def_ops_maint": {
+      "description": "Change in defense discretionary funding: operation and maintenance",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_def_other": {
+      "description": "Change in defense discretionary funding: other defense",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_def_procurement": {
+      "description": "Change in defense discretionary funding: procurement",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_def_rnd": {
+      "description": "Change in defense discretionary funding: research and development",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_def_total_disc_mand_outlays": {
+      "description": "Change in defense discretionary funding: total defense discretionary and mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_def_total_funding": {
+      "description": "Change in defense discretionary funding: total defense funding",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_def_total_outlays": {
+      "description": "Change in defense discretionary funding: total defense discretionary outlays",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_admin_justice": {
+      "description": "Change in nondefense discretionary funding: administration of justice",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_agriculture": {
+      "description": "Change in nondefense discretionary funding: agriculture",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_commerce": {
+      "description": "Change in nondefense discretionary funding: commerce and housing credit",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_community": {
+      "description": "Change in nondefense discretionary funding: community and regional development",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_education": {
+      "description": "Change in nondefense discretionary funding: education, training, employment, and social services",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_energy": {
+      "description": "Change in nondefense discretionary funding: energy",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_general_govt": {
+      "description": "Change in nondefense discretionary funding: general government",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_health": {
+      "description": "Change in nondefense discretionary funding: health",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_income_security": {
+      "description": "Change in nondefense discretionary funding: income security",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_intl_affairs": {
+      "description": "Change in nondefense discretionary funding: international affairs",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_medicare": {
+      "description": "Change in nondefense discretionary funding: Medicare",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_natural_resources": {
+      "description": "Change in nondefense discretionary funding: natural resources and environment",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_science": {
+      "description": "Change in nondefense discretionary funding: general science, space, and technology",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_social_security": {
+      "description": "Change in nondefense discretionary funding: Social Security",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_total_funding": {
+      "description": "Change in nondefense discretionary funding: total nondefense funding",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_total_outlays": {
+      "description": "Change in nondefense discretionary funding: outlays from nondefense discretionary funding",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_transportation": {
+      "description": "Change in nondefense discretionary funding: transportation",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_disc_nondef_veterans": {
+      "description": "Change in nondefense discretionary funding: veterans' benefits and services",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_changes"
+    },
+    "chg_econ_deficit_total": {
+      "description": "Economic: Change in deficit from this source",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_outlay_debt_service": {
+      "description": "Economic: Change in debt service costs",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_outlay_interest_rates": {
+      "description": "Economic: Change in net interest from interest rates and inflation",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_outlay_mand_eitc": {
+      "description": "Economic: Change in EITC/child tax credit outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_outlay_mand_medicaid": {
+      "description": "Economic: Change in Medicaid mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_outlay_mand_medicare": {
+      "description": "Economic: Change in Medicare mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_outlay_mand_other": {
+      "description": "Economic: Change in other mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_outlay_mand_snap": {
+      "description": "Economic: Change in SNAP mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_outlay_mand_social_security": {
+      "description": "Economic: Change in Social Security mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_outlay_mand_total": {
+      "description": "Economic: Total change in mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_outlay_mand_veterans": {
+      "description": "Economic: Change in veterans' benefits outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_outlay_net_interest": {
+      "description": "Economic: Total change in net interest outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_outlay_total": {
+      "description": "Economic: Total change in outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_rev_corporate": {
+      "description": "Economic: Change in corporate income tax revenues",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_rev_customs": {
+      "description": "Economic: Change in customs duties revenues",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_rev_fed_reserve": {
+      "description": "Economic: Change in Federal Reserve remittances",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_rev_individual": {
+      "description": "Economic: Change in individual income tax revenues",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_rev_other": {
+      "description": "Economic: Change in other revenues",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_rev_payroll": {
+      "description": "Economic: Change in payroll tax revenues",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_econ_rev_total": {
+      "description": "Economic: Total change in revenues",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_deficit_total": {
+      "description": "Legislative: Change in deficit from this source",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_debt_service": {
+      "description": "Legislative: Change in debt service costs",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_disc_def_base": {
+      "description": "Legislative: Change in defense discretionary base outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_disc_def_nonbase": {
+      "description": "Legislative: Change in defense discretionary nonbase outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_disc_defense": {
+      "description": "Legislative: Change in defense discretionary outlays subtotal",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_disc_nondef_base": {
+      "description": "Legislative: Change in nondefense discretionary base outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_disc_nondef_nonbase": {
+      "description": "Legislative: Change in nondefense discretionary nonbase outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_disc_nondefense": {
+      "description": "Legislative: Change in nondefense discretionary outlays subtotal",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_disc_total": {
+      "description": "Legislative: Total change in discretionary outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_mand_agriculture": {
+      "description": "Legislative: Change in agriculture mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_mand_coast_guard": {
+      "description": "Legislative: Change in Coast Guard outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_mand_eitc": {
+      "description": "Legislative: Change in EITC/child tax credit outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_mand_energy_credits": {
+      "description": "Legislative: Change in energy-related tax credit outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_mand_immigration": {
+      "description": "Legislative: Change in immigration enforcement outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_mand_medicaid": {
+      "description": "Legislative: Change in Medicaid mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_mand_medicare_health": {
+      "description": "Legislative: Change in Medicare and other health outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_mand_other": {
+      "description": "Legislative: Change in other mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_mand_premium_tax": {
+      "description": "Legislative: Change in premium tax credits outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_mand_reconciliation": {
+      "description": "Legislative: Change from reconciliation act (mandatory)",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_mand_snap": {
+      "description": "Legislative: Change in SNAP mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_mand_spectrum": {
+      "description": "Legislative: Change in spectrum auction receipts",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_mand_student_loans": {
+      "description": "Legislative: Change in student loan outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_mand_total": {
+      "description": "Legislative: Total change in mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_net_interest": {
+      "description": "Legislative: Total change in net interest outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_outlay_total": {
+      "description": "Legislative: Total change in outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_rev_corporate": {
+      "description": "Legislative: Change in corporate income tax revenues",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_rev_customs": {
+      "description": "Legislative: Change in customs duties revenues",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_rev_individual": {
+      "description": "Legislative: Change in individual income tax revenues",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_rev_other": {
+      "description": "Legislative: Change in other revenues",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_leg_rev_total": {
+      "description": "Legislative: Total change in revenues",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_net_interest_deficit": {
+      "description": "Change in deficit from net interest outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_primary_deficit": {
+      "description": "Change in primary deficit",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_deficit_total": {
+      "description": "Technical: Change in deficit from this source",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_debt_service": {
+      "description": "Technical: Change in debt service costs",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_disc_total": {
+      "description": "Technical: Total change in discretionary outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_interest_other": {
+      "description": "Technical: Change in other net interest outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_mand_agriculture": {
+      "description": "Technical: Change in agriculture mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_mand_covid_credits": {
+      "description": "Technical: Change in coronavirus refundable tax credit outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_mand_credit_revisions": {
+      "description": "Technical: Change in credit program revision outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_mand_deposit_insurance": {
+      "description": "Technical: Change in deposit insurance outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_mand_eitc": {
+      "description": "Technical: Change in EITC/child tax credit outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_mand_energy_credits": {
+      "description": "Technical: Change in energy-related tax credit outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_mand_medicaid": {
+      "description": "Technical: Change in Medicaid mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_mand_medicare": {
+      "description": "Technical: Change in Medicare mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_mand_other": {
+      "description": "Technical: Change in other mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_mand_premium_tax": {
+      "description": "Technical: Change in premium tax credits outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_mand_snap": {
+      "description": "Technical: Change in SNAP mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_mand_snap_child_nutrition": {
+      "description": "Technical: Change in SNAP and child nutrition outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_mand_social_security": {
+      "description": "Technical: Change in Social Security mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_mand_student_loans": {
+      "description": "Technical: Change in student loan outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_mand_total": {
+      "description": "Technical: Total change in mandatory outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_mand_veterans": {
+      "description": "Technical: Change in veterans' benefits outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_net_interest": {
+      "description": "Technical: Total change in net interest outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_outlay_total": {
+      "description": "Technical: Total change in outlays",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_rev_corporate": {
+      "description": "Technical: Change in corporate income tax revenues",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_rev_customs": {
+      "description": "Technical: Change in customs duties revenues",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_rev_individual": {
+      "description": "Technical: Change in individual income tax revenues",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_rev_other": {
+      "description": "Technical: Change in other revenues",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_rev_payroll": {
+      "description": "Technical: Change in payroll tax revenues",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_tech_rev_total": {
+      "description": "Technical: Total change in revenues",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_total_outlay": {
+      "description": "Total change in outlays (all sources)",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "chg_total_rev": {
+      "description": "Total change in revenues (all sources)",
+      "unit": "billions_of_dollars",
+      "category": "deficit_changes"
+    },
+    "immigration_surge_deficit_effect": {
+      "description": "Total deficit effect from immigration surge",
+      "unit": "billions_of_dollars",
+      "category": "immigration_effects"
+    },
+    "immigration_surge_mandatory": {
+      "description": "Increase in mandatory spending from immigration surge",
+      "unit": "billions_of_dollars",
+      "category": "immigration_effects"
+    },
+    "immigration_surge_net_interest": {
+      "description": "Change in net interest from immigration surge",
+      "unit": "billions_of_dollars",
+      "category": "immigration_effects"
+    },
+    "immigration_surge_revenues": {
+      "description": "Increase in revenues from immigration surge",
+      "unit": "billions_of_dollars",
+      "category": "immigration_effects"
+    },
+    "immigration_surge_total_outlays": {
+      "description": "Total change in outlays from immigration surge",
+      "unit": "billions_of_dollars",
+      "category": "immigration_effects"
+    },
+    "proj_disc_bsca_iija_outlays": {
+      "description": "Outlays from BSCA and IIJA appropriations as specified",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_defense_ba_timing_adj": {
+      "description": "Projected defense budget authority subtotal (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_defense_base_ba_timing_adj": {
+      "description": "Projected defense nonemergency budget authority (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_defense_base_outlays_timing_adj": {
+      "description": "Projected defense nonemergency outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_defense_emerg_cap_ba_timing_adj": {
+      "description": "Projected defense emergency BA resulting in cap adjustments (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_defense_emerg_cap_outlays_timing_adj": {
+      "description": "Projected defense emergency outlays resulting in cap adjustments (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_defense_emerg_nocap_ba_timing_adj": {
+      "description": "Projected defense emergency BA not subject to caps (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_defense_emerg_nocap_outlays_timing_adj": {
+      "description": "Projected defense emergency outlays not subject to caps (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_defense_emergency_ba_timing_adj": {
+      "description": "Projected defense emergency budget authority (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_defense_emergency_outlays_timing_adj": {
+      "description": "Projected defense emergency outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_defense_other_nonbase_ba_timing_adj": {
+      "description": "Projected defense other nonbase budget authority (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_defense_other_nonbase_outlays_timing_adj": {
+      "description": "Projected defense other nonbase outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_defense_outlays_timing_adj": {
+      "description": "Projected defense outlays subtotal (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_nondefense_ba_timing_adj": {
+      "description": "Projected nondefense budget authority subtotal (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_nondefense_base_ba_timing_adj": {
+      "description": "Projected nondefense nonemergency budget authority (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_nondefense_base_outlays_timing_adj": {
+      "description": "Projected nondefense nonemergency outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_nondefense_emerg_cap_ba_timing_adj": {
+      "description": "Projected nondefense emergency BA resulting in cap adjustments (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_nondefense_emerg_cap_outlays_timing_adj": {
+      "description": "Projected nondefense emergency outlays resulting in cap adjustments (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_nondefense_emerg_nocap_ba_timing_adj": {
+      "description": "Projected nondefense emergency BA not subject to caps (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_nondefense_emerg_nocap_outlays_timing_adj": {
+      "description": "Projected nondefense emergency outlays not subject to caps (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_nondefense_emergency_ba_timing_adj": {
+      "description": "Projected nondefense emergency budget authority (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_nondefense_emergency_outlays_timing_adj": {
+      "description": "Projected nondefense emergency outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_nondefense_other_nonbase_ba_timing_adj": {
+      "description": "Projected nondefense other nonbase budget authority (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_nondefense_other_nonbase_outlays_timing_adj": {
+      "description": "Projected nondefense other nonbase outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_nondefense_outlays_timing_adj": {
+      "description": "Projected nondefense outlays subtotal (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_timing_shift_effect": {
+      "description": "Timing shift effect on discretionary outlays",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_total_ba_timing_adj": {
+      "description": "Projected total budget authority (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_disc_total_outlays_timing_adj": {
+      "description": "Projected total discretionary outlays (timing-adjusted)",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "proj_outlays_discretionary_baseline": {
+      "description": "Discretionary outlays in CBO's baseline",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_timing_adjusted"
+    },
+    "scen_disc_baseline_net_interest": {
+      "description": "Net interest outlays in CBO's baseline",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_scenarios"
+    },
+    "scen_disc_baseline_primary_deficit": {
+      "description": "Primary deficit in CBO's baseline",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_scenarios"
+    },
+    "scen_disc_emergency_debt_service": {
+      "description": "Additional emergency funding: debt-service costs",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_scenarios"
+    },
+    "scen_disc_emergency_primary_deficit": {
+      "description": "Additional emergency funding: change in primary deficit",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_scenarios"
+    },
+    "scen_disc_freeze_debt_service": {
+      "description": "Disc funding frozen: debt-service savings",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_scenarios"
+    },
+    "scen_disc_freeze_primary_deficit": {
+      "description": "Disc funding frozen: change in primary deficit",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_scenarios"
+    },
+    "scen_disc_gdp_growth_debt_service": {
+      "description": "Disc funding grows with GDP: debt-service costs",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_scenarios"
+    },
+    "scen_disc_gdp_growth_primary_deficit": {
+      "description": "Disc funding grows with GDP: change in primary deficit",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_scenarios"
+    },
+    "scen_disc_no_iija_bsca_debt_service": {
+      "description": "No IIJA/BSCA continuation: debt-service savings",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_scenarios"
+    },
+    "scen_disc_no_iija_bsca_primary_deficit": {
+      "description": "No IIJA/BSCA continuation: change in primary deficit",
+      "unit": "billions_of_dollars",
+      "category": "discretionary_scenarios"
+    }
+  }
+}

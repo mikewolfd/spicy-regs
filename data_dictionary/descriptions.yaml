@@ -14961,3 +14961,520 @@ tables:
       source_generation: Exact prerequisite generation pin, verified before reading.
       amount_basis: Source-specific measure and estimate basis, preserved separately.
       overlap_note: Issue-filtered views overlap; repeated activities never multiply money.
+  cbo_historical_budget:
+    label: CBO historical budget data
+    subject: spending
+    identity_columns:
+    - source_record_id
+    summary: Historical federal revenues, outlays, deficits, and debt from CBO Open Data (`historical_budget`, Pub 51134).
+    coverage: Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; earlier unarchived CBO editions are excluded.
+    measured_on: '2026-11-27'
+    grain: One variable observation in one fiscal year and vintage.
+    columns:
+      source_record_id: Deterministic row identifier (`dataset:vintage:file_type:source_row_index`).
+      commit_sha: Pinned 40-character Git commit SHA in US-CBO/cbo-data.
+      publication_id: CBO publication identifier (`51134`).
+      vintage: Publication vintage (`YYYY-MM`).
+      file_type: Distribution series type (`annual_fy`).
+      date: Fiscal year label (`FY1962` onward).
+      variable: Snake_case CBO series identifier from `schema.json`.
+      value: Numeric observation parsed from the CSV cell.
+      value_raw: Literal CSV value string before numeric parsing.
+      unit: Measurement unit from `schema.json`.
+      category: CBO variable category from `schema.json`.
+      series_description: Series definition from `schema.json`.
+      metadata_json: Additional variable metadata from `schema.json`.
+      source_file: Relative CSV path inside US-CBO/cbo-data.
+      source_row_index: Zero-based data row index inside `source_file`.
+      source_sha256: SHA-256 digest of the exact source CSV bytes.
+      schema_sha256: SHA-256 digest of the dataset `schema.json` bytes.
+  cbo_ten_year_budget:
+    label: CBO 10-year budget projections
+    subject: spending
+    identity_columns:
+    - source_record_id
+    summary: Ten-year federal budget baseline projections and changes from CBO Open Data (`ten_year_budget`, Pub 51118).
+    coverage: Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; earlier unarchived CBO editions are excluded.
+    measured_on: '2026-11-27'
+    grain: One variable observation in one fiscal year and vintage.
+    columns:
+      source_record_id: Deterministic row identifier (`dataset:vintage:file_type:source_row_index`).
+      commit_sha: Pinned 40-character Git commit SHA in US-CBO/cbo-data.
+      publication_id: CBO publication identifier (`51118`).
+      vintage: Publication vintage (`YYYY-MM`).
+      file_type: Distribution series type (`annual_fy`).
+      date: Fiscal year label (`FYYYYY`).
+      variable: Snake_case CBO series identifier from `schema.json`.
+      value: Numeric observation parsed from the CSV cell.
+      value_raw: Literal CSV value string before numeric parsing.
+      unit: Measurement unit from `schema.json`.
+      category: CBO variable category from `schema.json`.
+      series_description: Series definition from `schema.json`.
+      metadata_json: Additional variable metadata from `schema.json`.
+      source_file: Relative CSV path inside US-CBO/cbo-data.
+      source_row_index: Zero-based data row index inside `source_file`.
+      source_sha256: SHA-256 digest of the exact source CSV bytes.
+      schema_sha256: SHA-256 digest of the dataset `schema.json` bytes.
+  cbo_long_term_budget:
+    label: CBO long-term budget outlook
+    subject: spending
+    identity_columns:
+    - source_record_id
+    summary: Thirty-year federal revenues, outlays, deficits, and debt projections as shares of GDP (`long_term_budget`, Pub 51119).
+    coverage: Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; earlier unarchived CBO editions are excluded.
+    measured_on: '2026-11-27'
+    grain: One variable observation in one fiscal year and vintage.
+    columns:
+      source_record_id: Deterministic row identifier (`dataset:vintage:file_type:source_row_index`).
+      commit_sha: Pinned 40-character Git commit SHA in US-CBO/cbo-data.
+      publication_id: CBO publication identifier (`51119`).
+      vintage: Publication vintage (`YYYY-MM`).
+      file_type: Distribution series type (`annual_fy`).
+      date: Fiscal year label (`FYYYYY`).
+      variable: Snake_case CBO series identifier from `schema.json`.
+      value: Numeric observation parsed from the CSV cell.
+      value_raw: Literal CSV value string before numeric parsing.
+      unit: Measurement unit from `schema.json`.
+      category: CBO variable category from `schema.json`.
+      series_description: Series definition from `schema.json`.
+      metadata_json: Additional variable metadata from `schema.json`.
+      source_file: Relative CSV path inside US-CBO/cbo-data.
+      source_row_index: Zero-based data row index inside `source_file`.
+      source_sha256: SHA-256 digest of the exact source CSV bytes.
+      schema_sha256: SHA-256 digest of the dataset `schema.json` bytes.
+  cbo_trust_fund:
+    label: CBO federal trust fund projections
+    subject: spending
+    identity_columns:
+    - source_record_id
+    summary: Projected balances, income, and outlays for Social Security, Medicare, Highway, and other federal trust funds (`trust_fund`, Pub 51136).
+    coverage: Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; repeated `(date, variable)` rows in source CSVs remain distinct.
+    measured_on: '2026-11-27'
+    grain: One source row in one trust-fund CSV vintage.
+    columns:
+      source_record_id: Deterministic row identifier (`dataset:vintage:file_type:source_row_index`).
+      commit_sha: Pinned 40-character Git commit SHA in US-CBO/cbo-data.
+      publication_id: CBO publication identifier (`51136`).
+      vintage: Publication vintage (`YYYY-MM`).
+      file_type: Distribution series type (`annual_fy`).
+      date: Fiscal year label (`FYYYYY`).
+      variable: Snake_case CBO series identifier from `schema.json`.
+      value: Numeric observation parsed from the CSV cell.
+      value_raw: Literal CSV value string before numeric parsing.
+      unit: Measurement unit from `schema.json`.
+      category: CBO variable category from `schema.json`.
+      series_description: Series definition from `schema.json`.
+      metadata_json: Additional variable metadata from `schema.json`.
+      source_file: Relative CSV path inside US-CBO/cbo-data.
+      source_row_index: Zero-based data row index inside `source_file`.
+      source_sha256: SHA-256 digest of the exact source CSV bytes.
+      schema_sha256: SHA-256 digest of the dataset `schema.json` bytes.
+  cbo_spending_detail:
+    label: CBO spending projections by budget account
+    subject: spending
+    identity_columns:
+    - source_record_id
+    summary: Account-level 10-year federal budget authority and outlay projections with agency, bureau, and function codes (`spending_detail`, Pub 51142).
+    coverage: Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; offsetting receipts and other spending rows for the same account remain distinct.
+    measured_on: '2026-11-27'
+    grain: One budget-account line in one fiscal year and vintage.
+    columns:
+      source_record_id: Deterministic row identifier (`dataset:vintage:file_type:source_row_index`).
+      commit_sha: Pinned 40-character Git commit SHA in US-CBO/cbo-data.
+      publication_id: CBO publication identifier (`51142`).
+      vintage: Publication vintage (`YYYY-MM`).
+      file_type: Distribution series type (`annual_fy`).
+      date: Fiscal year label (`FYYYYY`).
+      tin: Treasury Identification Number for the budget account.
+      title: Budget account title.
+      disc_or_mand: Discretionary or Mandatory classification.
+      category: Major spending category (Defense, Nondefense, Offsetting receipts, Other Spending, etc.).
+      agency: Federal agency name.
+      bureau: Sub-agency or bureau name.
+      function_code: Three-digit budget function code.
+      subfunction_code: Three-digit budget subfunction code.
+      off_budget: Off-budget indicator from the source CSV.
+      budget_authority: Projected budget authority in millions of dollars.
+      outlays: Projected outlays in millions of dollars.
+      budget_authority_raw: Literal CSV budget_authority string.
+      outlays_raw: Literal CSV outlays string.
+      unit: Measurement unit (`Millions of dollars`).
+      source_file: Relative CSV path inside US-CBO/cbo-data.
+      source_row_index: Zero-based data row index inside `source_file`.
+      source_sha256: SHA-256 digest of the exact source CSV bytes.
+      schema_sha256: SHA-256 digest of the dataset `schema.json` bytes.
+  cbo_revenue_detail:
+    label: CBO federal revenue projections by category
+    subject: spending
+    identity_columns:
+    - source_record_id
+    summary: Detailed fiscal-year and calendar-year federal revenue projections, payroll/excise detail, capital gains, and IIT components (`revenue_detail`, Pub 51138).
+    coverage: Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; fiscal-year and calendar-year distributions remain distinguished by `file_type`.
+    measured_on: '2026-11-27'
+    grain: One revenue variable observation in one period, file type, and vintage.
+    columns:
+      source_record_id: Deterministic row identifier (`dataset:vintage:file_type:source_row_index`).
+      commit_sha: Pinned 40-character Git commit SHA in US-CBO/cbo-data.
+      publication_id: CBO publication identifier (`51138`).
+      vintage: Publication vintage (`YYYY-MM`).
+      file_type: Distribution series type (`annual_fy`, `annual_cy`).
+      date: Fiscal or calendar year label (`FYYYYY` or `CYYYYY`).
+      variable: Snake_case CBO series identifier from `schema.json`.
+      value: Numeric observation parsed from the CSV cell.
+      value_raw: Literal CSV value string before numeric parsing.
+      estimate_type: Source estimate classification (`actual` or `projected`).
+      section: Source table section for `annual_cy_iit` distributions, NULL otherwise.
+      variable_note: Footnote text copied onto the field in `schema.json`, NULL when absent.
+      unit: Measurement unit from `schema.json`.
+      category: CBO variable category from `schema.json`.
+      series_description: Series definition from `schema.json`.
+      metadata_json: Additional variable metadata from `schema.json`.
+      source_file: Relative CSV path inside US-CBO/cbo-data.
+      source_row_index: Zero-based data row index inside `source_file`.
+      source_sha256: SHA-256 digest of the exact source CSV bytes.
+      schema_sha256: SHA-256 digest of the dataset `schema.json` bytes.
+  cbo_tax_parameters:
+    label: CBO tax parameters and effective marginal tax rates
+    subject: spending
+    identity_columns:
+    - source_record_id
+    summary: Projected individual income tax brackets, deductions, credits, effective marginal tax rates, and tax wedges (`tax_parameters`, Pub 53724).
+    coverage: Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; repeated `(date, variable)` rows in source CSVs remain distinct.
+    measured_on: '2026-11-27'
+    grain: One tax-parameter observation in one calendar year and vintage.
+    columns:
+      source_record_id: Deterministic row identifier (`dataset:vintage:file_type:source_row_index`).
+      commit_sha: Pinned 40-character Git commit SHA in US-CBO/cbo-data.
+      publication_id: CBO publication identifier (`53724`).
+      vintage: Publication vintage (`YYYY-MM`).
+      file_type: Distribution series type (`annual_cy`).
+      date: Calendar year label (`CYYYYY`).
+      variable: Snake_case CBO series identifier from `schema.json`.
+      value: Numeric observation parsed from the CSV cell.
+      value_raw: Literal CSV value string before numeric parsing.
+      unit: Measurement unit from `schema.json`.
+      category: CBO variable category from `schema.json`.
+      series_description: Series definition from `schema.json`.
+      metadata_json: Additional variable metadata from `schema.json`.
+      source_file: Relative CSV path inside US-CBO/cbo-data.
+      source_row_index: Zero-based data row index inside `source_file`.
+      source_sha256: SHA-256 digest of the exact source CSV bytes.
+      schema_sha256: SHA-256 digest of the dataset `schema.json` bytes.
+  cbo_automatic_stabilizers:
+    label: CBO automatic budget stabilizers
+    subject: spending
+    identity_columns:
+    - source_record_id
+    summary: Cyclical budget adjustments, revenues, outlays, and deficits with and without automatic stabilizers (`automatic_stabilizers`, Pub 51139).
+    coverage: Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; earlier unarchived CBO editions are excluded.
+    measured_on: '2026-11-27'
+    grain: One variable observation in one fiscal year and vintage.
+    columns:
+      source_record_id: Deterministic row identifier (`dataset:vintage:file_type:source_row_index`).
+      commit_sha: Pinned 40-character Git commit SHA in US-CBO/cbo-data.
+      publication_id: CBO publication identifier (`51139`).
+      vintage: Publication vintage (`YYYY-MM`).
+      file_type: Distribution series type (`annual_fy`).
+      date: Fiscal year label (`FYYYYY`).
+      variable: Snake_case CBO series identifier from `schema.json`.
+      value: Numeric observation parsed from the CSV cell.
+      value_raw: Literal CSV value string before numeric parsing.
+      unit: Measurement unit from `schema.json`.
+      category: CBO variable category from `schema.json`.
+      series_description: Series definition from `schema.json`.
+      metadata_json: Additional variable metadata from `schema.json`.
+      source_file: Relative CSV path inside US-CBO/cbo-data.
+      source_row_index: Zero-based data row index inside `source_file`.
+      source_sha256: SHA-256 digest of the exact source CSV bytes.
+      schema_sha256: SHA-256 digest of the dataset `schema.json` bytes.
+  cbo_historical_economic:
+    label: CBO historical economic data and potential GDP inputs
+    subject: reference
+    identity_columns:
+    - source_record_id
+    summary: Historical macroeconomic series, potential GDP, labor force, prices, and interest rates from 1949 onward (`historical_economic`, Pub 55022).
+    coverage: Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; quarterly, calendar-year, and fiscal-year series stay distinguished by `file_type`.
+    measured_on: '2026-11-27'
+    grain: One economic series observation in one period, frequency, and vintage.
+    columns:
+      source_record_id: Deterministic row identifier (`dataset:vintage:file_type:source_row_index`).
+      commit_sha: Pinned 40-character Git commit SHA in US-CBO/cbo-data.
+      publication_id: CBO publication identifier (`55022`).
+      vintage: Publication vintage (`YYYY-MM`).
+      file_type: Distribution frequency (`quarterly`, `annual_cy`, `annual_fy`).
+      date: Period label (`YYYYqN`, `YYYY`, or `FYYYYY`).
+      variable: Snake_case CBO series identifier from `schema.json`.
+      value: Numeric observation parsed from the CSV cell.
+      value_raw: Literal CSV value string before numeric parsing.
+      unit: Measurement unit from `schema.json`.
+      category: CBO variable category from `schema.json`.
+      series_description: Series definition from `schema.json`.
+      metadata_json: Additional variable metadata from `schema.json` (including `aggregation` and `source_frequency`).
+      source_file: Relative CSV path inside US-CBO/cbo-data.
+      source_row_index: Zero-based data row index inside `source_file`.
+      source_sha256: SHA-256 digest of the exact source CSV bytes.
+      schema_sha256: SHA-256 digest of the dataset `schema.json` bytes.
+  cbo_economic_projections:
+    label: CBO 10-year economic projections
+    subject: reference
+    identity_columns:
+    - source_record_id
+    summary: Ten-year quarterly, calendar-year, and fiscal-year macroeconomic projections (`economic_projections`, Pub 51135).
+    coverage: Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; repeated `(date, variable)` rows in `2024-06` and distinct calendar/fiscal files stay separate via `file_type` and `source_row_index`.
+    measured_on: '2026-11-27'
+    grain: One source row in one economic-projections CSV vintage.
+    columns:
+      source_record_id: Deterministic row identifier (`dataset:vintage:file_type:source_row_index`).
+      commit_sha: Pinned 40-character Git commit SHA in US-CBO/cbo-data.
+      publication_id: CBO publication identifier (`51135`).
+      vintage: Publication vintage (`YYYY-MM`).
+      file_type: Distribution frequency (`calendar`, `fiscal`, `quarterly`).
+      date: Period label (`YYYY` or `YYYYqN`).
+      variable: Snake_case CBO series identifier from `schema.json`.
+      value: Numeric observation parsed from the CSV cell.
+      value_raw: Literal CSV value string before numeric parsing.
+      estimate_type: Source estimate classification (`actual` or `projected`).
+      unit: Measurement unit from `schema.json`.
+      category: CBO variable category from `schema.json`.
+      series_description: Series definition from `schema.json`.
+      metadata_json: Additional variable metadata from `schema.json`.
+      source_file: Relative CSV path inside US-CBO/cbo-data.
+      source_row_index: Zero-based data row index inside `source_file`.
+      source_sha256: SHA-256 digest of the exact source CSV bytes.
+      schema_sha256: SHA-256 digest of the dataset `schema.json` bytes.
+  cbo_long_term_economic:
+    label: CBO long-term economic projections
+    subject: reference
+    identity_columns:
+    - source_record_id
+    summary: Thirty-year macroeconomic growth rates, levels, and labor force participation rates by sex and age group (`long_term_economic`, Pub 57054).
+    coverage: Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; `rates`, `levels`, and `lfp_rates` remain distinguished by `file_type`.
+    measured_on: '2026-11-27'
+    grain: One source row in one long-term economic CSV vintage.
+    columns:
+      source_record_id: Deterministic row identifier (`dataset:vintage:file_type:source_row_index`).
+      commit_sha: Pinned 40-character Git commit SHA in US-CBO/cbo-data.
+      publication_id: CBO publication identifier (`57054`).
+      vintage: Publication vintage (`YYYY-MM`).
+      file_type: Distribution series type (`rates`, `levels`, `lfp_rates`).
+      date: Four-digit year string (`YYYY`).
+      variable: Snake_case CBO series identifier (`lfp_rate` for labor force participation files).
+      value: Numeric observation parsed from the CSV cell.
+      value_raw: Literal CSV value string before numeric parsing.
+      sex: Sex stratum for `lfp_rates` rows (`all`, `male`, `female`), NULL otherwise.
+      age_group: Age-group label for `lfp_rates` rows, NULL otherwise.
+      unit: Measurement unit from `schema.json`.
+      category: CBO variable category from `schema.json`.
+      series_description: Series definition from `schema.json`.
+      metadata_json: Additional variable metadata from `schema.json`.
+      source_file: Relative CSV path inside US-CBO/cbo-data.
+      source_row_index: Zero-based data row index inside `source_file`.
+      source_sha256: SHA-256 digest of the exact source CSV bytes.
+      schema_sha256: SHA-256 digest of the dataset `schema.json` bytes.
+  cbo_potential_gdp:
+    label: CBO standalone potential GDP (pre-2020)
+    subject: reference
+    identity_columns:
+    - source_record_id
+    summary: Legacy standalone estimates of potential GDP and underlying inputs through August 2019 in chained 2012 dollars (`potential_gdp`, Pub 51137).
+    coverage: Sampled. Complete published August 2019 vintage from the pinned US-CBO/cbo-data commit; post-2020 series live in `cbo_historical_economic` and `cbo_economic_projections`.
+    measured_on: '2026-11-27'
+    grain: One source row in one potential-GDP CSV vintage.
+    columns:
+      source_record_id: Deterministic row identifier (`dataset:vintage:file_type:source_row_index`).
+      commit_sha: Pinned 40-character Git commit SHA in US-CBO/cbo-data.
+      publication_id: CBO publication identifier (`51137`).
+      vintage: Publication vintage (`YYYY-MM`).
+      file_type: Distribution frequency (`annual`, `quarterly`).
+      date: Period label (`YYYY` or `YYYYqN`).
+      variable: Snake_case CBO series identifier from `schema.json`.
+      value: Numeric observation parsed from the CSV cell.
+      value_raw: Literal CSV value string before numeric parsing.
+      unit: Measurement unit from `schema.json`.
+      category: CBO variable category from `schema.json`.
+      series_description: Series definition from `schema.json`.
+      metadata_json: Additional variable metadata from `schema.json`.
+      source_file: Relative CSV path inside US-CBO/cbo-data.
+      source_row_index: Zero-based data row index inside `source_file`.
+      source_sha256: SHA-256 digest of the exact source CSV bytes.
+      schema_sha256: SHA-256 digest of the dataset `schema.json` bytes.
+  cbo_demographic:
+    label: CBO demographic projections
+    subject: reference
+    identity_columns:
+    - source_record_id
+    summary: Population, fertility, mortality, migration, and Social Security area population projections across dimensions (`demographic`, Pub 57059).
+    coverage: Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit across all six demographic domains; 2026-01 `people` and `marital` renames align to normalized columns while `raw_json` provenance stays in source captures.
+    measured_on: '2026-11-27'
+    grain: One demographic cell in one domain, year, stratum, and vintage.
+    columns:
+      source_record_id: Deterministic row identifier (`dataset:vintage:domain:source_row_index`).
+      commit_sha: Pinned 40-character Git commit SHA in US-CBO/cbo-data.
+      publication_id: CBO publication identifier (`57059`).
+      vintage: Publication vintage (`YYYY-MM`).
+      domain: Demographic domain (`fertility`, `migration`, `mortality`, `population_bls`, `population_census`, `ss_area_population`).
+      year: Calendar year integer.
+      age: Age label (`-1` for prenatal/unborn cohorts, integer ages, and `100+`).
+      sex: Sex dimension (`female`, `male`, etc.), NULL for fertility domain.
+      place_of_birth: Place-of-birth dimension for `fertility`, NULL otherwise.
+      immigration_status: Immigration status dimension for `migration`, NULL otherwise.
+      migration_flow: Migration direction (`emigration`, `immigration`, etc.) for `migration`, NULL otherwise.
+      marital_status: Marital status dimension for `ss_area_population`, NULL otherwise.
+      measure: Domain measure name (`births_per_1000_females`, `deaths_per_1000_people`, or `number_of_people`).
+      value: Numeric observation parsed from the CSV cell.
+      value_raw: Literal CSV measure string before numeric parsing.
+      unit: Measurement unit for the domain from `schema.json`.
+      domain_description: Domain definition from `schema.json`.
+      source_file: Relative CSV path inside US-CBO/cbo-data.
+      source_row_index: Zero-based data row index inside `source_file`.
+      source_sha256: SHA-256 digest of the exact source CSV bytes.
+      schema_sha256: SHA-256 digest of the dataset `schema.json` bytes.
+  cbo_data_snapshots:
+    label: CBO Open Data distribution provenance snapshots
+    subject: spending
+    identity_columns:
+    - dataset
+    - vintage
+    - file_type
+    summary: One provenance row per acquired US-CBO/cbo-data CSV distribution with commit SHA, publication ID, row count, and SHA-256 digests.
+    coverage: Sampled. Every CSV distribution present in the pinned US-CBO/cbo-data commit; missing older CBO releases are not implied.
+    measured_on: '2026-11-27'
+    grain: One CSV distribution (`dataset`, `vintage`, `file_type`, `source_file`) in the pinned commit.
+    columns:
+      dataset: CBO Open Data dataset identifier.
+      vintage: Publication vintage (`YYYY-MM`).
+      file_type: Distribution series or domain type.
+      commit_sha: Pinned 40-character Git commit SHA in US-CBO/cbo-data.
+      publication_id: CBO publication identifier.
+      title: Dataset title from `schema.json`.
+      source_url: Landing CBO publication URL from `schema.json`.
+      source_file: Relative CSV path inside US-CBO/cbo-data.
+      row_count: Number of data rows parsed and emitted from `source_file`.
+      source_sha256: SHA-256 digest of the exact source CSV bytes.
+      schema_sha256: SHA-256 digest of the dataset `schema.json` bytes.
+      catalog_sha256: SHA-256 digest of `catalog.json`.
+      observed_at: UTC capture timestamp of the CSV acquisition.
+
+  cbo_projection_errors:
+    label: CBO budget projection errors
+    subject: spending
+    identity_columns: [component, category, subcategory, baseline_date, projected_fiscal_year]
+    summary: Historical CBO baseline projections compared against actual federal outlays, revenues, deficits, and debt with legislative adjustments and forecast errors.
+    coverage: 'Derived. Realized baseline evaluation observations from US-CBO/eval-projections covering FY1982-FY2025 for revenues (Winter and Spring baselines) and FY1984-FY2025 for outlays, deficits, and debt (Spring baselines), horizons 1-11. Excludes Fannie Mae and Freddie Mac outlays, 2022 student loan forgiveness outlays, and projected_year_number 0.'
+    measured_on: '2026-11-27'
+    grain: One component, category, subcategory, baseline date, and projected fiscal year evaluation observation.
+    columns:
+      component: Budget component (outlay, revenue, deficit, or debt).
+      category: Major budget category or Total.
+      subcategory: Budget subcategory or Total.
+      baseline_date: Year and month of the CBO baseline release (stored with day 01 per CBO convention).
+      spring_flag: True when CBO designates the baseline as that year's Spring baseline.
+      winter_flag: True when CBO designates the baseline as that year's Winter baseline.
+      projected_fiscal_year: Target federal fiscal year being projected.
+      projected_year_number: Forecast horizon from 1 (budget year) through 11.
+      projected_value_billions: Unadjusted baseline projection in billions of dollars.
+      actual_value_billions: Realized historical actual amount in billions of dollars.
+      gdp_billions: Nominal fiscal-year GDP in billions of dollars.
+      legislative_change_billions: Subsequent legislative adjustment applied to the baseline projection in billions of dollars (cumulative negative deficit effects for debt).
+      legislative_deficit_change_billions: Subsequent legislative deficit adjustment in billions of dollars for deficit and debt rows (negated for debt per CBO merge convention); null for outlays and revenues.
+      adjusted_projection_billions: Baseline projection plus legislative adjustment in billions of dollars.
+      projection_error_billions: Forecast error in billions of dollars (adjusted_projection minus actual_value for outlays, revenues, and debt; negated for deficits so positive means overestimated deficit).
+      projection_error_pct_actual: Projection error as a percentage of actual_value for outlays and revenues; null for deficits and debt.
+      leg_change_pct_gdp: Legislative change as a percentage of nominal GDP.
+      projection_error_pct_gdp: Projection error as a percentage of nominal GDP.
+      source_commit: Pinned 40-character Git commit SHA of US-CBO/eval-projections.
+      source_url: Immutable raw GitHub URL for the source projection-errors CSV at source_commit.
+      source_sha256: SHA-256 digest of the source projection-errors CSV bytes.
+      observed_at: UTC capture timestamp with timezone.
+
+  cbo_projection_error_summary_stats:
+    label: CBO projection error summary statistics
+    subject: spending
+    identity_columns: [component, category, subcategory, projected_year_number]
+    summary: Horizon-by-category summary accuracy statistics (mean error, MAE, RMSE, central two-thirds spread) across CBO historical evaluations.
+    coverage: 'Derived. Summary error statistics across horizons 1-11 for FY1982-FY2025 revenues (Winter baselines only) and FY1984-FY2025 outlays, deficits, and debt (Spring baselines only), excluding Fannie Mae, Freddie Mac, and 2022 student loan forgiveness.'
+    measured_on: '2026-11-27'
+    grain: One component, category, subcategory, and forecast horizon summary record.
+    columns:
+      component: Budget component (outlay, revenue, deficit, or debt).
+      category: Major budget category or Total.
+      subcategory: Budget subcategory or Total.
+      projected_year_number: Forecast horizon from 1 through 11.
+      projection_year_range: Inclusive first and last projected fiscal years in the summary sample.
+      number_of_projections: Count of evaluated baseline projections included in this horizon summary.
+      error_basis: Percentage denominator used by the summary metrics (pct_actual for outlays and revenues; pct_gdp for deficits and debt).
+      average_error_pct: Mean projection error in percentage points on error_basis.
+      average_absolute_error_pct: Mean absolute projection error in percentage points on error_basis.
+      rmse_pct: Root mean squared error in percentage points on error_basis.
+      two_thirds_spread_pct: Difference between the 5/6 and 1/6 quantiles of errors in percentage points on error_basis.
+      source_commit: Pinned 40-character Git commit SHA of US-CBO/eval-projections.
+      source_url: Immutable raw GitHub URL for the source summary-stats CSV at source_commit.
+      source_sha256: SHA-256 digest of the source summary-stats CSV bytes.
+      observed_at: UTC capture timestamp with timezone.
+
+  cbo_eval_actuals:
+    label: CBO historical budget actuals and GDP
+    subject: spending
+    identity_columns: [component, category, subcategory, fiscal_year]
+    summary: Historical realized federal outlays, revenues, deficits, debt, and nominal GDP used in CBO projection evaluations.
+    coverage: 'True range. Complete US-CBO/eval-projections input actuals from FY1982 through FY2025 (revenues from FY1982; Total outlays, deficits, and debt from FY1984; detailed outlay categories from FY1989), joined with nominal fiscal-year GDP.'
+    measured_on: '2026-11-27'
+    grain: One component, category, subcategory, and fiscal year actual observation.
+    columns:
+      component: Budget component (outlay, revenue, deficit, or debt).
+      category: Major budget category or Total.
+      subcategory: Budget subcategory or Total (preserves Fannie Freddie and literal CBO spelling Student Loan Foregiveness).
+      fiscal_year: Federal fiscal year.
+      actual_value_billions: Realized historical amount in billions of dollars.
+      gdp_billions: Nominal fiscal-year GDP in billions of dollars from actual_GDP.csv.
+      actuals_pct_gdp: Realized amount as a percentage of nominal GDP (full-precision ratio).
+      excluded_from_error_analysis: True for Fannie Freddie and Student Loan Foregiveness rows excluded from CBO projection-error tables.
+      source_commit: Pinned 40-character Git commit SHA of US-CBO/eval-projections.
+      source_url: Immutable raw GitHub URL for input_data/actuals.csv at source_commit.
+      actual_gdp_sha256: SHA-256 digest of input_data/actual_GDP.csv bytes.
+      source_sha256: SHA-256 digest of input_data/actuals.csv bytes.
+      observed_at: UTC capture timestamp with timezone.
+
+  cbo_eval_baselines:
+    label: CBO historical baseline projections
+    subject: spending
+    identity_columns: [component, category, subcategory, baseline_date, projected_fiscal_year]
+    summary: All CBO historical baseline budget projections across 1982-2026 vintages used as inputs to forecast evaluation.
+    coverage: 'True range. Complete US-CBO/eval-projections input_data/baselines.csv spanning February 1982 through February 2026 baselines and projected fiscal years 1982-2036, including non-Spring/non-Winter baselines and unrealized future years.'
+    measured_on: '2026-11-27'
+    grain: One component, category, subcategory, baseline date, and projected fiscal year baseline projection.
+    columns:
+      component: Budget component (outlay, revenue, deficit, or debt).
+      category: Major budget category or Total.
+      subcategory: Budget subcategory or Total.
+      baseline_date: Year and month of the CBO baseline release (day fixed to 01 per CBO convention).
+      spring_flag: True when CBO designates the baseline as that year's Spring baseline.
+      winter_flag: True when CBO designates the baseline as that year's Winter baseline.
+      projected_fiscal_year: Target federal fiscal year projected by the baseline.
+      projected_year_number: Forecast horizon relative to the baseline release (-1 through 11).
+      projected_value_billions: Unadjusted CBO baseline projection in billions of dollars.
+      source_commit: Pinned 40-character Git commit SHA of US-CBO/eval-projections.
+      source_url: Immutable raw GitHub URL for input_data/baselines.csv at source_commit.
+      source_sha256: SHA-256 digest of input_data/baselines.csv bytes.
+      observed_at: UTC capture timestamp with timezone.
+
+  cbo_eval_baseline_changes:
+    label: CBO baseline revision changes
+    subject: spending
+    identity_columns: [component, category, subcategory, changes_baseline_date, change_category, projected_fiscal_year]
+    summary: Legislative, economic, and technical revisions recorded between CBO baseline releases.
+    coverage: 'True range. Complete US-CBO/eval-projections input_data/baseline_changes.csv spanning 1983-2026 revision dates across Legislative, Economic, and Technical categories for outlays, deficits, and revenues (only Legislative changes are published for revenues).'
+    measured_on: '2026-11-27'
+    grain: One component, category, subcategory, revision baseline date, change category, and projected fiscal year revision.
+    columns:
+      component: Budget component (outlay, revenue, or deficit).
+      category: Major budget category or Total.
+      subcategory: Budget subcategory or Total.
+      changes_baseline_date: Year and month of the baseline revision report (day fixed to 01 per CBO convention).
+      change_category: Revision classification (Legislative, Economic, or Technical).
+      projected_fiscal_year: Target federal fiscal year affected by the revision.
+      change_value_billions: Dollar revision in billions of dollars; null when blank in the source CSV.
+      source_commit: Pinned 40-character Git commit SHA of US-CBO/eval-projections.
+      source_url: Immutable raw GitHub URL for input_data/baseline_changes.csv at source_commit.
+      source_sha256: SHA-256 digest of input_data/baseline_changes.csv bytes.
+      observed_at: UTC capture timestamp with timezone.

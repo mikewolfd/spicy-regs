@@ -345,6 +345,20 @@
       "kind": "government",
       "note": "Official Section 527 bulk archive (PolOrgsFullData.zip) with Form 8871, Form 8872, schedules, and transmission metadata."
     },
+    "cbo-data": {
+      "id": "cbo-data",
+      "name": "Congressional Budget Office Open Data Repository",
+      "url": "https://github.com/US-CBO/cbo-data",
+      "kind": "government",
+      "note": "Commit-pinned US-CBO/cbo-data budget, economic, trust-fund, and demographic baseline CSVs and schemas."
+    },
+    "cbo-eval-projections": {
+      "id": "cbo-eval-projections",
+      "name": "Congressional Budget Office Projection Evaluation Data",
+      "url": "https://github.com/US-CBO/eval-projections",
+      "kind": "government",
+      "note": "Public-domain US-CBO/eval-projections replication data comparing CBO baseline projections against actual outlays, revenues, deficits, and debt from 1984 through FY2025 (revenues from 1982)."
+    },
     "house-disclosures": {
       "id": "house-disclosures",
       "name": "Office of the Clerk, U.S. House of Representatives Financial Disclosures",
@@ -828,6 +842,18 @@
       "sources": [
         "irs-527"
       ]
+    },
+    "cbo-data": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo-eval-projections": {
+      "sources": [
+        "cbo-eval-projections"
+      ],
+      "transformation": "Commit-pinned normalization and arithmetic reconciliation of US-CBO/eval-projections actuals, baselines, baseline changes, projection errors, and horizon summary statistics.",
+      "evidence": "src/spicy_regs/transforms/build_cbo_eval_projections.py"
     },
     "house-disclosures": {
       "sources": [
@@ -1482,6 +1508,101 @@
     "irs527_expenditures": {
       "sources": [
         "irs-527"
+      ]
+    },
+    "cbo_historical_budget": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_ten_year_budget": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_long_term_budget": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_trust_fund": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_spending_detail": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_revenue_detail": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_tax_parameters": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_automatic_stabilizers": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_historical_economic": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_economic_projections": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_long_term_economic": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_potential_gdp": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_demographic": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_data_snapshots": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_projection_errors": {
+      "sources": [
+        "cbo-eval-projections"
+      ]
+    },
+    "cbo_projection_error_summary_stats": {
+      "sources": [
+        "cbo-eval-projections"
+      ]
+    },
+    "cbo_eval_actuals": {
+      "sources": [
+        "cbo-eval-projections"
+      ]
+    },
+    "cbo_eval_baselines": {
+      "sources": [
+        "cbo-eval-projections"
+      ]
+    },
+    "cbo_eval_baseline_changes": {
+      "sources": [
+        "cbo-eval-projections"
       ]
     }
   }

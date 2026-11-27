@@ -34807,6 +34807,1956 @@
     "grain": "One source release, report issue, native source line and measure.",
     "identity_columns": []
   },
+  "cbo_historical_budget": {
+    "table": "cbo_historical_budget",
+    "label": "CBO historical budget data",
+    "summary": "Historical federal revenues, outlays, deficits, and debt from CBO Open Data (`historical_budget`, Pub 51134).",
+    "coverage": "Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; earlier unarchived CBO editions are excluded.",
+    "kind": "sampled",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic row identifier (`dataset:vintage:file_type:source_row_index`)."
+      },
+      {
+        "column_name": "commit_sha",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA in US-CBO/cbo-data."
+      },
+      {
+        "column_name": "publication_id",
+        "column_type": "VARCHAR",
+        "description": "CBO publication identifier (`51134`)."
+      },
+      {
+        "column_name": "vintage",
+        "column_type": "VARCHAR",
+        "description": "Publication vintage (`YYYY-MM`)."
+      },
+      {
+        "column_name": "file_type",
+        "column_type": "VARCHAR",
+        "description": "Distribution series type (`annual_fy`)."
+      },
+      {
+        "column_name": "date",
+        "column_type": "VARCHAR",
+        "description": "Fiscal year label (`FY1962` onward)."
+      },
+      {
+        "column_name": "variable",
+        "column_type": "VARCHAR",
+        "description": "Snake_case CBO series identifier from `schema.json`."
+      },
+      {
+        "column_name": "value",
+        "column_type": "DOUBLE",
+        "description": "Numeric observation parsed from the CSV cell."
+      },
+      {
+        "column_name": "value_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal CSV value string before numeric parsing."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "Measurement unit from `schema.json`."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "CBO variable category from `schema.json`."
+      },
+      {
+        "column_name": "series_description",
+        "column_type": "VARCHAR",
+        "description": "Series definition from `schema.json`."
+      },
+      {
+        "column_name": "metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Additional variable metadata from `schema.json`."
+      },
+      {
+        "column_name": "source_file",
+        "column_type": "VARCHAR",
+        "description": "Relative CSV path inside US-CBO/cbo-data."
+      },
+      {
+        "column_name": "source_row_index",
+        "column_type": "BIGINT",
+        "description": "Zero-based data row index inside `source_file`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the exact source CSV bytes."
+      },
+      {
+        "column_name": "schema_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the dataset `schema.json` bytes."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One variable observation in one fiscal year and vintage.",
+    "identity_columns": [
+      "source_record_id"
+    ]
+  },
+  "cbo_ten_year_budget": {
+    "table": "cbo_ten_year_budget",
+    "label": "CBO 10-year budget projections",
+    "summary": "Ten-year federal budget baseline projections and changes from CBO Open Data (`ten_year_budget`, Pub 51118).",
+    "coverage": "Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; earlier unarchived CBO editions are excluded.",
+    "kind": "sampled",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic row identifier (`dataset:vintage:file_type:source_row_index`)."
+      },
+      {
+        "column_name": "commit_sha",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA in US-CBO/cbo-data."
+      },
+      {
+        "column_name": "publication_id",
+        "column_type": "VARCHAR",
+        "description": "CBO publication identifier (`51118`)."
+      },
+      {
+        "column_name": "vintage",
+        "column_type": "VARCHAR",
+        "description": "Publication vintage (`YYYY-MM`)."
+      },
+      {
+        "column_name": "file_type",
+        "column_type": "VARCHAR",
+        "description": "Distribution series type (`annual_fy`)."
+      },
+      {
+        "column_name": "date",
+        "column_type": "VARCHAR",
+        "description": "Fiscal year label (`FYYYYY`)."
+      },
+      {
+        "column_name": "variable",
+        "column_type": "VARCHAR",
+        "description": "Snake_case CBO series identifier from `schema.json`."
+      },
+      {
+        "column_name": "value",
+        "column_type": "DOUBLE",
+        "description": "Numeric observation parsed from the CSV cell."
+      },
+      {
+        "column_name": "value_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal CSV value string before numeric parsing."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "Measurement unit from `schema.json`."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "CBO variable category from `schema.json`."
+      },
+      {
+        "column_name": "series_description",
+        "column_type": "VARCHAR",
+        "description": "Series definition from `schema.json`."
+      },
+      {
+        "column_name": "metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Additional variable metadata from `schema.json`."
+      },
+      {
+        "column_name": "source_file",
+        "column_type": "VARCHAR",
+        "description": "Relative CSV path inside US-CBO/cbo-data."
+      },
+      {
+        "column_name": "source_row_index",
+        "column_type": "BIGINT",
+        "description": "Zero-based data row index inside `source_file`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the exact source CSV bytes."
+      },
+      {
+        "column_name": "schema_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the dataset `schema.json` bytes."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One variable observation in one fiscal year and vintage.",
+    "identity_columns": [
+      "source_record_id"
+    ]
+  },
+  "cbo_long_term_budget": {
+    "table": "cbo_long_term_budget",
+    "label": "CBO long-term budget outlook",
+    "summary": "Thirty-year federal revenues, outlays, deficits, and debt projections as shares of GDP (`long_term_budget`, Pub 51119).",
+    "coverage": "Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; earlier unarchived CBO editions are excluded.",
+    "kind": "sampled",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic row identifier (`dataset:vintage:file_type:source_row_index`)."
+      },
+      {
+        "column_name": "commit_sha",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA in US-CBO/cbo-data."
+      },
+      {
+        "column_name": "publication_id",
+        "column_type": "VARCHAR",
+        "description": "CBO publication identifier (`51119`)."
+      },
+      {
+        "column_name": "vintage",
+        "column_type": "VARCHAR",
+        "description": "Publication vintage (`YYYY-MM`)."
+      },
+      {
+        "column_name": "file_type",
+        "column_type": "VARCHAR",
+        "description": "Distribution series type (`annual_fy`)."
+      },
+      {
+        "column_name": "date",
+        "column_type": "VARCHAR",
+        "description": "Fiscal year label (`FYYYYY`)."
+      },
+      {
+        "column_name": "variable",
+        "column_type": "VARCHAR",
+        "description": "Snake_case CBO series identifier from `schema.json`."
+      },
+      {
+        "column_name": "value",
+        "column_type": "DOUBLE",
+        "description": "Numeric observation parsed from the CSV cell."
+      },
+      {
+        "column_name": "value_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal CSV value string before numeric parsing."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "Measurement unit from `schema.json`."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "CBO variable category from `schema.json`."
+      },
+      {
+        "column_name": "series_description",
+        "column_type": "VARCHAR",
+        "description": "Series definition from `schema.json`."
+      },
+      {
+        "column_name": "metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Additional variable metadata from `schema.json`."
+      },
+      {
+        "column_name": "source_file",
+        "column_type": "VARCHAR",
+        "description": "Relative CSV path inside US-CBO/cbo-data."
+      },
+      {
+        "column_name": "source_row_index",
+        "column_type": "BIGINT",
+        "description": "Zero-based data row index inside `source_file`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the exact source CSV bytes."
+      },
+      {
+        "column_name": "schema_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the dataset `schema.json` bytes."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One variable observation in one fiscal year and vintage.",
+    "identity_columns": [
+      "source_record_id"
+    ]
+  },
+  "cbo_trust_fund": {
+    "table": "cbo_trust_fund",
+    "label": "CBO federal trust fund projections",
+    "summary": "Projected balances, income, and outlays for Social Security, Medicare, Highway, and other federal trust funds (`trust_fund`, Pub 51136).",
+    "coverage": "Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; repeated `(date, variable)` rows in source CSVs remain distinct.",
+    "kind": "sampled",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic row identifier (`dataset:vintage:file_type:source_row_index`)."
+      },
+      {
+        "column_name": "commit_sha",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA in US-CBO/cbo-data."
+      },
+      {
+        "column_name": "publication_id",
+        "column_type": "VARCHAR",
+        "description": "CBO publication identifier (`51136`)."
+      },
+      {
+        "column_name": "vintage",
+        "column_type": "VARCHAR",
+        "description": "Publication vintage (`YYYY-MM`)."
+      },
+      {
+        "column_name": "file_type",
+        "column_type": "VARCHAR",
+        "description": "Distribution series type (`annual_fy`)."
+      },
+      {
+        "column_name": "date",
+        "column_type": "VARCHAR",
+        "description": "Fiscal year label (`FYYYYY`)."
+      },
+      {
+        "column_name": "variable",
+        "column_type": "VARCHAR",
+        "description": "Snake_case CBO series identifier from `schema.json`."
+      },
+      {
+        "column_name": "value",
+        "column_type": "DOUBLE",
+        "description": "Numeric observation parsed from the CSV cell."
+      },
+      {
+        "column_name": "value_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal CSV value string before numeric parsing."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "Measurement unit from `schema.json`."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "CBO variable category from `schema.json`."
+      },
+      {
+        "column_name": "series_description",
+        "column_type": "VARCHAR",
+        "description": "Series definition from `schema.json`."
+      },
+      {
+        "column_name": "metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Additional variable metadata from `schema.json`."
+      },
+      {
+        "column_name": "source_file",
+        "column_type": "VARCHAR",
+        "description": "Relative CSV path inside US-CBO/cbo-data."
+      },
+      {
+        "column_name": "source_row_index",
+        "column_type": "BIGINT",
+        "description": "Zero-based data row index inside `source_file`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the exact source CSV bytes."
+      },
+      {
+        "column_name": "schema_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the dataset `schema.json` bytes."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One source row in one trust-fund CSV vintage.",
+    "identity_columns": [
+      "source_record_id"
+    ]
+  },
+  "cbo_spending_detail": {
+    "table": "cbo_spending_detail",
+    "label": "CBO spending projections by budget account",
+    "summary": "Account-level 10-year federal budget authority and outlay projections with agency, bureau, and function codes (`spending_detail`, Pub 51142).",
+    "coverage": "Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; offsetting receipts and other spending rows for the same account remain distinct.",
+    "kind": "sampled",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic row identifier (`dataset:vintage:file_type:source_row_index`)."
+      },
+      {
+        "column_name": "commit_sha",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA in US-CBO/cbo-data."
+      },
+      {
+        "column_name": "publication_id",
+        "column_type": "VARCHAR",
+        "description": "CBO publication identifier (`51142`)."
+      },
+      {
+        "column_name": "vintage",
+        "column_type": "VARCHAR",
+        "description": "Publication vintage (`YYYY-MM`)."
+      },
+      {
+        "column_name": "file_type",
+        "column_type": "VARCHAR",
+        "description": "Distribution series type (`annual_fy`)."
+      },
+      {
+        "column_name": "date",
+        "column_type": "VARCHAR",
+        "description": "Fiscal year label (`FYYYYY`)."
+      },
+      {
+        "column_name": "tin",
+        "column_type": "VARCHAR",
+        "description": "Treasury Identification Number for the budget account."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "Budget account title."
+      },
+      {
+        "column_name": "disc_or_mand",
+        "column_type": "VARCHAR",
+        "description": "Discretionary or Mandatory classification."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "Major spending category (Defense, Nondefense, Offsetting receipts, Other Spending, etc.)."
+      },
+      {
+        "column_name": "agency",
+        "column_type": "VARCHAR",
+        "description": "Federal agency name."
+      },
+      {
+        "column_name": "bureau",
+        "column_type": "VARCHAR",
+        "description": "Sub-agency or bureau name."
+      },
+      {
+        "column_name": "function_code",
+        "column_type": "VARCHAR",
+        "description": "Three-digit budget function code."
+      },
+      {
+        "column_name": "subfunction_code",
+        "column_type": "VARCHAR",
+        "description": "Three-digit budget subfunction code."
+      },
+      {
+        "column_name": "off_budget",
+        "column_type": "VARCHAR",
+        "description": "Off-budget indicator from the source CSV."
+      },
+      {
+        "column_name": "budget_authority",
+        "column_type": "DOUBLE",
+        "description": "Projected budget authority in millions of dollars."
+      },
+      {
+        "column_name": "outlays",
+        "column_type": "DOUBLE",
+        "description": "Projected outlays in millions of dollars."
+      },
+      {
+        "column_name": "budget_authority_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal CSV budget_authority string."
+      },
+      {
+        "column_name": "outlays_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal CSV outlays string."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "Measurement unit (`Millions of dollars`)."
+      },
+      {
+        "column_name": "source_file",
+        "column_type": "VARCHAR",
+        "description": "Relative CSV path inside US-CBO/cbo-data."
+      },
+      {
+        "column_name": "source_row_index",
+        "column_type": "BIGINT",
+        "description": "Zero-based data row index inside `source_file`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the exact source CSV bytes."
+      },
+      {
+        "column_name": "schema_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the dataset `schema.json` bytes."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One budget-account line in one fiscal year and vintage.",
+    "identity_columns": [
+      "source_record_id"
+    ]
+  },
+  "cbo_revenue_detail": {
+    "table": "cbo_revenue_detail",
+    "label": "CBO federal revenue projections by category",
+    "summary": "Detailed fiscal-year and calendar-year federal revenue projections, payroll/excise detail, capital gains, and IIT components (`revenue_detail`, Pub 51138).",
+    "coverage": "Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; fiscal-year and calendar-year distributions remain distinguished by `file_type`.",
+    "kind": "sampled",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic row identifier (`dataset:vintage:file_type:source_row_index`)."
+      },
+      {
+        "column_name": "commit_sha",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA in US-CBO/cbo-data."
+      },
+      {
+        "column_name": "publication_id",
+        "column_type": "VARCHAR",
+        "description": "CBO publication identifier (`51138`)."
+      },
+      {
+        "column_name": "vintage",
+        "column_type": "VARCHAR",
+        "description": "Publication vintage (`YYYY-MM`)."
+      },
+      {
+        "column_name": "file_type",
+        "column_type": "VARCHAR",
+        "description": "Distribution series type (`annual_fy`, `annual_cy`)."
+      },
+      {
+        "column_name": "date",
+        "column_type": "VARCHAR",
+        "description": "Fiscal or calendar year label (`FYYYYY` or `CYYYYY`)."
+      },
+      {
+        "column_name": "variable",
+        "column_type": "VARCHAR",
+        "description": "Snake_case CBO series identifier from `schema.json`."
+      },
+      {
+        "column_name": "value",
+        "column_type": "DOUBLE",
+        "description": "Numeric observation parsed from the CSV cell."
+      },
+      {
+        "column_name": "value_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal CSV value string before numeric parsing."
+      },
+      {
+        "column_name": "estimate_type",
+        "column_type": "VARCHAR",
+        "description": "Source estimate classification (`actual` or `projected`)."
+      },
+      {
+        "column_name": "section",
+        "column_type": "VARCHAR",
+        "description": "Source table section for `annual_cy_iit` distributions, NULL otherwise."
+      },
+      {
+        "column_name": "variable_note",
+        "column_type": "VARCHAR",
+        "description": "Footnote text copied onto the field in `schema.json`, NULL when absent."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "Measurement unit from `schema.json`."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "CBO variable category from `schema.json`."
+      },
+      {
+        "column_name": "series_description",
+        "column_type": "VARCHAR",
+        "description": "Series definition from `schema.json`."
+      },
+      {
+        "column_name": "metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Additional variable metadata from `schema.json`."
+      },
+      {
+        "column_name": "source_file",
+        "column_type": "VARCHAR",
+        "description": "Relative CSV path inside US-CBO/cbo-data."
+      },
+      {
+        "column_name": "source_row_index",
+        "column_type": "BIGINT",
+        "description": "Zero-based data row index inside `source_file`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the exact source CSV bytes."
+      },
+      {
+        "column_name": "schema_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the dataset `schema.json` bytes."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One revenue variable observation in one period, file type, and vintage.",
+    "identity_columns": [
+      "source_record_id"
+    ]
+  },
+  "cbo_tax_parameters": {
+    "table": "cbo_tax_parameters",
+    "label": "CBO tax parameters and effective marginal tax rates",
+    "summary": "Projected individual income tax brackets, deductions, credits, effective marginal tax rates, and tax wedges (`tax_parameters`, Pub 53724).",
+    "coverage": "Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; repeated `(date, variable)` rows in source CSVs remain distinct.",
+    "kind": "sampled",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic row identifier (`dataset:vintage:file_type:source_row_index`)."
+      },
+      {
+        "column_name": "commit_sha",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA in US-CBO/cbo-data."
+      },
+      {
+        "column_name": "publication_id",
+        "column_type": "VARCHAR",
+        "description": "CBO publication identifier (`53724`)."
+      },
+      {
+        "column_name": "vintage",
+        "column_type": "VARCHAR",
+        "description": "Publication vintage (`YYYY-MM`)."
+      },
+      {
+        "column_name": "file_type",
+        "column_type": "VARCHAR",
+        "description": "Distribution series type (`annual_cy`)."
+      },
+      {
+        "column_name": "date",
+        "column_type": "VARCHAR",
+        "description": "Calendar year label (`CYYYYY`)."
+      },
+      {
+        "column_name": "variable",
+        "column_type": "VARCHAR",
+        "description": "Snake_case CBO series identifier from `schema.json`."
+      },
+      {
+        "column_name": "value",
+        "column_type": "DOUBLE",
+        "description": "Numeric observation parsed from the CSV cell."
+      },
+      {
+        "column_name": "value_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal CSV value string before numeric parsing."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "Measurement unit from `schema.json`."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "CBO variable category from `schema.json`."
+      },
+      {
+        "column_name": "series_description",
+        "column_type": "VARCHAR",
+        "description": "Series definition from `schema.json`."
+      },
+      {
+        "column_name": "metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Additional variable metadata from `schema.json`."
+      },
+      {
+        "column_name": "source_file",
+        "column_type": "VARCHAR",
+        "description": "Relative CSV path inside US-CBO/cbo-data."
+      },
+      {
+        "column_name": "source_row_index",
+        "column_type": "BIGINT",
+        "description": "Zero-based data row index inside `source_file`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the exact source CSV bytes."
+      },
+      {
+        "column_name": "schema_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the dataset `schema.json` bytes."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One tax-parameter observation in one calendar year and vintage.",
+    "identity_columns": [
+      "source_record_id"
+    ]
+  },
+  "cbo_automatic_stabilizers": {
+    "table": "cbo_automatic_stabilizers",
+    "label": "CBO automatic budget stabilizers",
+    "summary": "Cyclical budget adjustments, revenues, outlays, and deficits with and without automatic stabilizers (`automatic_stabilizers`, Pub 51139).",
+    "coverage": "Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; earlier unarchived CBO editions are excluded.",
+    "kind": "sampled",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic row identifier (`dataset:vintage:file_type:source_row_index`)."
+      },
+      {
+        "column_name": "commit_sha",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA in US-CBO/cbo-data."
+      },
+      {
+        "column_name": "publication_id",
+        "column_type": "VARCHAR",
+        "description": "CBO publication identifier (`51139`)."
+      },
+      {
+        "column_name": "vintage",
+        "column_type": "VARCHAR",
+        "description": "Publication vintage (`YYYY-MM`)."
+      },
+      {
+        "column_name": "file_type",
+        "column_type": "VARCHAR",
+        "description": "Distribution series type (`annual_fy`)."
+      },
+      {
+        "column_name": "date",
+        "column_type": "VARCHAR",
+        "description": "Fiscal year label (`FYYYYY`)."
+      },
+      {
+        "column_name": "variable",
+        "column_type": "VARCHAR",
+        "description": "Snake_case CBO series identifier from `schema.json`."
+      },
+      {
+        "column_name": "value",
+        "column_type": "DOUBLE",
+        "description": "Numeric observation parsed from the CSV cell."
+      },
+      {
+        "column_name": "value_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal CSV value string before numeric parsing."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "Measurement unit from `schema.json`."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "CBO variable category from `schema.json`."
+      },
+      {
+        "column_name": "series_description",
+        "column_type": "VARCHAR",
+        "description": "Series definition from `schema.json`."
+      },
+      {
+        "column_name": "metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Additional variable metadata from `schema.json`."
+      },
+      {
+        "column_name": "source_file",
+        "column_type": "VARCHAR",
+        "description": "Relative CSV path inside US-CBO/cbo-data."
+      },
+      {
+        "column_name": "source_row_index",
+        "column_type": "BIGINT",
+        "description": "Zero-based data row index inside `source_file`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the exact source CSV bytes."
+      },
+      {
+        "column_name": "schema_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the dataset `schema.json` bytes."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One variable observation in one fiscal year and vintage.",
+    "identity_columns": [
+      "source_record_id"
+    ]
+  },
+  "cbo_historical_economic": {
+    "table": "cbo_historical_economic",
+    "label": "CBO historical economic data and potential GDP inputs",
+    "summary": "Historical macroeconomic series, potential GDP, labor force, prices, and interest rates from 1949 onward (`historical_economic`, Pub 55022).",
+    "coverage": "Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; quarterly, calendar-year, and fiscal-year series stay distinguished by `file_type`.",
+    "kind": "sampled",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic row identifier (`dataset:vintage:file_type:source_row_index`)."
+      },
+      {
+        "column_name": "commit_sha",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA in US-CBO/cbo-data."
+      },
+      {
+        "column_name": "publication_id",
+        "column_type": "VARCHAR",
+        "description": "CBO publication identifier (`55022`)."
+      },
+      {
+        "column_name": "vintage",
+        "column_type": "VARCHAR",
+        "description": "Publication vintage (`YYYY-MM`)."
+      },
+      {
+        "column_name": "file_type",
+        "column_type": "VARCHAR",
+        "description": "Distribution frequency (`quarterly`, `annual_cy`, `annual_fy`)."
+      },
+      {
+        "column_name": "date",
+        "column_type": "VARCHAR",
+        "description": "Period label (`YYYYqN`, `YYYY`, or `FYYYYY`)."
+      },
+      {
+        "column_name": "variable",
+        "column_type": "VARCHAR",
+        "description": "Snake_case CBO series identifier from `schema.json`."
+      },
+      {
+        "column_name": "value",
+        "column_type": "DOUBLE",
+        "description": "Numeric observation parsed from the CSV cell."
+      },
+      {
+        "column_name": "value_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal CSV value string before numeric parsing."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "Measurement unit from `schema.json`."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "CBO variable category from `schema.json`."
+      },
+      {
+        "column_name": "series_description",
+        "column_type": "VARCHAR",
+        "description": "Series definition from `schema.json`."
+      },
+      {
+        "column_name": "metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Additional variable metadata from `schema.json` (including `aggregation` and `source_frequency`)."
+      },
+      {
+        "column_name": "source_file",
+        "column_type": "VARCHAR",
+        "description": "Relative CSV path inside US-CBO/cbo-data."
+      },
+      {
+        "column_name": "source_row_index",
+        "column_type": "BIGINT",
+        "description": "Zero-based data row index inside `source_file`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the exact source CSV bytes."
+      },
+      {
+        "column_name": "schema_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the dataset `schema.json` bytes."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One economic series observation in one period, frequency, and vintage.",
+    "identity_columns": [
+      "source_record_id"
+    ]
+  },
+  "cbo_economic_projections": {
+    "table": "cbo_economic_projections",
+    "label": "CBO 10-year economic projections",
+    "summary": "Ten-year quarterly, calendar-year, and fiscal-year macroeconomic projections (`economic_projections`, Pub 51135).",
+    "coverage": "Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; repeated `(date, variable)` rows in `2024-06` and distinct calendar/fiscal files stay separate via `file_type` and `source_row_index`.",
+    "kind": "sampled",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic row identifier (`dataset:vintage:file_type:source_row_index`)."
+      },
+      {
+        "column_name": "commit_sha",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA in US-CBO/cbo-data."
+      },
+      {
+        "column_name": "publication_id",
+        "column_type": "VARCHAR",
+        "description": "CBO publication identifier (`51135`)."
+      },
+      {
+        "column_name": "vintage",
+        "column_type": "VARCHAR",
+        "description": "Publication vintage (`YYYY-MM`)."
+      },
+      {
+        "column_name": "file_type",
+        "column_type": "VARCHAR",
+        "description": "Distribution frequency (`calendar`, `fiscal`, `quarterly`)."
+      },
+      {
+        "column_name": "date",
+        "column_type": "VARCHAR",
+        "description": "Period label (`YYYY` or `YYYYqN`)."
+      },
+      {
+        "column_name": "variable",
+        "column_type": "VARCHAR",
+        "description": "Snake_case CBO series identifier from `schema.json`."
+      },
+      {
+        "column_name": "value",
+        "column_type": "DOUBLE",
+        "description": "Numeric observation parsed from the CSV cell."
+      },
+      {
+        "column_name": "value_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal CSV value string before numeric parsing."
+      },
+      {
+        "column_name": "estimate_type",
+        "column_type": "VARCHAR",
+        "description": "Source estimate classification (`actual` or `projected`)."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "Measurement unit from `schema.json`."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "CBO variable category from `schema.json`."
+      },
+      {
+        "column_name": "series_description",
+        "column_type": "VARCHAR",
+        "description": "Series definition from `schema.json`."
+      },
+      {
+        "column_name": "metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Additional variable metadata from `schema.json`."
+      },
+      {
+        "column_name": "source_file",
+        "column_type": "VARCHAR",
+        "description": "Relative CSV path inside US-CBO/cbo-data."
+      },
+      {
+        "column_name": "source_row_index",
+        "column_type": "BIGINT",
+        "description": "Zero-based data row index inside `source_file`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the exact source CSV bytes."
+      },
+      {
+        "column_name": "schema_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the dataset `schema.json` bytes."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One source row in one economic-projections CSV vintage.",
+    "identity_columns": [
+      "source_record_id"
+    ]
+  },
+  "cbo_long_term_economic": {
+    "table": "cbo_long_term_economic",
+    "label": "CBO long-term economic projections",
+    "summary": "Thirty-year macroeconomic growth rates, levels, and labor force participation rates by sex and age group (`long_term_economic`, Pub 57054).",
+    "coverage": "Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit only; `rates`, `levels`, and `lfp_rates` remain distinguished by `file_type`.",
+    "kind": "sampled",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic row identifier (`dataset:vintage:file_type:source_row_index`)."
+      },
+      {
+        "column_name": "commit_sha",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA in US-CBO/cbo-data."
+      },
+      {
+        "column_name": "publication_id",
+        "column_type": "VARCHAR",
+        "description": "CBO publication identifier (`57054`)."
+      },
+      {
+        "column_name": "vintage",
+        "column_type": "VARCHAR",
+        "description": "Publication vintage (`YYYY-MM`)."
+      },
+      {
+        "column_name": "file_type",
+        "column_type": "VARCHAR",
+        "description": "Distribution series type (`rates`, `levels`, `lfp_rates`)."
+      },
+      {
+        "column_name": "date",
+        "column_type": "VARCHAR",
+        "description": "Four-digit year string (`YYYY`)."
+      },
+      {
+        "column_name": "variable",
+        "column_type": "VARCHAR",
+        "description": "Snake_case CBO series identifier (`lfp_rate` for labor force participation files)."
+      },
+      {
+        "column_name": "value",
+        "column_type": "DOUBLE",
+        "description": "Numeric observation parsed from the CSV cell."
+      },
+      {
+        "column_name": "value_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal CSV value string before numeric parsing."
+      },
+      {
+        "column_name": "sex",
+        "column_type": "VARCHAR",
+        "description": "Sex stratum for `lfp_rates` rows (`all`, `male`, `female`), NULL otherwise."
+      },
+      {
+        "column_name": "age_group",
+        "column_type": "VARCHAR",
+        "description": "Age-group label for `lfp_rates` rows, NULL otherwise."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "Measurement unit from `schema.json`."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "CBO variable category from `schema.json`."
+      },
+      {
+        "column_name": "series_description",
+        "column_type": "VARCHAR",
+        "description": "Series definition from `schema.json`."
+      },
+      {
+        "column_name": "metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Additional variable metadata from `schema.json`."
+      },
+      {
+        "column_name": "source_file",
+        "column_type": "VARCHAR",
+        "description": "Relative CSV path inside US-CBO/cbo-data."
+      },
+      {
+        "column_name": "source_row_index",
+        "column_type": "BIGINT",
+        "description": "Zero-based data row index inside `source_file`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the exact source CSV bytes."
+      },
+      {
+        "column_name": "schema_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the dataset `schema.json` bytes."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One source row in one long-term economic CSV vintage.",
+    "identity_columns": [
+      "source_record_id"
+    ]
+  },
+  "cbo_potential_gdp": {
+    "table": "cbo_potential_gdp",
+    "label": "CBO standalone potential GDP (pre-2020)",
+    "summary": "Legacy standalone estimates of potential GDP and underlying inputs through August 2019 in chained 2012 dollars (`potential_gdp`, Pub 51137).",
+    "coverage": "Sampled. Complete published August 2019 vintage from the pinned US-CBO/cbo-data commit; post-2020 series live in `cbo_historical_economic` and `cbo_economic_projections`.",
+    "kind": "sampled",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic row identifier (`dataset:vintage:file_type:source_row_index`)."
+      },
+      {
+        "column_name": "commit_sha",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA in US-CBO/cbo-data."
+      },
+      {
+        "column_name": "publication_id",
+        "column_type": "VARCHAR",
+        "description": "CBO publication identifier (`51137`)."
+      },
+      {
+        "column_name": "vintage",
+        "column_type": "VARCHAR",
+        "description": "Publication vintage (`YYYY-MM`)."
+      },
+      {
+        "column_name": "file_type",
+        "column_type": "VARCHAR",
+        "description": "Distribution frequency (`annual`, `quarterly`)."
+      },
+      {
+        "column_name": "date",
+        "column_type": "VARCHAR",
+        "description": "Period label (`YYYY` or `YYYYqN`)."
+      },
+      {
+        "column_name": "variable",
+        "column_type": "VARCHAR",
+        "description": "Snake_case CBO series identifier from `schema.json`."
+      },
+      {
+        "column_name": "value",
+        "column_type": "DOUBLE",
+        "description": "Numeric observation parsed from the CSV cell."
+      },
+      {
+        "column_name": "value_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal CSV value string before numeric parsing."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "Measurement unit from `schema.json`."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "CBO variable category from `schema.json`."
+      },
+      {
+        "column_name": "series_description",
+        "column_type": "VARCHAR",
+        "description": "Series definition from `schema.json`."
+      },
+      {
+        "column_name": "metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Additional variable metadata from `schema.json`."
+      },
+      {
+        "column_name": "source_file",
+        "column_type": "VARCHAR",
+        "description": "Relative CSV path inside US-CBO/cbo-data."
+      },
+      {
+        "column_name": "source_row_index",
+        "column_type": "BIGINT",
+        "description": "Zero-based data row index inside `source_file`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the exact source CSV bytes."
+      },
+      {
+        "column_name": "schema_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the dataset `schema.json` bytes."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One source row in one potential-GDP CSV vintage.",
+    "identity_columns": [
+      "source_record_id"
+    ]
+  },
+  "cbo_demographic": {
+    "table": "cbo_demographic",
+    "label": "CBO demographic projections",
+    "summary": "Population, fertility, mortality, migration, and Social Security area population projections across dimensions (`demographic`, Pub 57059).",
+    "coverage": "Sampled. Complete published CSV vintages from the pinned US-CBO/cbo-data commit across all six demographic domains; 2026-01 `people` and `marital` renames align to normalized columns while `raw_json` provenance stays in source captures.",
+    "kind": "sampled",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic row identifier (`dataset:vintage:domain:source_row_index`)."
+      },
+      {
+        "column_name": "commit_sha",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA in US-CBO/cbo-data."
+      },
+      {
+        "column_name": "publication_id",
+        "column_type": "VARCHAR",
+        "description": "CBO publication identifier (`57059`)."
+      },
+      {
+        "column_name": "vintage",
+        "column_type": "VARCHAR",
+        "description": "Publication vintage (`YYYY-MM`)."
+      },
+      {
+        "column_name": "domain",
+        "column_type": "VARCHAR",
+        "description": "Demographic domain (`fertility`, `migration`, `mortality`, `population_bls`, `population_census`, `ss_area_population`)."
+      },
+      {
+        "column_name": "year",
+        "column_type": "INTEGER",
+        "description": "Calendar year integer."
+      },
+      {
+        "column_name": "age",
+        "column_type": "VARCHAR",
+        "description": "Age label (`-1` for prenatal/unborn cohorts, integer ages, and `100+`)."
+      },
+      {
+        "column_name": "sex",
+        "column_type": "VARCHAR",
+        "description": "Sex dimension (`female`, `male`, etc.), NULL for fertility domain."
+      },
+      {
+        "column_name": "place_of_birth",
+        "column_type": "VARCHAR",
+        "description": "Place-of-birth dimension for `fertility`, NULL otherwise."
+      },
+      {
+        "column_name": "immigration_status",
+        "column_type": "VARCHAR",
+        "description": "Immigration status dimension for `migration`, NULL otherwise."
+      },
+      {
+        "column_name": "migration_flow",
+        "column_type": "VARCHAR",
+        "description": "Migration direction (`emigration`, `immigration`, etc.) for `migration`, NULL otherwise."
+      },
+      {
+        "column_name": "marital_status",
+        "column_type": "VARCHAR",
+        "description": "Marital status dimension for `ss_area_population`, NULL otherwise."
+      },
+      {
+        "column_name": "measure",
+        "column_type": "VARCHAR",
+        "description": "Domain measure name (`births_per_1000_females`, `deaths_per_1000_people`, or `number_of_people`)."
+      },
+      {
+        "column_name": "value",
+        "column_type": "DOUBLE",
+        "description": "Numeric observation parsed from the CSV cell."
+      },
+      {
+        "column_name": "value_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal CSV measure string before numeric parsing."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "Measurement unit for the domain from `schema.json`."
+      },
+      {
+        "column_name": "domain_description",
+        "column_type": "VARCHAR",
+        "description": "Domain definition from `schema.json`."
+      },
+      {
+        "column_name": "source_file",
+        "column_type": "VARCHAR",
+        "description": "Relative CSV path inside US-CBO/cbo-data."
+      },
+      {
+        "column_name": "source_row_index",
+        "column_type": "BIGINT",
+        "description": "Zero-based data row index inside `source_file`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the exact source CSV bytes."
+      },
+      {
+        "column_name": "schema_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the dataset `schema.json` bytes."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One demographic cell in one domain, year, stratum, and vintage.",
+    "identity_columns": [
+      "source_record_id"
+    ]
+  },
+  "cbo_data_snapshots": {
+    "table": "cbo_data_snapshots",
+    "label": "CBO Open Data distribution provenance snapshots",
+    "summary": "One provenance row per acquired US-CBO/cbo-data CSV distribution with commit SHA, publication ID, row count, and SHA-256 digests.",
+    "coverage": "Sampled. Every CSV distribution present in the pinned US-CBO/cbo-data commit; missing older CBO releases are not implied.",
+    "kind": "sampled",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "dataset",
+        "column_type": "VARCHAR",
+        "description": "CBO Open Data dataset identifier."
+      },
+      {
+        "column_name": "vintage",
+        "column_type": "VARCHAR",
+        "description": "Publication vintage (`YYYY-MM`)."
+      },
+      {
+        "column_name": "file_type",
+        "column_type": "VARCHAR",
+        "description": "Distribution series or domain type."
+      },
+      {
+        "column_name": "commit_sha",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA in US-CBO/cbo-data."
+      },
+      {
+        "column_name": "publication_id",
+        "column_type": "VARCHAR",
+        "description": "CBO publication identifier."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "Dataset title from `schema.json`."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Landing CBO publication URL from `schema.json`."
+      },
+      {
+        "column_name": "source_file",
+        "column_type": "VARCHAR",
+        "description": "Relative CSV path inside US-CBO/cbo-data."
+      },
+      {
+        "column_name": "row_count",
+        "column_type": "BIGINT",
+        "description": "Number of data rows parsed and emitted from `source_file`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the exact source CSV bytes."
+      },
+      {
+        "column_name": "schema_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the dataset `schema.json` bytes."
+      },
+      {
+        "column_name": "catalog_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of `catalog.json`."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC capture timestamp of the CSV acquisition."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One CSV distribution (`dataset`, `vintage`, `file_type`, `source_file`) in the pinned commit.",
+    "identity_columns": [
+      "dataset",
+      "vintage",
+      "file_type"
+    ]
+  },
+  "cbo_projection_errors": {
+    "table": "cbo_projection_errors",
+    "label": "CBO budget projection errors",
+    "summary": "Historical CBO baseline projections compared against actual federal outlays, revenues, deficits, and debt with legislative adjustments and forecast errors.",
+    "coverage": "Derived. Realized baseline evaluation observations from US-CBO/eval-projections covering FY1982-FY2025 for revenues (Winter and Spring baselines) and FY1984-FY2025 for outlays, deficits, and debt (Spring baselines), horizons 1-11. Excludes Fannie Mae and Freddie Mac outlays, 2022 student loan forgiveness outlays, and projected_year_number 0.",
+    "kind": "derived",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "component",
+        "column_type": "VARCHAR",
+        "description": "Budget component (outlay, revenue, deficit, or debt)."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "Major budget category or Total."
+      },
+      {
+        "column_name": "subcategory",
+        "column_type": "VARCHAR",
+        "description": "Budget subcategory or Total."
+      },
+      {
+        "column_name": "baseline_date",
+        "column_type": "DATE",
+        "description": "Year and month of the CBO baseline release (stored with day 01 per CBO convention)."
+      },
+      {
+        "column_name": "spring_flag",
+        "column_type": "BOOLEAN",
+        "description": "True when CBO designates the baseline as that year's Spring baseline."
+      },
+      {
+        "column_name": "winter_flag",
+        "column_type": "BOOLEAN",
+        "description": "True when CBO designates the baseline as that year's Winter baseline."
+      },
+      {
+        "column_name": "projected_fiscal_year",
+        "column_type": "BIGINT",
+        "description": "Target federal fiscal year being projected."
+      },
+      {
+        "column_name": "projected_year_number",
+        "column_type": "BIGINT",
+        "description": "Forecast horizon from 1 (budget year) through 11."
+      },
+      {
+        "column_name": "projected_value_billions",
+        "column_type": "DOUBLE",
+        "description": "Unadjusted baseline projection in billions of dollars."
+      },
+      {
+        "column_name": "actual_value_billions",
+        "column_type": "DOUBLE",
+        "description": "Realized historical actual amount in billions of dollars."
+      },
+      {
+        "column_name": "gdp_billions",
+        "column_type": "DOUBLE",
+        "description": "Nominal fiscal-year GDP in billions of dollars."
+      },
+      {
+        "column_name": "legislative_change_billions",
+        "column_type": "DOUBLE",
+        "description": "Subsequent legislative adjustment applied to the baseline projection in billions of dollars (cumulative negative deficit effects for debt)."
+      },
+      {
+        "column_name": "legislative_deficit_change_billions",
+        "column_type": "DOUBLE",
+        "description": "Subsequent legislative deficit adjustment in billions of dollars for deficit and debt rows (negated for debt per CBO merge convention); null for outlays and revenues."
+      },
+      {
+        "column_name": "adjusted_projection_billions",
+        "column_type": "DOUBLE",
+        "description": "Baseline projection plus legislative adjustment in billions of dollars."
+      },
+      {
+        "column_name": "projection_error_billions",
+        "column_type": "DOUBLE",
+        "description": "Forecast error in billions of dollars (adjusted_projection minus actual_value for outlays, revenues, and debt; negated for deficits so positive means overestimated deficit)."
+      },
+      {
+        "column_name": "projection_error_pct_actual",
+        "column_type": "DOUBLE",
+        "description": "Projection error as a percentage of actual_value for outlays and revenues; null for deficits and debt."
+      },
+      {
+        "column_name": "leg_change_pct_gdp",
+        "column_type": "DOUBLE",
+        "description": "Legislative change as a percentage of nominal GDP."
+      },
+      {
+        "column_name": "projection_error_pct_gdp",
+        "column_type": "DOUBLE",
+        "description": "Projection error as a percentage of nominal GDP."
+      },
+      {
+        "column_name": "source_commit",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA of US-CBO/eval-projections."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Immutable raw GitHub URL for the source projection-errors CSV at source_commit."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the source projection-errors CSV bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC capture timestamp with timezone."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One component, category, subcategory, baseline date, and projected fiscal year evaluation observation.",
+    "identity_columns": [
+      "component",
+      "category",
+      "subcategory",
+      "baseline_date",
+      "projected_fiscal_year"
+    ]
+  },
+  "cbo_projection_error_summary_stats": {
+    "table": "cbo_projection_error_summary_stats",
+    "label": "CBO projection error summary statistics",
+    "summary": "Horizon-by-category summary accuracy statistics (mean error, MAE, RMSE, central two-thirds spread) across CBO historical evaluations.",
+    "coverage": "Derived. Summary error statistics across horizons 1-11 for FY1982-FY2025 revenues (Winter baselines only) and FY1984-FY2025 outlays, deficits, and debt (Spring baselines only), excluding Fannie Mae, Freddie Mac, and 2022 student loan forgiveness.",
+    "kind": "derived",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "component",
+        "column_type": "VARCHAR",
+        "description": "Budget component (outlay, revenue, deficit, or debt)."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "Major budget category or Total."
+      },
+      {
+        "column_name": "subcategory",
+        "column_type": "VARCHAR",
+        "description": "Budget subcategory or Total."
+      },
+      {
+        "column_name": "projected_year_number",
+        "column_type": "BIGINT",
+        "description": "Forecast horizon from 1 through 11."
+      },
+      {
+        "column_name": "projection_year_range",
+        "column_type": "VARCHAR",
+        "description": "Inclusive first and last projected fiscal years in the summary sample."
+      },
+      {
+        "column_name": "number_of_projections",
+        "column_type": "BIGINT",
+        "description": "Count of evaluated baseline projections included in this horizon summary."
+      },
+      {
+        "column_name": "error_basis",
+        "column_type": "VARCHAR",
+        "description": "Percentage denominator used by the summary metrics (pct_actual for outlays and revenues; pct_gdp for deficits and debt)."
+      },
+      {
+        "column_name": "average_error_pct",
+        "column_type": "DOUBLE",
+        "description": "Mean projection error in percentage points on error_basis."
+      },
+      {
+        "column_name": "average_absolute_error_pct",
+        "column_type": "DOUBLE",
+        "description": "Mean absolute projection error in percentage points on error_basis."
+      },
+      {
+        "column_name": "rmse_pct",
+        "column_type": "DOUBLE",
+        "description": "Root mean squared error in percentage points on error_basis."
+      },
+      {
+        "column_name": "two_thirds_spread_pct",
+        "column_type": "DOUBLE",
+        "description": "Difference between the 5/6 and 1/6 quantiles of errors in percentage points on error_basis."
+      },
+      {
+        "column_name": "source_commit",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA of US-CBO/eval-projections."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Immutable raw GitHub URL for the source summary-stats CSV at source_commit."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the source summary-stats CSV bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC capture timestamp with timezone."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One component, category, subcategory, and forecast horizon summary record.",
+    "identity_columns": [
+      "component",
+      "category",
+      "subcategory",
+      "projected_year_number"
+    ]
+  },
+  "cbo_eval_actuals": {
+    "table": "cbo_eval_actuals",
+    "label": "CBO historical budget actuals and GDP",
+    "summary": "Historical realized federal outlays, revenues, deficits, debt, and nominal GDP used in CBO projection evaluations.",
+    "coverage": "True range. Complete US-CBO/eval-projections input actuals from FY1982 through FY2025 (revenues from FY1982; Total outlays, deficits, and debt from FY1984; detailed outlay categories from FY1989), joined with nominal fiscal-year GDP.",
+    "kind": "true_range",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "component",
+        "column_type": "VARCHAR",
+        "description": "Budget component (outlay, revenue, deficit, or debt)."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "Major budget category or Total."
+      },
+      {
+        "column_name": "subcategory",
+        "column_type": "VARCHAR",
+        "description": "Budget subcategory or Total (preserves Fannie Freddie and literal CBO spelling Student Loan Foregiveness)."
+      },
+      {
+        "column_name": "fiscal_year",
+        "column_type": "BIGINT",
+        "description": "Federal fiscal year."
+      },
+      {
+        "column_name": "actual_value_billions",
+        "column_type": "DOUBLE",
+        "description": "Realized historical amount in billions of dollars."
+      },
+      {
+        "column_name": "gdp_billions",
+        "column_type": "DOUBLE",
+        "description": "Nominal fiscal-year GDP in billions of dollars from actual_GDP.csv."
+      },
+      {
+        "column_name": "actuals_pct_gdp",
+        "column_type": "DOUBLE",
+        "description": "Realized amount as a percentage of nominal GDP (full-precision ratio)."
+      },
+      {
+        "column_name": "excluded_from_error_analysis",
+        "column_type": "BOOLEAN",
+        "description": "True for Fannie Freddie and Student Loan Foregiveness rows excluded from CBO projection-error tables."
+      },
+      {
+        "column_name": "source_commit",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA of US-CBO/eval-projections."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Immutable raw GitHub URL for input_data/actuals.csv at source_commit."
+      },
+      {
+        "column_name": "actual_gdp_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of input_data/actual_GDP.csv bytes."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of input_data/actuals.csv bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC capture timestamp with timezone."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One component, category, subcategory, and fiscal year actual observation.",
+    "identity_columns": [
+      "component",
+      "category",
+      "subcategory",
+      "fiscal_year"
+    ]
+  },
+  "cbo_eval_baselines": {
+    "table": "cbo_eval_baselines",
+    "label": "CBO historical baseline projections",
+    "summary": "All CBO historical baseline budget projections across 1982-2026 vintages used as inputs to forecast evaluation.",
+    "coverage": "True range. Complete US-CBO/eval-projections input_data/baselines.csv spanning February 1982 through February 2026 baselines and projected fiscal years 1982-2036, including non-Spring/non-Winter baselines and unrealized future years.",
+    "kind": "true_range",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "component",
+        "column_type": "VARCHAR",
+        "description": "Budget component (outlay, revenue, deficit, or debt)."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "Major budget category or Total."
+      },
+      {
+        "column_name": "subcategory",
+        "column_type": "VARCHAR",
+        "description": "Budget subcategory or Total."
+      },
+      {
+        "column_name": "baseline_date",
+        "column_type": "DATE",
+        "description": "Year and month of the CBO baseline release (day fixed to 01 per CBO convention)."
+      },
+      {
+        "column_name": "spring_flag",
+        "column_type": "BOOLEAN",
+        "description": "True when CBO designates the baseline as that year's Spring baseline."
+      },
+      {
+        "column_name": "winter_flag",
+        "column_type": "BOOLEAN",
+        "description": "True when CBO designates the baseline as that year's Winter baseline."
+      },
+      {
+        "column_name": "projected_fiscal_year",
+        "column_type": "BIGINT",
+        "description": "Target federal fiscal year projected by the baseline."
+      },
+      {
+        "column_name": "projected_year_number",
+        "column_type": "BIGINT",
+        "description": "Forecast horizon relative to the baseline release (-1 through 11)."
+      },
+      {
+        "column_name": "projected_value_billions",
+        "column_type": "DOUBLE",
+        "description": "Unadjusted CBO baseline projection in billions of dollars."
+      },
+      {
+        "column_name": "source_commit",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA of US-CBO/eval-projections."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Immutable raw GitHub URL for input_data/baselines.csv at source_commit."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of input_data/baselines.csv bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC capture timestamp with timezone."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One component, category, subcategory, baseline date, and projected fiscal year baseline projection.",
+    "identity_columns": [
+      "component",
+      "category",
+      "subcategory",
+      "baseline_date",
+      "projected_fiscal_year"
+    ]
+  },
+  "cbo_eval_baseline_changes": {
+    "table": "cbo_eval_baseline_changes",
+    "label": "CBO baseline revision changes",
+    "summary": "Legislative, economic, and technical revisions recorded between CBO baseline releases.",
+    "coverage": "True range. Complete US-CBO/eval-projections input_data/baseline_changes.csv spanning 1983-2026 revision dates across Legislative, Economic, and Technical categories for outlays, deficits, and revenues (only Legislative changes are published for revenues).",
+    "kind": "true_range",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "component",
+        "column_type": "VARCHAR",
+        "description": "Budget component (outlay, revenue, or deficit)."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "Major budget category or Total."
+      },
+      {
+        "column_name": "subcategory",
+        "column_type": "VARCHAR",
+        "description": "Budget subcategory or Total."
+      },
+      {
+        "column_name": "changes_baseline_date",
+        "column_type": "DATE",
+        "description": "Year and month of the baseline revision report (day fixed to 01 per CBO convention)."
+      },
+      {
+        "column_name": "change_category",
+        "column_type": "VARCHAR",
+        "description": "Revision classification (Legislative, Economic, or Technical)."
+      },
+      {
+        "column_name": "projected_fiscal_year",
+        "column_type": "BIGINT",
+        "description": "Target federal fiscal year affected by the revision."
+      },
+      {
+        "column_name": "change_value_billions",
+        "column_type": "DOUBLE",
+        "description": "Dollar revision in billions of dollars; null when blank in the source CSV."
+      },
+      {
+        "column_name": "source_commit",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA of US-CBO/eval-projections."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Immutable raw GitHub URL for input_data/baseline_changes.csv at source_commit."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of input_data/baseline_changes.csv bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC capture timestamp with timezone."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One component, category, subcategory, revision baseline date, change category, and projected fiscal year revision.",
+    "identity_columns": [
+      "component",
+      "category",
+      "subcategory",
+      "changes_baseline_date",
+      "change_category",
+      "projected_fiscal_year"
+    ]
+  },
   "census_acs_county_observations": {
     "table": "census_acs_county_observations",
     "label": "ACS county population and household income",
@@ -37582,7 +39532,7 @@
       {
         "column_name": "sponsorship_date",
         "column_type": "VARCHAR",
-        "description": "Literal sponsorshipDate; absent is NULL and present empty is an empty string."
+        "description": "Normalized sponsorshipDate; NULL when absent or present empty (see sponsorship_date_status and source_xml)."
       },
       {
         "column_name": "is_original",
@@ -37592,7 +39542,7 @@
       {
         "column_name": "sponsorship_withdrawn_date",
         "column_type": "VARCHAR",
-        "description": "Literal sponsorshipWithdrawnDate; retained BILLSTATUS source observations include positive dates."
+        "description": "Normalized sponsorshipWithdrawnDate; NULL when absent or present empty (see sponsorship_withdrawn_date_status and source_xml); retained BILLSTATUS source observations include positive dates."
       },
       {
         "column_name": "party",
@@ -37607,7 +39557,7 @@
       {
         "column_name": "district",
         "column_type": "VARCHAR",
-        "description": "District as the cosponsor entry states it."
+        "description": "District as the cosponsor entry states it; NULL when absent or present empty."
       }
     ],
     "subject": "congress",
@@ -37717,7 +39667,7 @@
       {
         "column_name": "version_date",
         "column_type": "VARCHAR",
-        "description": "Congress textVersions action-associated date for this printing, not its online publication time; the merge prefers the larger value. An enrolled printing's date is empty at the publisher (BILLSTATUS `<date/>` and the printing's own dc:date), so version_date is '' (not NULL) on enrolled rows, which sorts before every date: order printings with printing_order or NULLIF(version_date, '')."
+        "description": "Congress textVersions action-associated date for this printing, not its online publication time; the merge prefers the larger value. NULL when absent or when the publisher states an empty `<date/>` (as on enrolled printings, whose dc:date is also empty): order printings with printing_order."
       },
       {
         "column_name": "package_id",
@@ -37752,7 +39702,7 @@
       {
         "column_name": "kind",
         "column_type": "VARCHAR",
-        "description": "Interpreted document kind: `full_text`, `kind_uncertain` (a full-text slug whose document is too thin to be sure), `procedural_amendments`, `procedural_summary`, or `unknown`."
+        "description": "Interpreted document kind: `full_text`, `kind_uncertain` (a full-text slug whose measured body yielded zero sections or zero bytes), `procedural_amendments`, `procedural_summary`, or `unknown`."
       },
       {
         "column_name": "kind_label",
@@ -37767,7 +39717,7 @@
       {
         "column_name": "publication_dates",
         "column_type": "STRUCT(field VARCHAR, \"value\" VARCHAR, state VARCHAR, \"precision\" VARCHAR, locator VARCHAR, source_sha256 VARCHAR, source_url VARCHAR, observed_at VARCHAR, attributes STRUCT(\"name\" VARCHAR, \"value\" VARCHAR)[])[]",
-        "description": "Native SUMMARY/MODS date observations with original values, precision, attributes and exact evidence/capture locators."
+        "description": "Native SUMMARY and MODS date observations, preserving values, precision, attributes and exact evidence locators. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
         "column_name": "publication_evidence_status",

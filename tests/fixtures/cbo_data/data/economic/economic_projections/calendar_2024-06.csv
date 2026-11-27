@@ -1,0 +1,8 @@
+date,variable,value,estimate_type
+2021,chained_cpiu,151.955,actual
+2022,chained_cpiu,163.62,actual
+2023,chained_cpiu,170.047,actual
+2021,government_c_gi_pct_change,4.963,actual
+2021,government_c_gi_pct_change,4.654,actual
+2021,government_c_gi_pct_change,5.154,actual
+2022,government_c_gi_pct_change,6.052,actual

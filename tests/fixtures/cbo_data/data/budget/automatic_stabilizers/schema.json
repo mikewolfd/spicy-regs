@@ -1,0 +1,124 @@
+{
+  "dataset": "automatic_stabilizers",
+  "publication_id": "51139",
+  "title": "Estimates of Automatic Stabilizers",
+  "source_url": "https://www.cbo.gov/publication/51139",
+  "description": "CBO's estimates of the effects of automatic stabilizers on federal revenues, outlays, and deficits. Includes the GDP gap, unemployment gap, and budget totals with and without automatic stabilizer effects.",
+  "frequency": "annual_fy",
+  "date_format": "FY (e.g., FY1965, FY2034)",
+  "canonical_columns": ["date", "variable", "value"],
+  "notes": {
+    "units": "Sheet 1 values in billions_of_dollars; Sheet 2 values as percentage of potential GDP. GDP gap in billions. Unemployment gap in percentage points.",
+    "fiscal_year": "Federal fiscal year (Oct 1 through Sep 30).",
+    "automatic_stabilizers": "Changes in federal revenues and outlays that occur automatically in response to cyclical movements in GDP and unemployment.",
+    "gdp_gap": "Difference between actual/projected GDP and CBO's estimate of potential GDP.",
+    "unemployment_gap": "Actual/projected unemployment rate minus CBO's estimate of the noncyclical rate of unemployment.",
+    "quarterly_data": "The source workbook also contains quarterly NIPA-based estimates (Sheets 4-5) which are not extracted here."
+  },
+  "tables": {
+    "annual_billions": "Sheet 1 — Deficit or Surplus With and Without Automatic Stabilizers, in billions_of_dollars",
+    "annual_pct_gdp": "Sheet 2 — Deficit or Surplus With and Without Automatic Stabilizers, as Percentage of Potential GDP"
+  },
+  "fields": {
+    "as_revenues_with_stabilizers": {
+      "description": "Federal revenues (with automatic stabilizers)",
+      "unit": "Billions of $",
+      "category": "with_stabilizers"
+    },
+    "as_outlays_with_stabilizers": {
+      "description": "Federal outlays (with automatic stabilizers)",
+      "unit": "Billions of $",
+      "category": "with_stabilizers"
+    },
+    "as_deficit_with_stabilizers": {
+      "description": "Deficit or surplus (with automatic stabilizers)",
+      "unit": "Billions of $",
+      "category": "with_stabilizers"
+    },
+    "as_revenues_without_stabilizers": {
+      "description": "Federal revenues (without automatic stabilizers)",
+      "unit": "Billions of $",
+      "category": "without_stabilizers"
+    },
+    "as_outlays_without_stabilizers": {
+      "description": "Federal outlays (without automatic stabilizers)",
+      "unit": "Billions of $",
+      "category": "without_stabilizers"
+    },
+    "as_deficit_without_stabilizers": {
+      "description": "Deficit or surplus (without automatic stabilizers)",
+      "unit": "Billions of $",
+      "category": "without_stabilizers"
+    },
+    "as_effect_revenues": {
+      "description": "Effect of automatic stabilizers on revenues",
+      "unit": "Billions of $",
+      "category": "stabilizer_effect"
+    },
+    "as_effect_outlays": {
+      "description": "Effect of automatic stabilizers on outlays",
+      "unit": "Billions of $",
+      "category": "stabilizer_effect"
+    },
+    "as_effect_deficit": {
+      "description": "Effect of automatic stabilizers on deficit or surplus",
+      "unit": "Billions of $",
+      "category": "stabilizer_effect"
+    },
+    "as_gdp_gap": {
+      "description": "GDP gap (actual/projected GDP minus potential GDP)",
+      "unit": "Billions of $",
+      "category": "gap"
+    },
+    "as_unemployment_gap": {
+      "description": "Unemployment gap (actual/projected rate minus noncyclical rate)",
+      "unit": "Percentage points",
+      "category": "gap"
+    },
+    "as_revenues_with_stabilizers_pct_gdp": {
+      "description": "Federal revenues (with automatic stabilizers), as percentage of potential GDP",
+      "unit": "Percent of potential GDP",
+      "category": "with_stabilizers_pct"
+    },
+    "as_outlays_with_stabilizers_pct_gdp": {
+      "description": "Federal outlays (with automatic stabilizers), as percentage of potential GDP",
+      "unit": "Percent of potential GDP",
+      "category": "with_stabilizers_pct"
+    },
+    "as_deficit_with_stabilizers_pct_gdp": {
+      "description": "Deficit or surplus (with automatic stabilizers), as percentage of potential GDP",
+      "unit": "Percent of potential GDP",
+      "category": "with_stabilizers_pct"
+    },
+    "as_revenues_without_stabilizers_pct_gdp": {
+      "description": "Federal revenues (without automatic stabilizers), as percentage of potential GDP",
+      "unit": "Percent of potential GDP",
+      "category": "without_stabilizers_pct"
+    },
+    "as_outlays_without_stabilizers_pct_gdp": {
+      "description": "Federal outlays (without automatic stabilizers), as percentage of potential GDP",
+      "unit": "Percent of potential GDP",
+      "category": "without_stabilizers_pct"
+    },
+    "as_deficit_without_stabilizers_pct_gdp": {
+      "description": "Deficit or surplus (without automatic stabilizers), as percentage of potential GDP",
+      "unit": "Percent of potential GDP",
+      "category": "without_stabilizers_pct"
+    },
+    "as_effect_revenues_pct_gdp": {
+      "description": "Effect of automatic stabilizers on revenues, as percentage of potential GDP",
+      "unit": "Percent of potential GDP",
+      "category": "stabilizer_effect_pct"
+    },
+    "as_effect_outlays_pct_gdp": {
+      "description": "Effect of automatic stabilizers on outlays, as percentage of potential GDP",
+      "unit": "Percent of potential GDP",
+      "category": "stabilizer_effect_pct"
+    },
+    "as_effect_deficit_pct_gdp": {
+      "description": "Effect of automatic stabilizers on deficit or surplus, as percentage of potential GDP",
+      "unit": "Percent of potential GDP",
+      "category": "stabilizer_effect_pct"
+    }
+  }
+}

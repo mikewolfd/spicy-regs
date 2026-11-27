@@ -38,7 +38,16 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
-- **Selected OIRA + Wave B reader provider** `spicy_docs-0.85.0+readers.20261125.3` is built from
+- **Selected combined CBO + Wave 1 reader provider** `spicy_docs-0.85.0+readers.20261127.3` is built from
+  `481c6cac8ca0cc1f6e68f958fb6280f34b63c6cd` (tree `6a3bbbe7a252ea8fa046cc06ed79d8a7abc4495b`,
+  `mikewolfd/spicy-docs#52` on `fork/main`). It combines `spicy_docs.sources.cbo_data` (`US-CBO/cbo-data`),
+  `spicy_docs.sources.cbo_eval_projections` (`US-CBO/eval-projections`), CBO/JCT route research docs, and
+  all Wave 1 reader/schema updates merged on `spicy-docs` `fork/main` (including `#51` `.20261127.2`).
+  See [the receipt](spicy_docs-0.85.0+readers.20261127.3.json) for source, wheel and RECORD identity.
+  The superseded `.20261125.3` wheel is recoverable from this adoption commit's parent;
+  its receipt remains.
+
+- **Prior OIRA + Wave B reader provider** `spicy_docs-0.85.0+readers.20261125.3` is built from
   `bd96a61f29ac560d7d7593b4dc0c45d7bcb30a13` (tree `5969590149ebead191731c99c1bd22a80e186af3`,
   `mikewolfd/spicy-docs#43` on `fork/main`). It adds `spicy_docs.sources.oira` for RegInfo.gov EO
   12866 bulk XML reviews and meetings with raw-byte capture hooks, dynamic flags, Cp1252/double-entity

@@ -1,0 +1,8 @@
+component,category,subcategory,fiscal_year,actual_value,GDP,actuals_pct_GDP
+outlay,Mandatory,Student Loan Foregiveness,2022,378.7,25565.4,1.5
+outlay,Mandatory,Student Loan Foregiveness,2023,-333.0,27398.0,-1.2
+outlay,Total,Total,1984,851.8,3949.2,21.6
+outlay,Total,Total,2022,5900.4,25565.4,23.1
+outlay,Total,Total,2023,6473.9,27398.0,23.6
+outlay,Total,Total,2024,6757.2,28947.9,23.3
+outlay,Total,Total,2025,7016.4,30362.0,23.1

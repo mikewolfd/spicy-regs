@@ -1,0 +1,277 @@
+{
+  "dataset": "trust_fund",
+  "publication_id": "51136",
+  "title": "10-Year Trust Fund Projections",
+  "source_url": "https://www.cbo.gov/publication/51136",
+  "description": "CBO's baseline projections of trust fund balances, deficits/surpluses, and detailed OASI/DI/HI trust fund income, expenditures, and balances.",
+  "frequency": "annual_fy",
+  "date_format": "FY (e.g., FY2026, FY2036)",
+  "canonical_columns": ["date", "variable", "value"],
+  "notes": {
+    "units": "All values in billions_of_dollars.",
+    "fiscal_year": "Federal fiscal year (Oct 1 through Sep 30).",
+    "actual_year": "The first column is the most recent actual year; remaining columns are projections."
+  },
+  "tables": {
+    "balances": "Table B-1 / Table 1 — Trust Fund Balances (end-of-year)",
+    "surpluses": "Table B-2 / Table 2 — Trust Fund Deficits and Surpluses",
+    "oasi_di_hi": "Table B-3 / Table 3 — Detailed OASI, DI, and HI Trust Fund Balances"
+  },
+  "fields": {
+    "tf_bal_oasi": {
+      "description": "Old-Age and Survivors Insurance trust fund balance",
+      "unit": "Billions of $",
+      "category": "balances"
+    },
+    "tf_bal_di": {
+      "description": "Disability Insurance trust fund balance",
+      "unit": "Billions of $",
+      "category": "balances"
+    },
+    "tf_bal_ss_total": {
+      "description": "Social Security trust fund balance (OASI + DI subtotal)",
+      "unit": "Billions of $",
+      "category": "balances"
+    },
+    "tf_bal_smi": {
+      "description": "Supplementary Medical Insurance (Parts B and D) trust fund balance",
+      "unit": "Billions of $",
+      "category": "balances"
+    },
+    "tf_bal_hi": {
+      "description": "Hospital Insurance (Part A) trust fund balance",
+      "unit": "Billions of $",
+      "category": "balances"
+    },
+    "tf_bal_medicare_total": {
+      "description": "Medicare trust fund balance (SMI + HI subtotal)",
+      "unit": "Billions of $",
+      "category": "balances"
+    },
+    "tf_bal_military_retirement": {
+      "description": "Military retirement trust fund balance",
+      "unit": "Billions of $",
+      "category": "balances"
+    },
+    "tf_bal_civilian_retirement": {
+      "description": "Civilian retirement trust fund balance",
+      "unit": "Billions of $",
+      "category": "balances"
+    },
+    "tf_bal_unemployment": {
+      "description": "Unemployment insurance trust fund balance",
+      "unit": "Billions of $",
+      "category": "balances"
+    },
+    "tf_bal_highway": {
+      "description": "Highway and mass transit trust fund balance",
+      "unit": "Billions of $",
+      "category": "balances"
+    },
+    "tf_bal_airport": {
+      "description": "Airport and Airway trust fund balance",
+      "unit": "Billions of $",
+      "category": "balances"
+    },
+    "tf_bal_railroad": {
+      "description": "Railroad Retirement (Treasury holdings) trust fund balance",
+      "unit": "Billions of $",
+      "category": "balances"
+    },
+    "tf_bal_other": {
+      "description": "Other trust funds balance",
+      "unit": "Billions of $",
+      "category": "balances"
+    },
+    "tf_bal_total": {
+      "description": "Total trust fund balance",
+      "unit": "Billions of $",
+      "category": "balances"
+    },
+    "tf_bal_railroad_nontreas": {
+      "description": "Railroad Retirement (non-Treasury holdings) balance",
+      "unit": "Billions of $",
+      "category": "balances"
+    },
+    "tf_sur_oasi": {
+      "description": "OASI trust fund deficit (-) or surplus",
+      "unit": "Billions of $",
+      "category": "surpluses"
+    },
+    "tf_sur_di": {
+      "description": "DI trust fund deficit (-) or surplus",
+      "unit": "Billions of $",
+      "category": "surpluses"
+    },
+    "tf_sur_ss_total": {
+      "description": "Social Security trust fund deficit (-) or surplus (subtotal)",
+      "unit": "Billions of $",
+      "category": "surpluses"
+    },
+    "tf_sur_smi": {
+      "description": "SMI (Parts B and D) trust fund deficit (-) or surplus",
+      "unit": "Billions of $",
+      "category": "surpluses"
+    },
+    "tf_sur_hi": {
+      "description": "HI (Part A) trust fund deficit (-) or surplus",
+      "unit": "Billions of $",
+      "category": "surpluses"
+    },
+    "tf_sur_medicare_total": {
+      "description": "Medicare trust fund deficit (-) or surplus (subtotal)",
+      "unit": "Billions of $",
+      "category": "surpluses"
+    },
+    "tf_sur_military_retirement": {
+      "description": "Military retirement trust fund deficit (-) or surplus",
+      "unit": "Billions of $",
+      "category": "surpluses"
+    },
+    "tf_sur_civilian_retirement": {
+      "description": "Civilian retirement trust fund deficit (-) or surplus",
+      "unit": "Billions of $",
+      "category": "surpluses"
+    },
+    "tf_sur_unemployment": {
+      "description": "Unemployment insurance trust fund deficit (-) or surplus",
+      "unit": "Billions of $",
+      "category": "surpluses"
+    },
+    "tf_sur_highway": {
+      "description": "Highway and mass transit trust fund deficit (-) or surplus",
+      "unit": "Billions of $",
+      "category": "surpluses"
+    },
+    "tf_sur_airport": {
+      "description": "Airport and Airway trust fund deficit (-) or surplus",
+      "unit": "Billions of $",
+      "category": "surpluses"
+    },
+    "tf_sur_other": {
+      "description": "Other trust funds deficit (-) or surplus",
+      "unit": "Billions of $",
+      "category": "surpluses"
+    },
+    "tf_sur_total": {
+      "description": "Total trust fund deficit (-) or surplus",
+      "unit": "Billions of $",
+      "category": "surpluses"
+    },
+    "tf_sur_intragov_transfers": {
+      "description": "Intragovernmental transfers to trust funds (subtracted to get net effect)",
+      "unit": "Billions of $",
+      "category": "surpluses"
+    },
+    "tf_sur_net_budget_effect": {
+      "description": "Net effect on the budget of trust fund programs",
+      "unit": "Billions of $",
+      "category": "surpluses"
+    },
+    "tf_oasi_begin_balance": {
+      "description": "OASI trust fund beginning-of-year balance",
+      "unit": "Billions of $",
+      "category": "oasi_detail"
+    },
+    "tf_oasi_income_excl_interest": {
+      "description": "OASI trust fund income (excluding interest)",
+      "unit": "Billions of $",
+      "category": "oasi_detail"
+    },
+    "tf_oasi_expenditures": {
+      "description": "OASI trust fund expenditures",
+      "unit": "Billions of $",
+      "category": "oasi_detail"
+    },
+    "tf_oasi_noninterest_surplus": {
+      "description": "OASI trust fund noninterest deficit (-) or surplus",
+      "unit": "Billions of $",
+      "category": "oasi_detail"
+    },
+    "tf_oasi_interest": {
+      "description": "OASI trust fund interest received",
+      "unit": "Billions of $",
+      "category": "oasi_detail"
+    },
+    "tf_oasi_total_surplus": {
+      "description": "OASI trust fund total deficit (-) or surplus",
+      "unit": "Billions of $",
+      "category": "oasi_detail"
+    },
+    "tf_oasi_end_balance": {
+      "description": "OASI trust fund end-of-year balance",
+      "unit": "Billions of $",
+      "category": "oasi_detail"
+    },
+    "tf_di_begin_balance": {
+      "description": "DI trust fund beginning-of-year balance",
+      "unit": "Billions of $",
+      "category": "di_detail"
+    },
+    "tf_di_income_excl_interest": {
+      "description": "DI trust fund income (excluding interest)",
+      "unit": "Billions of $",
+      "category": "di_detail"
+    },
+    "tf_di_expenditures": {
+      "description": "DI trust fund expenditures",
+      "unit": "Billions of $",
+      "category": "di_detail"
+    },
+    "tf_di_noninterest_surplus": {
+      "description": "DI trust fund noninterest deficit (-) or surplus",
+      "unit": "Billions of $",
+      "category": "di_detail"
+    },
+    "tf_di_interest": {
+      "description": "DI trust fund interest received",
+      "unit": "Billions of $",
+      "category": "di_detail"
+    },
+    "tf_di_total_surplus": {
+      "description": "DI trust fund total deficit (-) or surplus",
+      "unit": "Billions of $",
+      "category": "di_detail"
+    },
+    "tf_di_end_balance": {
+      "description": "DI trust fund end-of-year balance",
+      "unit": "Billions of $",
+      "category": "di_detail"
+    },
+    "tf_hi_begin_balance": {
+      "description": "HI trust fund beginning-of-year balance",
+      "unit": "Billions of $",
+      "category": "hi_detail"
+    },
+    "tf_hi_income_excl_interest": {
+      "description": "HI trust fund income (excluding interest)",
+      "unit": "Billions of $",
+      "category": "hi_detail"
+    },
+    "tf_hi_expenditures": {
+      "description": "HI trust fund expenditures",
+      "unit": "Billions of $",
+      "category": "hi_detail"
+    },
+    "tf_hi_noninterest_surplus": {
+      "description": "HI trust fund noninterest deficit (-) or surplus",
+      "unit": "Billions of $",
+      "category": "hi_detail"
+    },
+    "tf_hi_interest": {
+      "description": "HI trust fund interest received",
+      "unit": "Billions of $",
+      "category": "hi_detail"
+    },
+    "tf_hi_total_surplus": {
+      "description": "HI trust fund total deficit (-) or surplus",
+      "unit": "Billions of $",
+      "category": "hi_detail"
+    },
+    "tf_hi_end_balance": {
+      "description": "HI trust fund end-of-year balance",
+      "unit": "Billions of $",
+      "category": "hi_detail"
+    }
+  }
+}

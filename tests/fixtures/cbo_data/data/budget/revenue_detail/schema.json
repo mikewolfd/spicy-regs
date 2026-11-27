@@ -1,0 +1,1265 @@
+{
+  "dataset": "revenue_detail",
+  "publication_id": "51138",
+  "title": "Revenue Projections by Category",
+  "source_url": "https://www.cbo.gov/publication/51138",
+  "description": "CBO's baseline projections of federal revenues by major source, with detail on payroll taxes, excise taxes, individual income tax components, and capital gains.",
+  "frequency": "annual_fy",
+  "date_format": "FY (e.g., FY2026, FY2036)",
+  "canonical_columns": [
+    "date",
+    "variable",
+    "value"
+  ],
+  "notes": {
+    "units": "billions_of_dollars unless noted (GDP-share variables are percentages of GDP).",
+    "fiscal_year": "Federal fiscal year (Oct 1 through Sep 30). Sheets 1, 4, 5 use fiscal-year data.",
+    "calendar_year": "Sheets 3, 6, 8 use calendar-year data (CY prefix in date column).",
+    "actual_year": "The first column is the most recent actual year; remaining columns are projections.",
+    "customs_note": "In 2026-02, Customs duties is a standalone top-level category. In 2025-01 and earlier, it appears under the Other subgroup. The variable name rev_customs is used in both cases.",
+    "field_footnotes": "Some source tables use superscript letter footnotes on row labels. For supported tables, extracted note text is copied into each affected field under variable_note."
+  },
+  "tables": {
+    "revenue_projections": "Sheet 1 - Revenue Projections (levels in $ and as % of GDP)",
+    "payroll_detail": "Sheet 4 - Payroll Tax Revenues",
+    "excise_detail": "Sheet 5 - Excise Tax Revenues",
+    "individual_income_tax": "Sheet 3 - Individual Income Tax Details (calendar year)",
+    "capital_gains": "Sheet 6 - Capital Gains Realizations and Tax Receipts (calendar year)",
+    "corporate_profits": "Sheet 8 - Corporate Profits Reconciliation (calendar year)",
+    "baseline_changes": "Sheet 2 - Changes in baseline projections of revenues since prior baseline (legislative, economic, technical decomposition)"
+  },
+  "fields": {
+    "rev_individual_income": {
+      "description": "Individual income taxes",
+      "unit": "Billions of $",
+      "category": "revenue_projections"
+    },
+    "rev_payroll": {
+      "description": "Payroll taxes (total)",
+      "unit": "Billions of $",
+      "category": "revenue_projections"
+    },
+    "rev_corporate_income": {
+      "description": "Corporate income taxes",
+      "unit": "Billions of $",
+      "category": "revenue_projections"
+    },
+    "rev_customs": {
+      "description": "Customs duties",
+      "unit": "Billions of $",
+      "category": "revenue_projections"
+    },
+    "rev_excise": {
+      "description": "Excise taxes (under Other subcategory)",
+      "unit": "Billions of $",
+      "category": "revenue_projections"
+    },
+    "rev_fed_reserve": {
+      "description": "Federal Reserve remittances",
+      "unit": "Billions of $",
+      "category": "revenue_projections"
+    },
+    "rev_estate_gift": {
+      "description": "Estate and gift taxes",
+      "unit": "Billions of $",
+      "category": "revenue_projections"
+    },
+    "rev_misc_fees": {
+      "description": "Miscellaneous fees and fines",
+      "unit": "Billions of $",
+      "category": "revenue_projections"
+    },
+    "rev_other_subtotal": {
+      "description": "Subtotal of the Other revenue subcategory",
+      "unit": "Billions of $",
+      "category": "revenue_projections"
+    },
+    "rev_total": {
+      "description": "Total revenues",
+      "unit": "Billions of $",
+      "category": "revenue_projections"
+    },
+    "rev_on_budget": {
+      "description": "On-budget revenues",
+      "unit": "Billions of $",
+      "category": "revenue_projections"
+    },
+    "rev_off_budget": {
+      "description": "Off-budget revenues",
+      "unit": "Billions of $",
+      "category": "revenue_projections"
+    },
+    "rev_addendum_gdp": {
+      "description": "Gross domestic product (addendum)",
+      "unit": "Billions of $",
+      "category": "revenue_projections"
+    },
+    "rev_addendum_gdi": {
+      "description": "Gross domestic income (addendum)",
+      "unit": "Billions of $",
+      "category": "revenue_projections"
+    },
+    "rev_individual_income_gdp_pct": {
+      "description": "Individual income taxes as a percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "revenue_projections_gdp_share"
+    },
+    "rev_payroll_gdp_pct": {
+      "description": "Payroll taxes as a percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "revenue_projections_gdp_share"
+    },
+    "rev_corporate_income_gdp_pct": {
+      "description": "Corporate income taxes as a percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "revenue_projections_gdp_share"
+    },
+    "rev_customs_gdp_pct": {
+      "description": "Customs duties as a percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "revenue_projections_gdp_share"
+    },
+    "rev_excise_gdp_pct": {
+      "description": "Excise taxes as a percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "revenue_projections_gdp_share"
+    },
+    "rev_fed_reserve_gdp_pct": {
+      "description": "Federal Reserve remittances as a percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "revenue_projections_gdp_share"
+    },
+    "rev_estate_gift_gdp_pct": {
+      "description": "Estate and gift taxes as a percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "revenue_projections_gdp_share"
+    },
+    "rev_misc_fees_gdp_pct": {
+      "description": "Miscellaneous fees and fines as a percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "revenue_projections_gdp_share"
+    },
+    "rev_other_subtotal_gdp_pct": {
+      "description": "Subtotal of Other revenue subcategory as a percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "revenue_projections_gdp_share"
+    },
+    "rev_total_gdp_pct": {
+      "description": "Total revenues as a percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "revenue_projections_gdp_share"
+    },
+    "rev_on_budget_gdp_pct": {
+      "description": "On-budget revenues as a percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "revenue_projections_gdp_share"
+    },
+    "rev_off_budget_gdp_pct": {
+      "description": "Off-budget revenues as a percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "revenue_projections_gdp_share"
+    },
+    "rev_payroll_ss": {
+      "description": "Social Security payroll taxes",
+      "unit": "Billions of $",
+      "category": "payroll_detail"
+    },
+    "rev_payroll_medicare": {
+      "description": "Medicare payroll taxes",
+      "unit": "Billions of $",
+      "category": "payroll_detail"
+    },
+    "rev_payroll_ui": {
+      "description": "Unemployment insurance payroll taxes",
+      "unit": "Billions of $",
+      "category": "payroll_detail"
+    },
+    "rev_payroll_railroad": {
+      "description": "Railroad Retirement payroll taxes",
+      "unit": "Billions of $",
+      "category": "payroll_detail"
+    },
+    "rev_payroll_other_retire": {
+      "description": "Other retirement payroll taxes (FERS, CSRS)",
+      "unit": "Billions of $",
+      "category": "payroll_detail"
+    },
+    "rev_payroll_total": {
+      "description": "Total payroll taxes (detail sheet)",
+      "unit": "Billions of $",
+      "category": "payroll_detail"
+    },
+    "rev_excise_hwy_gasoline": {
+      "description": "Highway excise - gasoline and gasoline blendstocks",
+      "unit": "Billions of $",
+      "category": "excise_highway"
+    },
+    "rev_excise_hwy_diesel": {
+      "description": "Highway excise - diesel fuel and kerosene",
+      "unit": "Billions of $",
+      "category": "excise_highway"
+    },
+    "rev_excise_hwy_other_fuels": {
+      "description": "Highway excise - other motor fuels",
+      "unit": "Billions of $",
+      "category": "excise_highway"
+    },
+    "rev_excise_hwy_trucks_trailers": {
+      "description": "Highway excise - trucks, trailers, and tractors",
+      "unit": "Billions of $",
+      "category": "excise_highway"
+    },
+    "rev_excise_hwy_tires": {
+      "description": "Highway excise - tires for heavy vehicles",
+      "unit": "Billions of $",
+      "category": "excise_highway"
+    },
+    "rev_excise_hwy_heavy_vehicle_use": {
+      "description": "Highway excise - heavy vehicle use tax",
+      "unit": "Billions of $",
+      "category": "excise_highway"
+    },
+    "rev_excise_hwy_htf_subtotal": {
+      "description": "Highway Trust Fund excise subtotal",
+      "unit": "Billions of $",
+      "category": "excise_highway"
+    },
+    "rev_excise_hwy_refunds": {
+      "description": "Highway excise - refunds and credits from the general fund",
+      "unit": "Billions of $",
+      "category": "excise_highway"
+    },
+    "rev_excise_hwy_lust": {
+      "description": "Highway excise - LUST (leaking underground storage tank) Trust Fund taxes",
+      "unit": "Billions of $",
+      "category": "excise_highway"
+    },
+    "rev_excise_hwy_total": {
+      "description": "Total highway excise taxes",
+      "unit": "Billions of $",
+      "category": "excise_highway"
+    },
+    "rev_excise_avn_domestic": {
+      "description": "Aviation excise - domestic air passengers",
+      "unit": "Billions of $",
+      "category": "excise_aviation"
+    },
+    "rev_excise_avn_international": {
+      "description": "Aviation excise - international air passengers",
+      "unit": "Billions of $",
+      "category": "excise_aviation"
+    },
+    "rev_excise_avn_cargo": {
+      "description": "Aviation excise - air cargo (freight) transportation",
+      "unit": "Billions of $",
+      "category": "excise_aviation"
+    },
+    "rev_excise_avn_fuels": {
+      "description": "Aviation excise - aviation fuels",
+      "unit": "Billions of $",
+      "category": "excise_aviation"
+    },
+    "rev_excise_avn_refunds": {
+      "description": "Aviation excise - refunds",
+      "unit": "Billions of $",
+      "category": "excise_aviation"
+    },
+    "rev_excise_avn_aatf_subtotal": {
+      "description": "Airport and Airways Trust Fund excise subtotal",
+      "unit": "Billions of $",
+      "category": "excise_aviation"
+    },
+    "rev_excise_avn_other": {
+      "description": "Aviation excise - other (overflight fees, LUST Trust Fund taxes)",
+      "unit": "Billions of $",
+      "category": "excise_aviation"
+    },
+    "rev_excise_avn_total": {
+      "description": "Total aviation excise taxes",
+      "unit": "Billions of $",
+      "category": "excise_aviation"
+    },
+    "rev_excise_health_care": {
+      "description": "Excise taxes - health care (ACA-related)",
+      "unit": "Billions of $",
+      "category": "excise_other"
+    },
+    "rev_excise_stock_buybacks": {
+      "description": "Excise taxes - stock buybacks",
+      "unit": "Billions of $",
+      "category": "excise_other"
+    },
+    "rev_excise_tobacco": {
+      "description": "Excise taxes - tobacco",
+      "unit": "Billions of $",
+      "category": "excise_other"
+    },
+    "rev_excise_alcohol": {
+      "description": "Excise taxes - alcohol",
+      "unit": "Billions of $",
+      "category": "excise_other"
+    },
+    "rev_excise_other": {
+      "description": "Excise taxes - other (miscellaneous excise)",
+      "unit": "Billions of $",
+      "category": "excise_other"
+    },
+    "rev_excise_total": {
+      "description": "Total excise taxes (detail sheet)",
+      "unit": "Billions of $",
+      "category": "excise_other"
+    },
+    "rev_iit_wages": {
+      "description": "Salaries and wages (AGI component)",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_interest_dividends": {
+      "description": "Taxable interest and ordinary dividends (excludes qualified dividends)",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_qualified_dividends": {
+      "description": "Qualified dividends (AGI component)",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_capital_gain_loss": {
+      "description": "Capital gain or loss (AGI component)",
+      "unit": "Billions of $",
+      "category": "individual_income_tax",
+      "variable_note": "Includes sales of capital assets and sales of property other than capital assets."
+    },
+    "rev_iit_business_income": {
+      "description": "Net business income (Schedules C, E, F)",
+      "unit": "Billions of $",
+      "category": "individual_income_tax",
+      "variable_note": "Business income is before disallowed losses on Form 461 and the deduction for qualifying business income."
+    },
+    "rev_iit_pensions": {
+      "description": "Taxable pensions, annuities, and IRA distributions",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_ss_benefits": {
+      "description": "Taxable Social Security benefits",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_other_income": {
+      "description": "All other sources of income",
+      "unit": "Billions of $",
+      "category": "individual_income_tax",
+      "variable_note": "All sources of income or loss that are included in AGI but not reported above. Includes net operating losses from prior years, unemployment compensation, alimony received, taxable state and local tax refunds, gambling earnings, the exclusion for foreign-earned income, disallowed business losses, and many other smaller items."
+    },
+    "rev_iit_total_income": {
+      "description": "Total income (sum of AGI components)",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_statutory_adjustments": {
+      "description": "Statutory adjustments (subtracted from total income)",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_agi": {
+      "description": "Adjusted gross income",
+      "unit": "Billions of $",
+      "category": "individual_income_tax",
+      "variable_note": "Income groups are defined on the basis of the distribution of tax units by adjusted gross income."
+    },
+    "rev_iit_personal_exemption": {
+      "description": "Personal exemption amount (after limit)",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_standard_deduction": {
+      "description": "Standard deduction (non-itemizers only)",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_itemized_deductions": {
+      "description": "Total itemized deductions (itemizers only, after limits)",
+      "unit": "Billions of $",
+      "category": "individual_income_tax",
+      "variable_note": "Amounts shown are after any applicable limits on each deduction, such as the limitation of the state and local tax (SALT) deduction, and after applying the overall limitation on itemized deductions."
+    },
+    "rev_iit_qbi_deduction": {
+      "description": "Qualified business income deduction",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_total_exemptions_deductions": {
+      "description": "Total exemptions and deductions after limits",
+      "unit": "Billions of $",
+      "category": "individual_income_tax",
+      "variable_note": "Total exemptions and deductions includes the deduction for qualifying business income and additional deductions. Limits include the overall limitation on itemized deductions."
+    },
+    "rev_iit_taxable_income": {
+      "description": "Taxable income",
+      "unit": "Billions of $",
+      "category": "individual_income_tax",
+      "variable_note": "Taxable income is larger than AGI minus total deductions and exemptions because taxable income cannot fall below zero, even if deductions and exemptions exceed AGI."
+    },
+    "rev_iit_taxable_ordinary": {
+      "description": "Taxable income taxed at ordinary rates (before AMT)",
+      "unit": "Billions of $",
+      "category": "individual_income_tax",
+      "variable_note": "See the supplemental data on parameters for bracket thresholds."
+    },
+    "rev_iit_bracket_1": {
+      "description": "Taxable income in bracket 1",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_bracket_2": {
+      "description": "Taxable income in bracket 2",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_bracket_3": {
+      "description": "Taxable income in bracket 3",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_bracket_4": {
+      "description": "Taxable income in bracket 4",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_bracket_5": {
+      "description": "Taxable income in bracket 5",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_bracket_6": {
+      "description": "Taxable income in bracket 6",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_bracket_7": {
+      "description": "Taxable income in bracket 7",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_taxable_capgains_divs": {
+      "description": "Taxable income taxed at reduced rates for capital gains and dividends",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_tax_before_credits": {
+      "description": "Total income tax (including AMT) before credits",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_tax_ordinary": {
+      "description": "Tax from taxable income taxed at ordinary rates",
+      "unit": "Billions of $",
+      "category": "individual_income_tax",
+      "variable_note": "See the supplemental data on parameters for the rate structure."
+    },
+    "rev_iit_tax_bracket_1": {
+      "description": "Tax from bracket 1",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_tax_bracket_2": {
+      "description": "Tax from bracket 2",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_tax_bracket_3": {
+      "description": "Tax from bracket 3",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_tax_bracket_4": {
+      "description": "Tax from bracket 4",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_tax_bracket_5": {
+      "description": "Tax from bracket 5",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_tax_bracket_6": {
+      "description": "Tax from bracket 6",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_tax_bracket_7": {
+      "description": "Tax from bracket 7",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_tax_capgains_divs": {
+      "description": "Tax from taxable income taxed at reduced rates for capital gains and dividends",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_tax_amt": {
+      "description": "Tax from AMT (including credits limited under the regular tax)",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_total_credits": {
+      "description": "Total credits (refundable and nonrefundable)",
+      "unit": "Billions of $",
+      "category": "individual_income_tax",
+      "variable_note": "Excludes the premium tax credit."
+    },
+    "rev_iit_tax_after_credits": {
+      "description": "Income tax after credits",
+      "unit": "Billions of $",
+      "category": "individual_income_tax",
+      "variable_note": "Income tax after credits does not include the portion of certain refundable credits that are considered outlays."
+    },
+    "rev_iit_niit": {
+      "description": "Net investment income tax",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_liability": {
+      "description": "Individual income tax liability",
+      "unit": "Billions of $",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_returns_total": {
+      "description": "Number of returns (millions)",
+      "unit": "Millions",
+      "category": "individual_income_tax",
+      "variable_note": "Based on returns filed in 2022, including dependents, plus estimates of future additional filers. The estimate does not account for changes in the filing thresholds, which may cause changes in the number of filers. m. Includes taxpayers with liability under the AMT and some taxpayers for whom the AMT limits their credits taken under the regular income tax. n. Receipts are actuals through FY 2025 and projections thereafter. The final projections of individual income tax receipts include many adjustments to the tax year liability estimate. Those adjustments include converting the projections from a calendar year liability basis to a fiscal year receipts basis, adding receipts of back taxes and fiduciary taxes, accounting for reallocations made between individual income and payroll taxes, adjusting for certain federal subsidies that boost business income in the NIPAs (national income and product accounts) but not taxable income, adding the effects of certain legislation not explicitly modeled on the microsimulation tax model, and adjusting for differences in projected tax liabilities and those implied by recently observed collections."
+    },
+    "rev_iit_returns_itemized": {
+      "description": "Number of returns with itemized deductions (millions)",
+      "unit": "Millions",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_returns_amt": {
+      "description": "Number of returns affected by AMT (millions)",
+      "unit": "Millions",
+      "category": "individual_income_tax"
+    },
+    "rev_capgains_realizations": {
+      "description": "Capital gains realizations",
+      "unit": "Billions of $",
+      "category": "capital_gains"
+    },
+    "rev_capgains_realizations_gdp_pct": {
+      "description": "Capital gains realizations as a percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "capital_gains"
+    },
+    "rev_capgains_tax_receipts": {
+      "description": "Capital gains tax receipts",
+      "unit": "Billions of $",
+      "category": "capital_gains"
+    },
+    "rev_capgains_pct_iit": {
+      "description": "Capital gains tax receipts as a percentage of individual income tax receipts",
+      "unit": "Percent",
+      "category": "capital_gains"
+    },
+    "rev_corp_profits_before_tax": {
+      "description": "Corporate profits before tax (without IVA and CCAdj)",
+      "unit": "Billions of $",
+      "category": "corporate_profits",
+      "variable_note": "Gross measure related to current activity; BEA derives it from total receipts less total deductions, as reported by the IRS for all corporations, by adding and subtracting certain items treated differently in the national accounts and for income tax purposes. Component of BEA's measure of overall corporate profits (with IVA and CCAdj). Changes to tax depreciation affect estimates of profits before tax but not corporate profits with IVA and CCAdj. For more information on how changes to tax depreciation affect profits in the NIPAs, see Bureau of Economic Analysis, \"How Do Changes in the Tax Treatment of Depreciation Impact NIPA Corporate Profits?\" (August 5, 2011), www.bea.gov/help/faq/1002."
+    },
+    "rev_corp_adj_misreporting": {
+      "description": "Adjustment for misreporting on income tax returns",
+      "unit": "Billions of $",
+      "category": "corporate_profits"
+    },
+    "rev_corp_adj_amendments": {
+      "description": "Posttabulation amendments and revisions",
+      "unit": "Billions of $",
+      "category": "corporate_profits",
+      "variable_note": "Contains adjustments to reflect changes from Public Law 115-97, including the treatment of certain deductions such as for excess interest expense (beginning in 2018). For 2021, this item also contains an adjustment to reflect the effect of Paycheck Protection Program (PPP) loans in corporate profits. For more information see \"How does the Paycheck Protection Program Impact the National Income and Product Accounts?\", https://www.bea.gov/help/faq/1408. Previously this item contained and adjustment for changes to the treatment of research and experimentation expenses (beginning in 2022). That effect has been removed as of the current projection and is captured in the “Adjustment to depreciate expenditures for intellectual property products” included in \"Other adjustments to corporate profits before tax\"."
+    },
+    "rev_corp_adj_state_local": {
+      "description": "State and local taxes on corporate income",
+      "unit": "Billions of $",
+      "category": "corporate_profits"
+    },
+    "rev_corp_adj_ric_interest": {
+      "description": "Interest payments of regulated investment companies",
+      "unit": "Billions of $",
+      "category": "corporate_profits"
+    },
+    "rev_corp_adj_bad_debt": {
+      "description": "Bad debt expense",
+      "unit": "Billions of $",
+      "category": "corporate_profits"
+    },
+    "rev_corp_adj_property_gains": {
+      "description": "Gains, net of losses, from sale of property",
+      "unit": "Billions of $",
+      "category": "corporate_profits"
+    },
+    "rev_corp_adj_domestic_dividends": {
+      "description": "Dividends received from domestic corporations",
+      "unit": "Billions of $",
+      "category": "corporate_profits"
+    },
+    "rev_corp_adj_foreign_equity_us": {
+      "description": "Income on equities in foreign corporations and branches (to U.S. corporations)",
+      "unit": "Billions of $",
+      "category": "corporate_profits"
+    },
+    "rev_corp_adj_foreign_equity_net": {
+      "description": "Income from equities in foreign corporations and branches by all U.S. residents, net",
+      "unit": "Billions of $",
+      "category": "corporate_profits"
+    },
+    "rev_corp_adj_other": {
+      "description": "Other adjustments to corporate profits before tax",
+      "unit": "Billions of $",
+      "category": "corporate_profits",
+      "variable_note": "Includes the following elements of Table 7.16 in the NIPAs: “income of organizations not filing corporation income tax returns,” “depletion on domestic minerals,” “adjustment to depreciate expenditures for mining exploration, shafts and wells,” “adjustment to depreciate expenditures for intellectual property products,” “disaster adjustments (net),” “costs of trading or issuing corporate securities,” and “excess of employer expenses over actual employer contributions for defined benefit employee pension plans.” \"Other adjustments to corporate profits before tax\" also includes adjustments for any remaining discrepancies to align corporate profits before tax with total receipts less total deductions."
+    },
+    "rev_corp_adj_total": {
+      "description": "Total adjustments to corporate profits",
+      "unit": "Billions of $",
+      "category": "corporate_profits"
+    },
+    "rev_corp_profits_after_adj": {
+      "description": "Corporate profits before tax after total adjustments (is equivalent to total receipts less total deductions, IRS)",
+      "unit": "Billions of $",
+      "category": "corporate_profits",
+      "variable_note": "Estimate for C corporations as well as entities that are legally organized as corporations but whose income is not subject to the corporate income tax."
+    },
+    "rev_corp_net_income_all": {
+      "description": "Net income (less deficit) for all corporations",
+      "unit": "Billions of $",
+      "category": "corporate_profits",
+      "variable_note": "Includes the income of all entities legally organized as corporations, as well as additional income not captured in the derivation from profits, such as nontaxable interest on state and local government obligations and constructive taxable income from related foreign corporations."
+    },
+    "rev_corp_net_income_subject": {
+      "description": "Net income (less deficit) for corporations subject to corporate income tax",
+      "unit": "Billions of $",
+      "category": "corporate_profits",
+      "variable_note": "Excludes the estimated net income of pass-through entities."
+    },
+    "rev_corp_income_subject_to_tax": {
+      "description": "Income subject to tax under the corporate income tax",
+      "unit": "Billions of $",
+      "category": "corporate_profits",
+      "variable_note": "Removes estimated net operating losses and other special deductions from the measure of \"net income (less deficit) for corporations subject to the corporate income tax.\" In addition, it is adjusted to account for any discrepancies between derived and actual values in history."
+    },
+    "chg_rev_econ_corporate_income": {
+      "description": "Change in corporate income taxes due to economic factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_econ_customs": {
+      "description": "Change in customs duties due to economic factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_econ_estate_gift": {
+      "description": "Change in estate and gift taxes due to economic factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_econ_excise": {
+      "description": "Change in excise taxes due to economic factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_econ_fed_reserve": {
+      "description": "Change in Federal Reserve remittances due to economic factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_econ_individual_income": {
+      "description": "Change in individual income taxes due to economic factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_econ_misc_fees": {
+      "description": "Change in miscellaneous fees and fines due to economic factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_econ_payroll": {
+      "description": "Change in payroll taxes due to economic factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_econ_subtotal": {
+      "description": "Change in subtotal due to economic factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_leg_corporate_income": {
+      "description": "Change in corporate income taxes due to legislative factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_leg_customs": {
+      "description": "Change in customs duties due to legislative factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_leg_estate_gift": {
+      "description": "Change in estate and gift taxes due to legislative factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_leg_excise": {
+      "description": "Change in excise taxes due to legislative factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_leg_fed_reserve": {
+      "description": "Change in Federal Reserve remittances due to legislative factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_leg_individual_income": {
+      "description": "Change in individual income taxes due to legislative factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_leg_misc_fees": {
+      "description": "Change in miscellaneous fees and fines due to legislative factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_leg_payroll": {
+      "description": "Change in payroll taxes due to legislative factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_leg_subtotal": {
+      "description": "Change in subtotal due to legislative factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_tech_corporate_income": {
+      "description": "Change in corporate income taxes due to technical factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_tech_customs": {
+      "description": "Change in customs duties due to technical factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_tech_estate_gift": {
+      "description": "Change in estate and gift taxes due to technical factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_tech_excise": {
+      "description": "Change in excise taxes due to technical factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_tech_fed_reserve": {
+      "description": "Change in Federal Reserve remittances due to technical factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_tech_individual_income": {
+      "description": "Change in individual income taxes due to technical factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_tech_misc_fees": {
+      "description": "Change in miscellaneous fees and fines due to technical factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_tech_payroll": {
+      "description": "Change in payroll taxes due to technical factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_tech_subtotal": {
+      "description": "Change in subtotal due to technical factors since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "chg_rev_total": {
+      "description": "Total change in revenue projections since prior baseline",
+      "unit": "billions_of_dollars",
+      "category": "baseline_changes"
+    },
+    "rev_iit_additional_deductions": {
+      "description": "Additional deductions (tipped income, overtime, vehicle loan interest, etc.)",
+      "unit": "billions_of_dollars",
+      "category": "individual_income_tax",
+      "variable_note": "Includes deductions for tipped income, overtime compensation, vehicle loan interest, and taxpayers age 65 or older."
+    },
+    "rev_iit_agi_share_top10_pct": {
+      "description": "Share of adjusted gross income held by top 10 percent of filers",
+      "unit": "%",
+      "category": "individual_income_tax_agi_shares"
+    },
+    "rev_iit_agi_share_top1_pct": {
+      "description": "Share of adjusted gross income held by top 1 percent of filers",
+      "unit": "%",
+      "category": "individual_income_tax_agi_shares"
+    },
+    "rev_iit_agi_share_top25_pct": {
+      "description": "Share of adjusted gross income held by top 25 percent of filers",
+      "unit": "%",
+      "category": "individual_income_tax_agi_shares"
+    },
+    "rev_iit_agi_share_top50_pct": {
+      "description": "Share of adjusted gross income held by top 50 percent of filers",
+      "unit": "%",
+      "category": "individual_income_tax_agi_shares"
+    },
+    "rev_iit_agi_share_top5_pct": {
+      "description": "Share of adjusted gross income held by top 5 percent of filers",
+      "unit": "%",
+      "category": "individual_income_tax_agi_shares"
+    },
+    "rev_iit_child_tax_credit": {
+      "description": "Child tax credit and credit for other dependents",
+      "unit": "billions_of_dollars",
+      "category": "individual_income_tax",
+      "variable_note": "Includes both the outlay portion of the credit and the portion offsetting tax liabilities."
+    },
+    "rev_iit_eitc": {
+      "description": "Earned income tax credit",
+      "unit": "billions_of_dollars",
+      "category": "individual_income_tax",
+      "variable_note": "Includes both the outlay portion of the credit and the portion offsetting tax liabilities."
+    },
+    "rev_iit_receipts_fy": {
+      "description": "Individual income tax receipts (fiscal year basis)",
+      "unit": "billions_of_dollars",
+      "category": "individual_income_tax"
+    },
+    "rev_iit_recovery_rebates": {
+      "description": "Recovery rebates for individuals (COVID-era stimulus)",
+      "unit": "billions_of_dollars",
+      "category": "individual_income_tax"
+    },
+    "leg_rev_econ_recovery_81": {
+      "description": "Revenue effect of Economic Recovery Tax Act of 1981 (PL 97-34), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_econ_recovery_81_gdp_pct": {
+      "description": "Revenue effect of Economic Recovery Tax Act of 1981 (PL 97-34), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_tefra_82": {
+      "description": "Revenue effect of Tax Equity and Fiscal Responsibility Act of 1982 (PL 97-248), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_tefra_82_gdp_pct": {
+      "description": "Revenue effect of Tax Equity and Fiscal Responsibility Act of 1982 (PL 97-248), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_ss_amend_83": {
+      "description": "Revenue effect of Social Security Amendments of 1983 (PL 98-21), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_ss_amend_83_gdp_pct": {
+      "description": "Revenue effect of Social Security Amendments of 1983 (PL 98-21), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_deficit_reduction_84": {
+      "description": "Revenue effect of Deficit Reduction Act of 1984 (PL 98-369), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_deficit_reduction_84_gdp_pct": {
+      "description": "Revenue effect of Deficit Reduction Act of 1984 (PL 98-369), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_tax_reform_86": {
+      "description": "Revenue effect of Tax Reform Act of 1986 (PL 99-514), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_tax_reform_86_gdp_pct": {
+      "description": "Revenue effect of Tax Reform Act of 1986 (PL 99-514), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_obra_87": {
+      "description": "Revenue effect of Omnibus Budget Reconciliation Act of 1987 (PL 100-203), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_obra_87_gdp_pct": {
+      "description": "Revenue effect of Omnibus Budget Reconciliation Act of 1987 (PL 100-203), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_obra_90": {
+      "description": "Revenue effect of Omnibus Budget Reconciliation Act of 1990 (PL 101-508), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_obra_90_gdp_pct": {
+      "description": "Revenue effect of Omnibus Budget Reconciliation Act of 1990 (PL 101-508), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_obra_93": {
+      "description": "Revenue effect of Omnibus Budget Reconciliation Act of 1993 (PL 103-66), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_obra_93_gdp_pct": {
+      "description": "Revenue effect of Omnibus Budget Reconciliation Act of 1993 (PL 103-66), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_taxpayer_relief_97": {
+      "description": "Revenue effect of Taxpayer Relief Act of 1997 (PL 105-34), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_taxpayer_relief_97_gdp_pct": {
+      "description": "Revenue effect of Taxpayer Relief Act of 1997 (PL 105-34), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_egtrra_01": {
+      "description": "Revenue effect of Economic Growth and Tax Relief Reconciliation Act of 2001 (PL 107-16), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_egtrra_01_gdp_pct": {
+      "description": "Revenue effect of Economic Growth and Tax Relief Reconciliation Act of 2001 (PL 107-16), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_jcwa_02": {
+      "description": "Revenue effect of Job Creation and Worker Assistance Act of 2002 (PL 107-147), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_jcwa_02_gdp_pct": {
+      "description": "Revenue effect of Job Creation and Worker Assistance Act of 2002 (PL 107-147), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_jgtrra_03": {
+      "description": "Revenue effect of Jobs and Growth Tax Relief Reconciliation Act of 2003 (PL 108-27), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_jgtrra_03_gdp_pct": {
+      "description": "Revenue effect of Jobs and Growth Tax Relief Reconciliation Act of 2003 (PL 108-27), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_wftra_04": {
+      "description": "Revenue effect of Working Families Tax Relief Act of 2004 (PL 108-311), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_wftra_04_gdp_pct": {
+      "description": "Revenue effect of Working Families Tax Relief Act of 2004 (PL 108-311), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_ajca_04": {
+      "description": "Revenue effect of American Jobs Creation Act of 2004 (PL 108-357), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_ajca_04_gdp_pct": {
+      "description": "Revenue effect of American Jobs Creation Act of 2004 (PL 108-357), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_tipra_05": {
+      "description": "Revenue effect of Tax Increase Prevention and Reconciliation Act of 2005 (PL 109-222), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_tipra_05_gdp_pct": {
+      "description": "Revenue effect of Tax Increase Prevention and Reconciliation Act of 2005 (PL 109-222), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_ppa_06": {
+      "description": "Revenue effect of Pension Protection Act of 2006 (PL 109-280), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_ppa_06_gdp_pct": {
+      "description": "Revenue effect of Pension Protection Act of 2006 (PL 109-280), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_trhca_06": {
+      "description": "Revenue effect of Tax Relief and Health Care Act of 2006 (PL 109-432), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_trhca_06_gdp_pct": {
+      "description": "Revenue effect of Tax Relief and Health Care Act of 2006 (PL 109-432), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_tipa_07": {
+      "description": "Revenue effect of Tax Increase Prevention Act of 2007 (PL 110-166), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_tipa_07_gdp_pct": {
+      "description": "Revenue effect of Tax Increase Prevention Act of 2007 (PL 110-166), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_esa_08": {
+      "description": "Revenue effect of Economic Stimulus Act of 2008 (PL 110-185), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_esa_08_gdp_pct": {
+      "description": "Revenue effect of Economic Stimulus Act of 2008 (PL 110-185), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_hera_08": {
+      "description": "Revenue effect of Housing and Economic Recovery Act of 2008 (PL 110-289), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_hera_08_gdp_pct": {
+      "description": "Revenue effect of Housing and Economic Recovery Act of 2008 (PL 110-289), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_eesa_08": {
+      "description": "Revenue effect of Emergency Economic Stabilization Act of 2008 (PL 110-343), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_eesa_08_gdp_pct": {
+      "description": "Revenue effect of Emergency Economic Stabilization Act of 2008 (PL 110-343), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_chipra_09": {
+      "description": "Revenue effect of CHIP Reauthorization Act of 2009 (PL 111-3), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_chipra_09_gdp_pct": {
+      "description": "Revenue effect of CHIP Reauthorization Act of 2009 (PL 111-3), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_arra_09": {
+      "description": "Revenue effect of American Recovery and Reinvestment Act of 2009 (PL 111-5), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_arra_09_gdp_pct": {
+      "description": "Revenue effect of American Recovery and Reinvestment Act of 2009 (PL 111-5), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_whba_09": {
+      "description": "Revenue effect of Worker, Homeownership, and Business Assistance Act of 2009 (PL 111-92), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_whba_09_gdp_pct": {
+      "description": "Revenue effect of Worker, Homeownership, and Business Assistance Act of 2009 (PL 111-92), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_hire_10": {
+      "description": "Revenue effect of Hiring Incentives to Restore Employment Act (PL 111-147), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_hire_10_gdp_pct": {
+      "description": "Revenue effect of Hiring Incentives to Restore Employment Act (PL 111-147), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_aca_10": {
+      "description": "Revenue effect of Affordable Care Act (PL 111-148; 111-152), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_aca_10_gdp_pct": {
+      "description": "Revenue effect of Affordable Care Act (PL 111-148; 111-152), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_sbja_10": {
+      "description": "Revenue effect of Small Business Jobs Act of 2010 (PL 111-240), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_sbja_10_gdp_pct": {
+      "description": "Revenue effect of Small Business Jobs Act of 2010 (PL 111-240), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_truirjca_10": {
+      "description": "Revenue effect of Tax Relief, Unemployment Insurance Reauthorization, and Job Creation Act of 2010 (PL 111-312), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_truirjca_10_gdp_pct": {
+      "description": "Revenue effect of Tax Relief, Unemployment Insurance Reauthorization, and Job Creation Act of 2010 (PL 111-312), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_tptcca_11": {
+      "description": "Revenue effect of Temporary Payroll Tax Cut Continuation Act of 2011 (PL 112-78), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_tptcca_11_gdp_pct": {
+      "description": "Revenue effect of Temporary Payroll Tax Cut Continuation Act of 2011 (PL 112-78), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_mctrjca_12": {
+      "description": "Revenue effect of Middle Class Tax Relief and Job Creation Act of 2012 (PL 112-96), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_mctrjca_12_gdp_pct": {
+      "description": "Revenue effect of Middle Class Tax Relief and Job Creation Act of 2012 (PL 112-96), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_atra_12": {
+      "description": "Revenue effect of American Taxpayer Relief Act of 2012 (PL 112-240), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_atra_12_gdp_pct": {
+      "description": "Revenue effect of American Taxpayer Relief Act of 2012 (PL 112-240), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_tipa_14": {
+      "description": "Revenue effect of Tax Increase Prevention Act of 2014 (PL 113-295), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_tipa_14_gdp_pct": {
+      "description": "Revenue effect of Tax Increase Prevention Act of 2014 (PL 113-295), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_fast_act_15": {
+      "description": "Revenue effect of FAST Act (PL 114-94), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_fast_act_15_gdp_pct": {
+      "description": "Revenue effect of FAST Act (PL 114-94), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_consol_approp_16": {
+      "description": "Revenue effect of Consolidated Appropriations Act, 2016 (PL 114-113), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_consol_approp_16_gdp_pct": {
+      "description": "Revenue effect of Consolidated Appropriations Act, 2016 (PL 114-113), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_tcja": {
+      "description": "Revenue effect of Tax Cuts and Jobs Act, 2017 (PL 115-97), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_tcja_gdp_pct": {
+      "description": "Revenue effect of Tax Cuts and Jobs Act, 2017 (PL 115-97), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_consol_approp_20": {
+      "description": "Revenue effect of Further Consolidated Appropriations Act, 2020 (PL 116-44), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_consol_approp_20_gdp_pct": {
+      "description": "Revenue effect of Further Consolidated Appropriations Act, 2020 (PL 116-44), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_ffcra_20": {
+      "description": "Revenue effect of Families First Coronavirus Response Act (PL 116-127), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_ffcra_20_gdp_pct": {
+      "description": "Revenue effect of Families First Coronavirus Response Act (PL 116-127), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_cares_act": {
+      "description": "Revenue effect of CARES Act (PL 116-136), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_cares_act_gdp_pct": {
+      "description": "Revenue effect of CARES Act (PL 116-136), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_consol_approp_21": {
+      "description": "Revenue effect of Consolidated Appropriations Act, 2021 (PL 116-260), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_consol_approp_21_gdp_pct": {
+      "description": "Revenue effect of Consolidated Appropriations Act, 2021 (PL 116-260), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_arpa_21": {
+      "description": "Revenue effect of American Rescue Plan Act, 2021 (PL 117-2), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_arpa_21_gdp_pct": {
+      "description": "Revenue effect of American Rescue Plan Act, 2021 (PL 117-2), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_ira_22": {
+      "description": "Revenue effect of Inflation Reduction Act, 2022 (PL 117-169), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_ira_22_gdp_pct": {
+      "description": "Revenue effect of Inflation Reduction Act, 2022 (PL 117-169), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    },
+    "leg_rev_obbba_25": {
+      "description": "Revenue effect of One Big Beautiful Bill Act, 2025 (PL 119-21), billions_of_dollars",
+      "unit": "billions_of_dollars",
+      "category": "legislation_effects"
+    },
+    "leg_rev_obbba_25_gdp_pct": {
+      "description": "Revenue effect of One Big Beautiful Bill Act, 2025 (PL 119-21), percentage of GDP",
+      "unit": "percent_of_gdp",
+      "category": "legislation_effects"
+    }
+  }
+}

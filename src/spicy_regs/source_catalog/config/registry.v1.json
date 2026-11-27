@@ -1522,8 +1522,14 @@
       "publisher": "USAspending.gov",
       "description": "Retained original award download listings, explicitly selected full transaction archives and request failures. Inventory items remain advertised only; archive identity and complete selected-row interpretation are qualified separately.",
       "source_names": [],
-      "families": ["usaspending-awards"],
-      "tables": ["usaspending_transactions", "usaspending_awards", "usaspending_archive_members"]
+      "families": [
+        "usaspending-awards"
+      ],
+      "tables": [
+        "usaspending_transactions",
+        "usaspending_awards",
+        "usaspending_archive_members"
+      ]
     },
     {
       "id": "declared:usaspending-gsdm",
@@ -1614,9 +1620,35 @@
       "title": "Historical presidential veto summary",
       "publisher": "U.S. Senate",
       "description": "One dated Senate Summary of Bills Vetoed capture. Administration spans, literal category cells and disputed-veto footnotes remain source-defined; per-president detail documents and per-term subdivisions are separate scope.",
-      "source_names": ["historical-vetoes"],
-      "families": ["historical-vetoes"],
-      "tables": ["historical_veto_administrations", "historical_veto_snapshots"]
+      "source_names": [
+        "historical-vetoes"
+      ],
+      "families": [
+        "historical-vetoes"
+      ],
+      "tables": [
+        "historical_veto_administrations",
+        "historical_veto_snapshots"
+      ]
+    },
+    {
+      "id": "family:cbo-eval-projections",
+      "title": "CBO projection accuracy history (US-CBO/eval-projections)",
+      "publisher": "Congressional Budget Office",
+      "description": "Commit-pinned CBO historical baseline projections, legislative/economic/technical baseline changes, actuals, GDP, projection errors, and horizon summary statistics (1982-2025 actuals; baselines through February 2026).",
+      "source_names": [
+        "cbo-eval-projections"
+      ],
+      "families": [
+        "cbo-eval-projections"
+      ],
+      "tables": [
+        "cbo_projection_errors",
+        "cbo_projection_error_summary_stats",
+        "cbo_eval_actuals",
+        "cbo_eval_baselines",
+        "cbo_eval_baseline_changes"
+      ]
     },
     {
       "id": "family:ofac-sanctions",
@@ -4665,7 +4697,7 @@
       "family": "fec-candidate-history",
       "id": "fec-qualified-policy:fec_candidate_history",
       "publication_changed": false,
-      "reason": "Prefer complete pinned candidate-master cycle files and their pinned header dictionary. All selected even cycles 1980–2026 passed native ID/field-width scans; preserve (candidate_id,cycle) and refuse duplicate keys. Modern API full-history equivalence is untested. Evidence fec-candidate-historical-query-contrast/1; https://www.fec.gov/data/browse-data/?tab=bulk-data",
+      "reason": "Prefer complete pinned candidate-master cycle files and their pinned header dictionary. All selected even cycles 1980\u20132026 passed native ID/field-width scans; preserve (candidate_id,cycle) and refuse duplicate keys. Modern API full-history equivalence is untested. Evidence fec-candidate-historical-query-contrast/1; https://www.fec.gov/data/browse-data/?tab=bulk-data",
       "retained_generation": "sha256:24877d4bbde2d3a364fb5880d999a5caf7522df400d524104e7ca8973bb22e51",
       "route_id": "family:fec-candidate-history:candidate-master",
       "status": "selected-policy",
@@ -8098,7 +8130,7 @@
       "id": "fec-qualified-relationship:candidate-history",
       "kind": "period-specific-representations",
       "note": "Each selected cycle retains unique native IDs and literal period values. H2AK01158 bulk incumbent/challenger differs between 2024 and 2026 and the later API response; preserve period semantics. H2GA13095 occurs in neither selected bulk nor API witness, so no API historic gap is established. Evidence fec-candidate-historical-query-contrast/1; https://www.fec.gov/campaign-finance-data/candidate-master-file-description/",
-      "scope": "Selected even-cycle candidate masters 1980–2026 and two retained candidate queries",
+      "scope": "Selected even-cycle candidate masters 1980\u20132026 and two retained candidate queries",
       "to_id": "family:fec-query:openfec",
       "qualification_input": {
         "path": "metadata/catalog-relationships/20261010/fec/proposed-registry.json",
@@ -8163,7 +8195,7 @@
       "kind": "complementary-period-role",
       "from_id": "family:federal-register:govinfo-fr-archive",
       "to_id": "family:federal-register:register",
-      "scope": "Historical issues 1936–1994 versus dated API records from 1994",
+      "scope": "Historical issues 1936\u20131994 versus dated API records from 1994",
       "note": "Digitized issue units and dated API records have different units and fields. Retained historical PDF and MODS establish historical holdings. https://www.govinfo.gov/help/fr",
       "qualification_input": {
         "path": "metadata/catalog-relationships/20261010/regulatory/proposed-registry.json",
@@ -9979,7 +10011,7 @@
       "collection_id": "family:federal-register",
       "route_id": "family:federal-register:govinfo-fr-archive",
       "kind": "documented-publisher-scope",
-      "label": "Historical digitizedissuePDF 1936–1994;1994 special case",
+      "label": "Historical digitizedissuePDF 1936\u20131994;1994 special case",
       "basis": "https://www.govinfo.gov/help/fr",
       "start": "1936-01-01",
       "end": "1994-12-31",
@@ -10118,7 +10150,7 @@
       "collection_id": "family:laws",
       "route_id": "family:laws:govinfo-laws",
       "kind": "documented-publisher-scope",
-      "label": "GovInfo slip laws from the 104 th Congress (1995–1996) forward",
+      "label": "GovInfo slip laws from the 104 th Congress (1995\u20131996) forward",
       "basis": "https://www.govinfo.gov/help/plaw",
       "start": "1995-01-01",
       "qualification_input": {
@@ -15769,7 +15801,7 @@
             "Docket identity and selected attributes; strip quotes from docket id; incremental native identity merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -15822,7 +15854,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -15847,9 +15879,9 @@
             {
               "path": "repo:spicy-docs/src/spicy_docs/schemas/federal_register.py",
               "start_line": 63,
-              "end_line": 115,
+              "end_line": 119,
               "symbol": "project_federal_register_document",
-              "sha256": "9c9dda445681ec44d609f144ccd1c42e47cff787b7e6d22cb5d2f49bc6f6e6b9",
+              "sha256": "cbeadef9da6f4ad9b07c4b8a1123a45bcf5b627e791733bd3b054582ae8aa92d",
               "scope": "current checkout capability"
             }
           ],
@@ -15882,10 +15914,10 @@
             },
             {
               "path": "repo:spicy-docs/src/spicy_docs/sources/unified_agenda/records.py",
-              "start_line": 163,
-              "end_line": 198,
+              "start_line": 166,
+              "end_line": 201,
               "symbol": "scan_unified_agenda_records",
-              "sha256": "67587dfb6984b5363fa893d12f9a1bbd563653b239530bf13e1b33a9777ab842",
+              "sha256": "ea863480dd638f803510b76d14c8171779d76a816412cf1093dfbcb24ef97a45",
               "scope": "current checkout capability"
             },
             {
@@ -15903,7 +15935,7 @@
             "Exact REGINFO_RIN_DATA_{stem}.xml body; PUBLICATION_ID can differ from historical filename stem."
           ],
           "periods": [
-            "60 advertised edition codes 199510–202510, inventory observed 2026-10-26."
+            "60 advertised edition codes 199510\u2013202510, inventory observed 2026-10-26."
           ],
           "source_collections": [
             "family:unified-agenda"
@@ -16228,7 +16260,7 @@
             "Count documents by agency/calendar month/document_type after removed-posting filter; omit missing, invalid and year-zero dates; output metadata stores exact parent digest and omitted-row counts; absent documents emits schema-only empty artifact."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -16260,7 +16292,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -16312,7 +16344,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -16896,7 +16928,7 @@
             "Union agency identities and left join docket/document/comment totals. Prefer comments_index, else comments monolith, else zero; subtract comments under removed postings."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -16931,7 +16963,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -16966,7 +16998,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -17001,7 +17033,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -17036,7 +17068,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -17091,7 +17123,7 @@
             "Docket identity and selected attributes; strip quotes from docket id; incremental native identity merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -17144,7 +17176,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -17221,7 +17253,7 @@
             "Native API detail JSON, not attachment byte inventory."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -17299,7 +17331,7 @@
             "Upstream generated attachment text; missing extracted text does not establish missing PDF."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -17377,7 +17409,7 @@
             "Catalog-native rows and receipts; original capture closure is inherited, not asserted by export."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -18288,7 +18320,7 @@
             "Docket identity and selected attributes; strip quotes from docket id; incremental native identity merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -18341,7 +18373,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -18366,9 +18398,9 @@
             {
               "path": "repo:spicy-docs/src/spicy_docs/schemas/federal_register.py",
               "start_line": 63,
-              "end_line": 115,
+              "end_line": 119,
               "symbol": "project_federal_register_document",
-              "sha256": "9c9dda445681ec44d609f144ccd1c42e47cff787b7e6d22cb5d2f49bc6f6e6b9",
+              "sha256": "cbeadef9da6f4ad9b07c4b8a1123a45bcf5b627e791733bd3b054582ae8aa92d",
               "scope": "current checkout capability"
             }
           ],
@@ -18401,10 +18433,10 @@
             },
             {
               "path": "repo:spicy-docs/src/spicy_docs/sources/unified_agenda/records.py",
-              "start_line": 163,
-              "end_line": 198,
+              "start_line": 166,
+              "end_line": 201,
               "symbol": "scan_unified_agenda_records",
-              "sha256": "67587dfb6984b5363fa893d12f9a1bbd563653b239530bf13e1b33a9777ab842",
+              "sha256": "ea863480dd638f803510b76d14c8171779d76a816412cf1093dfbcb24ef97a45",
               "scope": "current checkout capability"
             },
             {
@@ -18422,7 +18454,7 @@
             "Exact REGINFO_RIN_DATA_{stem}.xml body; PUBLICATION_ID can differ from historical filename stem."
           ],
           "periods": [
-            "60 advertised edition codes 199510–202510, inventory observed 2026-10-26."
+            "60 advertised edition codes 199510\u2013202510, inventory observed 2026-10-26."
           ],
           "source_collections": [
             "family:unified-agenda"
@@ -24199,7 +24231,7 @@
           ],
           "periods": [
             "Prior/current annual CFR years by default; selected edition plus prior table may span older years.",
-            "One resident annual bulk sample: CFR-2025-title1-vol1; separately held eCFR snapshots span 2024–2026."
+            "One resident annual bulk sample: CFR-2025-title1-vol1; separately held eCFR snapshots span 2024\u20132026."
           ],
           "source_collections": [
             "family:cfr-sections"
@@ -24250,7 +24282,7 @@
           ],
           "periods": [
             "Prior/current annual CFR years by default; selected edition plus prior table may span older years.",
-            "One resident annual bulk sample: CFR-2025-title1-vol1; separately held eCFR snapshots span 2024–2026."
+            "One resident annual bulk sample: CFR-2025-title1-vol1; separately held eCFR snapshots span 2024\u20132026."
           ],
           "source_collections": [
             "family:cfr-sections"
@@ -24301,7 +24333,7 @@
           ],
           "periods": [
             "Prior/current annual CFR years by default; selected edition plus prior table may span older years.",
-            "One resident annual bulk sample: CFR-2025-title1-vol1; separately held eCFR snapshots span 2024–2026."
+            "One resident annual bulk sample: CFR-2025-title1-vol1; separately held eCFR snapshots span 2024\u20132026."
           ],
           "source_collections": [
             "family:cfr-sections"
@@ -24352,7 +24384,7 @@
           ],
           "periods": [
             "Prior/current annual CFR years by default; selected edition plus prior table may span older years.",
-            "One resident annual bulk sample: CFR-2025-title1-vol1; separately held eCFR snapshots span 2024–2026."
+            "One resident annual bulk sample: CFR-2025-title1-vol1; separately held eCFR snapshots span 2024\u20132026."
           ],
           "source_collections": [
             "family:cfr-sections"
@@ -27376,7 +27408,7 @@
             "Same raw payload stream; refusal may omit only its attribute row."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -27436,7 +27468,7 @@
             "Selected previous attribute working table for incremental merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -28363,7 +28395,7 @@
             "Docket identity and selected attributes; strip quotes from docket id; incremental native identity merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -28416,7 +28448,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -28441,9 +28473,9 @@
             {
               "path": "repo:spicy-docs/src/spicy_docs/schemas/federal_register.py",
               "start_line": 63,
-              "end_line": 115,
+              "end_line": 119,
               "symbol": "project_federal_register_document",
-              "sha256": "9c9dda445681ec44d609f144ccd1c42e47cff787b7e6d22cb5d2f49bc6f6e6b9",
+              "sha256": "cbeadef9da6f4ad9b07c4b8a1123a45bcf5b627e791733bd3b054582ae8aa92d",
               "scope": "current checkout capability"
             }
           ],
@@ -28476,10 +28508,10 @@
             },
             {
               "path": "repo:spicy-docs/src/spicy_docs/sources/unified_agenda/records.py",
-              "start_line": 163,
-              "end_line": 198,
+              "start_line": 166,
+              "end_line": 201,
               "symbol": "scan_unified_agenda_records",
-              "sha256": "67587dfb6984b5363fa893d12f9a1bbd563653b239530bf13e1b33a9777ab842",
+              "sha256": "ea863480dd638f803510b76d14c8171779d76a816412cf1093dfbcb24ef97a45",
               "scope": "current checkout capability"
             },
             {
@@ -28497,7 +28529,7 @@
             "Exact REGINFO_RIN_DATA_{stem}.xml body; PUBLICATION_ID can differ from historical filename stem."
           ],
           "periods": [
-            "60 advertised edition codes 199510–202510, inventory observed 2026-10-26."
+            "60 advertised edition codes 199510\u2013202510, inventory observed 2026-10-26."
           ],
           "source_collections": [
             "family:unified-agenda"
@@ -28823,7 +28855,7 @@
             "Native API detail JSON, not attachment byte inventory."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -28899,7 +28931,7 @@
             "Upstream generated attachment text; missing extracted text does not establish missing PDF."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -28975,7 +29007,7 @@
             "Catalog-native rows and receipts; original capture closure is inherited, not asserted by export."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -29366,7 +29398,7 @@
             "Native API detail JSON, not attachment byte inventory."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -29442,7 +29474,7 @@
             "Upstream generated attachment text; missing extracted text does not establish missing PDF."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -29518,7 +29550,7 @@
             "Catalog-native rows and receipts; original capture closure is inherited, not asserted by export."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -36970,7 +37002,7 @@
             "At run UTC timestamp, count past 30-day documents and preceding-year count across 13-month window; exclude future dates and removed postings; require >=24 prior-year records and >=2x monthly-mean ratio. Store evaluation time/parent digest."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -37002,7 +37034,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -37054,7 +37086,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -37320,7 +37352,7 @@
             "Same raw payload stream; refusal may omit only its attribute row."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -37379,7 +37411,7 @@
             "Selected previous attribute working table for incremental merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -37625,7 +37657,7 @@
             "Docket identity and selected attributes; strip quotes from docket id; incremental native identity merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -37676,7 +37708,7 @@
             "Incremental predecessor includes historically preserved/migrated rows."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -38093,7 +38125,7 @@
             "Same raw payload stream; refusal may omit only its attribute row."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -38152,7 +38184,7 @@
             "Selected previous attribute working table for incremental merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -39943,7 +39975,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -39994,7 +40026,7 @@
             "Incremental predecessor includes historically preserved/migrated rows."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -49226,7 +49258,7 @@
       "recorded_at": "2026-10-27T18:15:03.021893+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "status": "reviewed",
-      "note": "Local inventory checked October 27, 2026: all 24 election-cycle ZIPs (1980–2026, even years) plus the header CSV are held for each of nine retained snapshots from September 30 through October 9. All 225 capture events resolve to 49 local byte identities. Later table processing history is separate.",
+      "note": "Local inventory checked October 27, 2026: all 24 election-cycle ZIPs (1980\u20132026, even years) plus the header CSV are held for each of nine retained snapshots from September 30 through October 9. All 225 capture events resolve to 49 local byte identities. Later table processing history is separate.",
       "scope": "Original-source availability for the exact selected table version; historical build consumption is separate.",
       "source_collections": [
         {
@@ -50670,7 +50702,7 @@
       "recorded_at": "2026-10-27T18:15:03.021893+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "status": "reviewed",
-      "note": "Local inventory checked October 27, 2026: all 24 election-cycle ZIPs (1980–2026, even years) plus the header CSV are held for each of 14 retained snapshots from September 27 through October 9 (UTC). All 350 capture events resolve to 64 local byte identities. Later table processing history is separate.",
+      "note": "Local inventory checked October 27, 2026: all 24 election-cycle ZIPs (1980\u20132026, even years) plus the header CSV are held for each of 14 retained snapshots from September 27 through October 9 (UTC). All 350 capture events resolve to 64 local byte identities. Later table processing history is separate.",
       "scope": "Original-source availability for the exact selected table version; historical build consumption is separate.",
       "source_collections": [
         {
@@ -80233,9 +80265,9 @@
             {
               "path": "repo:spicy-docs/src/spicy_docs/schemas/federal_register.py",
               "start_line": 63,
-              "end_line": 115,
+              "end_line": 119,
               "symbol": "project_federal_register_document",
-              "sha256": "9c9dda445681ec44d609f144ccd1c42e47cff787b7e6d22cb5d2f49bc6f6e6b9",
+              "sha256": "cbeadef9da6f4ad9b07c4b8a1123a45bcf5b627e791733bd3b054582ae8aa92d",
               "scope": "current checkout capability"
             }
           ],
@@ -80267,9 +80299,9 @@
             {
               "path": "repo:spicy-docs/src/spicy_docs/schemas/federal_register.py",
               "start_line": 63,
-              "end_line": 115,
+              "end_line": 119,
               "symbol": "project_federal_register_document",
-              "sha256": "9c9dda445681ec44d609f144ccd1c42e47cff787b7e6d22cb5d2f49bc6f6e6b9",
+              "sha256": "cbeadef9da6f4ad9b07c4b8a1123a45bcf5b627e791733bd3b054582ae8aa92d",
               "scope": "current checkout capability"
             }
           ],
@@ -80903,7 +80935,7 @@
             "Left join dockets to held comment sums (index preferred, monolith fallback), subtract removed-posting comments; join max comment_end_date and min posted_date; quote-trim docket ids; order modify_date DESC,docket_id; optional missing inputs yield zeros/nulls."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -80938,7 +80970,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -80973,7 +81005,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -81008,7 +81040,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -81043,7 +81075,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -81098,7 +81130,7 @@
             "Docket identity and selected attributes; strip quotes from docket id; incremental native identity merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -81151,7 +81183,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -81228,7 +81260,7 @@
             "Native API detail JSON, not attachment byte inventory."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -81306,7 +81338,7 @@
             "Upstream generated attachment text; missing extracted text does not establish missing PDF."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -81384,7 +81416,7 @@
             "Catalog-native rows and receipts; original capture closure is inherited, not asserted by export."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -83315,9 +83347,9 @@
             {
               "path": "repo:spicy-docs/src/spicy_docs/schemas/federal_register.py",
               "start_line": 63,
-              "end_line": 115,
+              "end_line": 119,
               "symbol": "project_federal_register_document",
-              "sha256": "9c9dda445681ec44d609f144ccd1c42e47cff787b7e6d22cb5d2f49bc6f6e6b9",
+              "sha256": "cbeadef9da6f4ad9b07c4b8a1123a45bcf5b627e791733bd3b054582ae8aa92d",
               "scope": "current checkout capability"
             }
           ],
@@ -84303,7 +84335,7 @@
           "version": "sha256:63caa4c9175be15188ea86ddcc452c2fe939e2ba5b9b4b5fa5c0d8c7feaa2684"
         },
         "supersedes_statement": "Retained exports redact director phone fields; they are not unmodified originals.",
-        "proposed_table_note": "GAO open-recommendation CSV exports are the source. The selected 2026-10-25 run explicitly retained a redacted derivative (Director Phone blanked; 6,753,671 bytes; SHA256 1a73d615…) and recorded the original response identity (6,820,456 bytes; SHA256 8527d918…). That exact original is unlocated in the indexed local catalog. Other scoped retained exports exist; bounded first-50-record checks show blank phone cells but do not establish universal original absence. Complete inherited source population remains partial.",
+        "proposed_table_note": "GAO open-recommendation CSV exports are the source. The selected 2026-10-25 run explicitly retained a redacted derivative (Director Phone blanked; 6,753,671 bytes; SHA256 1a73d615\u2026) and recorded the original response identity (6,820,456 bytes; SHA256 8527d918\u2026). That exact original is unlocated in the indexed local catalog. Other scoped retained exports exist; bounded first-50-record checks show blank phone cells but do not establish universal original absence. Complete inherited source population remains partial.",
         "corrections": [
           {
             "claim": "All retained GAO exports are redacted/unmodified originals are globally absent.",
@@ -88206,7 +88238,7 @@
       "recorded_at": "2026-10-27T12:25:07.834206+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "status": "reviewed",
-      "note": "Sources include Congress.gov law lists, GovInfo law XML and the Office of the Law Revision Counsel’s classification tables and Table III. Retained originals are mapped; the complete source population across all law and release versions remains incomplete. The retained Congress 119 law-list original contains all 113 records stated by that response, with no next-page link. This closes that response only; other Congresses and exact table consumption remain separate.",
+      "note": "Sources include Congress.gov law lists, GovInfo law XML and the Office of the Law Revision Counsel\u2019s classification tables and Table III. Retained originals are mapped; the complete source population across all law and release versions remains incomplete. The retained Congress 119 law-list original contains all 113 records stated by that response, with no next-page link. This closes that response only; other Congresses and exact table consumption remain separate.",
       "scope": "Original-source availability for the exact selected table version; historical build consumption is separate.",
       "source_collections": [
         {
@@ -88400,7 +88432,7 @@
             "bytes": 1387500
           }
         },
-        "result": "The retained Congress119 law-list original22978474… contains113 native bill records against113 stated,no next link. Exact response scope closes; all historical public/private laws and published table consumption remain partial.",
+        "result": "The retained Congress119 law-list original22978474\u2026 contains113 native bill records against113 stated,no next link. Exact response scope closes; all historical public/private laws and published table consumption remain partial.",
         "gap_dispositions": [
           "laws:4:11"
         ],
@@ -88476,7 +88508,7 @@
       "recorded_at": "2026-10-27T12:25:07.834206+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "status": "reviewed",
-      "note": "Sources include Congress.gov law lists, GovInfo law XML and the Office of the Law Revision Counsel’s classification tables and Table III. Retained originals are mapped; the complete source population across all law and release versions remains incomplete. The retained Congress 119 law-list original contains all 113 records stated by that response, with no next-page link. This closes that response only; other Congresses and exact table consumption remain separate.",
+      "note": "Sources include Congress.gov law lists, GovInfo law XML and the Office of the Law Revision Counsel\u2019s classification tables and Table III. Retained originals are mapped; the complete source population across all law and release versions remains incomplete. The retained Congress 119 law-list original contains all 113 records stated by that response, with no next-page link. This closes that response only; other Congresses and exact table consumption remain separate.",
       "scope": "Original-source availability for the exact selected table version; historical build consumption is separate.",
       "source_collections": [
         {
@@ -88670,7 +88702,7 @@
             "bytes": 1387500
           }
         },
-        "result": "The retained Congress119 law-list original22978474… contains113 native bill records against113 stated,no next link. Exact response scope closes; all historical public/private laws and published table consumption remain partial.",
+        "result": "The retained Congress119 law-list original22978474\u2026 contains113 native bill records against113 stated,no next link. Exact response scope closes; all historical public/private laws and published table consumption remain partial.",
         "gap_dispositions": [
           "laws:4:11"
         ],
@@ -88822,7 +88854,7 @@
       "recorded_at": "2026-10-27T12:25:07.834206+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "status": "reviewed",
-      "note": "Sources include Congress.gov law lists, GovInfo law XML and the Office of the Law Revision Counsel’s classification tables and Table III. Retained originals are mapped; the complete source population across all law and release versions remains incomplete. The retained Congress 119 law-list original contains all 113 records stated by that response, with no next-page link. This closes that response only; other Congresses and exact table consumption remain separate.",
+      "note": "Sources include Congress.gov law lists, GovInfo law XML and the Office of the Law Revision Counsel\u2019s classification tables and Table III. Retained originals are mapped; the complete source population across all law and release versions remains incomplete. The retained Congress 119 law-list original contains all 113 records stated by that response, with no next-page link. This closes that response only; other Congresses and exact table consumption remain separate.",
       "scope": "Original-source availability for the exact selected table version; historical build consumption is separate.",
       "source_collections": [
         {
@@ -89019,7 +89051,7 @@
             "bytes": 1387500
           }
         },
-        "result": "The retained Congress119 law-list original22978474… contains113 native bill records against113 stated,no next link. Exact response scope closes; all historical public/private laws and published table consumption remain partial.",
+        "result": "The retained Congress119 law-list original22978474\u2026 contains113 native bill records against113 stated,no next link. Exact response scope closes; all historical public/private laws and published table consumption remain partial.",
         "gap_dispositions": [
           "laws:4:11"
         ],
@@ -89099,7 +89131,7 @@
       "recorded_at": "2026-10-27T12:25:07.834206+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "status": "reviewed",
-      "note": "Sources include Congress.gov law lists, GovInfo law XML and the Office of the Law Revision Counsel’s classification tables and Table III. Retained originals are mapped; the complete source population across all law and release versions remains incomplete. The retained Congress 119 law-list original contains all 113 records stated by that response, with no next-page link. This closes that response only; other Congresses and exact table consumption remain separate.",
+      "note": "Sources include Congress.gov law lists, GovInfo law XML and the Office of the Law Revision Counsel\u2019s classification tables and Table III. Retained originals are mapped; the complete source population across all law and release versions remains incomplete. The retained Congress 119 law-list original contains all 113 records stated by that response, with no next-page link. This closes that response only; other Congresses and exact table consumption remain separate.",
       "scope": "Original-source availability for the exact selected table version; historical build consumption is separate.",
       "source_collections": [
         {
@@ -89296,7 +89328,7 @@
             "bytes": 1387500
           }
         },
-        "result": "The retained Congress119 law-list original22978474… contains113 native bill records against113 stated,no next link. Exact response scope closes; all historical public/private laws and published table consumption remain partial.",
+        "result": "The retained Congress119 law-list original22978474\u2026 contains113 native bill records against113 stated,no next link. Exact response scope closes; all historical public/private laws and published table consumption remain partial.",
         "gap_dispositions": [
           "laws:4:11"
         ],
@@ -90226,7 +90258,7 @@
             "Docket identity and selected attributes; strip quotes from docket id; incremental native identity merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -90279,7 +90311,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -90304,9 +90336,9 @@
             {
               "path": "repo:spicy-docs/src/spicy_docs/schemas/federal_register.py",
               "start_line": 63,
-              "end_line": 115,
+              "end_line": 119,
               "symbol": "project_federal_register_document",
-              "sha256": "9c9dda445681ec44d609f144ccd1c42e47cff787b7e6d22cb5d2f49bc6f6e6b9",
+              "sha256": "cbeadef9da6f4ad9b07c4b8a1123a45bcf5b627e791733bd3b054582ae8aa92d",
               "scope": "current checkout capability"
             }
           ],
@@ -90339,10 +90371,10 @@
             },
             {
               "path": "repo:spicy-docs/src/spicy_docs/sources/unified_agenda/records.py",
-              "start_line": 163,
-              "end_line": 198,
+              "start_line": 166,
+              "end_line": 201,
               "symbol": "scan_unified_agenda_records",
-              "sha256": "67587dfb6984b5363fa893d12f9a1bbd563653b239530bf13e1b33a9777ab842",
+              "sha256": "ea863480dd638f803510b76d14c8171779d76a816412cf1093dfbcb24ef97a45",
               "scope": "current checkout capability"
             },
             {
@@ -90360,7 +90392,7 @@
             "Exact REGINFO_RIN_DATA_{stem}.xml body; PUBLICATION_ID can differ from historical filename stem."
           ],
           "periods": [
-            "60 advertised edition codes 199510–202510, inventory observed 2026-10-26."
+            "60 advertised edition codes 199510\u2013202510, inventory observed 2026-10-26."
           ],
           "source_collections": [
             "family:unified-agenda"
@@ -96008,7 +96040,7 @@
       "recorded_at": "2026-10-27T12:25:07.834206+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "status": "reviewed",
-      "note": "The House and Senate Appropriations Committees’ RSS feeds supply the releases. Retained feed snapshots are held locally; rotating feeds do not establish a complete history of every release.",
+      "note": "The House and Senate Appropriations Committees\u2019 RSS feeds supply the releases. Retained feed snapshots are held locally; rotating feeds do not establish a complete history of every release.",
       "scope": "Original-source availability for the exact selected table version; historical build consumption is separate.",
       "source_collections": [
         {
@@ -97256,7 +97288,7 @@
             "Docket identity and selected attributes; strip quotes from docket id; incremental native identity merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -97309,7 +97341,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -97334,9 +97366,9 @@
             {
               "path": "repo:spicy-docs/src/spicy_docs/schemas/federal_register.py",
               "start_line": 63,
-              "end_line": 115,
+              "end_line": 119,
               "symbol": "project_federal_register_document",
-              "sha256": "9c9dda445681ec44d609f144ccd1c42e47cff787b7e6d22cb5d2f49bc6f6e6b9",
+              "sha256": "cbeadef9da6f4ad9b07c4b8a1123a45bcf5b627e791733bd3b054582ae8aa92d",
               "scope": "current checkout capability"
             }
           ],
@@ -97369,10 +97401,10 @@
             },
             {
               "path": "repo:spicy-docs/src/spicy_docs/sources/unified_agenda/records.py",
-              "start_line": 163,
-              "end_line": 198,
+              "start_line": 166,
+              "end_line": 201,
               "symbol": "scan_unified_agenda_records",
-              "sha256": "67587dfb6984b5363fa893d12f9a1bbd563653b239530bf13e1b33a9777ab842",
+              "sha256": "ea863480dd638f803510b76d14c8171779d76a816412cf1093dfbcb24ef97a45",
               "scope": "current checkout capability"
             },
             {
@@ -97390,7 +97422,7 @@
             "Exact REGINFO_RIN_DATA_{stem}.xml body; PUBLICATION_ID can differ from historical filename stem."
           ],
           "periods": [
-            "60 advertised edition codes 199510–202510, inventory observed 2026-10-26."
+            "60 advertised edition codes 199510\u2013202510, inventory observed 2026-10-26."
           ],
           "source_collections": [
             "family:unified-agenda"
@@ -99131,7 +99163,7 @@
             "Docket identity and selected attributes; strip quotes from docket id; incremental native identity merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -99184,7 +99216,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -99209,9 +99241,9 @@
             {
               "path": "repo:spicy-docs/src/spicy_docs/schemas/federal_register.py",
               "start_line": 63,
-              "end_line": 115,
+              "end_line": 119,
               "symbol": "project_federal_register_document",
-              "sha256": "9c9dda445681ec44d609f144ccd1c42e47cff787b7e6d22cb5d2f49bc6f6e6b9",
+              "sha256": "cbeadef9da6f4ad9b07c4b8a1123a45bcf5b627e791733bd3b054582ae8aa92d",
               "scope": "current checkout capability"
             }
           ],
@@ -99244,10 +99276,10 @@
             },
             {
               "path": "repo:spicy-docs/src/spicy_docs/sources/unified_agenda/records.py",
-              "start_line": 163,
-              "end_line": 198,
+              "start_line": 166,
+              "end_line": 201,
               "symbol": "scan_unified_agenda_records",
-              "sha256": "67587dfb6984b5363fa893d12f9a1bbd563653b239530bf13e1b33a9777ab842",
+              "sha256": "ea863480dd638f803510b76d14c8171779d76a816412cf1093dfbcb24ef97a45",
               "scope": "current checkout capability"
             },
             {
@@ -99265,7 +99297,7 @@
             "Exact REGINFO_RIN_DATA_{stem}.xml body; PUBLICATION_ID can differ from historical filename stem."
           ],
           "periods": [
-            "60 advertised edition codes 199510–202510, inventory observed 2026-10-26."
+            "60 advertised edition codes 199510\u2013202510, inventory observed 2026-10-26."
           ],
           "source_collections": [
             "family:unified-agenda"
@@ -100702,7 +100734,7 @@
             "Docket identity and selected attributes; strip quotes from docket id; incremental native identity merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -100755,7 +100787,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -100780,9 +100812,9 @@
             {
               "path": "repo:spicy-docs/src/spicy_docs/schemas/federal_register.py",
               "start_line": 63,
-              "end_line": 115,
+              "end_line": 119,
               "symbol": "project_federal_register_document",
-              "sha256": "9c9dda445681ec44d609f144ccd1c42e47cff787b7e6d22cb5d2f49bc6f6e6b9",
+              "sha256": "cbeadef9da6f4ad9b07c4b8a1123a45bcf5b627e791733bd3b054582ae8aa92d",
               "scope": "current checkout capability"
             }
           ],
@@ -100815,10 +100847,10 @@
             },
             {
               "path": "repo:spicy-docs/src/spicy_docs/sources/unified_agenda/records.py",
-              "start_line": 163,
-              "end_line": 198,
+              "start_line": 166,
+              "end_line": 201,
               "symbol": "scan_unified_agenda_records",
-              "sha256": "67587dfb6984b5363fa893d12f9a1bbd563653b239530bf13e1b33a9777ab842",
+              "sha256": "ea863480dd638f803510b76d14c8171779d76a816412cf1093dfbcb24ef97a45",
               "scope": "current checkout capability"
             },
             {
@@ -100836,7 +100868,7 @@
             "Exact REGINFO_RIN_DATA_{stem}.xml body; PUBLICATION_ID can differ from historical filename stem."
           ],
           "periods": [
-            "60 advertised edition codes 199510–202510, inventory observed 2026-10-26."
+            "60 advertised edition codes 199510\u2013202510, inventory observed 2026-10-26."
           ],
           "source_collections": [
             "family:unified-agenda"
@@ -101781,7 +101813,7 @@
             "Docket identity and selected attributes; strip quotes from docket id; incremental native identity merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -101834,7 +101866,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -101859,9 +101891,9 @@
             {
               "path": "repo:spicy-docs/src/spicy_docs/schemas/federal_register.py",
               "start_line": 63,
-              "end_line": 115,
+              "end_line": 119,
               "symbol": "project_federal_register_document",
-              "sha256": "9c9dda445681ec44d609f144ccd1c42e47cff787b7e6d22cb5d2f49bc6f6e6b9",
+              "sha256": "cbeadef9da6f4ad9b07c4b8a1123a45bcf5b627e791733bd3b054582ae8aa92d",
               "scope": "current checkout capability"
             }
           ],
@@ -101894,10 +101926,10 @@
             },
             {
               "path": "repo:spicy-docs/src/spicy_docs/sources/unified_agenda/records.py",
-              "start_line": 163,
-              "end_line": 198,
+              "start_line": 166,
+              "end_line": 201,
               "symbol": "scan_unified_agenda_records",
-              "sha256": "67587dfb6984b5363fa893d12f9a1bbd563653b239530bf13e1b33a9777ab842",
+              "sha256": "ea863480dd638f803510b76d14c8171779d76a816412cf1093dfbcb24ef97a45",
               "scope": "current checkout capability"
             },
             {
@@ -101915,7 +101947,7 @@
             "Exact REGINFO_RIN_DATA_{stem}.xml body; PUBLICATION_ID can differ from historical filename stem."
           ],
           "periods": [
-            "60 advertised edition codes 199510–202510, inventory observed 2026-10-26."
+            "60 advertised edition codes 199510\u2013202510, inventory observed 2026-10-26."
           ],
           "source_collections": [
             "family:unified-agenda"
@@ -116038,7 +116070,7 @@
       "recorded_at": "2026-10-27T12:25:07.834206+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "status": "reviewed",
-      "note": "Sources include Congress.gov law lists, GovInfo law XML and the Office of the Law Revision Counsel’s classification tables and Table III. Retained originals are mapped; the complete source population across all law and release versions remains incomplete. The retained Congress 119 law-list original contains all 113 records stated by that response, with no next-page link. This closes that response only; other Congresses and exact table consumption remain separate.",
+      "note": "Sources include Congress.gov law lists, GovInfo law XML and the Office of the Law Revision Counsel\u2019s classification tables and Table III. Retained originals are mapped; the complete source population across all law and release versions remains incomplete. The retained Congress 119 law-list original contains all 113 records stated by that response, with no next-page link. This closes that response only; other Congresses and exact table consumption remain separate.",
       "scope": "Original-source availability for the exact selected table version; historical build consumption is separate.",
       "source_collections": [
         {
@@ -116232,7 +116264,7 @@
             "bytes": 1387500
           }
         },
-        "result": "The retained Congress119 law-list original22978474… contains113 native bill records against113 stated,no next link. Exact response scope closes; all historical public/private laws and published table consumption remain partial.",
+        "result": "The retained Congress119 law-list original22978474\u2026 contains113 native bill records against113 stated,no next link. Exact response scope closes; all historical public/private laws and published table consumption remain partial.",
         "gap_dispositions": [
           "laws:4:11"
         ],
@@ -117672,7 +117704,7 @@
       "recorded_at": "2026-10-27T12:25:07.834206+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "status": "reviewed",
-      "note": "RegInfo.gov native XML editions are known: all 60 advertised native edition codes 199510–202510 have accepted local originals and full PUBLICATION_ID checks. This closes that advertised edition-code inventory; record-level completeness and additional editions in incremental table history remain separate. 2012 maps to 201210; Spring 2018 maps to 201804.",
+      "note": "RegInfo.gov native XML editions are known: all 60 advertised native edition codes 199510\u2013202510 have accepted local originals and full PUBLICATION_ID checks. This closes that advertised edition-code inventory; record-level completeness and additional editions in incremental table history remain separate. 2012 maps to 201210; Spring 2018 maps to 201804.",
       "scope": "Original-source availability for the exact selected table version; historical build consumption is separate.",
       "source_collections": [
         {
@@ -117772,10 +117804,10 @@
             },
             {
               "path": "repo:spicy-docs/src/spicy_docs/sources/unified_agenda/records.py",
-              "start_line": 163,
-              "end_line": 198,
+              "start_line": 166,
+              "end_line": 201,
               "symbol": "scan_unified_agenda_records",
-              "sha256": "67587dfb6984b5363fa893d12f9a1bbd563653b239530bf13e1b33a9777ab842",
+              "sha256": "ea863480dd638f803510b76d14c8171779d76a816412cf1093dfbcb24ef97a45",
               "scope": "current checkout capability"
             },
             {
@@ -117792,7 +117824,7 @@
             "Exact REGINFO_RIN_DATA_{stem}.xml body; PUBLICATION_ID can differ from historical filename stem."
           ],
           "periods": [
-            "60 advertised edition codes 199510–202510, inventory observed 2026-10-26."
+            "60 advertised edition codes 199510\u2013202510, inventory observed 2026-10-26."
           ],
           "source_collections": [
             "family:unified-agenda"
@@ -117814,10 +117846,10 @@
             },
             {
               "path": "repo:spicy-docs/src/spicy_docs/sources/unified_agenda/records.py",
-              "start_line": 163,
-              "end_line": 198,
+              "start_line": 166,
+              "end_line": 201,
               "symbol": "scan_unified_agenda_records",
-              "sha256": "67587dfb6984b5363fa893d12f9a1bbd563653b239530bf13e1b33a9777ab842",
+              "sha256": "ea863480dd638f803510b76d14c8171779d76a816412cf1093dfbcb24ef97a45",
               "scope": "current checkout capability"
             },
             {
@@ -117834,7 +117866,7 @@
             "Explicit selected predecessor retains older edition records."
           ],
           "periods": [
-            "60 advertised edition codes 199510–202510, inventory observed 2026-10-26."
+            "60 advertised edition codes 199510\u2013202510, inventory observed 2026-10-26."
           ],
           "source_collections": [
             "family:unified-agenda"
@@ -117903,7 +117935,7 @@
       "recorded_at": "2026-10-27T18:15:03.021893+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "status": "reviewed",
-      "note": "All 2,318 selected ranking response identities and their request bodies are held locally. Pages 1–2,318 are contiguous; the final response reaches non-positive awards. This closes that observed funded-ranking selection, while default top-page rankings and inherited snapshots remain separate.",
+      "note": "All 2,318 selected ranking response identities and their request bodies are held locally. Pages 1\u20132,318 are contiguous; the final response reaches non-positive awards. This closes that observed funded-ranking selection, while default top-page rankings and inherited snapshots remain separate.",
       "scope": "Original-source availability for the exact selected table version; historical build consumption is separate.",
       "source_collections": [
         {
@@ -118364,7 +118396,7 @@
       "recorded_at": "2026-10-27T12:25:07.834206+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "status": "reviewed",
-      "note": "The complete U.S. Code corpus ZIP for release point 119-102 is held locally and its hash and native title identity were checked. All 31 selected annual archives for 1994–2024 are also held; these inventories do not establish every edition underlying accumulated table records.",
+      "note": "The complete U.S. Code corpus ZIP for release point 119-102 is held locally and its hash and native title identity were checked. All 31 selected annual archives for 1994\u20132024 are also held; these inventories do not establish every edition underlying accumulated table records.",
       "scope": "Original-source availability for the exact selected table version; historical build consumption is separate.",
       "source_collections": [
         {
@@ -118493,7 +118525,7 @@
             "bytes": 1387500
           }
         },
-        "result": "All31 named annual archives1994–2024 and119-102ZIP directories opened; first/middle/last native text members sampled; native names,CRC,size,member hashes/prefix limits recorded.",
+        "result": "All31 named annual archives1994\u20132024 and119-102ZIP directories opened; first/middle/last native text members sampled; native names,CRC,size,member hashes/prefix limits recorded.",
         "gap_dispositions": [
           "uscode-editions:4:20"
         ],
@@ -118551,7 +118583,7 @@
       "recorded_at": "2026-11-11T12:46:12+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "status": "reviewed",
-      "note": "The complete U.S. Code corpus ZIPs for release points 119-102 and 119-138 are held locally. The 119-138 ZIP (sha256:763c3ddf5668c42ba8b138b764c8e80942766af7f18d20fcef8c706faf09e152, 108,702,539 bytes) was hashed and all 58 of its title members were audited against this generation's 119-138 rows; the 119-102 and annual-2000 rows are unchanged from the prior generation. The 119-102 ZIP's hash and native title identity were checked in the 2026-10-27 review. All 31 selected annual archives for 1994–2024 are also held; these inventories do not establish every edition underlying accumulated table records.",
+      "note": "The complete U.S. Code corpus ZIPs for release points 119-102 and 119-138 are held locally. The 119-138 ZIP (sha256:763c3ddf5668c42ba8b138b764c8e80942766af7f18d20fcef8c706faf09e152, 108,702,539 bytes) was hashed and all 58 of its title members were audited against this generation's 119-138 rows; the 119-102 and annual-2000 rows are unchanged from the prior generation. The 119-102 ZIP's hash and native title identity were checked in the 2026-10-27 review. All 31 selected annual archives for 1994\u20132024 are also held; these inventories do not establish every edition underlying accumulated table records.",
       "scope": "Original-source availability for the exact selected table version; historical build consumption is separate.",
       "source_collections": [
         {
@@ -118745,7 +118777,7 @@
       "recorded_at": "2026-10-27T12:25:07.834206+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "status": "reviewed",
-      "note": "The complete U.S. Code corpus ZIP for release point 119-102 is held locally and its hash and native title identity were checked. All 31 selected annual archives for 1994–2024 are also held; these inventories do not establish every edition underlying accumulated table records.",
+      "note": "The complete U.S. Code corpus ZIP for release point 119-102 is held locally and its hash and native title identity were checked. All 31 selected annual archives for 1994\u20132024 are also held; these inventories do not establish every edition underlying accumulated table records.",
       "scope": "Original-source availability for the exact selected table version; historical build consumption is separate.",
       "source_collections": [
         {
@@ -118874,7 +118906,7 @@
             "bytes": 1387500
           }
         },
-        "result": "All31 named annual archives1994–2024 and119-102ZIP directories opened; first/middle/last native text members sampled; native names,CRC,size,member hashes/prefix limits recorded.",
+        "result": "All31 named annual archives1994\u20132024 and119-102ZIP directories opened; first/middle/last native text members sampled; native names,CRC,size,member hashes/prefix limits recorded.",
         "gap_dispositions": [
           "uscode-editions:4:20"
         ],
@@ -118932,7 +118964,7 @@
       "recorded_at": "2026-11-11T12:46:12+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "status": "reviewed",
-      "note": "The complete U.S. Code corpus ZIPs for release points 119-102 and 119-138 are held locally. The 119-138 ZIP (sha256:763c3ddf5668c42ba8b138b764c8e80942766af7f18d20fcef8c706faf09e152, 108,702,539 bytes) was hashed and all 58 of its title members were audited against this generation's 119-138 rows; the 119-102 and annual-2000 rows are unchanged from the prior generation. The 119-102 ZIP's hash and native title identity were checked in the 2026-10-27 review. All 31 selected annual archives for 1994–2024 are also held; these inventories do not establish every edition underlying accumulated table records.",
+      "note": "The complete U.S. Code corpus ZIPs for release points 119-102 and 119-138 are held locally. The 119-138 ZIP (sha256:763c3ddf5668c42ba8b138b764c8e80942766af7f18d20fcef8c706faf09e152, 108,702,539 bytes) was hashed and all 58 of its title members were audited against this generation's 119-138 rows; the 119-102 and annual-2000 rows are unchanged from the prior generation. The 119-102 ZIP's hash and native title identity were checked in the 2026-10-27 review. All 31 selected annual archives for 1994\u20132024 are also held; these inventories do not establish every edition underlying accumulated table records.",
       "scope": "Original-source availability for the exact selected table version; historical build consumption is separate.",
       "source_collections": [
         {
@@ -119146,7 +119178,7 @@
       "recorded_at": "2026-10-27T12:25:07.834206+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "status": "reviewed",
-      "note": "The complete U.S. Code corpus ZIP for release point 119-102 is held locally and its hash and native title identity were checked. All 31 selected annual archives for 1994–2024 are also held; these inventories do not establish every edition underlying accumulated table records.",
+      "note": "The complete U.S. Code corpus ZIP for release point 119-102 is held locally and its hash and native title identity were checked. All 31 selected annual archives for 1994\u20132024 are also held; these inventories do not establish every edition underlying accumulated table records.",
       "scope": "Original-source availability for the exact selected table version; historical build consumption is separate.",
       "source_collections": [
         {
@@ -119275,7 +119307,7 @@
             "bytes": 1387500
           }
         },
-        "result": "All31 named annual archives1994–2024 and119-102ZIP directories opened; first/middle/last native text members sampled; native names,CRC,size,member hashes/prefix limits recorded.",
+        "result": "All31 named annual archives1994\u20132024 and119-102ZIP directories opened; first/middle/last native text members sampled; native names,CRC,size,member hashes/prefix limits recorded.",
         "gap_dispositions": [
           "uscode-editions:4:20"
         ],
@@ -119353,7 +119385,7 @@
       "recorded_at": "2026-11-11T12:46:12+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "status": "reviewed",
-      "note": "The complete U.S. Code corpus ZIPs for release points 119-102 and 119-138 are held locally. The 119-138 ZIP (sha256:763c3ddf5668c42ba8b138b764c8e80942766af7f18d20fcef8c706faf09e152, 108,702,539 bytes) was hashed and all 58 of its title members were audited against this generation's 119-138 rows; the 119-102 and annual-2000 rows are unchanged from the prior generation. The 119-102 ZIP's hash and native title identity were checked in the 2026-10-27 review. All 31 selected annual archives for 1994–2024 are also held; these inventories do not establish every edition underlying accumulated table records.",
+      "note": "The complete U.S. Code corpus ZIPs for release points 119-102 and 119-138 are held locally. The 119-138 ZIP (sha256:763c3ddf5668c42ba8b138b764c8e80942766af7f18d20fcef8c706faf09e152, 108,702,539 bytes) was hashed and all 58 of its title members were audited against this generation's 119-138 rows; the 119-102 and annual-2000 rows are unchanged from the prior generation. The 119-102 ZIP's hash and native title identity were checked in the 2026-10-27 review. All 31 selected annual archives for 1994\u20132024 are also held; these inventories do not establish every edition underlying accumulated table records.",
       "scope": "Original-source availability for the exact selected table version; historical build consumption is separate.",
       "source_collections": [
         {
@@ -122592,7 +122624,7 @@
       "recorded_at": "2026-10-27T13:21:39.920165+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "scope": "Identified source routes, selection rules, periods and scoped original-file inventories. Historical processing is a separate question.",
-      "note": "Sources include Congress.gov law lists, GovInfo law XML and the Office of the Law Revision Counsel’s classification tables and Table III. Retained originals are mapped; the complete source population across all law and release versions remains incomplete. The retained Congress 119 law-list original contains all 113 records stated by that response, with no next-page link. This closes that response only; other Congresses and exact table consumption remain separate. The user accepted existing R2 availability evidence on October 27, 2026. No new remote body SHA-256 verification or exact selected table-input completeness is asserted.",
+      "note": "Sources include Congress.gov law lists, GovInfo law XML and the Office of the Law Revision Counsel\u2019s classification tables and Table III. Retained originals are mapped; the complete source population across all law and release versions remains incomplete. The retained Congress 119 law-list original contains all 113 records stated by that response, with no next-page link. This closes that response only; other Congresses and exact table consumption remain separate. The user accepted existing R2 availability evidence on October 27, 2026. No new remote body SHA-256 verification or exact selected table-input completeness is asserted.",
       "source_routes": [
         {
           "source_id": "laws:api",
@@ -122840,7 +122872,7 @@
             "bytes": 1387500
           }
         },
-        "result": "The retained Congress119 law-list original22978474… contains113 native bill records against113 stated,no next link. Exact response scope closes; all historical public/private laws and published table consumption remain partial.",
+        "result": "The retained Congress119 law-list original22978474\u2026 contains113 native bill records against113 stated,no next link. Exact response scope closes; all historical public/private laws and published table consumption remain partial.",
         "gap_dispositions": [
           "laws:4:11"
         ],
@@ -124090,7 +124122,7 @@
       "recorded_at": "2026-10-27T12:25:07.834206+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "scope": "Identified source routes, selection rules, periods and scoped original-file inventories. Historical processing is a separate question.",
-      "note": "The House and Senate Appropriations Committees’ RSS feeds supply the releases. Retained feed snapshots are held locally; rotating feeds do not establish a complete history of every release.",
+      "note": "The House and Senate Appropriations Committees\u2019 RSS feeds supply the releases. Retained feed snapshots are held locally; rotating feeds do not establish a complete history of every release.",
       "source_routes": [
         {
           "source_id": "press-releases:rss",
@@ -126528,7 +126560,7 @@
       "recorded_at": "2026-10-27T12:25:07.834206+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "scope": "Identified source routes, selection rules, periods and scoped original-file inventories. Historical processing is a separate question.",
-      "note": "The complete U.S. Code corpus ZIP for release point 119-102 is held locally and its hash and native title identity were checked. All 31 selected annual archives for 1994–2024 are also held; these inventories do not establish every edition underlying accumulated table records.",
+      "note": "The complete U.S. Code corpus ZIP for release point 119-102 is held locally and its hash and native title identity were checked. All 31 selected annual archives for 1994\u20132024 are also held; these inventories do not establish every edition underlying accumulated table records.",
       "source_routes": [
         {
           "source_id": "uscode-editions:archives",
@@ -127756,7 +127788,7 @@
             "bytes": 1387500
           }
         },
-        "result": "All31 named annual archives1994–2024 and119-102ZIP directories opened; first/middle/last native text members sampled; native names,CRC,size,member hashes/prefix limits recorded.",
+        "result": "All31 named annual archives1994\u20132024 and119-102ZIP directories opened; first/middle/last native text members sampled; native names,CRC,size,member hashes/prefix limits recorded.",
         "gap_dispositions": [
           "uscode-editions:4:20"
         ],
@@ -130362,7 +130394,7 @@
       "recorded_at": "2026-10-27T18:15:03.021893+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "scope": "Identified source routes, selection rules, periods and scoped original-file inventories. Historical processing is a separate question.",
-      "note": "Local inventory checked October 27, 2026: all 24 election-cycle ZIPs (1980–2026, even years) plus the header CSV are held for each of nine retained snapshots from September 30 through October 9. All 225 capture events resolve to 49 local byte identities. Later table processing history is separate.",
+      "note": "Local inventory checked October 27, 2026: all 24 election-cycle ZIPs (1980\u20132026, even years) plus the header CSV are held for each of nine retained snapshots from September 30 through October 9. All 225 capture events resolve to 49 local byte identities. Later table processing history is separate.",
       "source_routes": [
         {
           "source_id": "fec-candidate-history:inputs",
@@ -130650,7 +130682,7 @@
       ],
       "inventories": [
         {
-          "scope": "Local inventory checked October 27, 2026: all 24 election-cycle ZIPs (1980–2026, even years) plus the header CSV are held for each of nine retained snapshots from September 30 through October 9. All 225 capture events resolve to 49 local byte identities. Later table processing history is separate.",
+          "scope": "Local inventory checked October 27, 2026: all 24 election-cycle ZIPs (1980\u20132026, even years) plus the header CSV are held for each of nine retained snapshots from September 30 through October 9. All 225 capture events resolve to 49 local byte identities. Later table processing history is separate.",
           "unit": "scoped retained source inventory",
           "enumerated": true,
           "evidence_refs": [
@@ -130847,7 +130879,7 @@
       "recorded_at": "2026-10-27T18:15:03.021893+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "scope": "Identified source routes, selection rules, periods and scoped original-file inventories. Historical processing is a separate question.",
-      "note": "Local inventory checked October 27, 2026: all 24 election-cycle ZIPs (1980–2026, even years) plus the header CSV are held for each of 14 retained snapshots from September 27 through October 9 (UTC). All 350 capture events resolve to 64 local byte identities. Later table processing history is separate.",
+      "note": "Local inventory checked October 27, 2026: all 24 election-cycle ZIPs (1980\u20132026, even years) plus the header CSV are held for each of 14 retained snapshots from September 27 through October 9 (UTC). All 350 capture events resolve to 64 local byte identities. Later table processing history is separate.",
       "source_routes": [
         {
           "source_id": "fec-committee-history:inputs",
@@ -131135,7 +131167,7 @@
       ],
       "inventories": [
         {
-          "scope": "Local inventory checked October 27, 2026: all 24 election-cycle ZIPs (1980–2026, even years) plus the header CSV are held for each of 14 retained snapshots from September 27 through October 9 (UTC). All 350 capture events resolve to 64 local byte identities. Later table processing history is separate.",
+          "scope": "Local inventory checked October 27, 2026: all 24 election-cycle ZIPs (1980\u20132026, even years) plus the header CSV are held for each of 14 retained snapshots from September 27 through October 9 (UTC). All 350 capture events resolve to 64 local byte identities. Later table processing history is separate.",
           "unit": "scoped retained source inventory",
           "enumerated": true,
           "evidence_refs": [
@@ -136070,7 +136102,7 @@
           "version": "sha256:63caa4c9175be15188ea86ddcc452c2fe939e2ba5b9b4b5fa5c0d8c7feaa2684"
         },
         "supersedes_statement": "Retained exports redact director phone fields; they are not unmodified originals.",
-        "proposed_table_note": "GAO open-recommendation CSV exports are the source. The selected 2026-10-25 run explicitly retained a redacted derivative (Director Phone blanked; 6,753,671 bytes; SHA256 1a73d615…) and recorded the original response identity (6,820,456 bytes; SHA256 8527d918…). That exact original is unlocated in the indexed local catalog. Other scoped retained exports exist; bounded first-50-record checks show blank phone cells but do not establish universal original absence. Complete inherited source population remains partial.",
+        "proposed_table_note": "GAO open-recommendation CSV exports are the source. The selected 2026-10-25 run explicitly retained a redacted derivative (Director Phone blanked; 6,753,671 bytes; SHA256 1a73d615\u2026) and recorded the original response identity (6,820,456 bytes; SHA256 8527d918\u2026). That exact original is unlocated in the indexed local catalog. Other scoped retained exports exist; bounded first-50-record checks show blank phone cells but do not establish universal original absence. Complete inherited source population remains partial.",
         "corrections": [
           {
             "claim": "All retained GAO exports are redacted/unmodified originals are globally absent.",
@@ -144603,7 +144635,7 @@
       "recorded_at": "2026-10-27T18:15:03.021893+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "scope": "Identified source routes, selection rules, periods and scoped original-file inventories. Historical processing is a separate question.",
-      "note": "All 2,318 selected ranking response identities and their request bodies are held locally. Pages 1–2,318 are contiguous; the final response reaches non-positive awards. This closes that observed funded-ranking selection, while default top-page rankings and inherited snapshots remain separate.",
+      "note": "All 2,318 selected ranking response identities and their request bodies are held locally. Pages 1\u20132,318 are contiguous; the final response reaches non-positive awards. This closes that observed funded-ranking selection, while default top-page rankings and inherited snapshots remain separate.",
       "source_routes": [
         {
           "source_id": "usaspending-recipients:inputs",
@@ -145160,7 +145192,7 @@
             "Count documents by agency/calendar month/document_type after removed-posting filter; omit missing, invalid and year-zero dates; output metadata stores exact parent digest and omitted-row counts; absent documents emits schema-only empty artifact."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -145192,7 +145224,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -145244,7 +145276,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -145850,7 +145882,7 @@
             "Union agency identities and left join docket/document/comment totals. Prefer comments_index, else comments monolith, else zero; subtract comments under removed postings."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -145885,7 +145917,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -145920,7 +145952,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -145955,7 +145987,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -145990,7 +146022,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -146045,7 +146077,7 @@
             "Docket identity and selected attributes; strip quotes from docket id; incremental native identity merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -146098,7 +146130,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -146175,7 +146207,7 @@
             "Native API detail JSON, not attachment byte inventory."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -146253,7 +146285,7 @@
             "Upstream generated attachment text; missing extracted text does not establish missing PDF."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -146331,7 +146363,7 @@
             "Catalog-native rows and receipts; original capture closure is inherited, not asserted by export."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -147856,7 +147888,7 @@
           ],
           "periods": [
             "Prior/current annual CFR years by default; selected edition plus prior table may span older years.",
-            "One resident annual bulk sample: CFR-2025-title1-vol1; separately held eCFR snapshots span 2024–2026."
+            "One resident annual bulk sample: CFR-2025-title1-vol1; separately held eCFR snapshots span 2024\u20132026."
           ],
           "source_collections": [
             "family:cfr-sections"
@@ -147907,7 +147939,7 @@
           ],
           "periods": [
             "Prior/current annual CFR years by default; selected edition plus prior table may span older years.",
-            "One resident annual bulk sample: CFR-2025-title1-vol1; separately held eCFR snapshots span 2024–2026."
+            "One resident annual bulk sample: CFR-2025-title1-vol1; separately held eCFR snapshots span 2024\u20132026."
           ],
           "source_collections": [
             "family:cfr-sections"
@@ -147958,7 +147990,7 @@
           ],
           "periods": [
             "Prior/current annual CFR years by default; selected edition plus prior table may span older years.",
-            "One resident annual bulk sample: CFR-2025-title1-vol1; separately held eCFR snapshots span 2024–2026."
+            "One resident annual bulk sample: CFR-2025-title1-vol1; separately held eCFR snapshots span 2024\u20132026."
           ],
           "source_collections": [
             "family:cfr-sections"
@@ -148009,7 +148041,7 @@
           ],
           "periods": [
             "Prior/current annual CFR years by default; selected edition plus prior table may span older years.",
-            "One resident annual bulk sample: CFR-2025-title1-vol1; separately held eCFR snapshots span 2024–2026."
+            "One resident annual bulk sample: CFR-2025-title1-vol1; separately held eCFR snapshots span 2024\u20132026."
           ],
           "source_collections": [
             "family:cfr-sections"
@@ -148366,7 +148398,7 @@
             "Same raw payload stream; refusal may omit only its attribute row."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -148426,7 +148458,7 @@
             "Selected previous attribute working table for incremental merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -148804,7 +148836,7 @@
             "Native API detail JSON, not attachment byte inventory."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -148880,7 +148912,7 @@
             "Upstream generated attachment text; missing extracted text does not establish missing PDF."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -148956,7 +148988,7 @@
             "Catalog-native rows and receipts; original capture closure is inherited, not asserted by export."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -156528,7 +156560,7 @@
             "At run UTC timestamp, count past 30-day documents and preceding-year count across 13-month window; exclude future dates and removed postings; require >=24 prior-year records and >=2x monthly-mean ratio. Store evaluation time/parent digest."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -156560,7 +156592,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -156612,7 +156644,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -157239,7 +157271,7 @@
             "Same raw payload stream; refusal may omit only its attribute row."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -157298,7 +157330,7 @@
             "Selected previous attribute working table for incremental merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -157716,7 +157748,7 @@
             "Docket identity and selected attributes; strip quotes from docket id; incremental native identity merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -157767,7 +157799,7 @@
             "Incremental predecessor includes historically preserved/migrated rows."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -158193,7 +158225,7 @@
             "Same raw payload stream; refusal may omit only its attribute row."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -158252,7 +158284,7 @@
             "Selected previous attribute working table for incremental merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -158661,7 +158693,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -158712,7 +158744,7 @@
             "Incremental predecessor includes historically preserved/migrated rows."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -160304,9 +160336,9 @@
             {
               "path": "repo:spicy-docs/src/spicy_docs/schemas/federal_register.py",
               "start_line": 63,
-              "end_line": 115,
+              "end_line": 119,
               "symbol": "project_federal_register_document",
-              "sha256": "9c9dda445681ec44d609f144ccd1c42e47cff787b7e6d22cb5d2f49bc6f6e6b9",
+              "sha256": "cbeadef9da6f4ad9b07c4b8a1123a45bcf5b627e791733bd3b054582ae8aa92d",
               "scope": "current checkout capability"
             }
           ],
@@ -160338,9 +160370,9 @@
             {
               "path": "repo:spicy-docs/src/spicy_docs/schemas/federal_register.py",
               "start_line": 63,
-              "end_line": 115,
+              "end_line": 119,
               "symbol": "project_federal_register_document",
-              "sha256": "9c9dda445681ec44d609f144ccd1c42e47cff787b7e6d22cb5d2f49bc6f6e6b9",
+              "sha256": "cbeadef9da6f4ad9b07c4b8a1123a45bcf5b627e791733bd3b054582ae8aa92d",
               "scope": "current checkout capability"
             }
           ],
@@ -160631,7 +160663,7 @@
             "Left join dockets to held comment sums (index preferred, monolith fallback), subtract removed-posting comments; join max comment_end_date and min posted_date; quote-trim docket ids; order modify_date DESC,docket_id; optional missing inputs yield zeros/nulls."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -160666,7 +160698,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -160701,7 +160733,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -160736,7 +160768,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -160771,7 +160803,7 @@
             "Follow parent table to original-source routes; a Parquet table is not an original publisher response."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -160826,7 +160858,7 @@
             "Docket identity and selected attributes; strip quotes from docket id; incremental native identity merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -160879,7 +160911,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -160956,7 +160988,7 @@
             "Native API detail JSON, not attachment byte inventory."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -161034,7 +161066,7 @@
             "Upstream generated attachment text; missing extracted text does not establish missing PDF."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -161112,7 +161144,7 @@
             "Catalog-native rows and receipts; original capture closure is inherited, not asserted by export."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -162662,9 +162694,9 @@
             {
               "path": "repo:spicy-docs/src/spicy_docs/schemas/federal_register.py",
               "start_line": 63,
-              "end_line": 115,
+              "end_line": 119,
               "symbol": "project_federal_register_document",
-              "sha256": "9c9dda445681ec44d609f144ccd1c42e47cff787b7e6d22cb5d2f49bc6f6e6b9",
+              "sha256": "cbeadef9da6f4ad9b07c4b8a1123a45bcf5b627e791733bd3b054582ae8aa92d",
               "scope": "current checkout capability"
             }
           ],
@@ -182937,7 +182969,7 @@
             "Docket identity and selected attributes; strip quotes from docket id; incremental native identity merge."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -182990,7 +183022,7 @@
             "Document metadata plus all file formats, native attachment relationships, additional RINs and independently populated text/status fields."
           ],
           "periods": [
-            "Docket year encoded in {agency}-{YYYY}-… is a selection locator; native postedDate/modifyDate are separate.",
+            "Docket year encoded in {agency}-{YYYY}-\u2026 is a selection locator; native postedDate/modifyDate are separate.",
             "Comments full-reread key inventory captured 2026-09-28; not a bound on all attachment dates."
           ],
           "source_collections": [
@@ -183015,9 +183047,9 @@
             {
               "path": "repo:spicy-docs/src/spicy_docs/schemas/federal_register.py",
               "start_line": 63,
-              "end_line": 115,
+              "end_line": 119,
               "symbol": "project_federal_register_document",
-              "sha256": "9c9dda445681ec44d609f144ccd1c42e47cff787b7e6d22cb5d2f49bc6f6e6b9",
+              "sha256": "cbeadef9da6f4ad9b07c4b8a1123a45bcf5b627e791733bd3b054582ae8aa92d",
               "scope": "current checkout capability"
             }
           ],
@@ -183050,10 +183082,10 @@
             },
             {
               "path": "repo:spicy-docs/src/spicy_docs/sources/unified_agenda/records.py",
-              "start_line": 163,
-              "end_line": 198,
+              "start_line": 166,
+              "end_line": 201,
               "symbol": "scan_unified_agenda_records",
-              "sha256": "67587dfb6984b5363fa893d12f9a1bbd563653b239530bf13e1b33a9777ab842",
+              "sha256": "ea863480dd638f803510b76d14c8171779d76a816412cf1093dfbcb24ef97a45",
               "scope": "current checkout capability"
             },
             {
@@ -183071,7 +183103,7 @@
             "Exact REGINFO_RIN_DATA_{stem}.xml body; PUBLICATION_ID can differ from historical filename stem."
           ],
           "periods": [
-            "60 advertised edition codes 199510–202510, inventory observed 2026-10-26."
+            "60 advertised edition codes 199510\u2013202510, inventory observed 2026-10-26."
           ],
           "source_collections": [
             "family:unified-agenda"
@@ -186943,7 +186975,7 @@
       "recorded_at": "2026-10-27T12:25:07.834206+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "scope": "Identified source routes, selection rules, periods and scoped original-file inventories. Historical processing is a separate question.",
-      "note": "RegInfo.gov native XML editions are known: all 60 advertised native edition codes 199510–202510 have accepted local originals and full PUBLICATION_ID checks. This closes that advertised edition-code inventory; record-level completeness and additional editions in incremental table history remain separate. 2012 maps to 201210; Spring 2018 maps to 201804.",
+      "note": "RegInfo.gov native XML editions are known: all 60 advertised native edition codes 199510\u2013202510 have accepted local originals and full PUBLICATION_ID checks. This closes that advertised edition-code inventory; record-level completeness and additional editions in incremental table history remain separate. 2012 maps to 201210; Spring 2018 maps to 201804.",
       "source_routes": [
         {
           "source_id": "unified-agenda:edition-xml",
@@ -186961,10 +186993,10 @@
             },
             {
               "path": "repo:spicy-docs/src/spicy_docs/sources/unified_agenda/records.py",
-              "start_line": 163,
-              "end_line": 198,
+              "start_line": 166,
+              "end_line": 201,
               "symbol": "scan_unified_agenda_records",
-              "sha256": "67587dfb6984b5363fa893d12f9a1bbd563653b239530bf13e1b33a9777ab842",
+              "sha256": "ea863480dd638f803510b76d14c8171779d76a816412cf1093dfbcb24ef97a45",
               "scope": "current checkout capability"
             },
             {
@@ -186981,7 +187013,7 @@
             "Exact REGINFO_RIN_DATA_{stem}.xml body; PUBLICATION_ID can differ from historical filename stem."
           ],
           "periods": [
-            "60 advertised edition codes 199510–202510, inventory observed 2026-10-26."
+            "60 advertised edition codes 199510\u2013202510, inventory observed 2026-10-26."
           ],
           "source_collections": [
             "family:unified-agenda"
@@ -187003,10 +187035,10 @@
             },
             {
               "path": "repo:spicy-docs/src/spicy_docs/sources/unified_agenda/records.py",
-              "start_line": 163,
-              "end_line": 198,
+              "start_line": 166,
+              "end_line": 201,
               "symbol": "scan_unified_agenda_records",
-              "sha256": "67587dfb6984b5363fa893d12f9a1bbd563653b239530bf13e1b33a9777ab842",
+              "sha256": "ea863480dd638f803510b76d14c8171779d76a816412cf1093dfbcb24ef97a45",
               "scope": "current checkout capability"
             },
             {
@@ -187023,7 +187055,7 @@
             "Explicit selected predecessor retains older edition records."
           ],
           "periods": [
-            "60 advertised edition codes 199510–202510, inventory observed 2026-10-26."
+            "60 advertised edition codes 199510\u2013202510, inventory observed 2026-10-26."
           ],
           "source_collections": [
             "family:unified-agenda"
@@ -216978,7 +217010,7 @@
       {
         "sha256": "sha256:eab0c9f4cbe138bdf68b76015d813744bd5cb7c5bf31839e7b2f5c79fd6ce593",
         "collection_id": "family:committee-reports",
-        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC→committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
+        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC\u2192committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
         "superseded_file_id": "file:0443bc185059216d3890dada591ed3d38bb9f4fb54453dac6c1f2b098fd255b6",
         "correction_receipt": {
           "sha256": "a184e074a4ad75cb9ef1661eeaa2353585c0cc2e9d7653a70ca9241dc8f04cfb",
@@ -216992,7 +217024,7 @@
       {
         "sha256": "sha256:dc3a86de4e867684c1dba83c9aaf461f7bd2811df96434bb7fdd3f9ccb530edd",
         "collection_id": "family:committee-reports",
-        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC→committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
+        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC\u2192committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
         "superseded_file_id": "file:108bc69cc8004aa3e1ed7c212081c2f5e6e12e51ac316e64a548e7ad1e206ced",
         "correction_receipt": {
           "sha256": "a184e074a4ad75cb9ef1661eeaa2353585c0cc2e9d7653a70ca9241dc8f04cfb",
@@ -217006,7 +217038,7 @@
       {
         "sha256": "sha256:eed2f7347dd28d3ae2af19aff495906b474befcb5d9c6f324c2dd768bc6d80b2",
         "collection_id": "family:committee-reports",
-        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC→committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
+        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC\u2192committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
         "superseded_file_id": "file:1bf882afecb23874cd8805391300d549d339c8e621cb71250351b22622530480",
         "correction_receipt": {
           "sha256": "a184e074a4ad75cb9ef1661eeaa2353585c0cc2e9d7653a70ca9241dc8f04cfb",
@@ -217020,7 +217052,7 @@
       {
         "sha256": "sha256:31e229e8fbba75cddeb0d90c89c7c3f6509131c49495f215f65f50b6842d92fb",
         "collection_id": "family:committee-reports",
-        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC→committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
+        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC\u2192committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
         "superseded_file_id": "file:251139d76a7506d6f815438d4534a6a9165282f9d72a6001ddf2eff002a8a7d9",
         "correction_receipt": {
           "sha256": "a184e074a4ad75cb9ef1661eeaa2353585c0cc2e9d7653a70ca9241dc8f04cfb",
@@ -217034,7 +217066,7 @@
       {
         "sha256": "sha256:4af219f87903b0e9913205e5d27a461dac4c74545a754ae512a3015cf852f10b",
         "collection_id": "family:committee-reports",
-        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC→committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
+        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC\u2192committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
         "superseded_file_id": "file:2e4c41a5ed3c7b5068efee13d4d46d90fa3f6b76899e4fe3df78e1ceba682de4",
         "correction_receipt": {
           "sha256": "a184e074a4ad75cb9ef1661eeaa2353585c0cc2e9d7653a70ca9241dc8f04cfb",
@@ -217048,7 +217080,7 @@
       {
         "sha256": "sha256:b898b53d508d2e7c6c78201d9ab5a6dd97f96de596c79cd2720d292b85422132",
         "collection_id": "family:committee-reports",
-        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC→committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
+        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC\u2192committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
         "superseded_file_id": "file:33bb30e7e55cbd663e9bdc78bdd25e8199a0504d42c3fc49fdd56b538dd88e5e",
         "correction_receipt": {
           "sha256": "a184e074a4ad75cb9ef1661eeaa2353585c0cc2e9d7653a70ca9241dc8f04cfb",
@@ -217062,7 +217094,7 @@
       {
         "sha256": "sha256:2bdc75916a2fda4de274b1c492830bcd82c6070810d1856d9635779d601fa16c",
         "collection_id": "family:committee-reports",
-        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC→committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
+        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC\u2192committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
         "superseded_file_id": "file:41a27302cb740fea4987628d90e4fc702ba68645035e7874fe94d2d65f6dd125",
         "correction_receipt": {
           "sha256": "a184e074a4ad75cb9ef1661eeaa2353585c0cc2e9d7653a70ca9241dc8f04cfb",
@@ -217076,7 +217108,7 @@
       {
         "sha256": "sha256:2248097b0c5106889d8882a979a0488a49f283b29e28289d2778864c40b7b13e",
         "collection_id": "family:committee-reports",
-        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC→committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
+        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC\u2192committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
         "superseded_file_id": "file:554a54a205d93923a4c465a6cd42b3489b433cb807abb19f42288da3af01c48b",
         "correction_receipt": {
           "sha256": "a184e074a4ad75cb9ef1661eeaa2353585c0cc2e9d7653a70ca9241dc8f04cfb",
@@ -217090,7 +217122,7 @@
       {
         "sha256": "sha256:78a3980b193166e1e82eba53df5ec3134bbcf1f98bb04ee424e223080ad865ff",
         "collection_id": "family:committee-reports",
-        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC→committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
+        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC\u2192committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
         "superseded_file_id": "file:55a01bd0b4679ee0806567be7624e4dc5c825d3399af342f0540fe30767ce054",
         "correction_receipt": {
           "sha256": "a184e074a4ad75cb9ef1661eeaa2353585c0cc2e9d7653a70ca9241dc8f04cfb",
@@ -217104,7 +217136,7 @@
       {
         "sha256": "sha256:8c0198e57f3f4a3bba56939e3972c7c2d3ef55f4d01aa0addd2457ff98158e47",
         "collection_id": "family:committee-reports",
-        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC→committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
+        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC\u2192committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
         "superseded_file_id": "file:6d7e2e06a8cd07ae729dd47f96db7b837acccd73eb36df7b36e49a397f1c3932",
         "correction_receipt": {
           "sha256": "a184e074a4ad75cb9ef1661eeaa2353585c0cc2e9d7653a70ca9241dc8f04cfb",
@@ -217118,7 +217150,7 @@
       {
         "sha256": "sha256:0361cfeb5274685036089948422c6088b62cb2bc2dae3823efa814e60c226d9d",
         "collection_id": "family:committee-reports",
-        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC→committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
+        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC\u2192committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
         "superseded_file_id": "file:80104a2e0fa2c72d4de7d68d7d0e6c2ab1745bc0525b0d2d597edd74ff4cfa0b",
         "correction_receipt": {
           "sha256": "a184e074a4ad75cb9ef1661eeaa2353585c0cc2e9d7653a70ca9241dc8f04cfb",
@@ -217132,7 +217164,7 @@
       {
         "sha256": "sha256:9271be1cfd26d750166b7c8f87afc3a9dace9bcd289f2e07158c5f7049e42ca5",
         "collection_id": "family:committee-reports",
-        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC→committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
+        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC\u2192committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
         "superseded_file_id": "file:8bb44932ce68244a9e161af161e46697c413821b582b442827f3a9d9647d5f7f",
         "correction_receipt": {
           "sha256": "a184e074a4ad75cb9ef1661eeaa2353585c0cc2e9d7653a70ca9241dc8f04cfb",
@@ -217146,7 +217178,7 @@
       {
         "sha256": "sha256:595dd6a92851506faae485a138a6d0c7e5c54f01bc11c962b81fd7e53e748683",
         "collection_id": "family:committee-reports",
-        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC→committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
+        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC\u2192committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
         "superseded_file_id": "file:986cabd3919a91db4517d299664d41445083bb7f86bb94c158be0fe00ba5acb8",
         "correction_receipt": {
           "sha256": "a184e074a4ad75cb9ef1661eeaa2353585c0cc2e9d7653a70ca9241dc8f04cfb",
@@ -217160,7 +217192,7 @@
       {
         "sha256": "sha256:5734ee9a0807fca93559a8c8de5793a5f1f084f670d18b080565cfe695c0c534",
         "collection_id": "family:committee-reports",
-        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC→committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
+        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC\u2192committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
         "superseded_file_id": "file:9dc7d18add1abff5c31ac5a190f9bd2ed0997f8911034af5d9caa4b1fa9f4fee",
         "correction_receipt": {
           "sha256": "a184e074a4ad75cb9ef1661eeaa2353585c0cc2e9d7653a70ca9241dc8f04cfb",
@@ -217174,7 +217206,7 @@
       {
         "sha256": "sha256:5598c87226c4f77a1337256e1f49ebf5ae402a97610ce38793c7864cb90fb15a",
         "collection_id": "family:committee-reports",
-        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC→committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
+        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC\u2192committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
         "superseded_file_id": "file:b195c8c66f8162919b4b9468b4972a3758d006d5628f51c2ded9af3ca7218418",
         "correction_receipt": {
           "sha256": "a184e074a4ad75cb9ef1661eeaa2353585c0cc2e9d7653a70ca9241dc8f04cfb",
@@ -217188,7 +217220,7 @@
       {
         "sha256": "sha256:b332e128c82c54f1d377fce1574326b92733b4534be0b7fa642743fd4cc92f41",
         "collection_id": "family:committee-reports",
-        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC→committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
+        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC\u2192committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
         "superseded_file_id": "file:c9197adde6806f6d42b864a131aa46b4a9de875c4acd1e7563d021eb60e0349c",
         "correction_receipt": {
           "sha256": "a184e074a4ad75cb9ef1661eeaa2353585c0cc2e9d7653a70ca9241dc8f04cfb",
@@ -217202,7 +217234,7 @@
       {
         "sha256": "sha256:65b5b563cf0cfaf6002eaaa66eff26e8fedd09e6c8e0a00f6e14544ea6691fd8",
         "collection_id": "family:committee-reports",
-        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC→committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
+        "reason": "Actual PDF title/part/reporting period or native MODS/summary title names Report of the Secretary of the Senate. Generic CDOC\u2192committee-reports heuristic and provisional receipt label are superseded by native evidence for this exact hash.",
         "superseded_file_id": "file:ed302cc59cb110f18080e823ff4031640b86a05ea5e40604bea5dbe48638ca46",
         "correction_receipt": {
           "sha256": "a184e074a4ad75cb9ef1661eeaa2353585c0cc2e9d7653a70ca9241dc8f04cfb",

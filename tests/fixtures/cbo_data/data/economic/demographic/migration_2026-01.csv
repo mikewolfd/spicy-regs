@@ -1,0 +1,9 @@
+year,age,sex,immigration_status,migration_flow,people
+2021,-1,female,INA Nonimmigrant,emigration,0
+2021,-1,female,INA Nonimmigrant,immigration,5
+2021,-1,female,LPR+,emigration,0
+2021,-1,female,LPR+,immigration,274
+2021,-1,female,OFN,emigration,0
+2021,-1,female,OFN,immigration,6026
+2021,-1,male,INA Nonimmigrant,emigration,0
+2021,-1,male,INA Nonimmigrant,immigration,3

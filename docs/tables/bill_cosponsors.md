@@ -19,9 +19,9 @@ One cosponsor occurrence in one retained BILLSTATUS observation, keyed by the bi
 | `cosponsor_index` | `BIGINT` | Zero-based position in the source cosponsors list, including repeated members. |
 | `bioguide_id` | `VARCHAR` | Source member identifier; its presence does not prove target resolution. |
 | `full_name` | `VARCHAR` | The source's fullName literal. |
-| `sponsorship_date` | `VARCHAR` | Literal sponsorshipDate; absent is NULL and present empty is an empty string. |
+| `sponsorship_date` | `VARCHAR` | Normalized sponsorshipDate; NULL when absent or present empty (see sponsorship_date_status and source_xml). |
 | `is_original` | `BOOLEAN` | Literal isOriginalCosponsor text, without Boolean coercion. |
-| `sponsorship_withdrawn_date` | `VARCHAR` | Literal sponsorshipWithdrawnDate; retained BILLSTATUS source observations include positive dates. |
+| `sponsorship_withdrawn_date` | `VARCHAR` | Normalized sponsorshipWithdrawnDate; NULL when absent or present empty (see sponsorship_withdrawn_date_status and source_xml); retained BILLSTATUS source observations include positive dates. |
 | `party` | `VARCHAR` | Party as the cosponsor entry states it. |
 | `state` | `VARCHAR` | State as the cosponsor entry states it. |
-| `district` | `VARCHAR` | District as the cosponsor entry states it. |
+| `district` | `VARCHAR` | District as the cosponsor entry states it; NULL when absent or present empty. |
