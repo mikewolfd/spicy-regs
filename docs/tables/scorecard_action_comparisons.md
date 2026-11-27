@@ -4,9 +4,9 @@
 
 **Scorecard action comparisons**
 
-One descriptive comparison per publisher member-item result. Publisher credit and official position remain separate; missing or ambiguous evidence stays unresolved. Join source facts on their recorded snapshot.
+One descriptive comparison per publisher member-item result across eligible vote-linked scorecards and the selected historical sponsorship item. Publisher credit and official position remain separate; missing or ambiguous evidence stays unresolved. Join source facts on their recorded snapshot; input pins are recorded at the generation level.
 
-**Coverage.** Derived. LCV 2025 explicit floor-vote targets compared with exact pinned official member votes. The selected Common Cause 2022 House DISCLOSE item compares dated cosponsorship with its explicit source cutoff. Other items and score reproduction are deferred. Implementation does not establish hosted adoption. *(measured 2026-10-19)*
+**Coverage.** Derived. Qualified per-publisher floor-vote targets across all scorecards with resolved roll-call links compared with exact pinned official member votes, plus the selected Common Cause 2022 House DISCLOSE cosponsorship cutoff item. Non-vote items, unlinked votes and unsupported targets stay explicitly classified; score reproduction is deferred. *(measured 2026-11-26)*
 
 - **Parquet file:** `scorecard_action_comparisons.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -25,16 +25,15 @@ One descriptive comparison per publisher member-item result. Publisher credit an
 | `vote_id` | `VARCHAR` | Exact pinned official roll-call identifier, or NULL. |
 | `bioguide_id` | `VARCHAR` | Exact resolved congressional member identity, or NULL. |
 | `official_member_key` | `VARCHAR` | Native official vote member key, or bill_id/cosponsor_index identity for historical sponsorship. |
-| `publisher_target_text` | `VARCHAR` | Literal publisher preferred position; only qualified spellings are interpreted. |
+| `publisher_target_text` | `VARCHAR` | Literal publisher preferred position; only qualified per-publisher spellings are interpreted. |
 | `publisher_action_text` | `VARCHAR` | Unchanged publisher-reported action literal, distinct from official position. |
 | `publisher_credit_text` | `VARCHAR` | Unchanged publisher credit literal, including excused; not an official vote. |
 | `publisher_eligibility_text` | `VARCHAR` | Unchanged publisher eligibility literal. |
 | `official_position_text` | `VARCHAR` | Literal official vote position from the pinned native member-vote row; NULL for dated sponsorship. |
 | `official_position_normalized` | `VARCHAR` | Official normalized vote position, or method-derived cosponsor_at_cutoff/not_cosponsor_at_cutoff. |
-| `comparison_status` | `VARCHAR` | same, different, not_voting, present, unresolved or not_applicable. Missing official records and same-day sponsorship cutoff ambiguity are unresolved. |
-| `reason` | `VARCHAR` | Specific evidence condition supporting the comparison or its unresolved disposition. |
-| `rule_version` | `VARCHAR` | Version of the narrow publisher-specific comparison method. |
-| `input_pins_json` | `VARCHAR` | Immutable source and congressional input generation and member pins. |
+| `comparison_status` | `VARCHAR` | same, different, not_voting, present, unresolved or not_applicable. Missing official records, unsupported publisher targets and same-day sponsorship cutoff ambiguity stay unresolved. |
+| `reason` | `VARCHAR` | Specific evidence condition supporting the comparison or its unresolved/not_applicable disposition. |
+| `rule_version` | `VARCHAR` | Version of the deterministic publisher-qualified comparison method. |
 | `capture_id` | `VARCHAR` | Original publisher result capture identity. |
 | `source_url` | `VARCHAR` | Original publisher result URL. |
 | `source_path` | `VARCHAR` | Original publisher result locator. |

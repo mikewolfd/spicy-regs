@@ -88,7 +88,8 @@ def test_exact_historical_context_uses_terms_not_latest_summary():
     resolved = link(member(), data)
     assert resolved["bioguide_id"] == "A000001"
     assert resolved["resolution_rule"] == "exact_historical_name_context"
-    assert json.loads(resolved["term_candidates_json"])["A000001"][0]["term_district"] == "7"
+    assert resolved["normalized_district"] == "7"
+    assert json.loads(resolved["candidates_json"])[0]["term_indexes"] == ["0"]
 
 
 def test_agc_house_district_correction_uses_accepted_term_and_preserves_raw(tmp_path):
@@ -108,19 +109,22 @@ def test_agc_house_district_correction_uses_accepted_term_and_preserves_raw(tmp_
     assert (found["normalized_state"], found["state_status"], found["correction_evidence_json"]) == (
         "AK", "confirmed", None)
     assert found["resolution_rule"] == "unique_normalized_name_historical_term"
-    context, candidates, input_pins = found["source_context_json"], found["term_candidates_json"], found["input_pins_json"]
-    assert context is not None and candidates is not None and input_pins is not None
-    assert json.loads(context) == before == raw
-    assert json.loads(candidates)["B001323"][0]["term_index"] == "0"
-    assert json.loads(input_pins) == pins()
+    assert "unrecognized_identifier_scheme:agc" not in (found["reason"] or "")
+    assert "source_context_json" not in found
+    assert "term_candidates_json" not in found
+    assert "input_pins_json" not in found
+    assert "geography_evidence_json" not in found
+    assert before == raw
+    assert found["candidates_json"] is not None
+    assert json.loads(found["candidates_json"])[0]["term_indexes"] == ["0"]
     write_family(tmp_path, results, generation_id="corrected-geography")
     assert read_family(tmp_path, LINK_NAMES, generation_id="corrected-geography") == results
     import duckdb
     with duckdb.connect() as connection:
         assert connection.execute(
-            "SELECT normalized_district, district_status, source_context_json::JSON->>'district' "
+            "SELECT normalized_district, district_status, resolution_status, resolution_rule "
             "FROM read_parquet(?)", [str(tmp_path / "scorecard_member_links.parquet")]
-        ).fetchall() == [("0", "corrected_from_term", "Senate")]
+        ).fetchall() == [("0", "corrected_from_term", "resolved", "unique_normalized_name_historical_term")]
 
 
 @pytest.mark.parametrize(
@@ -149,7 +153,7 @@ def test_normalized_district_does_not_choose_between_historical_districts():
     assert found["resolution_status"] == "resolved"
     assert found["normalized_district"] is None
     assert found["district_status"] == "ambiguous_term_district"
-    assert len(json.loads(found["term_candidates_json"])["A000001"]) == 2
+    assert json.loads(found["candidates_json"])[0]["term_indexes"] == ["0", "1"]
 
 
 @pytest.mark.parametrize("changed", ["district", "state"])
@@ -164,10 +168,10 @@ def test_geography_checks_all_terms_after_identity_resolution(changed):
     found = link(raw, official(terms=[first, second]))
     assert found["resolution_status"] == "resolved"
     assert found["bioguide_id"] == "A000001"
-    assert json.loads(found["source_context_json"]) == before
+    assert raw == before
     # Identity matching still records the matching source context, separately
     # from geography's review of every relevant term in the source period.
-    assert json.loads(found["term_candidates_json"])["A000001"] == [first]
+    assert json.loads(found["candidates_json"])[0]["term_indexes"] == ["0"]
     if changed == "district":
         assert (found["normalized_state"], found["state_status"]) == ("CA", "confirmed")
         assert (found["normalized_district"], found["district_status"]) == (None, "ambiguous_term_district")
@@ -194,8 +198,7 @@ def test_uncertain_term_bounds_and_chamber_qualify_geography(changes, qualified)
     found = link(raw, official(terms=[first, second]))
     assert found["resolution_status"] == "resolved"
     assert found["bioguide_id"] == "A000001"
-    assert json.loads(found["term_candidates_json"])["A000001"] == [first]
-    assert json.loads(found["source_context_json"]) == raw
+    assert json.loads(found["candidates_json"])[0]["term_indexes"] == ["0"]
     if qualified:
         assert (found["normalized_state"], found["state_status"]) == ("CA", "confirmed")
         assert (found["normalized_district"], found["district_status"]) == ("7", "confirmed")
@@ -240,7 +243,7 @@ def test_real_redistricting_boundary_keeps_identity_but_not_one_district():
     assert found["bioguide_id"] == "P000197" and found["resolution_status"] == "resolved"
     assert (found["normalized_state"], found["state_status"]) == ("CA", "confirmed")
     assert (found["normalized_district"], found["district_status"]) == (None, "ambiguous_term_district")
-    assert json.loads(found["source_context_json"])["district"] == "12"
+    assert raw["district"] == "12"
 
 
 @pytest.mark.parametrize("conflict", ["state", "chamber_text", "period_text", "district"])
@@ -292,8 +295,7 @@ def test_native_chamber_and_district_labels_constrain_exact_historical_identity(
     assert result["resolution_rule"] == "exact_historical_name_context"
     assert result["candidate_count"] == "2"
     assert row == before
-    context = json.loads(result["source_context_json"])
-    assert context["chamber_text"] == chamber and context["district"] == district
+    assert row["chamber_text"] == chamber and row["district"] == district
 
 
 def test_bioguide_and_crosswalk_orders_and_literal_state_not_overwritten():
@@ -309,7 +311,7 @@ def test_bioguide_and_crosswalk_orders_and_literal_state_not_overwritten():
         result = link(row, data)
         assert result["bioguide_id"] == "A000001"
         assert result["resolution_rule"] == rule
-        assert json.loads(result["source_context_json"])["state"] == "California"
+        assert row["state"] == "California"
 
 
 @pytest.mark.parametrize("scheme", ["votesmart", "votesmart_id"])
@@ -322,7 +324,6 @@ def test_votesmart_exact_crosswalk_preserves_source_literal_and_string_output(sc
     assert result["resolution_rule"] == "exact_crosswalk"
     assert result["candidate_count"] == "1"
     assert "votesmart_id" in OFFICIAL_COLUMNS["members"]
-    assert json.loads(result["source_context_json"])["identifiers_json"] == row["identifiers_json"]
     assert all(value is None or isinstance(value, str) for value in result.values())
     assert row == before
 
@@ -349,7 +350,8 @@ def test_votesmart_duplicate_can_be_narrowed_by_exact_historical_context_with_ca
     assert result["bioguide_id"] == "A000001"
     assert result["resolution_status"] == "resolved"
     assert result["candidate_count"] == "2"
-    assert json.loads(result["term_candidates_json"])["B000001"] == []
+    by_id = {c["bioguide_id"]: c for c in json.loads(result["candidates_json"])}
+    assert by_id["B000001"]["term_indexes"] == [] and not by_id["B000001"]["context_match"]
 
 
 def test_previous_bioguide_resolves_exactly_and_retains_the_stated_id():
@@ -359,7 +361,7 @@ def test_previous_bioguide_resolves_exactly_and_retains_the_stated_id():
     assert result["bioguide_id"] == "A000001"
     assert result["resolution_rule"] == "explicit_bioguide"
     assert "bioguide_previous" in json.loads(result["candidates_json"])[0]["matched_by"]
-    assert json.loads(result["source_context_json"])["identifiers_json"] == row["identifiers_json"]
+    assert row["identifiers_json"] == '[{"scheme":"bioguide","value":"P000001"}]'
 
 
 def test_previous_bioguide_collisions_and_contradictions_do_not_fall_through():
@@ -579,7 +581,7 @@ def test_unknown_nes_state_is_preserved_and_explained_not_repaired_to_ne():
     assert result["bioguide_id"] == "A000001"
     assert result["resolution_rule"] == "unique_normalized_name_historical_term"
     assert "unknown_state_literal_ignored:NES" in result["reason"]
-    assert json.loads(result["source_context_json"])["state"] == "NES"
+    assert row["state"] == "NES"
 
 
 def test_explicit_source_periods_precede_release_year_and_unreadable_period_blocks_fallback():
@@ -612,7 +614,7 @@ def test_senate_zero_district_is_not_applicable_but_house_zero_remains_at_large(
     assert result["bioguide_id"] == "A000001"
     assert result["resolution_rule"] == "exact_historical_name_context"
     assert "senate_district_not_applicable_literal:00" in result["reason"]
-    assert json.loads(result["source_context_json"])["district"] == "00"
+    assert row["district"] == "00"
     row["chamber_text"] = "House"
     assert link(row)["resolution_status"] == "unresolved"
     assert link(row, official(terms=[term(district="0")]))["bioguide_id"] == "A000001"
@@ -688,7 +690,6 @@ def test_sampled_upstream_bill_dialect_resolves_only_as_an_explicit_citation():
     assert row["bill_id"] == "118-hr-1"
     assert row["resolution_rule"] == "exact_bill"
     assert row["vote_id"] is row["session"] is row["roll_number"] is None
-    assert json.loads(row["source_context_json"])["item"]["bill_citation_text"] == "hr1-118"
     row = item_link(publisher_item_id="hr1-118")[0]
     assert row["resolution_status"] == "unresolved"
     assert row["bill_id"] is None
@@ -705,7 +706,7 @@ def test_unqualified_identifier_dialects_remain_literal_and_unresolved(kind, cit
     row = item_link(references_json=json.dumps([reference]))[0]
     assert row["resolution_status"] == "unresolved"
     assert row["amendment_id"] is row["vote_id"] is row["session"] is None
-    assert json.loads(row["source_context_json"])["reference"]["citation_text"] == citation
+    assert reference["citation_text"] == citation
 
 
 def test_upstream_amendment_dialect_is_anchored_and_measure_only():
@@ -968,14 +969,15 @@ def test_missing_or_mutable_pins_and_snapshot_mismatch_refuse():
 
 
 def test_partitioned_descriptor_pin_is_retained_without_inventing_file_sha256():
+    from spicy_regs.scorecards.resolution import _pins
+
     pinned = pins()
     split = pinned["congress_bills"]
     split["tableDescriptorDigest"] = split.pop("sha256")
     split["layout"] = {"kind": "partitioned", "members": [{"key": "immutable/bill-1.parquet", "byteSize": 31}]}
     output = resolve_scorecard_links(sources([member()]), official(), pinned)
-    retained_text = output["scorecard_member_links"][0]["input_pins_json"]
-    assert isinstance(retained_text, str)
-    retained = json.loads(retained_text)
+    assert "input_pins_json" not in output["scorecard_member_links"][0]
+    retained = json.loads(_pins(pinned))
     assert retained == pinned
     assert "sha256" not in retained["congress_bills"]
     split["sha256"] = "sha256:" + "a" * 64
@@ -1004,9 +1006,7 @@ def test_outputs_are_stable_all_varchar_and_inputs_and_ratings_stay_unchanged():
         for row in rows:
             assert tuple(row) == LINK_COLUMNS[table]
             assert all(value is None or isinstance(value, str) for value in row.values())
-            retained_text = row["input_pins_json"]
-            assert isinstance(retained_text, str)
-            assert json.loads(retained_text) == pinned
+            assert "input_pins_json" not in row and "source_context_json" not in row
             assert row["source_snapshot_id"] == "publisher:118:snapshot"
 
 
@@ -1038,12 +1038,8 @@ def test_explicit_edition_congress_qualifies_only_the_unstated_measure_context(f
     assert row[target] == identifier and row["congress"] == "118"
     assert row["vote_id"] is row["session"] is row["roll_number"] is None
     assert row["resolution_rule"].endswith("_edition_congress")
-    assert row["rule_version"] == "scorecard-resolution-v1.10"
+    assert row["rule_version"] == "scorecard-resolution-v1.11"
     assert "explicit_edition_congress_for_measure" in row["reason"]
-    context = json.loads(row["source_context_json"])
-    assert context["item"].get("congress_text") is None
-    assert context["reference"].get("congress_text") is None
-    assert context["edition"]["congress_text"] == "118th Congress"
 
 
 def test_edition_context_preserves_independent_citation_occurrences():
@@ -1055,7 +1051,7 @@ def test_edition_context_preserves_independent_citation_occurrences():
     assert [r["reference_id"] for r in rows] == ["reference:bill", "reference:amend"]
     assert rows[0]["bill_id"] == "118-hr-1" and rows[1]["amendment_id"] == "118-hamdt-3"
     assert all(r["vote_id"] is None for r in rows)
-    assert [json.loads(r["source_context_json"])["reference"] for r in rows] == references
+    assert [r["source_path"] for r in rows] == ["items/0/bill", "items/0/amend"]
 
 
 @pytest.mark.parametrize("literal", ["117-hr-1", "hr1-117"])
@@ -1162,7 +1158,7 @@ def test_partial_exact_bill_retains_candidates_without_operational_targets(tmp_p
     assert isinstance(candidates_json, str)
     assert json.loads(candidates_json) == [{"bill_id": "118-hr-1"}]
     assert row["candidate_count"] == "1"
-    assert RULE_VERSION == row["rule_version"] == "scorecard-resolution-v1.10"
+    assert RULE_VERSION == row["rule_version"] == "scorecard-resolution-v1.11"
     write_family(tmp_path, results, generation_id="partial-link-test")
     assert read_family(tmp_path, LINK_NAMES, generation_id="partial-link-test") == results
 
@@ -1196,7 +1192,6 @@ def test_normalized_district_checks_all_terms_across_source_period():
     found = link(raw, data)
     assert found["resolution_status"] == "resolved"
     assert (found["normalized_district"], found["district_status"]) == (None, "ambiguous_term_district")
-    assert [t["term_district"] for t in json.loads(found["geography_evidence_json"])["terms"]] == ["7", "8"]
     assert json.loads(found["candidates_json"])[0]["term_indexes"] == ["0"]
 
 
@@ -1246,3 +1241,166 @@ def test_geography_does_not_extend_inclusive_end_to_an_interval():
     found = link(raw)
     assert found["resolution_status"] != "resolved"
     assert found["normalized_district"] is None
+
+
+def test_hs_and_us_chamber_shorthand_resolve_members_and_items_without_warnings():
+    from spicy_regs.scorecards.resolution import classify_identifier_scheme
+
+    assert classify_identifier_scheme("govtrack") == "authoritative"
+    assert classify_identifier_scheme("cpac") == "publisher_native"
+    assert classify_identifier_scheme("quorum") == "publisher_native"
+    assert classify_identifier_scheme("unknown_custom_scheme") == "unrecognized"
+
+    data = official(
+        [person("A000001", "Alice", "Smith", govtrack_id="400001"), person("B000002", "Bob", "Jones")],
+        [
+            term("A000001", state="CA", district="7", kind="rep", start="2023-01-03", end="2025-01-03") | {"term_party": "Democrat"},
+            term("B000002", index="0", state="TX", district=None, kind="sen", start="2023-01-03", end="2025-01-03") | {"term_party": "Republican"},
+        ],
+    )
+    data["roll_call_votes"].append({"vote_id": "118-senate-1-9", "bill_id": "118-s-2", "vote_date": "January 23, 2023, 02:00 PM"})
+    house_row = member(chamber_text="H", identifiers_json='[{"scheme":"govtrack","value":"400001"},{"scheme":"quorum","value":"123"}]')
+    senate_row = fact(publisher_member_key="s1", member_name="Bob Jones", state="TX", district=None, chamber_text="S")
+    found_house = link(house_row, data)
+    found_senate = link(senate_row, data)
+    assert found_house["bioguide_id"] == "A000001" and found_house["resolution_rule"] == "exact_crosswalk"
+    assert "unknown_chamber_literal_ignored" not in (found_house["reason"] or "")
+    assert "unrecognized_identifier_scheme:quorum" not in (found_house["reason"] or "")
+    assert found_senate["bioguide_id"] == "B000002"
+    assert "unknown_chamber_literal_ignored" not in (found_senate["reason"] or "")
+    assert (found_house["normalized_party"], found_house["party_status"]) == ("Democrat", "supplied_from_term")
+    assert (found_senate["normalized_party"], found_senate["party_status"]) == ("Republican", "supplied_from_term")
+
+    # Item links accept H, S, U.S. House, U.S. Senate without unsupported_chamber_text
+    items = [
+        fact(item_id="h-roll", item_kind_text="roll_call", congress_text="118", chamber_text="H", session_text="1", roll_number_text="4"),
+        fact(item_id="s-roll", item_kind_text="roll_call", congress_text="118", chamber_text="S", session_text="1", roll_number_text="9"),
+        fact(item_id="us-house", item_kind_text="roll_call", congress_text="118", chamber_text="U.S. House", session_text="1", roll_number_text="4"),
+        fact(item_id="us-senate", item_kind_text="roll_call", congress_text="118", chamber_text="U.S. Senate", session_text="1", roll_number_text="9"),
+    ]
+    resolved_items = resolve_scorecard_links(sources(items=items), data, pins())["scorecard_item_links"]
+    assert [r["vote_id"] for r in resolved_items] == ["118-house-1-4", "118-senate-1-9", "118-house-1-4", "118-senate-1-9"]
+    assert all("unsupported_chamber_text" not in (r["reason"] or "") for r in resolved_items)
+
+
+def test_cpac_key_first_resolution_period_geography_and_conflict_guards():
+    # Two William Keatings: OH-1 (1971-1975, K000037) and MA-9 (2011-2027, K000375),
+    # plus Tom Coburn (nickname "Tom" vs authoritative "Thomas", C000560) and
+    # Pablo José Hernández Rivera (diacritic folding, H001103).
+    data = official(
+        [
+            person("K000037", "William", "Keating"),
+            person("K000375", "William", "Keating"),
+            person("C000560", "Thomas", "Coburn"),
+            person("H001103", "Pablo José", "Hernández Rivera"),
+        ],
+        [
+            term("K000037", index="0", state="OH", district="1", kind="rep", start="1971-01-21", end="1975-01-03") | {"term_party": "Republican"},
+            term("K000375", index="0", state="MA", district="9", kind="rep", start="2017-01-03", end="2019-01-03") | {"term_party": "Democrat"},
+            term("K000375", index="1", state="MA", district="9", kind="rep", start="2019-01-03", end="2023-01-03") | {"term_party": "Democrat"},
+            term("C000560", index="0", state="OK", district=None, kind="sen", start="2005-01-04", end="2011-01-03") | {"term_party": "Republican"},
+            term("H001103", index="0", state="PR", district="0", kind="rep", start="2023-01-03", end="2025-01-03") | {"term_party": "Democrat"},
+            term("H001103", index="1", state="PR", district="0", kind="rep", start="2025-01-03", end="2027-01-03") | {"term_party": "Democrat"},
+        ],
+    )
+    edition_2019 = fact(scorecard_id="cpac:2019", snapshot_id="s1", publisher_id="cpac", year_text="2019", chamber_scope_text="both")
+    edition_2008 = fact(scorecard_id="cpac:2008", snapshot_id="s2", publisher_id="cpac", year_text="2008", chamber_scope_text="both")
+    edition_2025 = fact(scorecard_id="cpac:2025", snapshot_id="s3", publisher_id="cpac", year_text="2025", chamber_scope_text="both")
+
+    cpac_members = [
+        # 1. Historical lifetime-only K000037 in 2019 with empty history and misleading top-level MA-9 in notes_text:
+        #    MUST resolve to K000037 (NOT falsely merge to active K000375!) and MUST NOT copy MA-9 into normalized geography.
+        fact(
+            scorecard_id="cpac:2019", snapshot_id="s1", publisher_member_key="K000037", member_name="William Keating",
+            chamber_text="H", state=None, district=None, party=None, period_text="2019",
+            identifiers_json='[{"scheme":"cpac","value":"K000037"}]',
+            notes_text='{"district":"9","from":"MA","history":[],"party":"D","role":"Rep","state":"US"}',
+        ),
+        # 2. Active 2019 K000375 with matching period term: resolves with confirmed state/district/party.
+        fact(
+            scorecard_id="cpac:2019", snapshot_id="s1", publisher_member_key="K000375", member_name="William Keating",
+            chamber_text="house", state="MA", district="9", party="D", period_text="2019",
+            identifiers_json='[{"scheme":"cpac","value":"K000375"}]',
+            notes_text='{"district":"9","from":"MA","history":[{"year":2019}],"party":"D"}',
+        ),
+        # 3. Genuine CPAC ID bug: active 2019 MA-9 observation mistakenly carrying OH-1 K000037 -> MUST conflict!
+        fact(
+            scorecard_id="cpac:2019", snapshot_id="s1", publisher_member_key="K000037-active-bug", member_name="William Keating",
+            chamber_text="house", state="MA", district="9", party="D", period_text="2019",
+            identifiers_json='[{"scheme":"cpac","value":"K000037"}]',
+            notes_text='{"district":"9","from":"MA","history":[{"year":2019}],"party":"D"}',
+        ),
+        # 4. Name conflict guard: CPAC key K000375 attached to someone named "Tom Rice" -> MUST conflict!
+        fact(
+            scorecard_id="cpac:2019", snapshot_id="s1", publisher_member_key="wrong-name", member_name="Tom Rice",
+            chamber_text="house", state="MA", district="9", party="D", period_text="2019",
+            identifiers_json='[{"scheme":"cpac","value":"K000375"}]',
+            notes_text='{"history":[{"year":2019}]}',
+        ),
+        # 5. Active nickname member (Tom Coburn -> Thomas Coburn C000560) resolved key-first with period-verified state/party.
+        fact(
+            scorecard_id="cpac:2008", snapshot_id="s2", publisher_member_key="C000560", member_name="Tom Coburn",
+            chamber_text="senate", state="OK", district="", party="R", period_text="2008",
+            identifiers_json='[{"scheme":"cpac","value":"C000560"}]',
+            notes_text='{"history":[{"year":2008}]}',
+        ),
+        # 6. CPAC 2025 decimal-year period ("2025.0") + diacritic surname ("Hernandez" vs "Hernández Rivera") + supplied party/district.
+        fact(
+            scorecard_id="cpac:2025", snapshot_id="s3", publisher_member_key="H001103", member_name="Pablo Jose Hernandez",
+            chamber_text="House", state="Puerto Rico", district=None, party=None, period_text="2025.0",
+            identifiers_json='[{"scheme":"cpac","value":"H001103"},{"scheme":"cpac_profile","value":"H001103"}]',
+            notes_text=None,
+        ),
+    ]
+    rows = resolve_scorecard_links(
+        {"scorecards": [edition_2019, edition_2008, edition_2025], "scorecard_members": cpac_members, "scorecard_items": []},
+        data,
+        pins(),
+    )["scorecard_member_links"]
+    by_key = {(r["scorecard_id"], r["publisher_member_key"]): r for r in rows}
+
+    # 1. Historical lifetime-only K000037: resolved to K000037, no fabricated 2019 geography!
+    hist = by_key["cpac:2019", "K000037"]
+    assert (hist["resolution_status"], hist["bioguide_id"], hist["resolution_rule"]) == (
+        "resolved", "K000037", "qualified_publisher_key_historical_service"
+    )
+    assert hist["normalized_state"] is None and hist["state_status"] == "unqualified_term_context"
+    assert hist["normalized_district"] is None and hist["normalized_party"] is None
+    assert "historical_lifetime_observation_prior_terms" in (hist["reason"] or "")
+    assert "unknown_chamber_literal_ignored" not in (hist["reason"] or "")
+
+    # 2. Active 2019 K000375: period-verified MA / 9 / Democrat
+    active = by_key["cpac:2019", "K000375"]
+    assert (active["resolution_status"], active["bioguide_id"], active["resolution_rule"]) == (
+        "resolved", "K000375", "qualified_publisher_key_period_term"
+    )
+    assert (active["normalized_state"], active["state_status"]) == ("MA", "confirmed")
+    assert (active["normalized_district"], active["district_status"]) == ("9", "confirmed")
+    assert (active["normalized_party"], active["party_status"]) == ("Democrat", "confirmed")
+
+    # 3. Genuine CPAC ID conflict: caught, NEVER falls through to name matching!
+    bug = by_key["cpac:2019", "K000037-active-bug"]
+    assert (bug["resolution_status"], bug["bioguide_id"], bug["resolution_rule"]) == (
+        "conflict", None, "publisher_key_context_conflict"
+    )
+    assert bug["normalized_state"] is None and bug["normalized_party"] is None
+
+    # 4. Name mismatch conflict guard
+    name_conflict = by_key["cpac:2019", "wrong-name"]
+    assert (name_conflict["resolution_status"], name_conflict["bioguide_id"], name_conflict["resolution_rule"]) == (
+        "conflict", None, "publisher_key_name_conflict"
+    )
+
+    # 5. Nickname active member
+    coburn = by_key["cpac:2008", "C000560"]
+    assert (coburn["resolution_status"], coburn["bioguide_id"]) == ("resolved", "C000560")
+    assert (coburn["normalized_state"], coburn["normalized_district"], coburn["district_status"], coburn["normalized_party"], coburn["party_status"]) == (
+        "OK", None, "not_applicable", "Republican", "confirmed"
+    )
+
+    # 6. CPAC 2025 decimal period + diacritic folding + supplied district/party
+    hernandez = by_key["cpac:2025", "H001103"]
+    assert (hernandez["resolution_status"], hernandez["bioguide_id"]) == ("resolved", "H001103")
+    assert (hernandez["normalized_state"], hernandez["state_status"]) == ("PR", "confirmed")
+    assert (hernandez["normalized_district"], hernandez["district_status"]) == ("0", "supplied_from_term")
+    assert (hernandez["normalized_party"], hernandez["party_status"]) == ("Democrat", "supplied_from_term")

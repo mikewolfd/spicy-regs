@@ -1505,12 +1505,13 @@ def accept_pending_policy_columns(index: dict, base_url: str, descriptions: dict
     for table in sorted(set(expected) & set(live)):
         exp_map, live_map = dict(expected[table]), dict(live[table])
         missing = set(exp_map) - set(live_map)
+        extra = set(live_map) - set(exp_map)
         type_mismatches = {name for name in set(exp_map) & set(live_map) if exp_map[name] != live_map[name]}
         owner = publication.table_owner(index, table + ".parquet")
-        if (not missing and not type_mismatches) or table not in installed or owner is None:
+        if (not missing and not extra and not type_mismatches) or table not in installed or owner is None:
             continue
         has_receipts = "etlReceipts" in owner[1]
-        if not has_receipts and (table not in retired or missing or not type_mismatches):
+        if not has_receipts and (table not in retired or missing or extra or not type_mismatches):
             continue
         family, entry = owner
         if family not in roots:
@@ -1531,6 +1532,10 @@ def accept_pending_policy_columns(index: dict, base_url: str, descriptions: dict
             continue
         written_map = dict(described_schema(written.subject_schema))
         pending = sorted(missing - set(written_map))
+        pending_retired = sorted(
+            col for col in extra
+            if col in written_map and live_map[col] == written_map[col]
+        )
         pending_nested = sorted(
             col for col in type_mismatches
             if col in written_map
@@ -1539,7 +1544,7 @@ def accept_pending_policy_columns(index: dict, base_url: str, descriptions: dict
                 written.subject_schema.field(col).type, installed[table].subject_schema.field(col).type
             )
         )
-        if not pending and not pending_nested:
+        if not pending and not pending_retired and not pending_nested:
             continue
         if pending:
             notices.append(f"[{table}] declared, not yet published: {', '.join(pending)} (the selected generation "
@@ -1549,6 +1554,16 @@ def accept_pending_policy_columns(index: dict, base_url: str, descriptions: dict
                 columns = descriptions[table].get("columns") or {}
                 descriptions[table] = {**descriptions[table],
                                        "columns": {name: text for name, text in columns.items() if name not in pending}}
+        if pending_retired:
+            notices.append(f"[{table}] retired in code, still published: {', '.join(pending_retired)} "
+                           f"(the selected generation states {written.policy_version}; installed is "
+                           f"{installed[table].policy_version})")
+            expected[table] = [*expected[table], *((col, written_map[col]) for col in pending_retired)]
+            if table in descriptions:
+                columns = dict(descriptions[table].get("columns") or {})
+                for col in pending_retired:
+                    columns.setdefault(col, f"Retired in {installed[table].policy_version}; present in {written.policy_version}.")
+                descriptions[table] = {**descriptions[table], "columns": columns}
         if pending_nested:
             notices.append(
                 f"[{table}] nested struct fields declared, not yet published: {', '.join(pending_nested)} "

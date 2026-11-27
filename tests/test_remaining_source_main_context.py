@@ -107,7 +107,8 @@ def test_scorecard_recorded_snapshot_is_association_not_business_identity(tmp_pa
     [card]=pq.read_table(tmp_path/'scorecards.parquet').to_pylist()
     [snapshot]=pq.read_table(tmp_path/'scorecard_snapshots.parquet').to_pylist()
     assert card['snapshot_id']==snapshot['snapshot_id']
-    assert {'source_snapshot_id','resolution_status','input_pins_json','candidates_json'} <= set(subject_schema('scorecard_item_links').names)
+    assert {'source_snapshot_id','resolution_status','resolution_rule','candidates_json'} <= set(subject_schema('scorecard_item_links').names)
+    assert not ({'input_pins_json','source_context_json'} & set(subject_schema('scorecard_item_links').names))
     assert not any(j.child=='scorecard_items' and j.parent=='scorecard_snapshots' for j in JOINS)
     routes=[s for s in declarations(RETIRED_PROCESSING_JOINS)
             if s['id']=='recorded_snapshot_scorecard_items_scorecard_snapshots']

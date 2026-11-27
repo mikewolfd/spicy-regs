@@ -119,7 +119,9 @@ def test_domenici_correction_preserves_raw_and_round_trips_native_evidence(tmp_p
     assert result["normalized_district"] is None
     assert result["district_status"] == "not_applicable"
     assert result["publisher_member_key"] == SOURCE["publisher_member_key"]
-    assert json.loads(result["source_context_json"]) == SOURCE
+    assert "source_context_json" not in result
+    assert "term_candidates_json" not in result
+    assert "input_pins_json" not in result
     assert json.loads(result["correction_evidence_json"]) == evidence
     assert evidence["status"] == "applied"
     assert evidence["original_value"] == "NH" and evidence["corrected_value"] == "NM"
@@ -131,7 +133,7 @@ def test_domenici_correction_preserves_raw_and_round_trips_native_evidence(tmp_p
         "printed_page": "506",
         "locator": "NEW MEXICO / SENATORS / Pete V. Domenici, Albuquerque",
     }
-    assert json.loads(result["term_candidates_json"])["D000407"] == data["member_terms"]
+    assert json.loads(result["candidates_json"])[0]["term_indexes"] == ["3"]
     rows = {"scorecard_member_links": [result], "scorecard_item_links": []}
     write_family(tmp_path, rows, generation_id="reviewed-state-fixture")
     assert read_family(tmp_path, LINK_NAMES, generation_id="reviewed-state-fixture") == rows
@@ -173,7 +175,16 @@ def test_stale_correction_preserves_other_members_and_publisher_fixed_state():
     data["member_terms"].append({**data["member_terms"][0], "bioguide_id": "G000445", "term_state": "NH"})
     changed = {**SOURCE, "capture_id": "fresh-capture"}
     other = {**SOURCE, "publisher_member_key": "Senate:Gregg:Judd:NH:R", "member_name": "Gregg Judd"}
-    pins = json.loads(resolve()["input_pins_json"])
+    pins = {
+        name: {
+            "sha256": "sha256:" + "a" * 64,
+            "byteSize": 321,
+            "family": "fixture",
+            "artifactDigest": "sha256:" + "b" * 64,
+            "layout": {"kind": "single"},
+        }
+        for name in INPUT_TABLES
+    }
     results = resolve_scorecard_links(
         {"scorecards": [EDITION], "scorecard_members": [changed, other], "scorecard_items": []},
         data,
@@ -182,8 +193,7 @@ def test_stale_correction_preserves_other_members_and_publisher_fixed_state():
     first, second = results
     assert first["resolution_status"] == "unresolved"
     assert first["bioguide_id"] is None
-    assert first["source_context_json"] is not None and first["correction_evidence_json"] is not None
-    assert json.loads(first["source_context_json"]) == changed
+    assert first["correction_evidence_json"] is not None
     assert json.loads(first["correction_evidence_json"])["status"] == "not_applied_source_changed"
     assert (second["bioguide_id"], second["normalized_state"], second["state_status"]) == ("G000445", "NH", "confirmed")
     assert second["correction_evidence_json"] is None
@@ -225,5 +235,5 @@ def test_correction_does_not_bypass_normal_official_matching(change):
     assert result["normalized_state"] is None
     assert result["state_status"] != "corrected_from_reviewed_evidence"
     assert result["resolution_status"] == ("ambiguous" if change == "ambiguous_name" else "unresolved")
-    assert json.loads(result["source_context_json"])["state"] == "NH"
+    assert json.loads(result["correction_evidence_json"])["original_value"] == "NH"
     assert json.loads(result["correction_evidence_json"])["corrected_value"] == "NM"

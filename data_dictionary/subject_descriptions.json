@@ -1806,9 +1806,7 @@
       "rule_version": "Version of the deterministic resolver rules.",
       "candidate_count": "Number of candidates, retained as decimal text.",
       "candidates_json": "JSON array of candidate identifiers retained for review.",
-      "reason": "Explanation of the resolution outcome or refusal.",
-      "source_context_json": "Source identity and period context used by the resolver, retained as JSON.",
-      "input_pins_json": "Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table."
+      "reason": "Explanation of the resolution outcome or refusal."
     }
   },
   "scorecard_items": {
@@ -1859,27 +1857,25 @@
     "columns": {
       "scorecard_id": "Stable publisher edition identifier; join within the recorded source snapshot.",
       "publisher_member_key": "Unchanged publisher member key within the edition.",
-      "bioguide_id": "Exact resolved congressional member identifier; NULL when unresolved or ambiguous.",
+      "bioguide_id": "Exact resolved congressional member identifier; NULL when unresolved, ambiguous or conflicting.",
       "source_snapshot_id": "Source snapshot used for resolution; require equality when joining to refreshed source facts.",
       "capture_id": "Source capture identifier carried through from the publisher fact.",
       "source_url": "Original publisher URL for the source fact.",
       "source_path": "Location of the source fact or reference within the captured document.",
-      "normalized_state": "State agreed by the resolved member's relevant terms in the source chamber and period, after any exact reviewed correction. NULL for missing or conflicting state context; original text remains in source_context_json.",
-      "state_status": "confirmed or corrected_from_reviewed_evidence for an accepted state; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state or ambiguous_term_state. Missing term dates or unknown chamber prevent confirmation when the term may overlap the period. Correction does not waive historical member matching.",
-      "normalized_district": "District agreed by the resolved member's relevant House terms in the source chamber and period; 0 means at-large. NULL for Senate, unresolved identity, missing context or conflicting term geography. Raw publisher text remains in source_context_json.",
-      "district_status": "confirmed, corrected_from_term or supplied_from_term for a qualified district; not_applicable for Senate; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state, ambiguous_term_state, unqualified_term_district or ambiguous_term_district. input_pins_json identifies the term input.",
-      "correction_evidence_json": "Exact reviewed source-error correction, evidence, and disposition: applied or not_applied_source_changed. Changed source records keep ordinary identity matching without the stale correction; NULL means no reviewed correction was considered. The original publisher row remains in source_context_json. A correction alone does not establish a resolved identity.",
-      "term_candidates_json": "JSON object keyed by congressional member identifier, recording the historical terms used for identity matching. Geography also checks other relevant terms in the pinned term input.",
+      "normalized_state": "State agreed by the resolved member's relevant terms in the source chamber and period, after any exact reviewed correction. NULL for missing period coverage or conflicting state context; original text remains in scorecard_members.",
+      "state_status": "confirmed, supplied_from_term, corrected_from_term or corrected_from_reviewed_evidence for an accepted state; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state or ambiguous_term_state. Missing term dates or unknown chamber prevent confirmation when the term may overlap the period. Correction does not waive historical member matching.",
+      "normalized_district": "District agreed by the resolved member's relevant House terms in the source chamber and period; 0 means at-large. NULL for Senate, unresolved identity, missing context or conflicting term geography. Raw publisher text remains in scorecard_members.",
+      "district_status": "confirmed, corrected_from_term or supplied_from_term for a qualified district; not_applicable for Senate; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state, ambiguous_term_state, unqualified_term_district or ambiguous_term_district.",
+      "normalized_party": "Party agreed by the resolved member's relevant terms in the source chamber and period. NULL when identity is unresolved, period term coverage is incomplete, or term party is missing or changes during the period; raw publisher text remains in scorecard_members.",
+      "party_status": "confirmed, corrected_from_term or supplied_from_term for an accepted period party; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state, ambiguous_term_state, unqualified_term_party or ambiguous_term_party.",
+      "correction_evidence_json": "Exact reviewed source-error correction, evidence, and disposition: applied or not_applied_source_changed. Changed source records keep ordinary identity matching without the stale correction; NULL means no reviewed correction was considered. The original publisher row remains in scorecard_members. A correction alone does not establish a resolved identity.",
       "override_version": "Version of an explicit member override, when used.",
       "resolution_status": "Resolution outcome, including resolved, unresolved, ambiguous or conflicting source identifiers.",
       "resolution_rule": "Exact matching rule that produced this disposition.",
       "rule_version": "Version of the deterministic resolver rules.",
       "candidate_count": "Number of candidates, retained as decimal text.",
       "candidates_json": "JSON array of candidate identifiers retained for review.",
-      "reason": "Explanation of the resolution outcome or refusal.",
-      "source_context_json": "Source identity and period context used by the resolver, retained as JSON.",
-      "input_pins_json": "Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table.",
-      "geography_evidence_json": "Version 1 geography evidence: relevant terms, uncertain terms, half-open source windows and uncovered intervals. Separate from identity candidates; confirmation requires complete coverage of every declared window."
+      "reason": "Explanation of the resolution outcome or refusal."
     }
   },
   "scorecard_member_ratings": {
@@ -2483,6 +2479,32 @@
       "summary_chars": "Character length of summary_html, so a truncation upstream is visible without reading it.",
       "last_summary_update_date": "Literal lastSummaryUpdateDate, which dates the summary itself in BILLSTATUS 1.0.0. NULL means absent; empty and malformed source strings remain unchanged. No first-publication claim.",
       "source_schema_version": "The BILLSTATUS version or Congress.gov API format giving the native clock its context."
+    }
+  },
+  "scorecard_action_comparisons": {
+    "columns": {
+      "scorecard_id": "Publisher edition identifier.",
+      "result_id": "Original result identifier within the item and publisher member.",
+      "source_snapshot_id": "Accepted source snapshot; require equality in source joins.",
+      "item_id": "Original publisher item identifier.",
+      "publisher_member_key": "Original publisher member key.",
+      "metric_id": "Original measurement context, when supplied.",
+      "reference_id": "Primary exact item-reference occurrence used, or NULL. The sponsorship method also requires every retained occurrence to resolve to the same bill.",
+      "vote_id": "Exact pinned official roll-call identifier, or NULL.",
+      "bioguide_id": "Exact resolved congressional member identity, or NULL.",
+      "official_member_key": "Native official vote member key, or bill_id/cosponsor_index identity for historical sponsorship.",
+      "publisher_target_text": "Literal publisher preferred position; only qualified per-publisher spellings are interpreted.",
+      "publisher_action_text": "Unchanged publisher-reported action literal, distinct from official position.",
+      "publisher_credit_text": "Unchanged publisher credit literal, including excused; not an official vote.",
+      "publisher_eligibility_text": "Unchanged publisher eligibility literal.",
+      "official_position_text": "Literal official vote position from the pinned native member-vote row; NULL for dated sponsorship.",
+      "official_position_normalized": "Official normalized vote position, or method-derived cosponsor_at_cutoff/not_cosponsor_at_cutoff.",
+      "comparison_status": "same, different, not_voting, present, unresolved or not_applicable. Missing official records, unsupported publisher targets and same-day sponsorship cutoff ambiguity stay unresolved.",
+      "reason": "Specific evidence condition supporting the comparison or its unresolved/not_applicable disposition.",
+      "rule_version": "Version of the deterministic publisher-qualified comparison method.",
+      "capture_id": "Original publisher result capture identity.",
+      "source_url": "Original publisher result URL.",
+      "source_path": "Original publisher result locator."
     }
   }
 }

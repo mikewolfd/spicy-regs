@@ -176,11 +176,19 @@ def test_shared_source_declarations_preserve_prior_columns_order_and_keys():
     baseline = json.loads((Path(__file__).parent / "fixtures/scorecard_source_shapes_before_refactor.json").read_text())
     assert set(SOURCE_COLUMNS) == set(baseline["SOURCE_COLUMNS"]) | {COMPARISON_TABLE}
     assert set(IDENTITIES) == set(baseline["IDENTITIES"]) | {COMPARISON_TABLE}
-    additions = {"normalized_state", "state_status", "normalized_district", "district_status", "correction_evidence_json",
-                 "geography_evidence_json"}
-    assert {k: [c for c in SOURCE_COLUMNS[k] if k != "scorecard_member_links" or c not in additions]
-            for k in baseline["SOURCE_COLUMNS"]} == baseline["SOURCE_COLUMNS"]
+    additions = {"normalized_state", "state_status", "normalized_district", "district_status",
+                 "normalized_party", "party_status", "correction_evidence_json"}
+    retired = {"input_pins_json", "source_context_json", "term_candidates_json"}
+    assert {
+        k: [c for c in SOURCE_COLUMNS[k] if k != "scorecard_member_links" or c not in additions]
+        for k in baseline["SOURCE_COLUMNS"]
+    } == {
+        k: [c for c in cols if k not in {"scorecard_member_links", "scorecard_item_links"} or c not in retired]
+        for k, cols in baseline["SOURCE_COLUMNS"].items()
+    }
     assert additions <= set(SOURCE_COLUMNS["scorecard_member_links"])
+    assert not (retired & set(SOURCE_COLUMNS["scorecard_member_links"]))
+    assert not (retired & set(SOURCE_COLUMNS["scorecard_item_links"]))
     assert {k: list(IDENTITIES[k]) for k in baseline["IDENTITIES"]} == baseline["IDENTITIES"]
     assert SOURCE_COLUMNS[COMPARISON_TABLE] == COMPARISON_COLUMNS
     assert IDENTITIES[COMPARISON_TABLE] == COMPARISON_KEYS
@@ -192,16 +200,18 @@ def test_earlier_member_link_policy_and_row_do_not_invent_new_geography():
     from spicy_regs.scorecards.etl import POLICIES, admitted_read_policies
 
     current = POLICIES["scorecard_member_links"]
-    geography, previous, original = earlier_policies(current)
+    v4, geography, previous, original = earlier_policies(current)
+    assert earlier_policies(v4) == (geography, previous, original)
     assert earlier_policies(geography) == (previous, original)
     assert earlier_policies(previous) == (original,)
     assert admitted_read_policies(("scorecard_member_links",), descriptors=[previous.descriptor()]) == {
         "scorecard_member_links": previous}
     before = row("scorecard_member_links", bioguide_id="B001323", resolution_status="resolved")
-    for field in ("normalized_state", "state_status", "normalized_district", "district_status", "correction_evidence_json"):
+    for field in ("normalized_state", "state_status", "normalized_district", "district_status",
+                  "normalized_party", "party_status", "correction_evidence_json"):
         del before[field]
     assert restore_source_row("scorecard_member_links", before) == before
     with pytest.raises(KeyError):
         restore_source_row("scorecard_member_links", before | {"normalized_district": "0"})
-    for policy in (current, geography, previous):
+    for policy in (current, v4, geography, previous):
         assert earlier_policies(replace(policy, identity_fields=("scorecard_id",))) == ()

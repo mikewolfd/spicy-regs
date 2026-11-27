@@ -9709,19 +9709,19 @@ tables:
       Derived exact identity links over pinned scorecard and congressional tables.
       Historical context constrains member matches; unresolved and ambiguous
       identities remain visible. No fuzzy matching or score conversion is applied.
-    measured_on: "2026-10-03"
-    summary: "One resolution disposition per publisher member. Normalized geography uses accepted, period-qualified congressional terms after identity resolution. Exact reviewed source corrections retain their evidence; original publisher geography remains in source_context_json and scorecard_members."
+    measured_on: "2026-11-26"
+    summary: "One resolution disposition per publisher member. Normalized state, district and party use accepted, period-qualified congressional terms after identity resolution. Exact reviewed source corrections retain their evidence; original publisher literals remain in scorecard_members and input pins are recorded at the generation level."
     columns:
       scorecard_id: "Stable publisher edition identifier; join within the recorded source snapshot."
       publisher_member_key: "Unchanged publisher member key within the edition."
-      bioguide_id: "Exact resolved congressional member identifier; NULL when unresolved or ambiguous."
-      normalized_state: "State agreed by the resolved member's relevant terms in the source chamber and period, after any exact reviewed correction. NULL for missing or conflicting state context; original text remains in source_context_json."
-      state_status: "confirmed or corrected_from_reviewed_evidence for an accepted state; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state or ambiguous_term_state. Missing term dates or unknown chamber prevent confirmation when the term may overlap the period. Correction does not waive historical member matching."
-      normalized_district: "District agreed by the resolved member's relevant House terms in the source chamber and period; 0 means at-large. NULL for Senate, unresolved identity, missing context or conflicting term geography. Raw publisher text remains in source_context_json."
-      district_status: "confirmed, corrected_from_term or supplied_from_term for a qualified district; not_applicable for Senate; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state, ambiguous_term_state, unqualified_term_district or ambiguous_term_district. input_pins_json identifies the term input."
-      correction_evidence_json: "Exact reviewed source-error correction, evidence, and disposition: applied or not_applied_source_changed. Changed source records keep ordinary identity matching without the stale correction; NULL means no reviewed correction was considered. The original publisher row remains in source_context_json. A correction alone does not establish a resolved identity."
-      term_candidates_json: "JSON object keyed by congressional member identifier, recording the historical terms used for identity matching. Geography also checks other relevant terms in the pinned term input."
-      geography_evidence_json: "Version 1 geography evidence: relevant terms, uncertain terms, half-open source windows and uncovered intervals. Separate from identity candidates; confirmation requires complete coverage of every declared window."
+      bioguide_id: "Exact resolved congressional member identifier; NULL when unresolved, ambiguous or conflicting."
+      normalized_state: "State agreed by the resolved member's relevant terms in the source chamber and period, after any exact reviewed correction. NULL for missing period coverage or conflicting state context; original text remains in scorecard_members."
+      state_status: "confirmed, supplied_from_term, corrected_from_term or corrected_from_reviewed_evidence for an accepted state; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state or ambiguous_term_state. Missing term dates or unknown chamber prevent confirmation when the term may overlap the period. Correction does not waive historical member matching."
+      normalized_district: "District agreed by the resolved member's relevant House terms in the source chamber and period; 0 means at-large. NULL for Senate, unresolved identity, missing context or conflicting term geography. Raw publisher text remains in scorecard_members."
+      district_status: "confirmed, corrected_from_term or supplied_from_term for a qualified district; not_applicable for Senate; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state, ambiguous_term_state, unqualified_term_district or ambiguous_term_district."
+      normalized_party: "Party agreed by the resolved member's relevant terms in the source chamber and period. NULL when identity is unresolved, period term coverage is incomplete, or term party is missing or changes during the period; raw publisher text remains in scorecard_members."
+      party_status: "confirmed, corrected_from_term or supplied_from_term for an accepted period party; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state, ambiguous_term_state, unqualified_term_party or ambiguous_term_party."
+      correction_evidence_json: "Exact reviewed source-error correction, evidence, and disposition: applied or not_applied_source_changed. Changed source records keep ordinary identity matching without the stale correction; NULL means no reviewed correction was considered. The original publisher row remains in scorecard_members. A correction alone does not establish a resolved identity."
       override_version: "Version of an explicit member override, when used."
       source_snapshot_id: "Source snapshot used for resolution; require equality when joining to refreshed source facts."
       resolution_status: "Resolution outcome, including resolved, unresolved, ambiguous or conflicting source identifiers."
@@ -9730,8 +9730,6 @@ tables:
       candidate_count: "Number of candidates, retained as decimal text."
       candidates_json: "JSON array of candidate identifiers retained for review."
       reason: "Explanation of the resolution outcome or refusal."
-      source_context_json: "Source identity and period context used by the resolver, retained as JSON."
-      input_pins_json: "Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table."
       capture_id: "Source capture identifier carried through from the publisher fact."
       source_url: "Original publisher URL for the source fact."
       source_path: "Location of the source fact or reference within the captured document."
@@ -9739,10 +9737,10 @@ tables:
   scorecard_action_comparisons:
     subject: congress
     label: "Scorecard action comparisons"
-    measured_on: "2026-10-19"
+    measured_on: "2026-11-26"
     identity_columns: ["scorecard_id", "item_id", "publisher_member_key", "result_id"]
-    coverage: "Derived. LCV 2025 explicit floor-vote targets compared with exact pinned official member votes. The selected Common Cause 2022 House DISCLOSE item compares dated cosponsorship with its explicit source cutoff. Other items and score reproduction are deferred. Implementation does not establish hosted adoption."
-    summary: "One descriptive comparison per publisher member-item result. Publisher credit and official position remain separate; missing or ambiguous evidence stays unresolved. Join source facts on their recorded snapshot."
+    coverage: "Derived. Qualified per-publisher floor-vote targets across all scorecards with resolved roll-call links compared with exact pinned official member votes, plus the selected Common Cause 2022 House DISCLOSE cosponsorship cutoff item. Non-vote items, unlinked votes and unsupported targets stay explicitly classified; score reproduction is deferred."
+    summary: "One descriptive comparison per publisher member-item result across eligible vote-linked scorecards and the selected historical sponsorship item. Publisher credit and official position remain separate; missing or ambiguous evidence stays unresolved. Join source facts on their recorded snapshot; input pins are recorded at the generation level."
     columns:
       scorecard_id: "Publisher edition identifier."
       result_id: "Original result identifier within the item and publisher member."
@@ -9754,16 +9752,15 @@ tables:
       vote_id: "Exact pinned official roll-call identifier, or NULL."
       bioguide_id: "Exact resolved congressional member identity, or NULL."
       official_member_key: "Native official vote member key, or bill_id/cosponsor_index identity for historical sponsorship."
-      publisher_target_text: "Literal publisher preferred position; only qualified spellings are interpreted."
+      publisher_target_text: "Literal publisher preferred position; only qualified per-publisher spellings are interpreted."
       publisher_action_text: "Unchanged publisher-reported action literal, distinct from official position."
       publisher_credit_text: "Unchanged publisher credit literal, including excused; not an official vote."
       publisher_eligibility_text: "Unchanged publisher eligibility literal."
       official_position_text: "Literal official vote position from the pinned native member-vote row; NULL for dated sponsorship."
       official_position_normalized: "Official normalized vote position, or method-derived cosponsor_at_cutoff/not_cosponsor_at_cutoff."
-      comparison_status: "same, different, not_voting, present, unresolved or not_applicable. Missing official records and same-day sponsorship cutoff ambiguity are unresolved."
-      reason: "Specific evidence condition supporting the comparison or its unresolved disposition."
-      rule_version: "Version of the narrow publisher-specific comparison method."
-      input_pins_json: "Immutable source and congressional input generation and member pins."
+      comparison_status: "same, different, not_voting, present, unresolved or not_applicable. Missing official records, unsupported publisher targets and same-day sponsorship cutoff ambiguity stay unresolved."
+      reason: "Specific evidence condition supporting the comparison or its unresolved/not_applicable disposition."
+      rule_version: "Version of the deterministic publisher-qualified comparison method."
       capture_id: "Original publisher result capture identity."
       source_url: "Original publisher result URL."
       source_path: "Original publisher result locator."
@@ -9776,8 +9773,8 @@ tables:
       Derived exact identity links over pinned scorecard and congressional tables.
       Historical context constrains member matches; unresolved and ambiguous
       identities remain visible. No fuzzy matching or score conversion is applied.
-    measured_on: "2026-10-03"
-    summary: "One resolution disposition per source item reference occurrence; a bill action does not imply a roll call."
+    measured_on: "2026-11-26"
+    summary: "One resolution disposition per source item reference occurrence; a bill action does not imply a roll call. Original item literals remain in scorecard_items and input pins are recorded at the generation level."
     columns:
       scorecard_id: "Stable publisher edition identifier; join within the recorded source snapshot."
       item_id: "Unchanged publisher scoring-item key within the edition."
@@ -9797,8 +9794,6 @@ tables:
       candidate_count: "Number of candidates, retained as decimal text."
       candidates_json: "JSON array of candidate identifiers retained for review."
       reason: "Explanation of the resolution outcome or refusal."
-      source_context_json: "Source identity and period context used by the resolver, retained as JSON."
-      input_pins_json: "Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table."
       capture_id: "Source capture identifier carried through from the publisher fact."
       source_url: "Original publisher URL for the source fact."
       source_path: "Location of the source fact or reference within the captured document."

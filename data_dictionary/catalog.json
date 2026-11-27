@@ -1803,7 +1803,7 @@
       {
         "dataset": "scorecard_action_comparisons",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v2",
+        "policy_version": "scorecards-etl-comparisons-v3",
         "identity_columns": [
           "scorecard_id",
           "item_id",
@@ -1817,7 +1817,7 @@
       {
         "dataset": "scorecard_item_links",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v2",
+        "policy_version": "scorecards-etl-item-links-v3",
         "identity_columns": [
           "scorecard_id",
           "item_id",
@@ -1861,7 +1861,7 @@
       {
         "dataset": "scorecard_member_links",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-member-links-v4",
+        "policy_version": "scorecards-etl-member-links-v5",
         "identity_columns": [
           "scorecard_id",
           "publisher_member_key"
@@ -6544,10 +6544,10 @@
     {
       "table": "scorecard_member_links",
       "label": "Scorecard member links",
-      "summary": "One resolution disposition per publisher member. Normalized geography uses accepted, period-qualified congressional terms after identity resolution. Exact reviewed source corrections retain their evidence; original publisher geography remains in source_context_json and scorecard_members.",
+      "summary": "One resolution disposition per publisher member. Normalized state, district and party use accepted, period-qualified congressional terms after identity resolution. Exact reviewed source corrections retain their evidence; original publisher literals remain in scorecard_members and input pins are recorded at the generation level.",
       "coverage": "Derived exact identity links over pinned scorecard and congressional tables. Historical context constrains member matches; unresolved and ambiguous identities remain visible. No fuzzy matching or score conversion is applied.",
       "kind": "derived",
-      "measured_on": "2026-10-03",
+      "measured_on": "2026-11-26",
       "data_quality": null,
       "columns": [
         "scorecard_id",
@@ -6561,27 +6561,25 @@
         "state_status",
         "normalized_district",
         "district_status",
+        "normalized_party",
+        "party_status",
         "correction_evidence_json",
-        "term_candidates_json",
-        "geography_evidence_json",
         "override_version",
         "resolution_status",
         "resolution_rule",
         "rule_version",
         "candidate_count",
         "candidates_json",
-        "reason",
-        "source_context_json",
-        "input_pins_json"
+        "reason"
       ]
     },
     {
       "table": "scorecard_item_links",
       "label": "Scorecard item links",
-      "summary": "One resolution disposition per source item reference occurrence; a bill action does not imply a roll call.",
+      "summary": "One resolution disposition per source item reference occurrence; a bill action does not imply a roll call. Original item literals remain in scorecard_items and input pins are recorded at the generation level.",
       "coverage": "Derived exact identity links over pinned scorecard and congressional tables. Historical context constrains member matches; unresolved and ambiguous identities remain visible. No fuzzy matching or score conversion is applied.",
       "kind": "derived",
-      "measured_on": "2026-10-03",
+      "measured_on": "2026-11-26",
       "data_quality": null,
       "columns": [
         "scorecard_id",
@@ -6604,18 +6602,16 @@
         "rule_version",
         "candidate_count",
         "candidates_json",
-        "reason",
-        "source_context_json",
-        "input_pins_json"
+        "reason"
       ]
     },
     {
       "table": "scorecard_action_comparisons",
       "label": "Scorecard action comparisons",
-      "summary": "One descriptive comparison per publisher member-item result. Publisher credit and official position remain separate; missing or ambiguous evidence stays unresolved. Join source facts on their recorded snapshot.",
-      "coverage": "Derived. LCV 2025 explicit floor-vote targets compared with exact pinned official member votes. The selected Common Cause 2022 House DISCLOSE item compares dated cosponsorship with its explicit source cutoff. Other items and score reproduction are deferred. Implementation does not establish hosted adoption.",
+      "summary": "One descriptive comparison per publisher member-item result across eligible vote-linked scorecards and the selected historical sponsorship item. Publisher credit and official position remain separate; missing or ambiguous evidence stays unresolved. Join source facts on their recorded snapshot; input pins are recorded at the generation level.",
+      "coverage": "Derived. Qualified per-publisher floor-vote targets across all scorecards with resolved roll-call links compared with exact pinned official member votes, plus the selected Common Cause 2022 House DISCLOSE cosponsorship cutoff item. Non-vote items, unlinked votes and unsupported targets stay explicitly classified; score reproduction is deferred.",
       "kind": "derived",
-      "measured_on": "2026-10-19",
+      "measured_on": "2026-11-26",
       "data_quality": null,
       "columns": [
         "scorecard_id",
@@ -6637,7 +6633,6 @@
         "comparison_status",
         "reason",
         "rule_version",
-        "input_pins_json",
         "capture_id",
         "source_url",
         "source_path"

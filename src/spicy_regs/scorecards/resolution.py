@@ -16,7 +16,7 @@ import unicodedata
 
 from spicy_docs.sources.congress.votes import vote_day
 
-RULE_VERSION = "scorecard-resolution-v1.10"
+RULE_VERSION = "scorecard-resolution-v1.11"
 SOURCE_TABLES = ("scorecards", "scorecard_members", "scorecard_items")
 OFFICIAL_TABLES = ("members", "member_terms", "congress_bills", "amendments", "roll_call_votes")
 INPUT_TABLES = SOURCE_TABLES + OFFICIAL_TABLES
@@ -58,8 +58,6 @@ COMMON_COLUMNS = (
     "candidate_count",
     "candidates_json",
     "reason",
-    "source_context_json",
-    "input_pins_json",
     "capture_id",
     "source_url",
     "source_path",
@@ -72,9 +70,9 @@ MEMBER_LINK_COLUMNS = (
     "state_status",
     "normalized_district",
     "district_status",
+    "normalized_party",
+    "party_status",
     "correction_evidence_json",
-    "term_candidates_json",
-    "geography_evidence_json",
     "override_version",
 ) + COMMON_COLUMNS
 ITEM_LINK_COLUMNS = (
@@ -117,6 +115,60 @@ _SCHEMES = {
     "fec": "fec_id",
     "fec_id": "fec_id",
 }
+_PUBLISHER_NATIVE_SCHEMES = frozenset({
+    "cpac",
+    "cpac_profile",
+    "wix_people",
+    "club_for_growth",
+    "heritage_action",
+    "aflcio",
+    "niac",
+    "agc",
+    "freedomindex.us:legislator",
+    "peaceaction.org:legislator",
+    "peaceaction.org:wpc_id",
+    "ocd-division",
+    "limitedgov.org:person",
+    "votervoice_occupancy_id",
+    "votervoice_politician_id",
+    "quorum",
+    "numbersusa",
+    "KnowWhoPersonID",
+    "alaska_wilderness_action_sheet_uid",
+    "ntu_slug",
+    "cdf_wp_post_id",
+    "legislatorKey",
+    "legislatorKeySimple",
+    "bipac.net:leg_id_num",
+    "bipac.net:tenant",
+})
+_BIOGUIDE_SHAPE = re.compile(r"[A-Z][0-9]{6}\Z")
+_PARTIES = {
+    "d": "Democrat",
+    "dem": "Democrat",
+    "dem.": "Democrat",
+    "democrat": "Democrat",
+    "democrats": "Democrat",
+    "democratic": "Democrat",
+    "(d)": "Democrat",
+    "r": "Republican",
+    "rep": "Republican",
+    "rep.": "Republican",
+    "republican": "Republican",
+    "republicans": "Republican",
+    "(r)": "Republican",
+    "i": "Independent",
+    "ind": "Independent",
+    "ind.": "Independent",
+    "independent": "Independent",
+    "(i)": "Independent",
+    "l": "Libertarian",
+    "lib": "Libertarian",
+    "libertarian": "Libertarian",
+    "id": "Independent Democrat",
+    "ind. democrat": "Independent Democrat",
+    "independent democrat": "Independent Democrat",
+}
 _STATE_NAMES = (
     "AL:Alabama|AK:Alaska|AZ:Arizona|AR:Arkansas|CA:California|CO:Colorado|CT:Connecticut|DE:Delaware|"
     "FL:Florida|GA:Georgia|HI:Hawaii|ID:Idaho|IL:Illinois|IN:Indiana|IA:Iowa|KS:Kansas|KY:Kentucky|"
@@ -134,6 +186,7 @@ _STATES: dict[str, str] = {
     for token in (code, name)
 }
 _CHAMBERS = {
+    "h": "house",
     "house": "house",
     "rep": "house",
     "representative": "house",
@@ -141,11 +194,23 @@ _CHAMBERS = {
     "u.s. house of representatives": "house",
     "us house": "house",
     "u.s house": "house",
+    "u.s. house": "house",
+    "s": "senate",
     "senate": "senate",
     "sen": "senate",
     "senator": "senate",
     "us senate": "senate",
+    "u.s. senate": "senate",
 }
+
+
+def classify_identifier_scheme(scheme: str | None) -> str:
+    """Classify a source identifier scheme without conflating publisher keys with crosswalks."""
+    if scheme in _SCHEMES:
+        return "authoritative"
+    if scheme in _PUBLISHER_NATIVE_SCHEMES:
+        return "publisher_native"
+    return "unrecognized"
 
 
 def qualified_item_targets(status: str, targets: Mapping, candidates: Sequence[Mapping]) -> tuple[dict, list[dict]]:
@@ -229,6 +294,34 @@ def _name(value: str | None) -> str:
     return " ".join("".join(" " if unicodedata.category(ch).startswith("P") else ch for ch in text).split())
 
 
+def _folded_tokens(value: str | None) -> set[str]:
+    """Accent-folded lowercase word tokens for name-conflict guards."""
+    text = unicodedata.normalize("NFKD", _name(value))
+    stripped = "".join(ch for ch in text if unicodedata.category(ch) != "Mn")
+    return {tok for tok in stripped.split() if len(tok) > 1}
+
+
+def _party(value: str | None) -> str | None:
+    text = _text(value)
+    if not text:
+        return None
+    return _PARTIES.get(text.casefold(), text.casefold())
+
+
+def _cpac_is_historical_lifetime(source: Row) -> bool:
+    """True when a CPAC observation carries empty period history and no period-scoped state/district/party."""
+    if any(_text(source.get(field)) for field in ("state", "district", "party")):
+        return False
+    notes = _text(source.get("notes_text"))
+    if not notes:
+        return False
+    try:
+        parsed = json.loads(notes)
+    except ValueError:
+        return False
+    return isinstance(parsed, dict) and parsed.get("history") == []
+
+
 def _index(rows: Sequence[Row], keys: tuple[str, ...], label: str) -> dict:
     result = {}
     for row in rows:
@@ -269,8 +362,9 @@ def _window(text: str | None) -> tuple[date, date] | None:
         if start >= end:
             raise ValueError("Source period interval must have an end after its start")
         return start, end
-    if re.fullmatch(r"\d{4}", text) and 1789 <= int(text) < 2100:
-        return date(int(text), 1, 1), date(int(text) + 1, 1, 1)
+    if (year_match := re.fullmatch(r"(\d{4})(?:\.0)?", text)) and 1789 <= int(year_match[1]) < 2100:
+        year = int(year_match[1])
+        return date(year, 1, 1), date(year + 1, 1, 1)
     match = re.fullmatch(r"(\d+)(?:st|nd|rd|th)?\s+Congress", text, re.I)
     if match and 1 <= int(match[1]) < 150:
         congress = int(match[1])
@@ -331,6 +425,7 @@ class _Members:
         self.aliases = {}
         self.exact_aliases = defaultdict(lambda: defaultdict(list))
         self.normal_aliases = defaultdict(lambda: defaultdict(list))
+        self.last_tokens: dict[str, set[str]] = {}
         for bioguide, row in self.members.items():
             for field in set(_SCHEMES.values()) - {"fec_id"}:
                 if row.get(field):
@@ -345,6 +440,7 @@ class _Members:
                 self.ids["bioguide_id", value].add(bioguide)
                 self.previous_ids[value].add(bioguide)
             first, last = _text(row.get("name_first")), _text(row.get("name_last"))
+            last_set = _folded_tokens(last)
             if first and last:
                 for name in (first + " " + last, last + ", " + first, last + " " + first):
                     self.exact[name].add(bioguide)
@@ -361,6 +457,7 @@ class _Members:
                         raise ValueError(f"other_names_json {field} must be a string or null")
                 alias_first = _text(patch.get("first", first))
                 alias_last = _text(patch.get("last", last))
+                last_set |= _folded_tokens(alias_last)
                 if alias_first and alias_last:
                     for name in (
                         alias_first + " " + alias_last,
@@ -371,6 +468,32 @@ class _Members:
                         self.normal_aliases[_name(name)][bioguide].append(index)
                 if alias_last:
                     self.exact_aliases[alias_last][bioguide].append(index)
+            self.last_tokens[bioguide] = last_set
+
+    def name_compatible(self, source_name: str | None, bioguide: str) -> bool:
+        """Require at least one accent-folded surname token overlap with the authoritative member."""
+        source_tokens = _folded_tokens(source_name)
+        allowed = self.last_tokens.get(bioguide, set())
+        return bool(source_tokens and allowed and (source_tokens & allowed))
+
+    def prior_service_terms(self, bioguide: str, context: dict) -> list[Row]:
+        """Authoritative terms in the observed chamber starting on or before the edition window."""
+        if not context["windows"]:
+            return []
+        cutoff = max(right for _, right in context["windows"])
+        matches = []
+        for term in self.terms[bioguide]:
+            if context["chamber"] and _chamber(term.get("term_type")) != context["chamber"]:
+                continue
+            start_text, end_text = term.get("term_start"), term.get("term_end")
+            if not start_text or not end_text:
+                continue
+            start, end = date.fromisoformat(start_text), date.fromisoformat(end_text)
+            if start >= end:
+                raise ValueError("Pinned member term ends before it starts")
+            if start < cutoff:
+                matches.append(term)
+        return sorted(matches, key=lambda row: (row.get("term_start") or "", row["term_index"]))
 
     def alias_terms(self, bioguide: str, index: int, context: dict, inclusive: bool = False) -> list[Row]:
         bounds = _alias_bounds(self.aliases[bioguide][index])
@@ -456,6 +579,7 @@ class _Members:
         matches = defaultdict(set)
         alias_details = defaultdict(dict)
         id_sets = []
+        cpac_keys: list[str] = []
         identifiers = _array(source.get("identifiers_json"), "identifiers_json")
         for field in _SCHEMES.values():
             if source.get(field):
@@ -463,7 +587,17 @@ class _Members:
         for identifier in identifiers:
             scheme = identifier.get("scheme", identifier.get("field"))
             value = identifier.get("value")
-            if scheme not in _SCHEMES:
+            classification = classify_identifier_scheme(scheme)
+            if classification == "publisher_native":
+                if (
+                    scheme == "cpac"
+                    and edition.get("publisher_id") == "cpac"
+                    and isinstance(value, str)
+                    and _BIOGUIDE_SHAPE.fullmatch(value)
+                ):
+                    cpac_keys.append(value)
+                continue
+            if classification != "authoritative":
                 reasons.append(f"unrecognized_identifier_scheme:{scheme}")
                 continue
             if not isinstance(value, str) or not value:
@@ -482,8 +616,14 @@ class _Members:
         method = "explicit_bioguide" if any("bioguide_id" in rules for rules in matches.values()) else "exact_crosswalk"
         status, chosen = "unresolved", None
         term_matches = {bioguide: self.terms_for(bioguide, context) for bioguide in matches}
+        distinct_cpac = sorted(set(cpac_keys))
         if id_sets:
             agreed = set.intersection(*map(set, id_sets))
+            if distinct_cpac:
+                cpac_candidates = set.union(*(set(self.ids["bioguide_id", key]) for key in distinct_cpac))
+                if len(distinct_cpac) > 1 or (agreed and cpac_candidates and not (agreed & cpac_candidates)):
+                    agreed = set()
+                    reasons.append(f"publisher_key_conflicts_with_authoritative_id:cpac:{','.join(distinct_cpac)}")
             if not agreed:
                 status, method = "conflict", "conflicting_or_unknown_identifiers"
             else:
@@ -508,6 +648,64 @@ class _Members:
                 else:
                     status = "ambiguous"
             # Known identifiers never fall through to name or override rules.
+        elif distinct_cpac:
+            # Qualified CPAC key-first matching against authoritative members/member_terms
+            # with explicit name + period/historical-service conflict guards.
+            if len(distinct_cpac) > 1:
+                status, method = "conflict", "conflicting_publisher_keys"
+                reasons.append(f"conflicting_publisher_keys:cpac:{','.join(distinct_cpac)}")
+            else:
+                cpac_key = distinct_cpac[0]
+                key_ids = set(self.ids["bioguide_id", cpac_key])
+                for bioguide in key_ids:
+                    matches[bioguide].add("publisher_key:cpac")
+                    if bioguide in self.previous_ids[cpac_key]:
+                        matches[bioguide].add("bioguide_previous")
+                    term_matches[bioguide] = self.terms_for(bioguide, context)
+                if not key_ids:
+                    status, method = "unresolved", "unknown_publisher_key"
+                    reasons.append(f"unknown_publisher_key:cpac:{cpac_key}")
+                else:
+                    name_ok = {key for key in key_ids if self.name_compatible(source.get("member_name"), key)}
+                    if not name_ok:
+                        status, method = "conflict", "publisher_key_name_conflict"
+                        reasons.append(f"publisher_key_name_conflict:cpac:{cpac_key}")
+                    else:
+                        has_context = any(
+                            [context["state"], context["chamber"], context["district"] is not None, context["windows"]]
+                        )
+                        eligible = {key for key in name_ok if term_matches[key] or not has_context}
+                        if not eligible:
+                            inclusive = {key: self.terms_for(key, context, inclusive=True) for key in name_ok}
+                            if sum(bool(terms) for terms in inclusive.values()) == 1:
+                                term_matches.update(inclusive)
+                                eligible = {key for key in name_ok if inclusive[key]}
+                                reasons.append("unique_inclusive_term_end_fallback")
+                        if len(eligible) == 1:
+                            status, chosen, method = (
+                                "resolved",
+                                next(iter(eligible)),
+                                "qualified_publisher_key_period_term",
+                            )
+                        elif len(eligible) > 1:
+                            status, method = "ambiguous", "qualified_publisher_key_period_term"
+                        elif _cpac_is_historical_lifetime(source) and context["windows"]:
+                            prior = {key: self.prior_service_terms(key, context) for key in name_ok}
+                            hist_eligible = {key for key in name_ok if prior[key]}
+                            if len(hist_eligible) == 1:
+                                chosen = next(iter(hist_eligible))
+                                status, method = "resolved", "qualified_publisher_key_historical_service"
+                                term_matches[chosen] = prior[chosen]
+                                reasons.append("historical_lifetime_observation_prior_terms")
+                            elif len(hist_eligible) > 1:
+                                status, method = "ambiguous", "qualified_publisher_key_historical_service"
+                            else:
+                                status, method = "conflict", "publisher_key_context_conflict"
+                                reasons.append(f"publisher_key_no_matching_historical_term:cpac:{cpac_key}")
+                        else:
+                            status, method = "conflict", "publisher_key_context_conflict"
+                            reasons.append(f"publisher_key_context_conflict:cpac:{cpac_key}")
+            # Qualified publisher keys with conflicts never fall through to name heuristics.
         else:
             exact_context = (
                 context["state"]
@@ -595,7 +793,7 @@ class _Members:
         if status == "resolved" and chosen is not None:  # every resolution names its member
             # Identity matching may filter by publisher geography. Once the
             # person is known, inspect all terms in the chamber and period so
-            # those filters cannot hide a geographic change.
+            # those filters cannot hide a geographic or party change.
             geography_context = {**context, "state": None, "district": None}
             inclusive = "unique_inclusive_term_end_fallback" in reasons
             geography_terms = self.terms_for(chosen, geography_context, inclusive=inclusive)
@@ -606,17 +804,10 @@ class _Members:
         return {
             "bioguide_id": chosen,
             **_resolved_geography(source, context, status, geography_terms, uncertain_geography, inclusive=inclusive),
-            "geography_evidence_json": _json({
-                "version": 1, "terms": geography_terms, "uncertain_terms":
-                self.uncertain_geography_terms(chosen, context, inclusive) if chosen else [],
-                "windows": _geography_coverage(context["windows"], geography_terms, inclusive),
-                "inclusive_term_end_fallback": inclusive,
-            }),
             "resolution_status": status,
             "resolution_rule": method,
             "candidate_count": str(len(candidates)),
             "candidates_json": _json(candidates),
-            "term_candidates_json": _json({key: term_matches[key] for key in sorted(term_matches)}),
             "override_version": override["version"] if override and method == "versioned_override" else None,
             "reason": ";".join(reasons) or method,
         }
@@ -647,23 +838,71 @@ def _geography_coverage(windows, terms, inclusive=False):
 def _resolved_geography(
     source: Row, context: Mapping, status: str, terms: Sequence[Row], uncertain: bool = False, *, inclusive: bool = False
 ) -> dict:
-    """Expose accepted historical geography without changing identity matching or raw facts."""
-    result = dict(normalized_state=None, state_status=status + "_identity",
-                  normalized_district=None, district_status=status + "_identity")
+    """Expose accepted historical geography and party without changing identity matching or raw facts."""
+    result = dict(
+        normalized_state=None,
+        state_status=status + "_identity",
+        normalized_district=None,
+        district_status=status + "_identity",
+        normalized_party=None,
+        party_status=status + "_identity",
+    )
     if status != "resolved":
         return result
-    if uncertain or not context["windows"] or not context["state"] or not context["chamber"] or not terms:
-        return result | dict(state_status="unqualified_term_context", district_status="unqualified_term_context")
+    if uncertain or not context["windows"] or not context["chamber"] or not terms:
+        return result | dict(
+            state_status="unqualified_term_context",
+            district_status="unqualified_term_context",
+            party_status="unqualified_term_context",
+        )
     if any(window["uncovered"] for window in _geography_coverage(context["windows"], terms, inclusive)):
-        return result | dict(state_status="unqualified_term_context", district_status="unqualified_term_context")
+        return result | dict(
+            state_status="unqualified_term_context",
+            district_status="unqualified_term_context",
+            party_status="unqualified_term_context",
+        )
     states = {term.get("term_state") for term in terms}
     if None in states or "" in states:
-        return result | dict(state_status="unqualified_term_state", district_status="unqualified_term_state")
+        return result | dict(
+            state_status="unqualified_term_state",
+            district_status="unqualified_term_state",
+            party_status="unqualified_term_state",
+        )
     if len(states) != 1:
-        return result | dict(state_status="ambiguous_term_state", district_status="ambiguous_term_state")
-    if states != {context["state"]}:
-        return result | dict(state_status="unqualified_term_context", district_status="unqualified_term_context")
-    result.update(normalized_state=context["state"], state_status="confirmed")
+        return result | dict(
+            state_status="ambiguous_term_state",
+            district_status="ambiguous_term_state",
+            party_status="ambiguous_term_state",
+        )
+    term_state = next(iter(states))
+    if context["state"]:
+        if context["state"] != term_state:
+            return result | dict(
+                state_status="unqualified_term_context",
+                district_status="unqualified_term_context",
+                party_status="unqualified_term_context",
+            )
+        state_status = "confirmed"
+    else:
+        state_status = "corrected_from_term" if _text(source.get("state")) else "supplied_from_term"
+    result.update(normalized_state=term_state, state_status=state_status)
+
+    parties = {_text(term.get("term_party")) for term in terms}
+    if "" in parties:
+        result["party_status"] = "unqualified_term_party"
+    elif len(parties) != 1:
+        result["party_status"] = "ambiguous_term_party"
+    else:
+        term_party = next(iter(parties))
+        raw_party = _text(source.get("party"))
+        if not raw_party:
+            party_status = "supplied_from_term"
+        elif _party(raw_party) == _party(term_party):
+            party_status = "confirmed"
+        else:
+            party_status = "corrected_from_term"
+        result.update(normalized_party=term_party, party_status=party_status)
+
     if context["chamber"] == "senate":
         return result | {"district_status": "not_applicable"}
     districts = {_district(term.get("term_district")) for term in terms}
@@ -1047,7 +1286,7 @@ def resolve_scorecard_links(
     for table in OFFICIAL_TABLES:
         if table not in official_tables:
             raise ValueError(f"Missing official input {table}")
-    pins_json = _pins(input_pins)
+    _pins(input_pins)
     editions = _index(source_tables["scorecards"], ("scorecard_id",), "scorecards")
     members = _Members(official_tables["members"], official_tables["member_terms"])
     items = _Items(official_tables)
@@ -1070,8 +1309,6 @@ def resolve_scorecard_links(
             scorecard_id=source["scorecard_id"],
             source_snapshot_id=source["snapshot_id"],
             rule_version=rule_version,
-            input_pins_json=pins_json,
-            source_context_json=_json(source),
             **{field: source[field] for field in ("capture_id", "source_url", "source_path")},
         )
         return row, edition
@@ -1127,7 +1364,6 @@ def resolve_scorecard_links(
                 source_reference_id=raw_identity,
                 **items.resolve(reference, source, edition),
             )
-            row["source_context_json"] = _json({"item": source, "reference": reference, "edition": edition})
             if raw_identity and reference.get("source_path"):
                 row["source_path"] = reference["source_path"]
             output["scorecard_item_links"].append(row)

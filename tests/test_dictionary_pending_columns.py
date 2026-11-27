@@ -139,3 +139,37 @@ def test_the_court_promotions_are_notices_against_the_live_generations_own_roots
         f"[{table}] declared, not yet published: {', '.join(columns)} (the selected generation states "
         f"{'courts/2' if table == 'court_opinions' else 'courts/1'}; installed is "
         f"{installed_policies()[table].policy_version})" for table, columns in COURT_PROMOTED.items())
+
+
+def test_retired_columns_between_published_and_installed_policies_are_notices():
+    """Columns retired in a newer scorecard-analysis policy stay notices until the next publish."""
+    from spicy_regs.native_types import described_schema
+
+    table = "scorecard_member_links"
+    earlier = receipt_policies(installed_policies()[table])[1]
+    entry = {
+        "prefix": "generations/scorecard-analysis/x",
+        "tables": {f"{table}.parquet": {}},
+        "etlReceipts": {"datasets": [table]},
+    }
+    index = {"families": {"scorecard-analysis": entry}}
+    live = {table: described_schema(earlier.subject_schema)}
+
+    def load_root(base_url, read):
+        return b"", {"spec": {"etlReceipts": {"policies": [earlier.descriptor()]}}}
+
+    before, after, notices = errors(index, live, load_root)
+    assert any("input_pins_json" in msg for msg in before)
+    assert any("normalized_party" in msg for msg in before)
+    assert after == []
+    assert any("declared, not yet published: normalized_party, party_status" in msg for msg in notices)
+    assert any(
+        "retired in code, still published: geography_evidence_json, input_pins_json, source_context_json, term_candidates_json"
+        in msg
+        for msg in notices
+    )
+
+    # A truly undeclared extra column in live parquet still fails even alongside retired columns.
+    live[table] = [*live[table], ("undeclared_extra", "VARCHAR")]
+    _, after_extra, _ = errors(index, live, load_root)
+    assert f"[{table}] column 'undeclared_extra' in live parquet but missing from in-code schema" in after_extra

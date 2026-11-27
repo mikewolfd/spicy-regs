@@ -39,10 +39,12 @@ from spicy_regs.etl_receipts import (
 )
 from spicy_regs.scorecards.subject_shapes import (
     BOOLEAN_FIELDS,
+    COMPARISON_POLICY_VERSION,
     DECIMAL_FIELDS,
     DOMAIN_COLUMNS,
     IDENTITIES,
     INTEGER_FIELDS,
+    ITEM_LINK_POLICY_VERSION,
     POLICY_VERSION,
     RATING_POLICY_VERSION,
     MEMBER_LINK_POLICY_VERSION,
@@ -71,6 +73,8 @@ def policy(name):
         policy_version={
             "scorecard_member_ratings": RATING_POLICY_VERSION,
             "scorecard_member_links": MEMBER_LINK_POLICY_VERSION,
+            "scorecard_item_links": ITEM_LINK_POLICY_VERSION,
+            "scorecard_action_comparisons": COMPARISON_POLICY_VERSION,
         }.get(name, POLICY_VERSION),
         receipt_only=not schema.names,
     )
