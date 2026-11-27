@@ -38,7 +38,22 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
-- **Selected OIRA + Wave B reader provider** `spicy_docs-0.85.0+readers.20261125.3` is built from
+- **Selected Wave 1 reader provider** `spicy_docs-0.85.0+readers.20261127.2` is built from
+  `ac5e8b535b0f79ea281dfc569fa2ec1eb80482da` (tree `11eb82d48eb6cf27ee100ecb8e43638b2b320981`,
+  `mikewolfd/spicy-docs` PRs `#46`–`#51` plus RefSpec parity commits `60179be2`, `3f1547a0`,
+  `adce9334` on `fork/main`). It bundles Wave 1 Wheel Train #1 on top of `.20261125.3`: eCFR,
+  CBO, source-domain, and Table III RefSpec refusal-parity hardening; citation-grammar
+  `is_proposed_usc_section` and `ActRelativeCitation.enclosing_section`; bill empty dates/districts,
+  `version_kind` coverage, and null-stage activity event fixes (`ss-kj95`); docket placeholder RIN
+  and blank comment `original_document_id` normalization (`ss-eyhu`, `ss-otwa`); Senate expenditure
+  blank-row dropping, unruled B-page amount extraction, and rule `004` (`ss-f1q5`); CBO compound
+  statutory headings, cover typo, and multi-letter HTML bounds (`ss-uep5`); and Unified Agenda
+  `LEGAL_DLINE_LIST`, `PARENT_RIN`, and `CHILD_RIN_LIST` parsing (`ss-zas1`, `ss-eyhu`).
+  See [the receipt](spicy_docs-0.85.0+readers.20261127.2.json) for source, wheel and RECORD identity.
+  The superseded `.20261125.3` wheel is recoverable from this adoption commit's parent;
+  its receipt remains.
+
+- **Prior OIRA + Wave B reader provider** `spicy_docs-0.85.0+readers.20261125.3` is built from
   `bd96a61f29ac560d7d7593b4dc0c45d7bcb30a13` (tree `5969590149ebead191731c99c1bd22a80e186af3`,
   `mikewolfd/spicy-docs#43` on `fork/main`). It adds `spicy_docs.sources.oira` for RegInfo.gov EO
   12866 bulk XML reviews and meetings with raw-byte capture hooks, dynamic flags, Cp1252/double-entity

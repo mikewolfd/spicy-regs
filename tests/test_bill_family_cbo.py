@@ -58,7 +58,7 @@ class Bill7643(StubBulkAcquirer):
 
 
 def _item(key, title, publication, bill_number, date="Wed, 08 May 2024 16:00:00 -0400"):
-    number = "" if bill_number is None else f"<Bill_Number>{bill_number}</Bill_Number>"
+    number = "<Bill_Number/>" if bill_number is None else f"<Bill_Number>{bill_number}</Bill_Number>"
     return (
         f'<item key="{key}"><Title>{title}</Title><Date>{date}</Date>'
         f"<Link>https://www.cbo.gov/publication/{publication}</Link><Description>As ordered reported</Description>"
