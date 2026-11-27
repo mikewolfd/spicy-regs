@@ -958,3 +958,273 @@ def test_the_staged_read_is_refused_unless_its_digest_matches(tmp_path):
     with pytest.raises(RuntimeError, match="sha256"):
         cfw.fetch_staged(tmp_path, "staging/x/reads.parquet", "0" * 64, client=bucket)
     assert not (tmp_path / "reads.parquet").exists()
+
+
+# --------------------------------------------------------------------------- #
+# Empty-string original_document_id nullification (ss-otwa)
+# --------------------------------------------------------------------------- #
+def test_empty_original_document_id_nullifies_only_blank_cells_and_keeps_reference_json(tmp_path, catalog):
+    raw_empty_ref = json.dumps({"commentOnDocumentId": "EPA-D1-0001", "originalDocumentId": ""})
+    raw_space_ref = json.dumps({"commentOnDocumentId": "CMS-D2-0001", "originalDocumentId": "   "})
+    raw_valid_ref = json.dumps({"originalDocumentId": "EPA_FRDOC_0001-0004"})
+    seed(
+        catalog,
+        [
+            row(
+                "A-EMPTY",
+                agency="EPA",
+                docket_id="EPA-D1",
+                comment_on_document_id="EPA-D1-0001",
+                original_document_id="",
+                comment_reference_values_json=raw_empty_ref,
+                subtype="Public Comment",
+                duplicate_comments=2,
+                attachments_json=HELD,
+            ),
+            row(
+                "B-SPACE",
+                agency="CMS",
+                docket_id="CMS-D2",
+                comment_on_document_id="CMS-D2-0001",
+                original_document_id="   \t",
+                comment_reference_values_json=raw_space_ref,
+                first_name="Jane",
+            ),
+            row(
+                "C-LEGACY-EMPTY",
+                agency="CMS",
+                docket_id="CMS-D2",
+                original_document_id="",
+                comment_reference_values_json=None,
+            ),
+            row(
+                "D-VALID",
+                agency="EPA",
+                docket_id="EPA-D1",
+                original_document_id="EPA_FRDOC_0001-0004",
+                comment_reference_values_json=raw_valid_ref,
+            ),
+            row(
+                "E-NULL",
+                agency="DOT",
+                docket_id="DOT-D3",
+                original_document_id=None,
+                comment_reference_values_json="{}",
+            ),
+        ],
+    )
+    before = table(catalog)
+
+    prepared = cfw.prepare_empty_original_document_id(tmp_path)
+    assert prepared["operation"] == cfw.EMPTY_ORIGINAL_DOCUMENT_ID_OPERATION
+    assert prepared["columns"] == ["original_document_id"]
+    assert prepared["table_rows"] == 5
+    assert prepared["catalog_rows"] == 5
+    assert prepared["rows_to_fill"] == 3
+    assert prepared["empty_string_rows"] == 2
+    assert prepared["whitespace_only_rows"] == 1
+    assert prepared["non_empty_rows"] == 1
+    assert prepared["already_null_rows"] == 1
+    assert prepared["nullified_by_column"] == {"original_document_id": 3}
+    assert sorted(prepared["files"]) == ["CMS", "EPA"]
+    assert not (tmp_path / "fill" / "work").exists()
+
+    with catalog() as con:
+        written = cfw.write(tmp_path, con=con, batch_bytes=1000)
+    assert written == {"batches": 2, "rows_changed": 3, "files_skipped_verified": 0}
+    assert [line["state"] for line in journal(tmp_path)] == ["pending", "verified", "pending", "verified"]
+
+    after = table(catalog)
+    assert len(after) == len(before) == 5
+    assert after["A-EMPTY"]["original_document_id"] is None
+    assert after["B-SPACE"]["original_document_id"] is None
+    assert after["C-LEGACY-EMPTY"]["original_document_id"] is None
+    assert after["D-VALID"]["original_document_id"] == "EPA_FRDOC_0001-0004"
+    assert after["E-NULL"]["original_document_id"] is None
+
+    # comment_reference_values_json and every single other column remain 100% untouched.
+    assert after["A-EMPTY"]["comment_reference_values_json"] == raw_empty_ref
+    assert after["B-SPACE"]["comment_reference_values_json"] == raw_space_ref
+    assert after["C-LEGACY-EMPTY"]["comment_reference_values_json"] is None
+    assert after["D-VALID"]["comment_reference_values_json"] == raw_valid_ref
+    for comment_id, prior_row in before.items():
+        for column in COMMENT.schema:
+            if column == "original_document_id" and comment_id in {"A-EMPTY", "B-SPACE", "C-LEGACY-EMPTY"}:
+                continue
+            assert after[comment_id][column] == prior_row[column], (comment_id, column)
+
+    # Re-running prepare + write on the clean catalog is an idempotent no-op.
+    second_prepare = cfw.prepare_empty_original_document_id(tmp_path)
+    assert second_prepare["rows_to_fill"] == 0
+    assert second_prepare["files"] == {}
+    with catalog() as con:
+        second_write = cfw.write(tmp_path, con=con)
+    assert second_write == {"batches": 0, "rows_changed": 0, "files_skipped_verified": 0}
+
+
+def test_empty_original_document_id_pilot_scope_and_undo(tmp_path, catalog):
+    seed(
+        catalog,
+        [
+            row("A", agency="EPA", docket_id="EPA-PILOT", original_document_id="", comment_reference_values_json='{"originalDocumentId":""}'),
+            row("B", agency="EPA", docket_id="EPA-OTHER", original_document_id="", comment_reference_values_json='{"originalDocumentId":""}'),
+            row("C", agency="EPA", docket_id="EPA-PILOT", original_document_id="KEEP-1"),
+        ],
+    )
+    before = table(catalog)
+    prepared = cfw.prepare_empty_original_document_id(tmp_path, scope={"docket_id": "EPA-PILOT"})
+    assert prepared["table_rows"] == 3
+    assert prepared["catalog_rows"] == 2
+    assert prepared["rows_to_fill"] == 1
+    with catalog() as con:
+        written = cfw.write(tmp_path, con=con, by_file=False)
+    assert written == {"batches": 1, "rows_changed": 1, "files_skipped_verified": 0}
+
+    mid = table(catalog)
+    assert mid["A"]["original_document_id"] is None
+    assert mid["A"]["comment_reference_values_json"] == '{"originalDocumentId":""}'
+    assert mid["B"]["original_document_id"] == ""
+    assert mid["C"]["original_document_id"] == "KEEP-1"
+
+    # Undo restores the pilot batch cleanly back to its exact pre-image.
+    (verified,) = [line for line in journal(tmp_path) if line["state"] == "verified"]
+    expected = _current(catalog)
+    with catalog() as con:
+        undone = cfw.undo(tmp_path, verified["batch"], expected_snapshot=expected, con=con)
+    assert undone["rows_restored"] == 1
+    assert table(catalog) == before
+
+
+def test_empty_original_document_id_rejects_bad_scope_tampered_columns_and_mutation_of_reference_json(tmp_path, catalog):
+    seed(
+        catalog,
+        [
+            row("A", agency="EPA", original_document_id="", comment_reference_values_json='{"originalDocumentId":""}'),
+        ],
+    )
+    with pytest.raises(ValueError, match="unknown scope column"):
+        cfw.prepare_empty_original_document_id(tmp_path, scope={"nonexistent": "x"})
+
+    cfw.prepare_empty_original_document_id(tmp_path)
+
+    # A faulty write that alters comment_reference_values_json is caught and rolled back.
+    corrupt = lambda sql: (  # noqa: E731
+        sql.replace('"comment_reference_values_json"=s."comment_reference_values_json"', '"comment_reference_values_json"=NULL')
+        if sql.lstrip().startswith("MERGE")
+        else sql
+    )
+    with catalog() as con, pytest.raises(cfw.FillVerificationError):
+        cfw.write(tmp_path, con=Proxy(con, rewrite=corrupt))
+    after = table(catalog)
+    assert after["A"]["original_document_id"] == ""
+    assert after["A"]["comment_reference_values_json"] == '{"originalDocumentId":""}'
+
+    # Tampering prepare.json to claim another column refuses before opening the catalog.
+    tampered = tmp_path / "tampered"
+    cfw.prepare_empty_original_document_id(tampered)
+    prep_path = tampered / "fill" / "prepare.json"
+    data = json.loads(prep_path.read_text())
+    data["columns"] = ["comment_reference_values_json"]
+    prep_path.write_text(json.dumps(data))
+    with catalog() as con, pytest.raises(RuntimeError, match="may only modify"):
+        cfw.write(tampered, con=con)
+
+
+def test_empty_original_document_id_workflow_and_cli_plumbing():
+    import subprocess
+    import sys
+    import yaml
+
+    repo_root = Path(__file__).resolve().parents[1]
+    workflow_path = repo_root / ".github" / "workflows" / "fill-comment-fields.yml"
+    raw_text = workflow_path.read_text(encoding="utf-8")
+    workflow = yaml.safe_load(raw_text)
+    inputs = workflow[True]["workflow_dispatch"]["inputs"]
+    assert {
+        "prepare",
+        "pilot",
+        "fill",
+        "undo",
+        "prepare-empty-original-document-id",
+        "pilot-empty-original-document-id",
+        "fill-empty-original-document-id",
+    } <= set(inputs["operation"]["options"])
+    assert workflow["concurrency"] == {"group": "comments-catalog-write", "cancel-in-progress": False, "queue": "max"}
+    assert workflow["env"]["SPICY_REGS_CATALOG_LOCK"] == "comments-catalog-write"
+
+    steps = {step["name"]: step for step in workflow["jobs"]["fill"]["steps"] if "name" in step}
+    for name, step in steps.items():
+        if "run" in step:
+            assert "${{ inputs." not in step["run"], f"{name} must not interpolate raw inputs.* in run:"
+            subprocess.run(["bash", "-n"], input=step["run"], text=True, check=True)
+
+    suspend = steps["Save and suspend maintenance on both selected native tables"]
+    restore = steps["Restore exact prior maintenance on both native tables"]
+    assert "prepare-empty-original-document-id" in suspend["if"]
+    assert restore["if"].startswith("always()") and "prepare-empty-original-document-id" in restore["if"]
+    assert "prepare-empty-original-document-id" in steps["Prepare (reads the catalog at one snapshot; writes nothing)"]["run"]
+    assert "fill-empty-original-document-id" in steps["Write, one verified batch at a time"]["if"]
+    assert "pilot-empty-original-document-id" in steps["Write, one verified batch at a time"]["if"]
+
+    help_out = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "spicy_regs.pipelines.comment_fields_write",
+            "prepare-empty-original-document-id",
+            "--help",
+        ],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    assert "--workdir" in help_out.stdout
+    assert "--docket" in help_out.stdout
+    assert "--agency" in help_out.stdout
+
+
+def test_empty_original_document_id_recovers_after_crash_between_commit_and_journal(tmp_path, catalog, monkeypatch):
+    seed(
+        catalog,
+        [
+            row("A", agency="EPA", original_document_id="", comment_reference_values_json='{"originalDocumentId":""}'),
+            row("B", agency="CMS", original_document_id="  \t", comment_reference_values_json='{"originalDocumentId":"  \\t"}'),
+        ],
+    )
+    cfw.prepare_empty_original_document_id(tmp_path)
+    commits = {"n": 0}
+
+    def crash(sql):
+        if sql == "COMMIT":
+            commits["n"] += 1
+            if commits["n"] == 1:
+                raise KeyboardInterrupt
+
+    with catalog() as con, pytest.raises(KeyboardInterrupt):
+        cfw.write(tmp_path, con=Proxy(con, after=crash), batch_bytes=1000)
+    assert [line["state"] for line in journal(tmp_path)] == ["pending"]
+    with catalog() as con:
+        snap = iceberg._read_snapshot(con, COMMENT)
+    monkeypatch.setattr(
+        cfw,
+        "commit_record",
+        lambda con, parent_id: {
+            "table_uuid": snap.table_uuid,
+            "snapshot_id": snap.snapshot_id,
+            "schema_id": snap.schema_id,
+            "summary": {"added-records": "1", "added-position-deletes": "1"},
+        }
+        if parent_id == journal(tmp_path)[0]["snapshot_before"]["snapshot_id"]
+        else None,
+    )
+    strip_at = lambda sql: re.sub(r"\s+AT\s+\(VERSION\s*=>\s*\d+\)", "", sql)  # noqa: E731
+    with catalog() as con:
+        resumed = cfw.write(tmp_path, con=Proxy(con, rewrite=strip_at), batch_bytes=1000)
+    assert resumed["rows_changed"] == 1
+    assert any(line.get("recovered") is True for line in journal(tmp_path))
+    after = table(catalog)
+    assert after["A"]["original_document_id"] is None and after["B"]["original_document_id"] is None
+    assert after["A"]["comment_reference_values_json"] == '{"originalDocumentId":""}'
+    assert after["B"]["comment_reference_values_json"] == '{"originalDocumentId":"  \\t"}'
