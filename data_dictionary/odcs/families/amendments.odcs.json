@@ -39,11 +39,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:congress-amendment-id"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:legal-location"
             },
@@ -217,11 +212,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:bioguide-id"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:entity"
             },
@@ -279,11 +269,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:legal-location"
             },
@@ -312,11 +297,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:congress-amendment-id"
             },
             {
               "vendor": "refspec",

@@ -40,11 +40,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:congress-nomination-id"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:administrative-process-stage"
             },
@@ -408,11 +403,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:congress-event-id"
             },
             {
               "vendor": "refspec",

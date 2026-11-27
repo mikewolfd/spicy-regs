@@ -189,6 +189,8 @@ def _resolve_family_odcs_contract(
     if odcs_contract is not None:
         if isinstance(odcs_contract, (str, Path)):
             contract_path = Path(odcs_contract)
+            if contract_path.is_symlink():
+                raise PublicationError(f"{family} ODCS contract path must not be a symlink: {contract_path}")
             if not contract_path.is_file():
                 raise PublicationError(f"{family} ODCS contract file is missing: {contract_path}")
             try:
@@ -217,7 +219,18 @@ def _resolve_family_odcs_contract(
             )
         return contract, source
 
+    explicit_dir = odcs_contracts_dir is not None
     contracts_dir = DEFAULT_ODCS_DIR if odcs_contracts_dir is None else Path(odcs_contracts_dir)
+    if explicit_dir:
+        if contracts_dir.is_symlink():
+            raise PublicationError(f"{family} ODCS contracts directory must not be a symlink: {contracts_dir}")
+        if not contracts_dir.is_dir():
+            raise PublicationError(f"{family} ODCS contracts directory does not exist: {contracts_dir}")
+        manifest_path = contracts_dir / "manifest.json"
+        if manifest_path.is_symlink():
+            raise PublicationError(f"{family} ODCS manifest must not be a symlink: {manifest_path}")
+        if not manifest_path.is_file():
+            raise PublicationError(f"{family} ODCS contracts directory is missing manifest.json: {manifest_path}")
     try:
         loaded = load_enrolled_family_contract(family, contracts_dir=contracts_dir)
     except ODCSContractError as exc:
@@ -263,6 +276,7 @@ def _verify_family_schemas(
     require_odcs_contract: bool = False,
 ) -> dict[str, Any] | None:
     """Refuse any candidate generation whose Parquet schemas drift from declared Arrow or ODCS v3.2.0 contracts."""
+    import pyarrow as pa
     import pyarrow.parquet as pq
 
     from spicy_regs.odcs_contracts import (
@@ -294,9 +308,15 @@ def _verify_family_schemas(
                 )
             expected = declared[table_name]
             for parquet_path in candidate_files[table_name]:
-                actual = pq.read_schema(parquet_path)
+                relative = parquet_path.relative_to(directory).as_posix()
+                try:
+                    actual = pq.read_schema(parquet_path)
+                except (pa.ArrowException, OSError) as exc:
+                    raise PublicationError(
+                        f"{family} schema parity check could not read Parquet schema for {table_key} ({relative}): "
+                        f"{exc}"
+                    ) from exc
                 if issues := _parquet_schema_diff(expected, actual):
-                    relative = parquet_path.relative_to(directory).as_posix()
                     raise PublicationError(
                         f"{family} schema parity check failed for {table_key} ({relative}): "
                         + "; ".join(issues)

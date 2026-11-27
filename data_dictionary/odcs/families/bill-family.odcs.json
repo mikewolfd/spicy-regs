@@ -40,11 +40,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:legal-location"
             },
@@ -135,11 +130,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:vocabulary:billstatus-action-code"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:code-list-value"
             },
@@ -151,7 +141,7 @@
             {
               "vendor": "ddk",
               "property": "conceptKind",
-              "value": "vocabulary"
+              "value": "attribute"
             },
             {
               "vendor": "spicy-regs",
@@ -222,11 +212,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:vocabulary:billstatus-action-type"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:code-list-value"
             },
@@ -238,7 +223,7 @@
             {
               "vendor": "ddk",
               "property": "conceptKind",
-              "value": "vocabulary"
+              "value": "attribute"
             },
             {
               "vendor": "spicy-regs",
@@ -588,11 +573,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:legal-location"
             },
@@ -623,11 +603,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:congress-committee-system-code"
             },
             {
               "vendor": "refspec",
@@ -706,11 +681,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:congress-committee-system-code"
             },
             {
               "vendor": "refspec",
@@ -956,11 +926,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:legal-location"
             },
@@ -991,11 +956,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:congress-committee-system-code"
             },
             {
               "vendor": "refspec",
@@ -1065,11 +1025,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:congress-committee-system-code"
             },
             {
               "vendor": "refspec",
@@ -1251,11 +1206,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:legal-location"
             },
@@ -1304,11 +1254,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:bioguide-id"
             },
             {
               "vendor": "refspec",
@@ -1825,11 +1770,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:legal-location"
             },
@@ -2056,11 +1996,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
             },
             {
               "vendor": "refspec",
@@ -2471,11 +2406,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:legal-location"
             },
@@ -2676,11 +2606,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:legal-location"
             },
@@ -2767,11 +2692,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:govinfo-package-id"
             },
             {
               "vendor": "refspec",
@@ -3094,11 +3014,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:legal-location"
             },
@@ -3370,11 +3285,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
             },
             {
               "vendor": "refspec",
@@ -4720,11 +4630,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:legal-location"
             },
@@ -4888,11 +4793,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:vocabulary:crs-legislative-subjects"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:general-subject"
             },
@@ -4904,7 +4804,7 @@
             {
               "vendor": "ddk",
               "property": "conceptKind",
-              "value": "vocabulary"
+              "value": "attribute"
             }
           ],
           "description": "The publisher's single policy-area term for this measure."
@@ -4924,11 +4824,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:vocabulary:crs-legislative-subjects"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:general-subject"
             },
@@ -4940,7 +4835,7 @@
             {
               "vendor": "ddk",
               "property": "conceptKind",
-              "value": "vocabulary"
+              "value": "attribute"
             }
           ],
           "description": "Every legislative subject term the publisher lists, as a Native list in publisher order. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
@@ -4970,11 +4865,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:bioguide-id"
             },
             {
               "vendor": "refspec",
@@ -5684,11 +5574,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:legal-location"
             },
@@ -5940,11 +5825,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
             },
             {
               "vendor": "refspec",
@@ -6228,11 +6108,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:legal-location"
             },
@@ -6334,11 +6209,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:bioguide-id"
             },
             {
               "vendor": "refspec",
@@ -6505,11 +6375,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
             },
             {
               "vendor": "refspec",
@@ -6722,11 +6587,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
             },
             {
               "vendor": "refspec",
@@ -7194,11 +7054,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
             },
             {
               "vendor": "refspec",

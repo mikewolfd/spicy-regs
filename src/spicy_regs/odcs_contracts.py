@@ -3,7 +3,7 @@
 This module bridges ``spicy-regs`` metadata (``table_metadata.json`` and ``table_joins.json``)
 and verified Parquet Arrow footers to ODCS v3.2.0 DataContract JSON documents tagged with
 their target DDK domain (``spicycongress``, ``spicygov``, ``RefSpec``, or ``SpicyEntities``)
-and canonical RefSpec URN mappings (``urn:rkaf:...`` / ``urn:ref:...``).
+and verified canonical RefSpec / RKAF URN mappings (``urn:rkaf:us:...``, ``urn:ref:...``).
 
 It also implements strict Arrow schema parity checks interoperable with
 ``ddk.publication.verify_parquet_schema_parity`` (identical contract normalization,
@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 import io
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import sys
 from typing import Any
@@ -27,6 +27,7 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from spicy_regs.identifiers import RIN_PATTERN
 from spicy_regs.native_types import arrow_type as parse_duckdb_arrow_type
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -43,6 +44,29 @@ DDK_ARROW_EXACT_PROFILE = "urn:ddk:odcs:arrow-declaration:3"
 
 #: Target DDK platform / registry domains.
 DDK_DOMAINS: tuple[str, ...] = ("spicycongress", "spicygov", "RefSpec", "SpicyEntities")
+
+#: Valid DDK conceptKind values (per DDK catalog.schema.json).
+DDK_CONCEPT_KINDS: frozenset[str] = frozenset({"identifier", "attribute"})
+
+#: Verified canonical RefSpec / RKAF URN prefixes and Atlas resource schemes.
+#: Never emit a ``vendor: "refspec", property: "urn"`` value outside this verified set.
+CANONICAL_REFSPEC_URNS: frozenset[str] = frozenset(
+    {
+        "urn:rkaf:us:cfr:",
+        "urn:rkaf:us:eo:",
+        "urn:rkaf:us:frdoc:",
+        "urn:rkaf:us:pl:",
+        "urn:rkaf:us:regsgov:",
+        "urn:rkaf:us:rin:",
+        "urn:rkaf:us:usc:",
+        "urn:ref:federal-register-agency:",
+        "urn:ref:regulations-gov-agency:",
+        "urn:ref:atlas-resource-scheme:federal-register-api-topics",
+        "urn:ref:atlas-resource-scheme:federal-register-thesaurus-2025",
+        "urn:ref:atlas-resource-scheme:uei-authority",
+        "urn:ref:atlas-resource-scheme:nppes-npi-authority",
+    }
+)
 
 #: Eight pilot-wave families (6 legislative families pinned by congressional-tech + federal-register + rulemaking).
 PILOT_FAMILIES: tuple[str, ...] = (
@@ -393,7 +417,7 @@ FAMILY_DOMAIN_ASSIGNMENTS: dict[str, tuple[str, tuple[str, ...]]] = {
     "document-attributes": ("spicygov", ()),
     "documents": ("spicygov", ()),
     "executive-disclosures": ("spicygov", ("SpicyEntities",)),
-    "executive-orders": ("spicygov", ()),
+    "executive-orders": ("spicygov", ("RefSpec",)),
     "fcc-filings": ("spicygov", ()),
     "fcc-proceedings": ("spicygov", ()),
     "fec-candidate-history": ("spicygov", ("SpicyEntities",)),
@@ -434,10 +458,12 @@ FAMILY_DOMAIN_ASSIGNMENTS: dict[str, tuple[str, tuple[str, ...]]] = {
 
 _TABLE_TO_FAMILY: dict[str, str] = {table: family for family, tables in FAMILY_TABLES.items() for table in tables}
 
-#: Regex constraints from ODCS v3.2.0 JSON Schema.
+#: Regex constraints from ODCS v3.2.0 JSON Schema and safe filesystem/manifest checks.
 _STABLE_ID_RE = re.compile(r"^[^\s.#/\\@!%&^]+$")
 _SHORTHAND_REF_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_\-]*(\.[A-Za-z_][A-Za-z0-9_\-]*)+$")
 _VENDOR_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+_FAMILY_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+_HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
 _DECIMAL_RE = re.compile(r"^(?:decimal|decimal128|decimal256|numeric)\s*\(\s*(\d+)\s*,\s*(-?\d+)\s*\)$", re.IGNORECASE)
 _FIXED_BIN_RE = re.compile(r"^(?:fixed|fixed_size_binary)\s*[\[(]\s*(\d+)\s*[\])]$", re.IGNORECASE)
 
@@ -464,9 +490,14 @@ class ODCSContractError(ValueError):
 
 @dataclass(frozen=True)
 class RefSpecMapping:
-    """Canonical RefSpec URN + DDK concept mapping attached to a schema property."""
+    """Verified RefSpec facet / optional canonical URN + DDK concept mapping attached to a property.
 
-    refspec_urn: str
+    ``refspec_urn`` MUST either be ``None`` (when no canonical RefSpec / RKAF URN exists for the
+    column) or a verified entry in :data:`CANONICAL_REFSPEC_URNS`. ``ddk_concept_kind`` MUST be
+    ``"identifier"`` or ``"attribute"`` per DDK's ``catalog.schema.json``.
+    """
+
+    refspec_urn: str | None
     refspec_facet: str
     ddk_concept: str
     ddk_concept_kind: str = "identifier"
@@ -474,62 +505,72 @@ class RefSpecMapping:
     authority_url: str | None = None
     authority_description: str | None = None
 
+    def __post_init__(self) -> None:
+        if self.refspec_urn is not None and self.refspec_urn not in CANONICAL_REFSPEC_URNS:
+            raise ValueError(f"Unverified RefSpec URN {self.refspec_urn!r} is not in CANONICAL_REFSPEC_URNS")
+        if self.ddk_concept_kind not in DDK_CONCEPT_KINDS:
+            raise ValueError(f"Invalid DDK conceptKind {self.ddk_concept_kind!r}; expected one of {DDK_CONCEPT_KINDS}")
+
 
 _CONGRESS_SUBJECTS = frozenset({"congress", "oversight"})
-_REGULATORY_SUBJECTS = frozenset({"rulemaking", "reference"})
 _FEC_SUBJECTS = frozenset({"campaign_finance"})
 _LOBBYING_SUBJECTS = frozenset({"lobbying"})
 _COURT_SUBJECTS = frozenset({"courts"})
 
-#: Canonical RefSpec URN mappings for typed identifiers, agencies, legal references, and vocabularies.
+#: Canonical RIN pattern sourced directly from ``spicy_regs.identifiers.RIN_PATTERN``.
+_RIN_FULL_PATTERN = f"^{RIN_PATTERN}$"
+_AGENDA_ITEM_RIN_PATTERN = f"^urn:rkaf:us:rin:{RIN_PATTERN}$"
+
+#: Verified RefSpec / RKAF / DDK semantic mappings for typed identifiers, agencies, legal references, and vocabularies.
+#: Only columns with an actual canonical RefSpec / RKAF URN in RefSpec or spicy-docs emit ``refspec_urn``.
 _UNCONDITIONAL_REFSPEC: dict[str, RefSpecMapping] = {
     "bill_id": RefSpecMapping(
-        refspec_urn="urn:rkaf:us:bill:",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:legal-location",
         ddk_concept="urn:ddk:legislative:concept:bill-id",
         pattern=r"^[0-9]+-(hr|s|hjres|sjres|hconres|sconres|hres|sres)-[0-9]+$",
     ),
     "amended_bill_id": RefSpecMapping(
-        refspec_urn="urn:rkaf:us:bill:",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:legal-location",
         ddk_concept="urn:ddk:legislative:concept:bill-id",
         pattern=r"^[0-9]+-(hr|s|hjres|sjres|hconres|sconres|hres|sres)-[0-9]+$",
     ),
     "amendment_id": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:congress-amendment-id",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:legal-location",
         ddk_concept="urn:ddk:legislative:concept:amendment-id",
     ),
     "amended_amendment_id": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:congress-amendment-id",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:legal-location",
         ddk_concept="urn:ddk:legislative:concept:amendment-id",
     ),
     "bioguide_id": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:bioguide-id",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:entity",
         ddk_concept="urn:ddk:legislative:concept:bioguide-id",
         pattern=r"^[A-Z][0-9]{6}$",
     ),
     "sponsor_bioguide_id": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:bioguide-id",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:entity",
         ddk_concept="urn:ddk:legislative:concept:bioguide-id",
         pattern=r"^[A-Z][0-9]{6}$",
     ),
     "bioguide_previous": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:bioguide-id",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:entity",
         ddk_concept="urn:ddk:legislative:concept:bioguide-id",
     ),
     "vote_id": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:congress-roll-call-vote-id",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:administrative-process-stage",
         ddk_concept="urn:ddk:legislative:concept:roll-call-id",
         pattern=r"^[0-9]+-(house|senate)-[1-2]-[0-9]+$",
     ),
     "nomination_id": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:congress-nomination-id",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:administrative-process-stage",
         ddk_concept="urn:ddk:legislative:concept:nomination-id",
     ),
@@ -543,11 +584,16 @@ _UNCONDITIONAL_REFSPEC: dict[str, RefSpecMapping] = {
         refspec_facet="urn:ref:facet:legal-location",
         ddk_concept="urn:ddk:legislative:concept:public-law",
     ),
+    "executive_order_number": RefSpecMapping(
+        refspec_urn="urn:rkaf:us:eo:",
+        refspec_facet="urn:ref:facet:legal-location",
+        ddk_concept="urn:ddk:regulatory:concept:executive-order-number",
+    ),
     "rin": RefSpecMapping(
         refspec_urn="urn:rkaf:us:rin:",
         refspec_facet="urn:ref:facet:administrative-process-stage",
         ddk_concept="urn:ddk:regulatory:concept:rin",
-        pattern=r"^\d{4}-[A-Z0-9]{4}$",
+        pattern=_RIN_FULL_PATTERN,
     ),
     "regulation_id_numbers": RefSpecMapping(
         refspec_urn="urn:rkaf:us:rin:",
@@ -563,40 +609,41 @@ _UNCONDITIONAL_REFSPEC: dict[str, RefSpecMapping] = {
         refspec_urn="urn:rkaf:us:rin:",
         refspec_facet="urn:ref:facet:administrative-process-stage",
         ddk_concept="urn:ddk:regulatory:concept:rin",
+        pattern=_RIN_FULL_PATTERN,
     ),
     "agenda_item_id": RefSpecMapping(
         refspec_urn="urn:rkaf:us:rin:",
         refspec_facet="urn:ref:facet:administrative-process-stage",
         ddk_concept="urn:ddk:regulatory:concept:agenda-item-id",
-        pattern=r"^urn:rkaf:us:rin:\d{4}-[A-Z0-9]{4}$",
+        pattern=_AGENDA_ITEM_RIN_PATTERN,
     ),
     "proceeding_id": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:spicy-rulemaking-proceeding-id",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:administrative-process-stage",
         ddk_concept="urn:ddk:regulatory:concept:rulemaking-id",
     ),
     "docket_id": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:regulations-gov-docket-id",
+        refspec_urn="urn:rkaf:us:regsgov:",
         refspec_facet="urn:ref:facet:administrative-process-stage",
         ddk_concept="urn:ddk:regulatory:concept:docket-id",
     ),
     "docket_ids": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:regulations-gov-docket-id",
+        refspec_urn="urn:rkaf:us:regsgov:",
         refspec_facet="urn:ref:facet:administrative-process-stage",
         ddk_concept="urn:ddk:regulatory:concept:docket-id",
     ),
     "regulations_dot_gov_docket_id": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:regulations-gov-docket-id",
+        refspec_urn="urn:rkaf:us:regsgov:",
         refspec_facet="urn:ref:facet:administrative-process-stage",
         ddk_concept="urn:ddk:regulatory:concept:docket-id",
     ),
     "regulations_dot_gov_document_id": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:regulations-gov-document-id",
+        refspec_urn="urn:rkaf:us:regsgov:",
         refspec_facet="urn:ref:facet:administrative-process-stage",
         ddk_concept="urn:ddk:regulatory:concept:document-id",
     ),
     "fr_doc_num": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:federal-register-document-number",
+        refspec_urn="urn:rkaf:us:frdoc:",
         refspec_facet="urn:ref:facet:legal-location",
         ddk_concept="urn:ddk:regulatory:concept:federal-register-document-number",
     ),
@@ -643,62 +690,62 @@ _UNCONDITIONAL_REFSPEC: dict[str, RefSpecMapping] = {
         ddk_concept="urn:ddk:legal:concept:usc-section",
     ),
     "package_id": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:govinfo-package-id",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:legal-location",
         ddk_concept="urn:ddk:gpo:concept:package-id",
     ),
     "uei": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:sam-uei",
+        refspec_urn="urn:ref:atlas-resource-scheme:uei-authority",
         refspec_facet="urn:ref:facet:entity",
         ddk_concept="urn:ddk:entity:concept:uei",
         pattern=r"^[A-Z0-9]{12}$",
     ),
     "ein": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:irs-ein",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:entity",
         ddk_concept="urn:ddk:entity:concept:ein",
         pattern=r"^[0-9]{9}$",
     ),
     "cik": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:sec-cik",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:entity",
         ddk_concept="urn:ddk:corporate:concept:sec-cik",
         pattern=r"^[0-9]{10}$",
     ),
     "npi": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:cms-npi",
+        refspec_urn="urn:ref:atlas-resource-scheme:nppes-npi-authority",
         refspec_facet="urn:ref:facet:entity",
         ddk_concept="urn:ddk:healthcare:concept:npi",
         pattern=r"^[0-9]{10}$",
     ),
     "fec_ids": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:fec-candidate-id",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:entity",
         ddk_concept="urn:ddk:fec:concept:candidate-id",
     ),
     "reporting_committee_id": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:fec-committee-id",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:entity",
         ddk_concept="urn:ddk:fec:concept:committee-id",
         pattern=r"^C[0-9]{8}$",
     ),
     "candidate_id": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:fec-candidate-id",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:entity",
         ddk_concept="urn:ddk:fec:concept:candidate-id",
     ),
     "candidate_native_id": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:fec-candidate-id",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:entity",
         ddk_concept="urn:ddk:fec:concept:candidate-id",
     ),
     "cluster_id": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:courtlistener-cluster-id",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:legal-location",
         ddk_concept="urn:ddk:judicial:concept:courtlistener-cluster-id",
     ),
     "county_geoid": RefSpecMapping(
-        refspec_urn="urn:ref:identifier:census-county-geoid",
+        refspec_urn=None,
         refspec_facet="urn:ref:facet:entity",
         ddk_concept="urn:ddk:geography:concept:county-geoid",
     ),
@@ -717,6 +764,35 @@ def _sha256_bytes(data: bytes) -> str:
 def _stable_id(raw: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9_-]+", "_", raw).strip("_")
     return cleaned or "id"
+
+
+def _validate_family_slug(family: str) -> str:
+    if not isinstance(family, str) or not _FAMILY_SLUG_RE.fullmatch(family):
+        raise ODCSContractError(
+            f"Invalid family slug {family!r}; expected lowercase alphanumeric and hyphens matching ^[a-z0-9][a-z0-9-]*$"
+        )
+    return family
+
+
+def _safe_contained_path(base_dir: Path, rel_path_str: str, *, label: str) -> Path:
+    """Resolve a relative POSIX path strictly within ``base_dir``, rejecting traversal and symlinks."""
+    if not isinstance(rel_path_str, str) or not rel_path_str or "\\" in rel_path_str:
+        raise ODCSContractError(f"{label} must be a non-empty relative POSIX path, got {rel_path_str!r}")
+    rel = PurePosixPath(rel_path_str)
+    if rel.is_absolute() or any(part in ("", ".", "..") for part in rel.parts):
+        raise ODCSContractError(f"{label} escapes containment or contains unsafe segments: {rel_path_str!r}")
+    if base_dir.is_symlink():
+        raise ODCSContractError(f"ODCS contracts directory must not be a symlink: {base_dir}")
+    resolved_base = base_dir.resolve()
+    current = base_dir
+    for part in rel.parts:
+        current = current / part
+        if current.is_symlink():
+            raise ODCSContractError(f"{label} must not traverse or point to a symlink: {current}")
+    resolved_target = current.resolve(strict=False)
+    if not resolved_target.is_relative_to(resolved_base):
+        raise ODCSContractError(f"{label} resolves outside {resolved_base}: {rel_path_str!r}")
+    return current
 
 
 def family_for_table(table: str) -> str | None:
@@ -757,7 +833,7 @@ def resolve_refspec_mapping(
     if column_name in ("system_code", "parent_system_code", "committee_system_code") and subject in _CONGRESS_SUBJECTS:
         return (
             RefSpecMapping(
-                refspec_urn="urn:ref:identifier:congress-committee-system-code",
+                refspec_urn=None,
                 refspec_facet="urn:ref:facet:entity",
                 ddk_concept="urn:ddk:legislative:concept:committee-code",
             ),
@@ -766,24 +842,26 @@ def resolve_refspec_mapping(
     if column_name in ("event_id", "mods_event_id") and subject in _CONGRESS_SUBJECTS:
         return (
             RefSpecMapping(
-                refspec_urn="urn:ref:identifier:congress-event-id",
+                refspec_urn=None,
                 refspec_facet="urn:ref:facet:administrative-process-stage",
                 ddk_concept="urn:ddk:legislative:concept:event-id",
             ),
             documented,
         )
     if column_name == "document_number" and (
-        table_name in ("federal_register", "fr_docket_links") or subject == "rulemaking"
+        table_name in ("federal_register", "fr_docket_links", "executive_order_observations") or subject == "rulemaking"
     ):
         return (
             RefSpecMapping(
-                refspec_urn="urn:ref:identifier:federal-register-document-number",
+                refspec_urn="urn:rkaf:us:frdoc:",
                 refspec_facet="urn:ref:facet:legal-location",
                 ddk_concept="urn:ddk:regulatory:concept:federal-register-document-number",
             ),
             documented,
         )
-    if column_name in ("agencies", "agency_slugs") and table_name == "federal_register":
+    # urn:ref:federal-register-agency: applies ONLY to scalar numeric Federal Register agency ID columns,
+    # never to agency_slugs or nested agencies struct arrays.
+    if column_name == "fr_agency_id":
         return (
             RefSpecMapping(
                 refspec_urn="urn:ref:federal-register-agency:",
@@ -793,24 +871,34 @@ def resolve_refspec_mapping(
             ),
             documented,
         )
+    if column_name in ("agencies", "agency_slugs") and table_name == "federal_register":
+        return (
+            RefSpecMapping(
+                refspec_urn=None,
+                refspec_facet="urn:ref:facet:entity",
+                ddk_concept="urn:ddk:regulatory:concept:federal-register-agency",
+                ddk_concept_kind="attribute",
+            ),
+            documented,
+        )
     if column_name == "topics" and table_name == "federal_register":
         return (
             RefSpecMapping(
-                refspec_urn="urn:ref:vocabulary:federal-register-topics",
+                refspec_urn="urn:ref:atlas-resource-scheme:federal-register-api-topics",
                 refspec_facet="urn:ref:facet:general-subject",
                 ddk_concept="urn:ddk:regulatory:concept:federal-register-topic",
-                ddk_concept_kind="vocabulary",
-                authority_description="RefSpec REF-042 Federal Register thesaurus",
+                ddk_concept_kind="attribute",
+                authority_description="RefSpec Atlas Federal Register API topics scheme",
             ),
             documented,
         )
     if column_name in ("subjects", "policy_area") and subject == "congress":
         return (
             RefSpecMapping(
-                refspec_urn="urn:ref:vocabulary:crs-legislative-subjects",
+                refspec_urn=None,
                 refspec_facet="urn:ref:facet:general-subject",
                 ddk_concept="urn:ddk:legislative:concept:crs-subject",
-                ddk_concept_kind="vocabulary",
+                ddk_concept_kind="attribute",
             ),
             documented,
         )
@@ -820,7 +908,7 @@ def resolve_refspec_mapping(
     ):
         return (
             RefSpecMapping(
-                refspec_urn="urn:ref:identifier:regulations-gov-document-id",
+                refspec_urn="urn:rkaf:us:regsgov:",
                 refspec_facet="urn:ref:facet:administrative-process-stage",
                 ddk_concept="urn:ddk:regulatory:concept:document-id",
             ),
@@ -829,7 +917,7 @@ def resolve_refspec_mapping(
     if column_name == "comment_id" and subject == "rulemaking":
         return (
             RefSpecMapping(
-                refspec_urn="urn:ref:identifier:regulations-gov-comment-id",
+                refspec_urn="urn:rkaf:us:regsgov:",
                 refspec_facet="urn:ref:facet:administrative-process-stage",
                 ddk_concept="urn:ddk:regulatory:concept:comment-id",
             ),
@@ -838,7 +926,7 @@ def resolve_refspec_mapping(
     if column_name == "committee_id" and (subject in _FEC_SUBJECTS or table_name == "org_committee_links"):
         return (
             RefSpecMapping(
-                refspec_urn="urn:ref:identifier:fec-committee-id",
+                refspec_urn=None,
                 refspec_facet="urn:ref:facet:entity",
                 ddk_concept="urn:ddk:fec:concept:committee-id",
                 pattern=r"^C[0-9]{8}$",
@@ -848,7 +936,7 @@ def resolve_refspec_mapping(
     if column_name == "registrant_id" and subject in _LOBBYING_SUBJECTS:
         return (
             RefSpecMapping(
-                refspec_urn="urn:ref:identifier:lda-registrant-id",
+                refspec_urn=None,
                 refspec_facet="urn:ref:facet:entity",
                 ddk_concept="urn:ddk:lobbying:concept:lda-registrant-id",
             ),
@@ -857,7 +945,7 @@ def resolve_refspec_mapping(
     if column_name == "client_id" and subject in _LOBBYING_SUBJECTS:
         return (
             RefSpecMapping(
-                refspec_urn="urn:ref:identifier:lda-client-id",
+                refspec_urn=None,
                 refspec_facet="urn:ref:facet:entity",
                 ddk_concept="urn:ddk:lobbying:concept:lda-client-id",
             ),
@@ -866,7 +954,7 @@ def resolve_refspec_mapping(
     if column_name == "court_id" and subject in _COURT_SUBJECTS:
         return (
             RefSpecMapping(
-                refspec_urn="urn:ref:identifier:courtlistener-court-id",
+                refspec_urn=None,
                 refspec_facet="urn:ref:facet:entity",
                 ddk_concept="urn:ddk:judicial:concept:courtlistener-court-id",
             ),
@@ -875,10 +963,10 @@ def resolve_refspec_mapping(
     if column_name in ("provider_number", "ccn") and table_name.startswith("hospital_cost_report"):
         return (
             RefSpecMapping(
-                refspec_urn="urn:ref:identifier:cms-ccn",
+                refspec_urn=None,
                 refspec_facet="urn:ref:facet:entity",
                 ddk_concept="urn:ddk:healthcare:concept:ccn",
-                authority_description="RefSpec REF-024 CMS Certification Number",
+                authority_description="RefSpec CMS Certification Number definition",
             ),
             documented,
         )
@@ -886,10 +974,10 @@ def resolve_refspec_mapping(
         domain_slug = documented["domain"]
         return (
             RefSpecMapping(
-                refspec_urn=f"urn:ref:vocabulary:{domain_slug}",
+                refspec_urn=None,
                 refspec_facet="urn:ref:facet:code-list-value",
                 ddk_concept=f"urn:ddk:common:concept:{domain_slug}",
-                ddk_concept_kind="vocabulary",
+                ddk_concept_kind="attribute",
                 authority_url=documented.get("source_url"),
                 authority_description=documented.get("locator"),
             ),
@@ -902,10 +990,6 @@ def _normalize_arrow_type(dtype: pa.DataType) -> pa.DataType:
     """Normalize Arrow list element names to Parquet's canonical ``element`` field."""
     if pa.types.is_list(dtype):
         return pa.list_(
-            pa.field("element", _normalize_arrow_type(dtype.value_type), nullable=dtype.value_field.nullable)
-        )
-    if pa.types.is_large_list(dtype):
-        return pa.large_list(
             pa.field("element", _normalize_arrow_type(dtype.value_type), nullable=dtype.value_field.nullable)
         )
     if pa.types.is_struct(dtype):
@@ -922,6 +1006,10 @@ def arrow_type_to_odcs_property(
 ) -> dict[str, Any]:
     """Convert a PyArrow DataType into an ODCS v3.2.0 property/item dict.
 
+    Refuses Arrow types that cannot round-trip losslessly with ODCS v3.2.0 and DDK
+    (such as ``large_list``, ``date64``, ``time32``, non-``us`` ``timestamp``/``time64``,
+    and ``string_view``) instead of silently coercing them.
+
     Produces declarations compatible simultaneously with:
     1. Official ODCS v3.2.0 JSON Schema,
     2. ``ddk.publication.verify_parquet_schema_parity`` (``odcs_schema_to_pyarrow``), and
@@ -931,39 +1019,48 @@ def arrow_type_to_odcs_property(
     if name is not None:
         prop["name"] = name
 
-    if (
-        pa.types.is_string(dtype)
-        or pa.types.is_large_string(dtype)
-        or (hasattr(pa.types, "is_string_view") and pa.types.is_string_view(dtype))
-    ):
+    if hasattr(pa.types, "is_string_view") and pa.types.is_string_view(dtype):
+        raise ODCSContractError(f"Arrow string_view type cannot round-trip losslessly to ODCS v3.2.0: {dtype!r}")
+    if pa.types.is_large_list(dtype):
+        raise ODCSContractError(f"Arrow large_list type cannot round-trip losslessly to ODCS v3.2.0: {dtype!r}")
+    if pa.types.is_date64(dtype):
+        raise ODCSContractError(f"Arrow date64 type cannot round-trip losslessly to ODCS v3.2.0: {dtype!r}")
+    if pa.types.is_time32(dtype):
+        raise ODCSContractError(f"Arrow time32 type cannot round-trip losslessly to ODCS v3.2.0: {dtype!r}")
+
+    if pa.types.is_string(dtype) or pa.types.is_large_string(dtype):
         prop["logicalType"] = "string"
         prop["physicalType"] = "LargeUtf8" if pa.types.is_large_string(dtype) else "Utf8"
     elif pa.types.is_boolean(dtype):
         prop["logicalType"] = "boolean"
         prop["physicalType"] = "Boolean"
-    elif pa.types.is_date(dtype):
+    elif pa.types.is_date32(dtype):
         prop["logicalType"] = "date"
         prop["logicalTypeOptions"] = {"format": "yyyy-MM-dd"}
         prop["physicalType"] = "Date32"
-    elif pa.types.is_time(dtype):
-        unit = getattr(dtype, "unit", "us")
-        fmt = "HH:mm:ss.SSSSSSSSS" if unit == "ns" else "HH:mm:ss.SSSSSS"
+    elif pa.types.is_time64(dtype):
+        if dtype.unit != "us":
+            raise ODCSContractError(
+                f"Arrow time64 unit {dtype.unit!r} cannot round-trip losslessly through DDK (only 'us' is lossless)"
+            )
         prop["logicalType"] = "time"
-        prop["logicalTypeOptions"] = {"format": fmt, "timezone": False}
+        prop["logicalTypeOptions"] = {"format": "HH:mm:ss.SSSSSS", "timezone": False}
     elif pa.types.is_timestamp(dtype):
-        unit = dtype.unit
-        frac = ".SSSSSSSSS" if unit == "ns" else ".SSSSSS"
+        if dtype.unit != "us":
+            raise ODCSContractError(
+                f"Arrow timestamp unit {dtype.unit!r} cannot round-trip losslessly through DDK (only 'us' is lossless)"
+            )
         if dtype.tz:
             prop["logicalType"] = "timestamp"
             prop["logicalTypeOptions"] = {
-                "format": f"yyyy-MM-dd'T'HH:mm:ss{frac}XXX",
+                "format": "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX",
                 "timezone": True,
                 "defaultTimezone": str(dtype.tz),
             }
         else:
             prop["logicalType"] = "timestamp"
             prop["logicalTypeOptions"] = {
-                "format": f"yyyy-MM-dd'T'HH:mm:ss{frac}",
+                "format": "yyyy-MM-dd'T'HH:mm:ss.SSSSSS",
                 "timezone": False,
             }
     elif pa.types.is_int8(dtype):
@@ -1024,7 +1121,7 @@ def arrow_type_to_odcs_property(
         prop["logicalType"] = "string"
         prop["logicalTypeOptions"] = {"format": "binary"}
         prop["physicalType"] = f"fixed[{dtype.byte_width}]"
-    elif pa.types.is_list(dtype) or pa.types.is_large_list(dtype):
+    elif pa.types.is_list(dtype):
         prop["logicalType"] = "array"
         prop["items"] = arrow_type_to_odcs_property(
             dtype.value_type,
@@ -1060,77 +1157,85 @@ def odcs_property_to_pyarrow(prop: Mapping[str, Any]) -> pa.DataType:
     if logical is None and prop.get("properties"):
         logical = "object"
 
-    if logical == "string":
-        if opts.get("format") == "binary":
-            if physical == "large_binary":
-                return pa.large_binary()
-            if physical == "binary":
+    try:
+        if logical == "string":
+            if opts.get("format") == "binary":
+                if physical == "large_binary":
+                    return pa.large_binary()
+                if physical == "binary":
+                    return pa.binary()
+                match = _FIXED_BIN_RE.match(physical)
+                if match:
+                    width = int(match.group(1))
+                    if width <= 0:
+                        raise ODCSContractError(f"Field {name!r} fixed binary width must be positive, got {width}")
+                    return pa.binary(width)
                 return pa.binary()
-            match = _FIXED_BIN_RE.match(physical)
+            if physical == "LargeUtf8":
+                return pa.large_string()
+            return pa.string()
+        if logical == "boolean":
+            return pa.bool_()
+        if logical == "date":
+            return pa.date32()
+        if logical == "time":
+            fmt = str(opts.get("format") or "")
+            return pa.time64("ns" if ".SSSSSSSSS" in fmt else "us")
+        if logical == "timestamp":
+            fmt = str(opts.get("format") or "")
+            unit = "ns" if ".SSSSSSSSS" in fmt else "us"
+            tz_opt = opts.get("timezone")
+            if tz_opt is False or (
+                tz_opt is not True and physical_upper in {"TIMESTAMP", "TIMESTAMP_NTZ", "TIMESTAMP WITHOUT TIME ZONE"}
+            ):
+                return pa.timestamp(unit, tz=None)
+            default_tz = opts.get("defaultTimezone")
+            tz = default_tz if isinstance(default_tz, str) and default_tz else "UTC"
+            return pa.timestamp(unit, tz=tz)
+        if logical == "integer":
+            fmt = str(opts.get("format") or "").lower()
+            if fmt == "i8" or physical_upper in {"TINYINT", "INT8"}:
+                return pa.int8()
+            if fmt == "i16" or physical_upper in {"SMALLINT", "INT16", "SHORT"}:
+                return pa.int16()
+            if fmt == "i32" or physical_upper in {"INTEGER", "INT", "INT32"}:
+                return pa.int32()
+            if fmt == "u8" or physical_upper in {"UTINYINT", "UINT8"}:
+                return pa.uint8()
+            if fmt == "u16" or physical_upper in {"USMALLINT", "UINT16"}:
+                return pa.uint16()
+            if fmt == "u32" or physical_upper in {"UINTEGER", "UINT32"}:
+                return pa.uint32()
+            if fmt == "u64" or physical_upper in {"UBIGINT", "UINT64"}:
+                return pa.uint64()
+            return pa.int64()
+        if logical == "number":
+            match = _DECIMAL_RE.match(physical)
             if match:
-                return pa.binary(int(match.group(1)))
-            return pa.binary()
-        if physical == "LargeUtf8":
-            return pa.large_string()
-        return pa.string()
-    if logical == "boolean":
-        return pa.bool_()
-    if logical == "date":
-        return pa.date32()
-    if logical == "time":
-        fmt = str(opts.get("format") or "")
-        return pa.time64("ns" if ".SSSSSSSSS" in fmt else "us")
-    if logical == "timestamp":
-        fmt = str(opts.get("format") or "")
-        unit = "ns" if ".SSSSSSSSS" in fmt else "us"
-        tz_opt = opts.get("timezone")
-        if tz_opt is False or (
-            tz_opt is not True and physical_upper in {"TIMESTAMP", "TIMESTAMP_NTZ", "TIMESTAMP WITHOUT TIME ZONE"}
-        ):
-            return pa.timestamp(unit, tz=None)
-        default_tz = opts.get("defaultTimezone")
-        tz = default_tz if isinstance(default_tz, str) and default_tz else "UTC"
-        return pa.timestamp(unit, tz=tz)
-    if logical == "integer":
-        fmt = str(opts.get("format") or "").lower()
-        if fmt == "i8" or physical_upper in {"TINYINT", "INT8"}:
-            return pa.int8()
-        if fmt == "i16" or physical_upper in {"SMALLINT", "INT16", "SHORT"}:
-            return pa.int16()
-        if fmt == "i32" or physical_upper in {"INTEGER", "INT", "INT32"}:
-            return pa.int32()
-        if fmt == "u8" or physical_upper in {"UTINYINT", "UINT8"}:
-            return pa.uint8()
-        if fmt == "u16" or physical_upper in {"USMALLINT", "UINT16"}:
-            return pa.uint16()
-        if fmt == "u32" or physical_upper in {"UINTEGER", "UINT32"}:
-            return pa.uint32()
-        if fmt == "u64" or physical_upper in {"UBIGINT", "UINT64"}:
-            return pa.uint64()
-        return pa.int64()
-    if logical == "number":
-        match = _DECIMAL_RE.match(physical)
-        if match:
-            precision, scale = int(match.group(1)), int(match.group(2))
-            if physical.lower().startswith("decimal256") or precision > 38:
-                return pa.decimal256(precision, scale)
-            return pa.decimal128(precision, scale)
-        fmt = str(opts.get("format") or "").lower()
-        if fmt == "f32" or physical_upper in {"FLOAT", "REAL", "FLOAT32"}:
-            return pa.float32()
-        return pa.float64()
-    if logical == "object":
-        children = prop.get("properties")
-        if not isinstance(children, list) or not children:
-            raise ODCSContractError(f"ODCS object property {name!r} has no declared child properties")
-        return pa.struct([odcs_field_to_pyarrow(child) for child in children])
-    if logical == "array":
-        items = prop.get("items")
-        if isinstance(items, Mapping) and (items.get("logicalType") or items.get("properties")):
-            elem_type = odcs_property_to_pyarrow(items)
-            elem_nullable = not bool(items.get("required", False))
-            return pa.list_(pa.field("element", elem_type, nullable=elem_nullable))
-        raise ODCSContractError(f"ODCS array property {name!r} has no declared items type")
+                precision, scale = int(match.group(1)), int(match.group(2))
+                if physical.lower().startswith("decimal256") or precision > 38:
+                    return pa.decimal256(precision, scale)
+                return pa.decimal128(precision, scale)
+            fmt = str(opts.get("format") or "").lower()
+            if fmt == "f32" or physical_upper in {"FLOAT", "REAL", "FLOAT32"}:
+                return pa.float32()
+            return pa.float64()
+        if logical == "object":
+            children = prop.get("properties")
+            if not isinstance(children, list) or not children:
+                raise ODCSContractError(f"ODCS object property {name!r} has no declared child properties")
+            return pa.struct([odcs_field_to_pyarrow(child) for child in children])
+        if logical == "array":
+            items = prop.get("items")
+            if isinstance(items, Mapping) and (items.get("logicalType") or items.get("properties")):
+                elem_type = odcs_property_to_pyarrow(items)
+                elem_nullable = not bool(items.get("required", False))
+                return pa.list_(pa.field("element", elem_type, nullable=elem_nullable))
+            raise ODCSContractError(f"ODCS array property {name!r} has no declared items type")
+    except (pa.ArrowException, ValueError, KeyError, TypeError) as exc:
+        if isinstance(exc, ODCSContractError):
+            raise
+        raise ODCSContractError(f"Invalid Arrow type specification for ODCS field {name!r}: {exc}") from exc
     raise ODCSContractError(f"ODCS property {name!r} uses unsupported logicalType {logical!r}")
 
 
@@ -1208,27 +1313,37 @@ def _ddk_fields_to_pyarrow(schema_dict: Mapping[str, Any]) -> pa.Schema:
             return aliases[value]
         if isinstance(value, Mapping) and len(value) == 1:
             kind, detail = next(iter(value.items()))
-            if kind == "Struct":
-                return pa.struct([field(child) for child in detail])
-            if kind == "List":
-                return pa.list_(field(detail))
-            if kind == "FixedSizeBinary":
-                return pa.binary(int(detail))
-            if kind == "Decimal128":
-                return pa.decimal128(int(detail[0]), int(detail[1]))
-            if kind == "Decimal256":
-                return pa.decimal256(int(detail[0]), int(detail[1]))
-            units = {"Microsecond": "us", "Nanosecond": "ns"}
-            if kind == "Time64":
-                return pa.time64(units[detail])
-            if kind == "Timestamp":
-                return pa.timestamp(units[detail[0]], detail[1])
+            try:
+                if kind == "Struct":
+                    return pa.struct([field(child) for child in detail])
+                if kind == "List":
+                    return pa.list_(field(detail))
+                if kind == "FixedSizeBinary":
+                    return pa.binary(int(detail))
+                if kind == "Decimal128":
+                    return pa.decimal128(int(detail[0]), int(detail[1]))
+                if kind == "Decimal256":
+                    return pa.decimal256(int(detail[0]), int(detail[1]))
+                units = {"Microsecond": "us", "Nanosecond": "ns"}
+                if kind == "Time64":
+                    return pa.time64(units[detail])
+                if kind == "Timestamp":
+                    return pa.timestamp(units[detail[0]], detail[1])
+            except (pa.ArrowException, KeyError, ValueError, TypeError, IndexError) as exc:
+                if isinstance(exc, ODCSContractError):
+                    raise
+                raise ODCSContractError(f"Invalid DDK Arrow type declaration {value!r}: {exc}") from exc
         raise ODCSContractError(f"Unsupported DDK Arrow type declaration {value!r}")
 
     def field(value: Mapping[str, Any]) -> pa.Field:
+        if not isinstance(value, Mapping) or "name" not in value or "data_type" not in value:
+            raise ODCSContractError(f"Invalid DDK Arrow field descriptor: {value!r}")
         return pa.field(str(value["name"]), dtype(value["data_type"]), nullable=bool(value.get("nullable", True)))
 
-    return pa.schema([field(item) for item in schema_dict["fields"]])
+    fields = schema_dict.get("fields")
+    if not isinstance(fields, list):
+        raise ODCSContractError("DDK Arrow schema dict 'fields' must be a list")
+    return pa.schema([field(item) for item in fields])
 
 
 def _resolve_actual_arrow_schema(actual: Any) -> pa.Schema:
@@ -1516,9 +1631,10 @@ def build_table_schema_object(
 
         mapping, documented = resolve_refspec_mapping(table_name, field.name, table_meta)
         if mapping is not None:
+            if mapping.refspec_urn is not None:
+                custom_props.append({"vendor": "refspec", "property": "urn", "value": mapping.refspec_urn})
             custom_props.extend(
                 [
-                    {"vendor": "refspec", "property": "urn", "value": mapping.refspec_urn},
                     {"vendor": "refspec", "property": "facet", "value": mapping.refspec_facet},
                     {"vendor": "ddk", "property": "concept", "value": mapping.ddk_concept},
                     {"vendor": "ddk", "property": "conceptKind", "value": mapping.ddk_concept_kind},
@@ -1604,6 +1720,7 @@ def build_family_contract(
     verified_parquet_schemas: Mapping[str, pa.Schema] | None = None,
 ) -> dict[str, Any]:
     """Generate one deterministic ODCS v3.2.0 DataContract document for ``family``."""
+    _validate_family_slug(family)
     ordered_tables = sorted(dict.fromkeys(table_names))
     if not ordered_tables:
         raise ODCSContractError(f"Family {family!r} has no declared tables for ODCS contract export")
@@ -1714,6 +1831,15 @@ def validate_odcs_v320_contract(
             vendor = item.get("vendor")
             if vendor is not None and (not isinstance(vendor, str) or not _VENDOR_RE.fullmatch(vendor)):
                 errors.append(f"{path}.customProperties[{idx}] invalid vendor {vendor!r}")
+            if vendor == "ddk" and item.get("property") == "conceptKind":
+                if item.get("value") not in DDK_CONCEPT_KINDS:
+                    errors.append(
+                        f"{path}.customProperties[{idx}] invalid DDK conceptKind {item.get('value')!r}; "
+                        f"expected one of {sorted(DDK_CONCEPT_KINDS)}"
+                    )
+            if vendor == "refspec" and item.get("property") == "urn":
+                if item.get("value") not in CANONICAL_REFSPEC_URNS:
+                    errors.append(f"{path}.customProperties[{idx}] unverified RefSpec URN {item.get('value')!r}")
 
     check_custom_props(contract.get("customProperties"), "$")
 
@@ -1844,7 +1970,20 @@ def validate_odcs_v320_contract(
     return errors
 
 
-def _count_refspec_columns(contract: Mapping[str, Any]) -> int:
+def _count_refspec_urn_columns(contract: Mapping[str, Any]) -> int:
+    """Count columns carrying a verified canonical RefSpec / RKAF URN."""
+    total = 0
+    for table in contract.get("schema", ()):
+        for prop in table.get("properties", ()):
+            if any(
+                cp.get("vendor") == "refspec" and cp.get("property") == "urn" for cp in prop.get("customProperties", ())
+            ):
+                total += 1
+    return total
+
+
+def _count_refspec_faceted_columns(contract: Mapping[str, Any]) -> int:
+    """Count columns carrying a RefSpec facet or canonical URN mapping."""
     total = 0
     for table in contract.get("schema", ()):
         for prop in table.get("properties", ()):
@@ -1911,11 +2050,14 @@ def resolve_families_to_export(
     family_map: dict[str, tuple[str, ...]] = dict(FAMILY_TABLES)
     if published_index is not None:
         for fam, entry in sorted((published_index.get("families") or {}).items()):
+            _validate_family_slug(fam)
             tables = tuple(sorted(k.removesuffix(".parquet") for k in (entry.get("tables") or {})))
             if tables:
                 family_map[fam] = tables
 
     if families:
+        for fam in families:
+            _validate_family_slug(fam)
         unknown = [f for f in families if f not in family_map]
         if unknown:
             raise ODCSContractError(f"Unknown family name(s) requested for ODCS export: {unknown}")
@@ -1995,7 +2137,8 @@ def build_odcs_bundle(
             "tables": list(tables),
             "table_count": len(tables),
             "relationship_count": rel_count,
-            "refspec_mapped_columns": _count_refspec_columns(contract),
+            "refspec_urn_columns": _count_refspec_urn_columns(contract),
+            "refspec_mapped_columns": _count_refspec_faceted_columns(contract),
         }
 
     manifest: dict[str, Any] = {
@@ -2033,7 +2176,13 @@ def export_odcs_contracts(
     rulemaking_manifest: Mapping[str, Any] | None = None,
     json_schema_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Write deterministic ODCS v3.2.0 DataContracts and ``manifest.json`` to ``out_dir``."""
+    """Write deterministic ODCS v3.2.0 DataContracts and ``manifest.json`` to ``out_dir``.
+
+    Stale ``families/*.odcs.json`` files are pruned only on full-scope exports (when ``families``
+    is omitted), never on single/subset ``--family`` exports.
+    """
+    if out_dir.is_symlink():
+        raise ODCSContractError(f"ODCS output directory must not be a symlink: {out_dir}")
     manifest, file_bytes = build_odcs_bundle(
         scope=scope,
         families=families,
@@ -2046,15 +2195,20 @@ def export_odcs_contracts(
     )
     out_dir.mkdir(parents=True, exist_ok=True)
     families_dir = out_dir / "families"
+    if families_dir.is_symlink():
+        raise ODCSContractError(f"ODCS families directory must not be a symlink: {families_dir}")
     families_dir.mkdir(parents=True, exist_ok=True)
     expected_rel = set(file_bytes)
-    # Remove stale contract files in families/ when regenerating the same directory.
-    for existing in sorted(families_dir.glob("*.odcs.json")):
-        rel = f"families/{existing.name}"
-        if rel not in expected_rel:
-            existing.unlink()
+    # Prune stale contract files only during full-scope exports, never on --family subset exports.
+    if not families:
+        for existing in sorted(families_dir.glob("*.odcs.json")):
+            if existing.is_symlink():
+                raise ODCSContractError(f"Refusing to prune symlinked contract file: {existing}")
+            rel = f"families/{existing.name}"
+            if rel not in expected_rel:
+                existing.unlink()
     for rel_path, raw in sorted(file_bytes.items()):
-        target = out_dir / rel_path
+        target = _safe_contained_path(out_dir, rel_path, label=f"ODCS output path {rel_path!r}")
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(raw)
     return manifest
@@ -2070,6 +2224,8 @@ def check_odcs_contracts(
     json_schema_path: Path | None = None,
 ) -> list[str]:
     """Verify committed ODCS v3.2.0 contracts match a fresh deterministic export byte-for-byte."""
+    if out_dir.is_symlink():
+        return [f"ODCS contracts directory must not be a symlink: {out_dir}"]
     _, expected_files = build_odcs_bundle(
         scope=scope,
         families=families,
@@ -2079,7 +2235,11 @@ def check_odcs_contracts(
     )
     errors: list[str] = []
     for rel_path, expected_raw in sorted(expected_files.items()):
-        actual_path = out_dir / rel_path
+        try:
+            actual_path = _safe_contained_path(out_dir, rel_path, label=f"ODCS file {rel_path!r}")
+        except ODCSContractError as exc:
+            errors.append(str(exc))
+            continue
         if not actual_path.is_file():
             errors.append(f"Missing committed ODCS file: {rel_path}")
             continue
@@ -2090,7 +2250,7 @@ def check_odcs_contracts(
                 f"(expected sha256 {_sha256_bytes(expected_raw)[:12]}, got {_sha256_bytes(actual_raw)[:12]})"
             )
     families_dir = out_dir / "families"
-    if families_dir.is_dir():
+    if not families and families_dir.is_dir():
         for existing in sorted(families_dir.glob("*.odcs.json")):
             rel = f"families/{existing.name}"
             if rel not in expected_files:
@@ -2098,34 +2258,87 @@ def check_odcs_contracts(
     return errors
 
 
+def _declared_contract_family(contract: Mapping[str, Any]) -> str | None:
+    for cp in contract.get("customProperties", ()):
+        if isinstance(cp, Mapping) and cp.get("vendor") == "spicy-regs" and cp.get("property") == "family":
+            val = cp.get("value")
+            return val if isinstance(val, str) else None
+    return None
+
+
 def load_enrolled_family_contract(
     family: str,
     *,
     contracts_dir: Path = DEFAULT_ODCS_DIR,
 ) -> tuple[dict[str, Any], Path] | None:
-    """Load the enrolled ODCS v3.2.0 DataContract for ``family`` from ``contracts_dir``, if enrolled."""
+    """Load and verify the enrolled ODCS v3.2.0 DataContract for ``family`` from ``contracts_dir``.
+
+    Fails closed on symlinks, path traversal, missing/malformed SHA-256 digests, mismatched
+    manifest or contract family identities, corrupt JSON, or invalid ODCS v3.2.0 structure.
+    Returns ``None`` only when ``manifest.json`` is absent or does not enroll ``family``.
+    """
+    _validate_family_slug(family)
+    if contracts_dir.is_symlink():
+        raise ODCSContractError(f"ODCS contracts directory must not be a symlink: {contracts_dir}")
     manifest_path = contracts_dir / "manifest.json"
+    if manifest_path.is_symlink():
+        raise ODCSContractError(f"ODCS manifest must not be a symlink: {manifest_path}")
     if not manifest_path.is_file():
         return None
-    manifest = json.loads(manifest_path.read_bytes())
+    try:
+        manifest = json.loads(manifest_path.read_bytes())
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ODCSContractError(f"Failed to read ODCS manifest {manifest_path}: {exc}") from exc
+    if not isinstance(manifest, Mapping):
+        raise ODCSContractError(f"ODCS manifest {manifest_path} must be a JSON object")
     if manifest.get("format") != ODCS_MANIFEST_FORMAT:
         raise ODCSContractError(f"Unrecognized ODCS manifest format in {manifest_path}: {manifest.get('format')!r}")
-    entry = (manifest.get("contracts") or {}).get(family)
+    contracts = manifest.get("contracts")
+    if not isinstance(contracts, Mapping):
+        raise ODCSContractError(f"ODCS manifest {manifest_path} 'contracts' must be a JSON object")
+    entry = contracts.get(family)
     if entry is None:
         return None
-    contract_path = contracts_dir / entry["path"]
+    if not isinstance(entry, Mapping):
+        raise ODCSContractError(f"ODCS manifest entry for {family!r} must be a JSON object")
+    if entry.get("family") != family:
+        raise ODCSContractError(
+            f"ODCS manifest entry for {family!r} declares mismatched family {entry.get('family')!r}"
+        )
+
+    rel_path = entry.get("path")
+    contract_path = _safe_contained_path(contracts_dir, rel_path, label=f"Enrolled ODCS contract path for {family!r}")
     if not contract_path.is_file():
         raise ODCSContractError(f"Enrolled ODCS contract for {family!r} is missing: {contract_path}")
-    raw = contract_path.read_bytes()
+
     expected_sha = entry.get("sha256")
-    if isinstance(expected_sha, str) and _sha256_bytes(raw) != expected_sha:
+    if not isinstance(expected_sha, str) or not _HEX64_RE.fullmatch(expected_sha):
+        raise ODCSContractError(
+            f"Enrolled ODCS contract manifest entry for {family!r} requires a valid 64-hex sha256 digest"
+        )
+    try:
+        raw = contract_path.read_bytes()
+    except OSError as exc:
+        raise ODCSContractError(f"Failed to read enrolled ODCS contract {contract_path}: {exc}") from exc
+    actual_sha = _sha256_bytes(raw)
+    if actual_sha != expected_sha:
         raise ODCSContractError(
             f"Enrolled ODCS contract for {family!r} failed SHA-256 check "
-            f"(expected {expected_sha[:12]}, got {_sha256_bytes(raw)[:12]})"
+            f"(expected {expected_sha[:12]}, got {actual_sha[:12]})"
         )
-    contract = json.loads(raw)
+    try:
+        contract = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ODCSContractError(f"Enrolled ODCS contract {contract_path} is not valid JSON: {exc}") from exc
+    if not isinstance(contract, dict):
+        raise ODCSContractError(f"Enrolled ODCS contract {contract_path} must be a JSON object")
     if errors := validate_odcs_v320_contract(contract):
         raise ODCSContractError(f"Enrolled ODCS contract for {family!r} is invalid: " + "; ".join(errors))
+    declared_family = _declared_contract_family(contract)
+    if declared_family != family:
+        raise ODCSContractError(
+            f"Enrolled ODCS contract {contract_path} declares family {declared_family!r}, not the expected {family!r}"
+        )
     return contract, contract_path
 
 
@@ -2137,7 +2350,16 @@ class _HTTPRangeFile(io.RawIOBase):
         self._url = url
         head = client.head(url)
         head.raise_for_status()
-        self._size = int(head.headers["content-length"])
+        raw_len = head.headers.get("content-length")
+        if raw_len is None:
+            raise ODCSContractError(f"Missing Content-Length header for remote Parquet {url}")
+        try:
+            size = int(raw_len)
+        except ValueError as exc:
+            raise ODCSContractError(f"Invalid Content-Length header {raw_len!r} for remote Parquet {url}") from exc
+        if size <= 0:
+            raise ODCSContractError(f"Non-positive Content-Length {size} for remote Parquet {url}")
+        self._size = size
         self._pos = 0
 
     def readable(self) -> bool:
@@ -2148,23 +2370,37 @@ class _HTTPRangeFile(io.RawIOBase):
 
     def seek(self, offset: int, whence: int = io.SEEK_SET) -> int:
         if whence == io.SEEK_SET:
-            self._pos = offset
+            new_pos = offset
         elif whence == io.SEEK_CUR:
-            self._pos += offset
+            new_pos = self._pos + offset
         elif whence == io.SEEK_END:
-            self._pos = self._size + offset
+            new_pos = self._size + offset
+        else:
+            raise ValueError(f"Invalid whence value: {whence!r}")
+        if new_pos < 0:
+            raise ValueError(f"Negative seek position: {new_pos}")
+        self._pos = new_pos
         return self._pos
 
     def tell(self) -> int:
         return self._pos
 
     def read(self, size: int = -1) -> bytes:
-        if self._pos >= self._size:
+        if size == 0 or self._pos >= self._size:
             return b""
         end = self._size - 1 if size < 0 else min(self._size - 1, self._pos + size - 1)
+        expected_max = end - self._pos + 1
         response = self._client.get(self._url, headers={"Range": f"bytes={self._pos}-{end}"})
         response.raise_for_status()
+        if response.status_code != 206:
+            raise ODCSContractError(
+                f"Expected HTTP 206 Partial Content for range read of {self._url}, got {response.status_code}"
+            )
         data = response.content
+        if len(data) > expected_max:
+            raise ODCSContractError(
+                f"Remote range response for {self._url} returned {len(data)} bytes, exceeding requested {expected_max}"
+            )
         self._pos += len(data)
         return data
 
@@ -2189,24 +2425,34 @@ def audit_parquet_parity(
     metadata_path: Path = DEFAULT_TABLE_METADATA_PATH,
     joins_path: Path = DEFAULT_TABLE_JOINS_PATH,
     check_order: bool = True,
+    http_client: Any | None = None,
 ) -> dict[str, Any]:
     """Audit ODCS v3.2.0 contracts against local Parquet files or live public R2 Parquet footers.
 
     Explicitly reports verified tables, any schema drift gaps, and tracked catalog gaps
-    without silently suppressing any mismatch.
+    without silently suppressing any mismatch or HTTP error.
     """
     import httpx
 
-    table_metadata, _ = load_table_metadata(metadata_path)
+    if parquet_dir is not None and not parquet_dir.is_dir():
+        raise ODCSContractError(f"Parquet directory does not exist: {parquet_dir}")
+
     published_index: dict[str, Any] | None = None
     rulemaking_manifest: dict[str, Any] | None = None
     remote_urls: dict[str, list[tuple[str, str]]] = {}
 
-    if r2_base_url is not None:
-        base = r2_base_url.rstrip("/")
-        headers = {"User-Agent": "spicy-regs-odcs-verifier/1.0"}
-        with httpx.Client(headers=headers, timeout=30.0) as client:
-            published_index = client.get(f"{base}/publication.v2.json").json()
+    owned_client = None
+    active_client = http_client
+    if r2_base_url is not None and active_client is None:
+        owned_client = httpx.Client(headers={"User-Agent": "spicy-regs-odcs-verifier/1.0"}, timeout=30.0)
+        active_client = owned_client
+
+    try:
+        if r2_base_url is not None:
+            base = r2_base_url.rstrip("/")
+            pub_resp = active_client.get(f"{base}/publication.v2.json")
+            pub_resp.raise_for_status()
+            published_index = pub_resp.json()
             for fam, entry in (published_index.get("families") or {}).items():
                 prefix = entry["prefix"]
                 for tkey, tdesc in (entry.get("tables") or {}).items():
@@ -2219,45 +2465,43 @@ def audit_parquet_parity(
                         rels = [tkey]
                     remote_urls[tname] = [(rel, f"{base}/{prefix}/{rel}") for rel in rels]
 
-            rm_ptr = client.get(f"{base}/materialized/rulemaking/latest.json")
-            if rm_ptr.status_code == 200:
+            needs_rulemaking = (families is None) or ("rulemaking" in families)
+            rm_ptr = active_client.get(f"{base}/materialized/rulemaking/latest.json")
+            if rm_ptr.status_code == 404 and not needs_rulemaking:
+                rulemaking_manifest = None
+            else:
+                rm_ptr.raise_for_status()
                 ptr_doc = rm_ptr.json()
-                rm_resp = client.get(f"{base}/{ptr_doc['manifest_key']}")
-                if rm_resp.status_code == 200:
-                    rulemaking_manifest = rm_resp.json()
-                    for art_name, art in (rulemaking_manifest.get("artifacts") or {}).items():
-                        if (
-                            isinstance(art, Mapping)
-                            and art.get("visibility") == "public"
-                            and art_name.endswith(".parquet")
-                        ):
-                            tname = art_name.removesuffix(".parquet")
-                            remote_urls[tname] = [(art_name, f"{base}/{art['remote_key']}")]
+                manifest_key = ptr_doc.get("manifest_key")
+                if not isinstance(manifest_key, str) or not manifest_key:
+                    raise ODCSContractError("Rulemaking latest.json pointer missing valid 'manifest_key'")
+                rm_resp = active_client.get(f"{base}/{manifest_key}")
+                rm_resp.raise_for_status()
+                rulemaking_manifest = rm_resp.json()
+                for art_name, art in (rulemaking_manifest.get("artifacts") or {}).items():
+                    if isinstance(art, Mapping) and art.get("visibility") == "public" and art_name.endswith(".parquet"):
+                        tname = art_name.removesuffix(".parquet")
+                        remote_urls[tname] = [(art_name, f"{base}/{art['remote_key']}")]
 
-    manifest, file_bytes = build_odcs_bundle(
-        scope=scope,
-        families=families,
-        metadata_path=metadata_path,
-        joins_path=joins_path,
-        published_index=published_index,
-        rulemaking_manifest=rulemaking_manifest,
-    )
+        manifest, file_bytes = build_odcs_bundle(
+            scope=scope,
+            families=families,
+            metadata_path=metadata_path,
+            joins_path=joins_path,
+            published_index=published_index,
+            rulemaking_manifest=rulemaking_manifest,
+        )
 
-    verified_tables: dict[str, dict[str, Any]] = {}
-    drift_gaps: list[dict[str, Any]] = []
-    missing_parquet_tables: list[dict[str, str]] = []
+        verified_tables: dict[str, dict[str, Any]] = {}
+        drift_gaps: list[dict[str, Any]] = []
+        missing_parquet_tables: list[dict[str, str]] = []
 
-    http_client = (
-        httpx.Client(headers={"User-Agent": "spicy-regs-odcs-verifier/1.0"}, timeout=30.0)
-        if r2_base_url is not None
-        else None
-    )
-    try:
         for fam, entry in sorted(manifest["contracts"].items()):
             contract = json.loads(file_bytes[entry["path"]])
             declared = contract_declared_schemas(contract)
             for tname, expected_schema in sorted(declared.items()):
                 candidates: list[tuple[str, Any]] = []
+                fetch_failed = False
                 if parquet_dir is not None:
                     direct = parquet_dir / f"{tname}.parquet"
                     fam_direct = parquet_dir / fam / f"{tname}.parquet"
@@ -2278,22 +2522,31 @@ def audit_parquet_parity(
                 elif tname in remote_urls:
                     for rel, url in remote_urls[tname]:
                         try:
-                            candidates.append((rel, read_remote_parquet_schema(url, client=http_client)))
+                            candidates.append((rel, read_remote_parquet_schema(url, client=active_client)))
                         except Exception as exc:
+                            fetch_failed = True
                             drift_gaps.append(
                                 {"family": fam, "table": tname, "member": rel, "issues": [f"read_error: {exc}"]}
                             )
 
-                if not candidates:
+                if not candidates and not fetch_failed:
                     missing_parquet_tables.append({"family": fam, "table": tname})
                     continue
 
-                table_failed = False
+                table_failed = fetch_failed
                 for label, actual in candidates:
-                    if issues := parquet_schema_diff(expected_schema, actual, check_order=check_order):
+                    try:
+                        issues = parquet_schema_diff(expected_schema, actual, check_order=check_order)
+                    except ODCSContractError as exc:
+                        table_failed = True
+                        drift_gaps.append(
+                            {"family": fam, "table": tname, "member": label, "issues": [f"read_error: {exc}"]}
+                        )
+                        continue
+                    if issues:
                         table_failed = True
                         drift_gaps.append({"family": fam, "table": tname, "member": label, "issues": issues})
-                if not table_failed:
+                if not table_failed and candidates:
                     verified_tables[tname] = {
                         "family": fam,
                         "domain": entry["domain"],
@@ -2302,8 +2555,8 @@ def audit_parquet_parity(
                         "schema_sha256": _schema_fingerprint(expected_schema),
                     }
     finally:
-        if http_client is not None:
-            http_client.close()
+        if owned_client is not None:
+            owned_client.close()
 
     return {
         "odcs_api_version": ODCS_API_VERSION,
@@ -2390,16 +2643,20 @@ def main(argv: list[str] | None = None) -> int:
     families = args.family or None
 
     if args.verify_parquet_dir is not None or args.verify_r2:
-        report = audit_parquet_parity(
-            scope=args.scope,
-            families=families,
-            parquet_dir=args.verify_parquet_dir,
-            r2_base_url=args.r2_base_url if args.verify_r2 else None,
-            metadata_path=args.metadata,
-            joins_path=args.joins,
-        )
+        try:
+            report = audit_parquet_parity(
+                scope=args.scope,
+                families=families,
+                parquet_dir=args.verify_parquet_dir,
+                r2_base_url=args.r2_base_url if args.verify_r2 else None,
+                metadata_path=args.metadata,
+                joins_path=args.joins,
+            )
+        except Exception as exc:
+            print(f"ERROR: Parquet schema parity verification failed: {exc}", file=sys.stderr)
+            return 1
         print(json.dumps(report, indent=2, sort_keys=True))
-        if report["drift_gap_count"] > 0:
+        if report["drift_gap_count"] > 0 or report["verified_table_count"] == 0 or report["missing_parquet_count"] > 0:
             return 1
         return 0
 

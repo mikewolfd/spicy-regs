@@ -39,11 +39,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:congress-roll-call-vote-id"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:administrative-process-stage"
             },
@@ -141,11 +136,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:bioguide-id"
             },
             {
               "vendor": "refspec",
@@ -395,11 +385,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:congress-roll-call-vote-id"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:administrative-process-stage"
             },
@@ -631,11 +616,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:rkaf:us:bill:"
             },
             {
               "vendor": "refspec",

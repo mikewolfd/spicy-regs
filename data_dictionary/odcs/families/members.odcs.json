@@ -40,11 +40,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:bioguide-id"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:entity"
             },
@@ -345,11 +340,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:bioguide-id"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:entity"
             },
@@ -586,11 +576,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:bioguide-id"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:entity"
             },
@@ -624,11 +609,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR[]"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:bioguide-id"
             },
             {
               "vendor": "refspec",
@@ -673,11 +653,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR[]"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:fec-candidate-id"
             },
             {
               "vendor": "refspec",

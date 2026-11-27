@@ -94,11 +94,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:congress-committee-system-code"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:entity"
             },
@@ -155,11 +150,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:congress-committee-system-code"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:entity"
             },
@@ -198,11 +188,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:bioguide-id"
             },
             {
               "vendor": "refspec",
@@ -783,11 +768,6 @@
             },
             {
               "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:congress-committee-system-code"
-            },
-            {
-              "vendor": "refspec",
               "property": "facet",
               "value": "urn:ref:facet:entity"
             },
@@ -854,11 +834,6 @@
               "vendor": "spicy-regs",
               "property": "duckdbType",
               "value": "VARCHAR"
-            },
-            {
-              "vendor": "refspec",
-              "property": "urn",
-              "value": "urn:ref:identifier:congress-committee-system-code"
             },
             {
               "vendor": "refspec",

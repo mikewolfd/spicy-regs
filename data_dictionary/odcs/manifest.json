@@ -32,7 +32,7 @@
     "amendments": {
       "family": "amendments",
       "path": "families/amendments.odcs.json",
-      "sha256": "b2ef144c8ba17bc270d39efa567ae8a0dc81a2c82b9d0494371fde2b5425478a",
+      "sha256": "5bc213fef1fc1850cce2d4e36a3916b96178a8ee647c33b4aaba9eb006a18ce3",
       "contract_id": "urn:spicy-regs:odcs:family:amendments",
       "domain": "spicycongress",
       "secondary_domains": [],
@@ -42,12 +42,13 @@
       ],
       "table_count": 1,
       "relationship_count": 3,
+      "refspec_urn_columns": 0,
       "refspec_mapped_columns": 4
     },
     "bill-family": {
       "family": "bill-family",
       "path": "families/bill-family.odcs.json",
-      "sha256": "ff3f7cabfe6a72d721bbdbc9a428c2e01249934a80f7806e30228fde1f8428f1",
+      "sha256": "461b60b2b8fbd94a6d31eb1a9a6377358429339da25b68e4d730f79750070d1a",
       "contract_id": "urn:spicy-regs:odcs:family:bill-family",
       "domain": "spicycongress",
       "secondary_domains": [
@@ -78,12 +79,13 @@
       ],
       "table_count": 20,
       "relationship_count": 30,
+      "refspec_urn_columns": 1,
       "refspec_mapped_columns": 30
     },
     "committee-rosters": {
       "family": "committee-rosters",
       "path": "families/committee-rosters.odcs.json",
-      "sha256": "55befc8b12db4b4d91fa2fe10d944a27034a94591f22f4f968c8a168f5096d93",
+      "sha256": "c4771af6c22f64884695a4af6575e93afb43a5c3c6acfdf983925a4baf07ec49",
       "contract_id": "urn:spicy-regs:odcs:family:committee-rosters",
       "domain": "spicycongress",
       "secondary_domains": [
@@ -97,12 +99,13 @@
       ],
       "table_count": 3,
       "relationship_count": 4,
+      "refspec_urn_columns": 0,
       "refspec_mapped_columns": 5
     },
     "federal-register": {
       "family": "federal-register",
       "path": "families/federal-register.odcs.json",
-      "sha256": "d31e7a616e7fb505827f67c633c631b1b0f44beaba49d993ecab5db8407290e0",
+      "sha256": "3efc5aa0067803c1352b8d4cebe954f02569492d2379bf34f507ca26345a7de9",
       "contract_id": "urn:spicy-regs:odcs:family:federal-register",
       "domain": "spicygov",
       "secondary_domains": [
@@ -114,12 +117,13 @@
       ],
       "table_count": 1,
       "relationship_count": 1,
-      "refspec_mapped_columns": 12
+      "refspec_urn_columns": 11,
+      "refspec_mapped_columns": 13
     },
     "members": {
       "family": "members",
       "path": "families/members.odcs.json",
-      "sha256": "00f8322c0fade545654ee4b6d91b538fb1f1517e280f42860a825fdc5775fcec",
+      "sha256": "bb017796e0a714b397c7157586996a42609494bd17a3be240ad6051c3c54758e",
       "contract_id": "urn:spicy-regs:odcs:family:members",
       "domain": "spicycongress",
       "secondary_domains": [
@@ -133,12 +137,13 @@
       ],
       "table_count": 3,
       "relationship_count": 2,
+      "refspec_urn_columns": 0,
       "refspec_mapped_columns": 5
     },
     "nominations": {
       "family": "nominations",
       "path": "families/nominations.odcs.json",
-      "sha256": "b1904831a8536fce394aa8179526494f4b3a69193c562b450743dd63108df1d0",
+      "sha256": "6e9ebb037dd0b9e7fa5c82cf0b83c59c10637067cd8582fbdabe98e2e0735b57",
       "contract_id": "urn:spicy-regs:odcs:family:nominations",
       "domain": "spicycongress",
       "secondary_domains": [
@@ -151,12 +156,13 @@
       ],
       "table_count": 2,
       "relationship_count": 0,
+      "refspec_urn_columns": 0,
       "refspec_mapped_columns": 2
     },
     "roll-call-votes": {
       "family": "roll-call-votes",
       "path": "families/roll-call-votes.odcs.json",
-      "sha256": "a2d58bf044603e27896cd4b6c2cbf21925a22e2c9df75368ba5ffec3de287c04",
+      "sha256": "8ad9ba6aaa91e22345a025e3d403d8de1d00b1d7d4a65a0ced4fd9d77b0d678c",
       "contract_id": "urn:spicy-regs:odcs:family:roll-call-votes",
       "domain": "spicycongress",
       "secondary_domains": [],
@@ -167,12 +173,13 @@
       ],
       "table_count": 2,
       "relationship_count": 3,
+      "refspec_urn_columns": 0,
       "refspec_mapped_columns": 4
     },
     "rulemaking": {
       "family": "rulemaking",
       "path": "families/rulemaking.odcs.json",
-      "sha256": "003005b4f545d3a4e222f3e4bf8df37116efd8dd928eebee4d5c9bd9ec516bb0",
+      "sha256": "da2d066b57794eeb9112edfa1f2215076e8e0d3300494273c89fc09ca4de2c18",
       "contract_id": "urn:spicy-regs:odcs:family:rulemaking",
       "domain": "spicygov",
       "secondary_domains": [
@@ -191,6 +198,7 @@
       ],
       "table_count": 8,
       "relationship_count": 15,
+      "refspec_urn_columns": 17,
       "refspec_mapped_columns": 21
     }
   },
