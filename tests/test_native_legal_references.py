@@ -257,3 +257,48 @@ def test_bill_and_law_scopes_replay_correct_and_fail_closed(tmp_path):
     with pytest.raises(ValueError):
         run(bad, tmp_path / "failed", prior=third[0].parent)
     assert not (tmp_path / "failed/native_legal_references.parquet").exists()
+
+
+def test_wave1_declared_cohort_manifest_respects_bounds_and_publish_hygiene():
+    from spicy_docs.schemas.native_reference_rows import NATIVE_LEGAL_REFERENCE_RULE, native_reference_scope_id
+    from spicy_regs.citation_resolution import NATIVE_RESOLUTION_RULE
+    from spicy_regs.source_evidence import _LOCAL_PATH_BYTES
+
+    assert NATIVE_RESOLUTION_RULE == "selected-target-lookup/1"
+    assert NATIVE_LEGAL_REFERENCE_RULE == "native-legal-reference/003"
+
+    manifest_path = Path(__file__).resolve().parents[1] / "manifests/native_legal_wave1.json"
+    raw = manifest_path.read_bytes()
+    assert len(raw) <= 1024 * 1024
+    assert _LOCAL_PATH_BYTES.search(raw) is None, "published manifest must not embed local machine paths"
+
+    manifest = json.loads(raw)
+    sources = manifest["sources"]
+    assert 1 <= len(sources) <= 75
+    total_bytes = sum(entry["bytes"] for entry in sources)
+    assert total_bytes <= 32 * 1024 * 1024
+    assert manifest["bounds"]["measured_inputs"] == len(sources)
+    assert manifest["bounds"]["measured_total_xml_bytes"] == total_bytes
+    assert manifest["bounds"]["measured_observations"] <= 8_000
+
+    scopes = set()
+    families = {"bill": 0, "law": 0}
+    for entry in sources:
+        family = entry["source_family"]
+        assert family in families
+        families[family] += 1
+        assert entry["sha256"].startswith("sha256:") and len(entry["sha256"]) == 71
+        assert 0 < entry["bytes"] <= 16 * 1024 * 1024
+        assert entry["source_locator"].startswith("https://www.govinfo.gov/")
+        scope = native_reference_scope_id(family, entry["source_record_key"], entry["edition"])
+        assert scope not in scopes
+        scopes.add(scope)
+        qual = entry["qualification"]
+        if family == "bill":
+            assert qual["kind"] == "bill-dtd-xml" and qual["congress"] == 119
+            assert entry["edition"] and entry["source_record_key"] == qual["package_id"]
+        else:
+            assert qual["kind"] == "law-native-xml" and qual["congress"] == 119
+            assert entry["edition"] is None
+            assert entry["source_record_key"] == f"{qual['congress']}-{qual['law_kind']}-{qual['number']}"
+    assert families["bill"] >= 15 and families["law"] >= 15

@@ -1,0 +1,915 @@
+{
+  "cohort_id": "native-legal-wave1-119th-bills-plaw-v1",
+  "ticket": "ss-qggu",
+  "description": "Declared, bounded Wave 1 cohort of 50 retained real 119th Congress originals (25 BILLS DTD XML packages across s/enr and hr/ih,rh,eh,pcs plus 25 PLAW USLM XML enacted Public Laws spanning House- and Senate-origin enactments) selected from the central raw archive for native-legal-references replay under native-legal-reference/003 and selected-target-lookup/1.",
+  "archive_store": "central-raw-archive",
+  "bounds": {
+    "max_inputs_target": 75,
+    "max_total_xml_bytes_target": 33554432,
+    "max_observations_target": 8000,
+    "measured_inputs": 50,
+    "measured_total_xml_bytes": 14132042,
+    "measured_observations": 7064,
+    "measured_usc_section_observations": 3401
+  },
+  "sources": [
+    {
+      "path": "inputs/BILLS-119hr10061ih.xml",
+      "sha256": "sha256:82e280fba750321af896580affd32487c25f9ba140491fc32332d42cf323a9fe",
+      "bytes": 429873,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr10061ih",
+      "edition": "ih",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr10061ih/xml/BILLS-119hr10061ih.xml",
+      "archive_object": "objects/sha256/82/82e280fba750321af896580affd32487c25f9ba140491fc32332d42cf323a9fe.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 10061,
+        "package_id": "BILLS-119hr10061ih"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr2317ih.xml",
+      "sha256": "sha256:300b4d63164720d4620df38f626e2478ab1beb3dff2f376dd17534b59c98c933",
+      "bytes": 188207,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr2317ih",
+      "edition": "ih",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr2317ih/xml/BILLS-119hr2317ih.xml",
+      "archive_object": "objects/sha256/30/300b4d63164720d4620df38f626e2478ab1beb3dff2f376dd17534b59c98c933.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 2317,
+        "package_id": "BILLS-119hr2317ih"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr2456ih.xml",
+      "sha256": "sha256:25e3687e5655b20a0cc9b85aec2aec15d82957b510d9e1df75382c44b6d16277",
+      "bytes": 40193,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr2456ih",
+      "edition": "ih",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr2456ih/xml/BILLS-119hr2456ih.xml",
+      "archive_object": "objects/sha256/25/25e3687e5655b20a0cc9b85aec2aec15d82957b510d9e1df75382c44b6d16277.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 2456,
+        "package_id": "BILLS-119hr2456ih"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr2482eh.xml",
+      "sha256": "sha256:0228b5012594dcaa946f7d117fce0a749ec2f963c51d2c885da45f08594076ea",
+      "bytes": 53562,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr2482eh",
+      "edition": "eh",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr2482eh/xml/BILLS-119hr2482eh.xml",
+      "archive_object": "objects/sha256/02/0228b5012594dcaa946f7d117fce0a749ec2f963c51d2c885da45f08594076ea.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 2482,
+        "package_id": "BILLS-119hr2482eh"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr2483eh.xml",
+      "sha256": "sha256:bea871a3d1913b484ba0f34c1eadee04aa43a7fd0e65bf7db4fca9de78372613",
+      "bytes": 112442,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr2483eh",
+      "edition": "eh",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr2483eh/xml/BILLS-119hr2483eh.xml",
+      "archive_object": "objects/sha256/be/bea871a3d1913b484ba0f34c1eadee04aa43a7fd0e65bf7db4fca9de78372613.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 2483,
+        "package_id": "BILLS-119hr2483eh"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr2725ih.xml",
+      "sha256": "sha256:5d6de29c7be433171a8ab40477c240a674702379cf5272815b0444e592eeeb49",
+      "bytes": 90763,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr2725ih",
+      "edition": "ih",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr2725ih/xml/BILLS-119hr2725ih.xml",
+      "archive_object": "objects/sha256/5d/5d6de29c7be433171a8ab40477c240a674702379cf5272815b0444e592eeeb49.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 2725,
+        "package_id": "BILLS-119hr2725ih"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr2966rh.xml",
+      "sha256": "sha256:b6eaf8b35f9a03d7ede45df7f4af9a17fbfd4290f9d0bcd06f329ac50663fa9f",
+      "bytes": 8565,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr2966rh",
+      "edition": "rh",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr2966rh/xml/BILLS-119hr2966rh.xml",
+      "archive_object": "objects/sha256/b6/b6eaf8b35f9a03d7ede45df7f4af9a17fbfd4290f9d0bcd06f329ac50663fa9f.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 2966,
+        "package_id": "BILLS-119hr2966rh"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr3062eh.xml",
+      "sha256": "sha256:b0a0425f7bfc36ccc2880638ab2b070ec0b2438617dd43a11fe7b9dcffc4ad85",
+      "bytes": 17715,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr3062eh",
+      "edition": "eh",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr3062eh/xml/BILLS-119hr3062eh.xml",
+      "archive_object": "objects/sha256/b0/b0a0425f7bfc36ccc2880638ab2b070ec0b2438617dd43a11fe7b9dcffc4ad85.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 3062,
+        "package_id": "BILLS-119hr3062eh"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr3668rh.xml",
+      "sha256": "sha256:1fe3431177f6e9eccd442e47821f978e5dcc6b52b04cf4ba6b44019b77259b67",
+      "bytes": 26423,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr3668rh",
+      "edition": "rh",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr3668rh/xml/BILLS-119hr3668rh.xml",
+      "archive_object": "objects/sha256/1f/1fe3431177f6e9eccd442e47821f978e5dcc6b52b04cf4ba6b44019b77259b67.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 3668,
+        "package_id": "BILLS-119hr3668rh"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr36pcs.xml",
+      "sha256": "sha256:83cb1e5d85195e0ba933df703dfcc81a841f53abb3f2716a320778d2287b9d65",
+      "bytes": 38773,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr36pcs",
+      "edition": "pcs",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr36pcs/xml/BILLS-119hr36pcs.xml",
+      "archive_object": "objects/sha256/83/83cb1e5d85195e0ba933df703dfcc81a841f53abb3f2716a320778d2287b9d65.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 36,
+        "package_id": "BILLS-119hr36pcs"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr3898rh.xml",
+      "sha256": "sha256:b39d3b76973fad8a769e7e40699b3b14ba53b2fcc7ccafc3a7e07621328d0e30",
+      "bytes": 76298,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr3898rh",
+      "edition": "rh",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr3898rh/xml/BILLS-119hr3898rh.xml",
+      "archive_object": "objects/sha256/b3/b39d3b76973fad8a769e7e40699b3b14ba53b2fcc7ccafc3a7e07621328d0e30.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 3898,
+        "package_id": "BILLS-119hr3898rh"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr3947ih.xml",
+      "sha256": "sha256:bfeeaafed01b475dc5dec2f407066df7b941ff013184acee8550b152a9517196",
+      "bytes": 101938,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr3947ih",
+      "edition": "ih",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr3947ih/xml/BILLS-119hr3947ih.xml",
+      "archive_object": "objects/sha256/bf/bfeeaafed01b475dc5dec2f407066df7b941ff013184acee8550b152a9517196.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 3947,
+        "package_id": "BILLS-119hr3947ih"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr4238eh.xml",
+      "sha256": "sha256:5d4ffe8c156fc297f119376b2b0214ad963f081b5598ce796bd9c35c9161ae72",
+      "bytes": 21822,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr4238eh",
+      "edition": "eh",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr4238eh/xml/BILLS-119hr4238eh.xml",
+      "archive_object": "objects/sha256/5d/5d4ffe8c156fc297f119376b2b0214ad963f081b5598ce796bd9c35c9161ae72.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 4238,
+        "package_id": "BILLS-119hr4238eh"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr4371eh.xml",
+      "sha256": "sha256:ca66f04481b302046201461638738fb6bc0b0bb95bd6ed52ad5d4fc94cf7b2c6",
+      "bytes": 19778,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr4371eh",
+      "edition": "eh",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr4371eh/xml/BILLS-119hr4371eh.xml",
+      "archive_object": "objects/sha256/ca/ca66f04481b302046201461638738fb6bc0b0bb95bd6ed52ad5d4fc94cf7b2c6.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 4371,
+        "package_id": "BILLS-119hr4371eh"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr4626eh.xml",
+      "sha256": "sha256:5b4177c4e9b3b5b9425f60d0522c0631947f0b2e6423cf890ddccee49bd0eb88",
+      "bytes": 38552,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr4626eh",
+      "edition": "eh",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr4626eh/xml/BILLS-119hr4626eh.xml",
+      "archive_object": "objects/sha256/5b/5b4177c4e9b3b5b9425f60d0522c0631947f0b2e6423cf890ddccee49bd0eb88.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 4626,
+        "package_id": "BILLS-119hr4626eh"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr4895ih.xml",
+      "sha256": "sha256:a9b30a46ec1369adb8597a5f83f9bd9f9bc5f88f2439b45a5631d0d45b3563ec",
+      "bytes": 105183,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr4895ih",
+      "edition": "ih",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr4895ih/xml/BILLS-119hr4895ih.xml",
+      "archive_object": "objects/sha256/a9/a9b30a46ec1369adb8597a5f83f9bd9f9bc5f88f2439b45a5631d0d45b3563ec.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 4895,
+        "package_id": "BILLS-119hr4895ih"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr5166rh.xml",
+      "sha256": "sha256:a26ff3d770c8e43211e70947bdf8d8f9fa89d0c893e702f6808b11df90222026",
+      "bytes": 365530,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr5166rh",
+      "edition": "rh",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr5166rh/xml/BILLS-119hr5166rh.xml",
+      "archive_object": "objects/sha256/a2/a26ff3d770c8e43211e70947bdf8d8f9fa89d0c893e702f6808b11df90222026.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 5166,
+        "package_id": "BILLS-119hr5166rh"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr6028eh.xml",
+      "sha256": "sha256:89f7d7a3a1f3fe28bc5227099662d8819ba674c70ccb258edba16ada7d3fc21d",
+      "bytes": 104890,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr6028eh",
+      "edition": "eh",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr6028eh/xml/BILLS-119hr6028eh.xml",
+      "archive_object": "objects/sha256/89/89f7d7a3a1f3fe28bc5227099662d8819ba674c70ccb258edba16ada7d3fc21d",
+      "archive_encoding": "raw",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 6028,
+        "package_id": "BILLS-119hr6028eh"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr6644eh.xml",
+      "sha256": "sha256:99317586072b7117889ff6d2bbc9cc888cf52b4931356211788d28a166dd996b",
+      "bytes": 362126,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr6644eh",
+      "edition": "eh",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr6644eh/xml/BILLS-119hr6644eh.xml",
+      "archive_object": "objects/sha256/99/99317586072b7117889ff6d2bbc9cc888cf52b4931356211788d28a166dd996b",
+      "archive_encoding": "raw",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 6644,
+        "package_id": "BILLS-119hr6644eh"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr7147eh.xml",
+      "sha256": "sha256:fde7cb159921fa0d39660740b4b851698c0fd701796edce7b693f45ce027ccc5",
+      "bytes": 197965,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr7147eh",
+      "edition": "eh",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr7147eh/xml/BILLS-119hr7147eh.xml",
+      "archive_object": "objects/sha256/fd/fde7cb159921fa0d39660740b4b851698c0fd701796edce7b693f45ce027ccc5.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 7147,
+        "package_id": "BILLS-119hr7147eh"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr7147pcs.xml",
+      "sha256": "sha256:902a4e1c634bc676630153b2e1b10d9a85ffcad737da248a5dd37e41ba3d057a",
+      "bytes": 197864,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr7147pcs",
+      "edition": "pcs",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr7147pcs/xml/BILLS-119hr7147pcs.xml",
+      "archive_object": "objects/sha256/90/902a4e1c634bc676630153b2e1b10d9a85ffcad737da248a5dd37e41ba3d057a",
+      "archive_encoding": "raw",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 7147,
+        "package_id": "BILLS-119hr7147pcs"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr7300ih.xml",
+      "sha256": "sha256:5493fc411fb744cb77c703e13ee07fd9aa53b6469ad8d168ff55f7a87811dd13",
+      "bytes": 160302,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr7300ih",
+      "edition": "ih",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr7300ih/xml/BILLS-119hr7300ih.xml",
+      "archive_object": "objects/sha256/54/5493fc411fb744cb77c703e13ee07fd9aa53b6469ad8d168ff55f7a87811dd13.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 7300,
+        "package_id": "BILLS-119hr7300ih"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr8646rh.xml",
+      "sha256": "sha256:975fef02625a869c314d1e2c7b5841039dbf028cd2159b68e92256d536700ffb",
+      "bytes": 256538,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr8646rh",
+      "edition": "rh",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr8646rh/xml/BILLS-119hr8646rh.xml",
+      "archive_object": "objects/sha256/97/975fef02625a869c314d1e2c7b5841039dbf028cd2159b68e92256d536700ffb.gz",
+      "archive_encoding": "gzip",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 8646,
+        "package_id": "BILLS-119hr8646rh"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119hr9022rh.xml",
+      "sha256": "sha256:fc82dbe573754a737e74e6489262dd423bdb9d1e17d8b6203456c77e6c1f135b",
+      "bytes": 124422,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119hr9022rh",
+      "edition": "rh",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119hr9022rh/xml/BILLS-119hr9022rh.xml",
+      "archive_object": "objects/sha256/fc/fc82dbe573754a737e74e6489262dd423bdb9d1e17d8b6203456c77e6c1f135b",
+      "archive_encoding": "raw",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "hr",
+        "number": 9022,
+        "package_id": "BILLS-119hr9022rh"
+      }
+    },
+    {
+      "path": "inputs/BILLS-119s5enr.xml",
+      "sha256": "sha256:df4b19ff99c27f8f6dcc5098fe82c726e33666c78d65126d1622f611bf8b94c9",
+      "bytes": 18934,
+      "source_family": "bill",
+      "source_record_key": "BILLS-119s5enr",
+      "edition": "enr",
+      "source_locator": "https://www.govinfo.gov/content/pkg/BILLS-119s5enr/xml/BILLS-119s5enr.xml",
+      "archive_object": "objects/sha256/df/df4b19ff99c27f8f6dcc5098fe82c726e33666c78d65126d1622f611bf8b94c9",
+      "archive_encoding": "raw",
+      "qualification": {
+        "kind": "bill-dtd-xml",
+        "congress": 119,
+        "bill_type": "s",
+        "number": 5,
+        "package_id": "BILLS-119s5enr"
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ1.xml",
+      "sha256": "sha256:ee0e7a5d534411f78dd325405c42d386a1cfcf14f3870c93f5488874bb7acb54",
+      "bytes": 23379,
+      "source_family": "law",
+      "source_record_key": "119-public-1",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ1.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ1.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 1
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ101.xml",
+      "sha256": "sha256:9f4bc8d57d39bf4d84442f3e68e0fd679a62878ce7c78909e687a70401616a8e",
+      "bytes": 1126653,
+      "source_family": "law",
+      "source_record_key": "119-public-101",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ101.xml",
+      "archive_object": "objects/sha256/9f/9f4bc8d57d39bf4d84442f3e68e0fd679a62878ce7c78909e687a70401616a8e",
+      "archive_encoding": "raw",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 101
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ108.xml",
+      "sha256": "sha256:342fefd0464260182ccb509a45c3be928b3fcd8d8829bc885cd7684d3521ecd0",
+      "bytes": 22740,
+      "source_family": "law",
+      "source_record_key": "119-public-108",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ108.xml",
+      "archive_object": "objects/sha256/34/342fefd0464260182ccb509a45c3be928b3fcd8d8829bc885cd7684d3521ecd0",
+      "archive_encoding": "raw",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 108
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ12.xml",
+      "sha256": "sha256:d26c433f169751fb46c6932136039d2eef45ee7e8d3a46bb04909787d0c54037",
+      "bytes": 57485,
+      "source_family": "law",
+      "source_record_key": "119-public-12",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ12.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ12.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 12
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ21.xml",
+      "sha256": "sha256:762ae9af06640f023ddb9eb6f474ff7cfa275691de338d4fd985cfb04a7b6dea",
+      "bytes": 2787974,
+      "source_family": "law",
+      "source_record_key": "119-public-21",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ21.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ21.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 21
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ26.xml",
+      "sha256": "sha256:1690f0292434fc938729b2b3448653bf5d4f339c64462e98a37ee6d0a60bc0f9",
+      "bytes": 74203,
+      "source_family": "law",
+      "source_record_key": "119-public-26",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ26.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ26.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 26
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ27.xml",
+      "sha256": "sha256:9c7bf33496c2f65085234dbf7f5cecaa72919520912c43f9f7769264e261d282",
+      "bytes": 358508,
+      "source_family": "law",
+      "source_record_key": "119-public-27",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ27.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ27.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 27
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ31.xml",
+      "sha256": "sha256:754c9945eba5c68a8bdea24d6de083b5cca7fdac59ca071358f410690faf4bdc",
+      "bytes": 40954,
+      "source_family": "law",
+      "source_record_key": "119-public-31",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ31.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ31.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 31
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ36.xml",
+      "sha256": "sha256:9e911a87c803e973eb615314ddfe28837a369a130ba1789af4f6dfe1f10f2054",
+      "bytes": 13515,
+      "source_family": "law",
+      "source_record_key": "119-public-36",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ36.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ36.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 36
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ37.xml",
+      "sha256": "sha256:06529f779fb356cb83f7a65bb9acc70c0fecf7dee8411aab8bdd799e129678f1",
+      "bytes": 1000077,
+      "source_family": "law",
+      "source_record_key": "119-public-37",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ37.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ37.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 37
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ39.xml",
+      "sha256": "sha256:cb8be9f793f6a9fc7d7fcdc32fd7a53e328478866ca39d0438b67b4a5ac8edf3",
+      "bytes": 20894,
+      "source_family": "law",
+      "source_record_key": "119-public-39",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ39.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ39.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 39
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ4.xml",
+      "sha256": "sha256:1806832d2d7c6563ae0cc8beb69b8b5536e89f0408682c3a250b0e452e44885e",
+      "bytes": 313404,
+      "source_family": "law",
+      "source_record_key": "119-public-4",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ4.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ4.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 4
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ42.xml",
+      "sha256": "sha256:06a4c6973466a39f9fd0ed16b6ba5894c42f7a0bfcbdffa6c94a1881e5a7b5ce",
+      "bytes": 11285,
+      "source_family": "law",
+      "source_record_key": "119-public-42",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ42.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ42.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 42
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ44.xml",
+      "sha256": "sha256:0f62736e3048fd2cf787fa38632496a65d2562cbe01e62c062e6eb3347a85d7a",
+      "bytes": 189695,
+      "source_family": "law",
+      "source_record_key": "119-public-44",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ44.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ44.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 44
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ57.xml",
+      "sha256": "sha256:4a0b60df44ae0ccba6dae81749fd7514316f28be87d36252413dbf824eb8aaf4",
+      "bytes": 19834,
+      "source_family": "law",
+      "source_record_key": "119-public-57",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ57.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ57.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 57
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ58.xml",
+      "sha256": "sha256:21ae5aebf2dfce6c6c044fe9b1cd4fd1d1d54b735f49ff3b4d2692d9dae3caa7",
+      "bytes": 22911,
+      "source_family": "law",
+      "source_record_key": "119-public-58",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ58.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ58.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 58
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ62.xml",
+      "sha256": "sha256:ddc12cc148463d2bf5c31858daf1a71a8bec979b49fd090a8c1db233c7571905",
+      "bytes": 35933,
+      "source_family": "law",
+      "source_record_key": "119-public-62",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ62.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ62.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 62
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ65.xml",
+      "sha256": "sha256:afb25851d0b75eaa39e4b934d663add5bbd8e85bbf3d831d8202d5562c9fb68f",
+      "bytes": 55042,
+      "source_family": "law",
+      "source_record_key": "119-public-65",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ65.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ65.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 65
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ73.xml",
+      "sha256": "sha256:ddbe48670bdfeecc9919f911a95b36f5dfa53fcc6f2bf936512faace28e3f7b1",
+      "bytes": 57918,
+      "source_family": "law",
+      "source_record_key": "119-public-73",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ73.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ73.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 73
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ74.xml",
+      "sha256": "sha256:acf1aa2e57eafa81c0bfb0accc5bccb6caf42794068435100946675c46c147f5",
+      "bytes": 895787,
+      "source_family": "law",
+      "source_record_key": "119-public-74",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ74.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ74.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 74
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ75.xml",
+      "sha256": "sha256:ef528a390725114748382594b611f458c51dc5cf6a4e35a9c0b87c119849edec",
+      "bytes": 3410661,
+      "source_family": "law",
+      "source_record_key": "119-public-75",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ75.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ75.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 75
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ76.xml",
+      "sha256": "sha256:c81be03939a13714e317aba7003b6164e8be0b0e902dac675445ce1c8b6f490e",
+      "bytes": 36508,
+      "source_family": "law",
+      "source_record_key": "119-public-76",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ76.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ76.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 76
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ83.xml",
+      "sha256": "sha256:75b6b442d3081b1f5ee854cf1c09411e9a9131ec717de4de308b29f1493fce54",
+      "bytes": 119444,
+      "source_family": "law",
+      "source_record_key": "119-public-83",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ83.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ83.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 83
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ86.xml",
+      "sha256": "sha256:d9ecab0c391cf4d8f8b588d6279fe2ff9dae8aa6b9fd425f29cbe6c47ee58ac4",
+      "bytes": 250327,
+      "source_family": "law",
+      "source_record_key": "119-public-86",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ86.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ86.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 86
+      }
+    },
+    {
+      "path": "inputs/PLAW-119publ98.xml",
+      "sha256": "sha256:03389837d00a09f6d625544dcd9b32a0d283ff4c1cf5a22487fbcc1864a642a6",
+      "bytes": 28253,
+      "source_family": "law",
+      "source_record_key": "119-public-98",
+      "edition": null,
+      "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ98.xml",
+      "archive_object": "objects/sha256/56/5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_object_sha256": "sha256:5694c34db729f07246208a8226abb8744dd79a509e8ee8068282681f1d03cfbf",
+      "archive_zip_member": "PLAW-119publ98.xml",
+      "qualification": {
+        "kind": "law-native-xml",
+        "congress": 119,
+        "law_kind": "public",
+        "number": 98
+      }
+    }
+  ]
+}
