@@ -493,19 +493,48 @@ def header_subjects(selection, retained, proof, check_resources):
     if len(originals) != len(candidates):
         raise ValueError('Current header decisions omit or add original observations')
     allowed = {'record_id', 'policy_version', 'selection_evidence_sha256', 'source_generation_pin'}
+    archive_upgrade = allowed | {
+        'association_basis', 'association_status', 'referenced_filing_key', 'filing_key',
+        'report_number_raw', 'filing_observation_count', 'filing_observation_ids',
+    }
     for old, candidate in zip(originals, candidates, strict=True):
         if candidate.get('policy_version') != 'fec-retained-filing-association/2':
             raise ValueError('Current headers must state the maintained association policy')
         if candidate.get('source_generation_pin') != selection.source_generation_pin:
             raise ValueError('Current header decision has a foreign source generation')
-        from spicy_regs.transforms.fec_filing_associations import _base
+        from spicy_regs.transforms.fec_filing_associations import _base, official_archive_member_file_number
+        from spicy_regs.transforms.fec_identity_observations import filing_key as _filing_key
         raw = {**candidate, 'record_id': candidate['target_record_id']}
         expected = _base(raw, candidate['target_table'], candidate['source_generation_pin'],
                          candidate['selection_evidence_sha256'], candidate['association_basis'])
         if candidate['record_id'] != expected['record_id']:
             raise ValueError('Current header identity differs from its maintained source-generation rule')
-        if set(old) != set(candidate) or any(old[k] != candidate[k] for k in old.keys() - allowed):
+        upgraded = (
+            old.get('association_status') == 'unresolved_archive_member_identity'
+            and candidate.get('association_basis') == 'official-archive-member-file-number'
+        )
+        permitted = archive_upgrade if upgraded else allowed
+        if set(old) != set(candidate) or any(old[k] != candidate[k] for k in old.keys() - permitted):
             raise ValueError('Current header decisions change original coordinates, order or decision outcomes')
+        if upgraded:
+            locator = json.loads(candidate['header_locator_json'])
+            archive_member = official_archive_member_file_number(candidate.get('request_url'), locator.get('member'))
+            if (
+                archive_member is None
+                or candidate.get('source_authority') != 'official-fec'
+                or candidate.get('report_number_raw') != archive_member[1]
+                or candidate.get('referenced_filing_key') != _filing_key(archive_member[1], 'official-fec')
+                or candidate.get('association_status') not in {
+                    'resolved_native_filing_key', 'unresolved_target_not_retained',
+                    'unresolved_target_observation_ambiguous', 'unresolved_target_identity_conflict',
+                }
+                or (
+                    candidate.get('filing_key') != candidate.get('referenced_filing_key')
+                    if candidate.get('association_status') == 'resolved_native_filing_key'
+                    else candidate.get('filing_key') is not None
+                )
+            ):
+                raise ValueError('Archive-member header upgrade differs from maintained official archive rules')
         if old.get('source_generation_pin') != candidate.get('source_generation_pin') and (
                 proof is None or old.get('source_generation_pin') != proof.original_pin
                 or candidate.get('source_generation_pin') != proof.staged_pin):

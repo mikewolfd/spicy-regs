@@ -8,7 +8,7 @@ this function does not resolve the latest source family or qualify totals.
 
 import re
 
-from spicy_regs.fec_versions import INDIVIDUAL_SNAPSHOT_POLICY
+from spicy_regs.fec_versions import CROSS_SOURCE_SELECTION_POLICY, INDIVIDUAL_SNAPSHOT_POLICY
 
 from .core import literal, quoted
 
@@ -213,6 +213,66 @@ def individual_snapshot_inclusion(source_generation_pin: str) -> str:
         FROM fec_receipts t LEFT JOIN checked p
           ON t.collection_id = p.collection_id AND t.source_sha256 = p.source_sha256
         WHERE t.source_namespace = 'fec-bulk-individual-contributions'"""
+
+
+def cross_source_collection_inclusion(table: str, source_generation_pin: str, *, purpose: str | None = None) -> str:
+    """Per-observation cross-source representation decisions over ``fec_collection_selection``.
+
+    Preserves every row of ``table`` (no source occurrence is dropped) and marks
+    each row as ``included``, ``duplicate``, ``single_representation`` (when no
+    cross-source duplicate group covers that ``(collection_id, source_sha256)``),
+    or ``unresolved`` (when the policy table is conflicting or uses an
+    unsupported policy version/status).
+    """
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", source_generation_pin):
+        raise ValueError("Cross-source representation inclusion requires its exact source-generation pin")
+    purpose_filter = f" AND purpose = {literal(purpose)}" if purpose is not None else ""
+    return f"""WITH p AS (
+        SELECT collection_id, source_sha256, count(*) AS policy_count,
+            min(record_id) AS policy_record_id, min(policy_version) AS policy_version,
+            min(purpose) AS purpose, min(selection_status) AS selection_status,
+            min(selection_reason) AS selection_reason,
+            min(selected_collection_id) AS selected_collection_id,
+            min(equivalence_evidence_sha256) AS equivalence_evidence_sha256
+        FROM fec_collection_selection
+        WHERE source_generation_pin = {literal(source_generation_pin)}
+          AND policy_version = {literal(CROSS_SOURCE_SELECTION_POLICY)}{purpose_filter}
+        GROUP BY collection_id, source_sha256
+    ), checked AS (
+        SELECT *, policy_count = 1
+            AND policy_version = {literal(CROSS_SOURCE_SELECTION_POLICY)}
+            AND selection_status IN ('included', 'duplicate') AS supported_policy
+        FROM p
+    ) SELECT t.record_id AS target_record_id, {literal(table)} AS target_table,
+        'self' AS target_generation_scope, t.collection_id, t.source_sha256,
+        CASE WHEN p.policy_count IS NULL THEN 'single_representation'
+             WHEN p.supported_policy THEN p.selection_status
+             ELSE 'unresolved' END AS selection_status,
+        CASE WHEN p.policy_count IS NULL THEN 'no-duplicate-registration-observed'
+             WHEN p.supported_policy THEN p.selection_reason
+             WHEN p.policy_count > 1 THEN 'ambiguous-collection-policy'
+             ELSE 'unsupported-policy-status' END AS selection_reason,
+        CASE WHEN p.policy_count = 1 THEN p.policy_record_id END AS policy_record_id,
+        CASE WHEN p.policy_count = 1 THEN p.policy_version END AS policy_version,
+        CASE WHEN p.policy_count = 1 THEN p.equivalence_evidence_sha256 END AS evidence_sha256,
+        CASE WHEN p.supported_policy THEN p.selected_collection_id
+             WHEN p.policy_count IS NULL THEN t.collection_id END AS selected_collection_id,
+        'unqualified' AS current_record_status,
+        p.purpose AS purpose
+        FROM {quoted(table)} t LEFT JOIN checked p
+          ON t.collection_id = p.collection_id AND t.source_sha256 = p.source_sha256"""
+
+
+def deduplicated_subject_sql(table: str, source_generation_pin: str, *, purpose: str | None = None) -> str:
+    """Query view selecting non-duplicate cross-source registrations while keeping provenance intact."""
+    inclusion = cross_source_collection_inclusion(table, source_generation_pin, purpose=purpose)
+    return f"""WITH inclusion AS ({inclusion})
+        SELECT t.*, i.selection_status AS cross_source_selection_status,
+            i.selected_collection_id AS canonical_collection_id,
+            i.selection_reason AS cross_source_selection_reason
+        FROM {quoted(table)} t
+        JOIN inclusion i ON t.record_id = i.target_record_id
+        WHERE i.selection_status IN ('included', 'single_representation')"""
 
 
 TARGET_COLUMNS = {

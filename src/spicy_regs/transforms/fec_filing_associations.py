@@ -8,6 +8,7 @@ These associations do not select amendments, current filings or money totals.
 from collections import defaultdict
 import hashlib
 import json
+import re
 
 import pyarrow as pa
 
@@ -22,6 +23,14 @@ from spicy_regs.relationship_views.fec_filing_associations import (
 from .fec_filing_financial import validate_filing_header
 from .fec_identity_observations import filing_key
 from .fec_query import CollectionSelection, _digest, _json, _text, observation_id
+
+# Official FEC S3 bulk filing daily archives use <file_number>.fec member names
+# corresponding to https://docquery.fec.gov/{dcdev|paper}/posted/<file_number>.fec.
+_OFFICIAL_BULK_FILING_ARCHIVE = re.compile(
+    r"^https://cg-519a459a-0ea3-42c2-b7bc-fa1143481f74\.s3-us-gov-west-1\.amazonaws\.com"
+    r"/bulk-downloads/(electronic|paper)/[0-9]{8}\.zip$"
+)
+_OFFICIAL_ARCHIVE_MEMBER = re.compile(r"^([1-9][0-9]*)\.fec$")
 
 
 ASSOCIATION_SCHEMA = pa.schema(
@@ -306,16 +315,38 @@ def association_records(rows, *, table, schema, filings, headers, source_generat
                 )
 
 
+def official_archive_member_file_number(request_url, member):
+    """Return ``(archive_kind, file_number)`` for an official FEC bulk filing ZIP member, else ``None``.
+
+    Non-official URLs or arbitrary archive member filenames never establish filing identity.
+    """
+    if not isinstance(request_url, str) or not isinstance(member, dict):
+        return None
+    archive = _OFFICIAL_BULK_FILING_ARCHIVE.fullmatch(request_url)
+    name = member.get("name")
+    if archive is None or not isinstance(name, str):
+        return None
+    matched = _OFFICIAL_ARCHIVE_MEMBER.fullmatch(name)
+    if matched is None:
+        return None
+    return archive[1], matched[1]
+
+
 def associate_filing_headers(
     headers, *, scopes, authorities, filings, source_generation_pin, selection_evidence_sha256
 ):
-    """Associate each selected physical header with an API-reported original URL.
+    """Associate each selected physical header with a native filing witness.
 
     scopes are the exact retained source-reader selections, keyed by collection.
-    Archive member names and HDR report/amendment fields never establish identity.
+    Direct captures match API-reported original URLs; official FEC bulk filing
+    archives (``/bulk-downloads/{electronic|paper}/YYYYMMDD.zip`` with
+    ``<file_number>.fec`` members) match their exact file number against retained
+    ``fec_filings`` witnesses (and preserve ``referenced_filing_key`` with
+    ``unresolved_target_not_retained`` when absent from the retained filing sample).
+    Arbitrary archive member names and HDR fields never establish identity.
     The physical header endpoint remains usable when no logical filing can resolve.
     """
-    _, by_url = _index(filings)
+    by_key, by_url = _index(filings)
     result = []
     for header in headers:
         cid = header["collection_id"]
@@ -328,12 +359,19 @@ def associate_filing_headers(
         locator = json.loads(header["source_locator_json"])
         if capture["responseSha256"] != header["source_sha256"] or scope.get("member") != locator.get("member"):
             raise ValueError("Header association scope differs from the exact original/member")
+        redirected = capture.get("resolvedUrl", capture["requestUrl"]) != capture["requestUrl"]
+        archive_member = (
+            official_archive_member_file_number(capture["requestUrl"], scope.get("member"))
+            if authority == "official-fec" and not redirected and scope.get("member") is not None
+            else None
+        )
+        basis = "official-archive-member-file-number" if archive_member is not None else "native-api-original-url"
         item = _base(
             {**header, "record_id": header["source_record_id"], "source_authority": authority},
             "fec_source_records",
             source_generation_pin,
             selection_evidence_sha256,
-            "native-api-original-url",
+            basis,
         )
         item.update(
             header_record_id=header["source_record_id"],
@@ -343,10 +381,32 @@ def associate_filing_headers(
         )
         if authority != "official-fec":
             item["association_status"] = "unresolved_source_authority"
-        elif scope.get("member") is not None:
-            item["association_status"] = "unresolved_archive_member_identity"
-        elif capture.get("resolvedUrl", capture["requestUrl"]) != capture["requestUrl"]:
+        elif redirected:
             item["association_status"] = "unresolved_redirect_identity"
+        elif scope.get("member") is not None:
+            if archive_member is None:
+                item["association_status"] = "unresolved_archive_member_identity"
+            else:
+                archive_kind, member_number = archive_member
+                ref_key = filing_key(member_number, authority)
+                item["referenced_filing_key"] = ref_key
+                item["report_number_raw"] = member_number
+                targets = by_key.get(ref_key, [])
+                expected_url = (
+                    f"https://docquery.fec.gov/{'dcdev' if archive_kind == 'electronic' else 'paper'}"
+                    f"/posted/{member_number}.fec"
+                )
+                if targets and any(
+                    row.get("fec_url") not in (None, "", expected_url) for row in targets
+                ):
+                    item.update(
+                        filing_key=None,
+                        association_status="unresolved_target_identity_conflict",
+                        filing_observation_count=len(targets),
+                        filing_observation_ids=sorted(r["record_id"] for r in targets),
+                    )
+                else:
+                    _targets(item, targets)
         else:
             targets = by_url.get(capture["requestUrl"], [])
             _targets(item, targets)

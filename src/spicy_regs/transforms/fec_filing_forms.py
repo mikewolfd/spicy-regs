@@ -2752,6 +2752,18 @@ def map_filing_text(row, selection, *, header_row, read_body, mapping=None, layo
         if not isinstance(text, str):
             raise ValueError("Narrative reader must return source text")
         pointer, status = "/embedded_bodies/0", "resolved_source_body"
+        if kind == "record":
+            raw_reasons = result.get("mapping_reason_json")
+            reasons = json.loads(raw_reasons) if isinstance(raw_reasons, str) else {}
+            remaining = [p for p in reasons.get("body_positions", []) if p != position]
+            reasons["body_positions"] = remaining
+            reasons["resolved_body_positions"] = [position]
+            result["mapping_status"] = (
+                "partial"
+                if any(reasons.get(k) for k in ("field_refusals", "absent_positions", "body_positions", "extra_positions"))
+                else "mapped"
+            )
+            result["mapping_reason_json"] = _json(reasons)
     if text == "":
         status = "source_empty"
     result.update(

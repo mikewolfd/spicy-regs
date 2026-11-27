@@ -109,10 +109,64 @@ def test_quality_notice_never_excludes_and_does_not_force_recent_century():
         SELECTION,
         identity.QUALITY_NOTICE,
     )
-    assert row["notice_scope"] == "source_listed_committee" and row["exclusion_status"] == "no_automatic_exclusion"
+    assert row["committee_id_status"] == "candidate_id_shape"
+    assert row["notice_scope"] == "source_listed_candidate" and row["exclusion_status"] == "no_automatic_exclusion"
     # `76` is 1976, FEC's first cycle, not 2076: the bounds end at the year the list was captured.
     assert row["first_receipt_date"] == date(1976, 12, 31) and row["first_receipt_date_raw"] == "31-DEC-76"
     assert row["first_receipt_date_status"] == "exact_with_year_bounds"
+
+    committee_row, _ = identity.map_registry(
+        registry(identity.QUALITY_NOTICE, committee_id="C00123456", first_receipt_dt="11-SEP-24"),
+        SELECTION,
+        identity.QUALITY_NOTICE,
+    )
+    assert committee_row["committee_id_status"] == "source_id_shape"
+    assert committee_row["notice_scope"] == "source_listed_committee"
+
+    for cand_id in ("H4MI05180", "S8CA00052"):
+        cand_row, _ = identity.map_registry(
+            registry(identity.QUALITY_NOTICE, committee_id=cand_id, first_receipt_dt="11-SEP-24"),
+            SELECTION,
+            identity.QUALITY_NOTICE,
+        )
+        assert cand_row["committee_id_status"] == "candidate_id_shape"
+        assert cand_row["notice_scope"] == "source_listed_candidate"
+
+    bad_row, _ = identity.map_registry(
+        registry(identity.QUALITY_NOTICE, committee_id="INVALID", first_receipt_dt="11-SEP-24"),
+        SELECTION,
+        identity.QUALITY_NOTICE,
+    )
+    assert bad_row["committee_id_status"] == "invalid_source_id_shape"
+    assert bad_row["notice_scope"] == "source_listed_entity"
+
+
+def test_resolve_filing_links_matches_sql_reference_resolution_semantics():
+    import duckdb
+    from spicy_regs.relationship_views.fec_typed import filing_reference_resolution
+
+    t1, _ = identity.map_filing_metadata(
+        api(dict(file_number=100, committee_id="C00000001", form_type="F3", amendment_chain=[100, 200, 999])),
+        SELECTION,
+    )
+    row2 = api(dict(file_number=200, committee_id="C00000001", form_type="F3"))
+    row2["source_record_id"] = "row/2"
+    row2["source_locator_json"] = json.dumps(dict(collection_id="collection", source_record_id="row/2", ordinal=2))
+    t2, _ = identity.map_filing_metadata(row2, SELECTION)
+    filings = t1[identity.FILINGS] + t2[identity.FILINGS]
+    links = t1[identity.LINKS]
+    resolved = identity.resolve_filing_links(links, filings)
+    by_target = {r["native_target_file_number"]: r["target_resolution_status"] for r in resolved}
+    assert by_target == {
+        "100": "resolved_native_filing_key",
+        "200": "resolved_native_filing_key",
+        "999": "unresolved_target_not_retained",
+    }
+    with duckdb.connect() as con:
+        con.register(identity.FILINGS, pa.Table.from_pylist(filings, schema=identity.SCHEMAS[identity.FILINGS]))
+        con.register(identity.LINKS, pa.Table.from_pylist(links, schema=identity.SCHEMAS[identity.LINKS]))
+        sql_rows = con.sql(filing_reference_resolution()).to_arrow_table().to_pylist()
+    assert [r["target_resolution_status"] for r in resolved] == [r["target_resolution_status"] for r in sql_rows]
 
 
 def test_lobbyist_filed_date_is_typed_within_the_capture_year():

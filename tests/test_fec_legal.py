@@ -190,12 +190,18 @@ def test_dates_and_exact_penalties_preserve_missing_null_empty_and_invalid():
     assert matter["treasury_referral_amount_status"] == "source_missing"
     events = {r["event_type"]: r for r in tables[legal.EVENTS]}
     assert events["open"]["event_date_status"] == "invalid_date" and events["open"]["mapping_status"] == "partial"
-    assert events["close"]["event_date_status"] == "source_null"
+    assert "close" not in events
     vote = events["commission_vote"]
     assert vote["event_date"] == date(2025, 3, 3) and vote["event_date_raw"] == "2025-03-03T12:34:56"
+    assert vote["description"] == "Voted" and vote["description_status"] == "reported"
     disposition = events["disposition"]
     assert disposition["event_date_status"] == "source_missing" and disposition["amount_status"] == "excess_precision"
     assert disposition["amount"] is None and disposition["amount_raw"] == "0.0000000001"
+    parties = tables[legal.PARTIES]
+    assert len(parties) == 1
+    assert parties[0]["role"] == "Subject committee"
+    assert parties[0]["entity_namespace"] == "fec-committee-id"
+    assert parties[0]["entity_type"] == "committee"
 
 
 def test_nested_rulemaking_documents_retain_parent_and_defer_pdf_bodies():
@@ -248,6 +254,47 @@ def test_audit_no_findings_category_is_not_fabricated_finding_text():
     assert finding["text"] is None and finding["amount"] is None
     assert finding["supporting_document_record_id"] == tables[legal.DOCUMENTS][0]["record_id"]
     assert tables[legal.DOCUMENTS][0]["body_status"] == "not_requested"
+    parties = {p["role"]: p for p in tables[legal.PARTIES]}
+    assert parties["Subject committee"]["entity_type"] == "committee"
+
+
+def test_audit_associated_candidate_and_redacted_mur_url_sanitizer():
+    from spicy_docs.sources.fec.catalog import official_url
+
+    n = dict(
+        audit_case_id="2287",
+        audit_id=807,
+        committee_id="C00811711",
+        committee_name="Committee",
+        candidate_id="P80001571",
+        candidate_name="Candidate",
+        cycle=2024,
+    )
+    tables, _ = legal.map_legal(source(n, route="/v1/audit-case/"), SELECTED)
+    parties = {p["role"]: p for p in tables[legal.PARTIES]}
+    assert parties["Subject committee"]["entity_type"] == "committee"
+    assert parties["Associated candidate"]["entity_type"] == "candidate"
+
+    # Credential guard in spicy_docs.sources.fec.catalog.official_url stays strictly intact.
+    with pytest.raises(ValueError):
+        official_url("https://api.open.fec.gov/v1/legal/docs/murs/1604?api_key=<redacted>")
+    with pytest.raises(ValueError):
+        official_url("https://api.open.fec.gov/v1/legal/docs/murs/1604?api_key=REALKEY123")
+
+    # Sanitizer strips ONLY exact literal api_key=<redacted> and refuses real keys.
+    cleaned, stripped = legal.sanitize_redacted_mur_url(
+        "https://api.open.fec.gov/v1/legal/docs/murs/1604?api_key=<redacted>"
+    )
+    assert cleaned == "https://api.open.fec.gov/v1/legal/docs/murs/1604" and stripped is True
+    unchanged, stripped = legal.sanitize_redacted_mur_url("https://api.open.fec.gov/v1/legal/docs/murs/1604")
+    assert unchanged == "https://api.open.fec.gov/v1/legal/docs/murs/1604" and stripped is False
+    for refused in (
+        "https://api.open.fec.gov/v1/legal/docs/murs/1604?api_key=DEMO_KEY",
+        "https://api.open.fec.gov/v1/legal/docs/murs/1604?api_key=",
+        "https://example.org/v1/legal/docs/murs/1604?api_key=<redacted>",
+    ):
+        with pytest.raises(ValueError):
+            legal.sanitize_redacted_mur_url(refused)
 
 
 def test_empty_null_and_missing_document_collections_remain_distinct():

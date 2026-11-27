@@ -111,11 +111,41 @@ def test_aggregate_names_do_not_become_resolved_candidate_identities():
         )
     )
     row, _ = s.map_contribution_aggregate(raw, SELECTED, kind="three-digit-zip")
-    assert row["entity_reference_status"] == "source_identifier_unresolved"
-    assert row["candidate_native_id"] == "P00000001" and row["candidate_name"] == "All candidates,"
+    assert row["entity_reference_status"] == "rollup_pseudo_candidate"
+    assert row["observation_grain"] == "rollup-pseudo-candidate-aggregate"
+    assert row["candidate_native_id"] is None and row["candidate_name"] == "All candidates,"
+    reasons = json.loads(row["mapping_reason_json"])
+    assert reasons["rollup_pseudo_candidate_id"] == "P00000001" and reasons["rollup_group"] == "all_candidates"
     assert json.loads(row["dimensions_json"])["ZIP_3"] == "004"
     assert row["reported_count"] is None and row["reported_count_status"] == "not_reported"
     assert set(row) == set(s.AGGREGATE_SCHEMA.names)
+
+    for pseudo_id, group in (("P00000002", "democrats"), ("P00000003", "republicans")):
+        pseudo_row, _ = s.map_contribution_aggregate(
+            source(dict(CANDIDATE_ID=pseudo_id, CANDIDATE_NAME=group.title(), CONTRIB_RECEIPT_AMOUNT="100", SIZE_OF_CONTRIBUTION="200")),
+            SELECTED,
+            kind="size-band",
+        )
+        assert pseudo_row["candidate_native_id"] is None
+        assert pseudo_row["entity_reference_status"] == "rollup_pseudo_candidate"
+        assert pseudo_row["observation_grain"] == "rollup-pseudo-candidate-aggregate"
+        assert json.loads(pseudo_row["mapping_reason_json"])["rollup_group"] == group
+
+    candidate_row, _ = s.map_contribution_aggregate(
+        source(
+            dict(
+                CANDIDATE_ID="P80001571",
+                CANDIDATE_NAME="TRUMP, DONALD J.",
+                CONTRIB_RECEIPT_AMOUNT="500",
+                SIZE_OF_CONTRIBUTION="200",
+            )
+        ),
+        SELECTED,
+        kind="size-band",
+    )
+    assert candidate_row["candidate_native_id"] == "P80001571"
+    assert candidate_row["entity_reference_status"] == "source_identifier_unresolved"
+    assert candidate_row["observation_grain"] == "candidate-aggregate"
 
 
 @pytest.mark.parametrize(

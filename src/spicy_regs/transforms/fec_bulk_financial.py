@@ -314,6 +314,4 @@ def operating_expense(row, selection: CollectionSelection, header_row):
     reasons = json.loads(result["mapping_reason_json"])
     reasons["unlabelled_positions"] = {str(i): fields[i] for i in range(25, len(fields))}
     result["mapping_reason_json"] = _json(reasons)
-    if fields[25:]:
-        result["mapping_status"] = "partial"
     return result, evidence
