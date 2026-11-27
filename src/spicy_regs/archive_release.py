@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping, Sequence
 from functools import cache
 from hashlib import sha256
 from importlib.resources import files
@@ -65,6 +66,13 @@ BOUND_FILES = (
     "people",
     "person_aliases",
     "recordings",
+)
+#: The subset of ``BOUND_FILES`` carrying CT's witness-appearance and person-identity tables.
+PERSON_BOUND_FILES = (
+    "witnesses",
+    "witness_key_map",
+    "people",
+    "person_aliases",
 )
 _RELEASE_ID = re.compile(r"[0-9a-f]{64}")
 _URL = re.compile(r"([a-zA-Z][a-zA-Z0-9+.-]*)://([^/?#]*)([^?#]*)(\?[^#]*)?(?:#.*)?")
@@ -246,6 +254,41 @@ def bind(release_id: str, origin: str, *, hash_files: bool) -> Binding:
             if digest.hexdigest() != entry["sha256"]:
                 raise ArchiveReleaseError(f"Local archive {stem}.parquet does not match release {release_id[:8]}")
     return Binding(release_id, origin, found, schema, document, hash_files)
+
+
+def bind_current(origin: str = ORIGIN, *, hash_files: bool = False) -> Binding:
+    """Bind the shipped ``bound`` release from ``archive_release_pins.json`` (including ``people`` and ``person_aliases``)."""
+    return bind(load_pins()["bound"], origin, hash_files=hash_files)
+
+
+def resolve_person_key(aliases: Sequence[Mapping[str, Any]], person_key: str) -> str:
+    """Resolve an aliased CT ``old_person_key`` to its unambiguous successor ``person_key``.
+
+    Follows the retired-keys ledger contract: unambiguous aliases redirect one hop to their successor,
+    while ambiguous or missing entries never guess and return ``person_key`` unchanged.
+    """
+    by_old = {
+        row["old_person_key"]: row["person_key"]
+        for row in aliases
+        if row.get("status") == "unambiguous"
+        and isinstance(row.get("old_person_key"), str)
+        and isinstance(row.get("person_key"), str)
+        and row["person_key"]
+    }
+    return by_old.get(person_key, person_key)
+
+
+def resolve_witness_key(witness_key_map: Sequence[Mapping[str, Any]], witness_key: str) -> str:
+    """Resolve a migrated CT ``old_key`` to its current unambiguous ``witness_key``."""
+    by_old = {
+        row["old_key"]: row["witness_key"]
+        for row in witness_key_map
+        if row.get("status") == "unambiguous"
+        and isinstance(row.get("old_key"), str)
+        and isinstance(row.get("witness_key"), str)
+        and row["witness_key"]
+    }
+    return by_old.get(witness_key, witness_key)
 
 
 def relationship_tables(item: dict[str, Any]) -> list[str]:
