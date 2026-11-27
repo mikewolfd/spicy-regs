@@ -129,6 +129,9 @@ def test_workflow_cli_flags_match_live_help_parsers():
     acquire_flags = _help_flags([*house_base, "acquire", "--help"])
     house_build_flags = _help_flags([*house_base, "build", "--help"])
     fec_build_flags = _help_flags([sys.executable, "-m", "spicy_regs.pipelines.fec_research_profiles", "--help"])
+    fec_acquire_flags = _help_flags(
+        [sys.executable, "-m", "spicy_regs.pipelines.fec_research_profiles", "acquire", "--help"]
+    )
     publish_flags = _help_flags([sys.executable, "-m", "spicy_regs.local_publication", "--help"])
     mirror_flags = _help_flags([sys.executable, "-m", "spicy_regs.cli", "mirror", "--help"])
 
@@ -136,7 +139,21 @@ def test_workflow_cli_flags_match_live_help_parsers():
     assert {"--year", "--max-requests", "--output-dir", "--archive-root", "--captures-out"} <= acquire_indexes_flags
     assert {"--selection", "--doc-id", "--max-requests", "--output-dir", "--archive-root", "--captures-out"} <= acquire_flags
     assert {"--selection", "--output-dir", "--archive-root", "--read-index"} <= house_build_flags
-    assert {"--selection", "--output-dir"} <= fec_build_flags
+    assert {"--selection", "--output-dir", "--archive-root", "--read-index"} <= fec_build_flags
+    assert {
+        "--output-dir",
+        "--selection-out",
+        "--archive-root",
+        "--cycles",
+        "--committee-cycles",
+        "--max-committee-pages",
+        "--outside-candidates-per-cycle",
+        "--outside-candidate",
+        "--contribution-reports-per-cycle",
+        "--contribution-forms",
+        "--contribution-filing",
+        "--max-requests",
+    } <= fec_acquire_flags
     assert {"--generation", "--family", "--evidence", "--expect-prior", "--output"} <= publish_flags
     assert {"--family", "--min-free-gib"} <= mirror_flags
 
@@ -711,3 +728,106 @@ def test_fec_research_profiles_validation_handles_response_sha256_only_pages_and
     assert missing_digest.returncode != 0
     assert "missing response_sha256/sha256" in (missing_digest.stderr + missing_digest.stdout)
     assert "KeyError" not in (missing_digest.stderr + missing_digest.stdout)
+
+
+@pytest.mark.parametrize(
+    ("env_overrides", "expected_error"),
+    [
+        ({"HAS_API_KEY": "false"}, "DATA_GOV_API_KEY or API_GOV"),
+        ({"CYCLES": "2023"}, "Invalid FEC two-year cycle"),
+        ({"OUTSIDE_PER_CYCLE": "0", "OUTSIDE_CANDIDATES": ""}, "outside_candidates_per_cycle"),
+        ({"CONTRIB_PER_CYCLE": "0", "CONTRIB_FILINGS": ""}, "contribution_reports_per_cycle"),
+        ({"CONTRIB_FORMS": "invalid-form"}, "contribution_forms"),
+        ({"MAX_REQUESTS": "0"}, "Invalid max_requests"),
+        ({"EXPECT_PRIOR": "not-hex"}, "expect_prior"),
+    ],
+)
+def test_fec_research_profiles_acquire_validation_fails_closed(tmp_path: Path, env_overrides, expected_error):
+    step = _steps_by_name(_load_workflow(FEC_WORKFLOW))["Validate required retained inputs"]
+    github_output = tmp_path / "github_output.txt"
+    github_output.write_text("", encoding="utf-8")
+    result = subprocess.run(
+        ["bash", "-c", step["run"]],
+        cwd=REPO_ROOT,
+        env=_clean_env(
+            {
+                "RUNNER_TEMP": str(tmp_path.resolve()),
+                "GITHUB_OUTPUT": str(github_output),
+                "MODE": "acquire",
+                "CYCLES": "2020,2022,2024,2026",
+                "COMMITTEE_CYCLES": "2024,2026",
+                "MAX_COMMITTEE_PAGES": "0",
+                "OUTSIDE_PER_CYCLE": "25",
+                "OUTSIDE_CANDIDATES": "",
+                "CONTRIB_PER_CYCLE": "8",
+                "CONTRIB_FORMS": "house-senate,presidential,pac-party",
+                "CONTRIB_FILINGS": "",
+                "MAX_REQUESTS": "850",
+                "HAS_API_KEY": "true",
+                "SELECTION_PATH": "",
+                "ARCHIVE_ROOT": "",
+                "EXPECT_PRIOR": "",
+                "SKIP_UPLOAD": "true",
+                **env_overrides,
+            }
+        ),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode != 0
+    assert expected_error in (result.stderr + result.stdout)
+
+
+@pytest.mark.parametrize("skip_upload", ["true", "false"], ids=["dry-run-scratch", "publish-shared"])
+def test_fec_research_profiles_acquire_step_constructs_exact_quoted_cli(tmp_path: Path, skip_upload: str):
+    step = _steps_by_name(_load_workflow(FEC_WORKFLOW))["Acquire FEC research profile originals"]
+    work_dir = tmp_path.resolve() / "fec-research-profiles"
+    work_dir.mkdir()
+    selection_path = work_dir / "selection.json"
+    selection_path.write_text('{"format":"fec-research-profiles-selection","version":2}\n', encoding="utf-8")
+    workspace = tmp_path.resolve() / "workspace"
+    workspace.mkdir()
+    log = tmp_path / "uv-fec-acquire.jsonl"
+    stub = (
+        f'uv() {{ python3 -c "import json, sys; open({str(log)!r}, \'a\').write(json.dumps(sys.argv[1:]) + \'\\n\')" "$@"; }}\n'
+    )
+    subprocess.run(
+        ["bash", "-c", stub + step["run"]],
+        cwd=workspace,
+        env=_clean_env(
+            {
+                "RUNNER_TEMP": str(tmp_path.resolve()),
+                "WORK_DIR": str(work_dir),
+                "SELECTION_PATH": str(selection_path),
+                "ARCHIVE_ROOT": str(work_dir / "raw-archive"),
+                "CYCLES_CSV": "2020,2022,2024,2026",
+                "COMMITTEE_CYCLES_CSV": "2024,2026",
+                "MAX_COMMITTEE_PAGES": "0",
+                "OUTSIDE_PER_CYCLE": "25",
+                "OUTSIDE_CANDIDATES_CSV": "S6OH00163:2024",
+                "CONTRIB_PER_CYCLE": "8",
+                "CONTRIB_FORMS_CSV": "house-senate,presidential,pac-party",
+                "CONTRIB_FILINGS_CSV": "C00921817:1943202:2026:S6AL00484",
+                "MAX_REQUESTS": "850",
+                "SKIP_UPLOAD": skip_upload,
+            }
+        ),
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    calls = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(calls) == 1
+    cmd = calls[0]
+    assert cmd[:6] == ["run", "--frozen", "python", "-m", "spicy_regs.pipelines.fec_research_profiles", "acquire"]
+    assert "--cycles" in cmd and cmd[cmd.index("--cycles") + 1] == "2020,2022,2024,2026"
+    assert "--outside-candidate" in cmd and "S6OH00163:2024" in cmd
+    assert "--contribution-filing" in cmd and "C00921817:1943202:2026:S6AL00484" in cmd
+    assert (workspace / "output" / "selection.json").is_file()
+    if skip_upload == "true":
+        assert "--archive-root" in cmd
+    else:
+        assert "--archive-root" not in cmd
+

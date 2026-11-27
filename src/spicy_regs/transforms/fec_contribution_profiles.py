@@ -1,15 +1,17 @@
-"""One effective, source-reconciled Form 3 contribution population.
+"""One effective, source-reconciled Form 3 / 3P / 3X contribution population.
 
 Native decoding, field positions, amounts and membership decisions reuse their
 existing owners. This named calculation never qualifies all retained FEC rows.
 """
 
 from collections import defaultdict
+from dataclasses import dataclass
 from decimal import Decimal, localcontext
 import json
 
 import pyarrow as pa
 
+from spicy_regs.runtime_bounds import checkpoint
 from spicy_regs.transforms.build_fec_financial_profiles import json_bytes
 from spicy_regs.transforms.fec_financial_selection import FinancialRecord, membership_pin, select_scope
 from spicy_regs.transforms.fec_filing_financial import load_layout, map_filing_financial
@@ -34,6 +36,49 @@ SCHEMAS = {
 }
 
 
+@dataclass(frozen=True)
+class _FormSpec:
+    individual_receipts: frozenset[str]
+    individual_refunds: frozenset[str]
+    pac_receipts: frozenset[str]
+    pac_refunds: frozenset[str]
+    requires_candidate: bool
+
+    @property
+    def schedule_types(self) -> frozenset[str]:
+        return self.individual_receipts | self.individual_refunds | self.pac_receipts | self.pac_refunds
+
+    @property
+    def pac_types(self) -> frozenset[str]:
+        return self.pac_receipts | self.pac_refunds
+
+
+# Exact FEC Form 3 / 3P / 3X Schedule A & B contribution and refund line mappings.
+SUPPORTED_FORMS: dict[str, _FormSpec] = {
+    "F3": _FormSpec(
+        individual_receipts=frozenset({"SA11AI"}),
+        individual_refunds=frozenset({"SB20A"}),
+        pac_receipts=frozenset({"SA11C"}),
+        pac_refunds=frozenset({"SB20C"}),
+        requires_candidate=True,
+    ),
+    "F3P": _FormSpec(
+        individual_receipts=frozenset({"SA17A", "SA17AI"}),
+        individual_refunds=frozenset({"SB28A"}),
+        pac_receipts=frozenset({"SA17C"}),
+        pac_refunds=frozenset({"SB28C"}),
+        requires_candidate=True,
+    ),
+    "F3X": _FormSpec(
+        individual_receipts=frozenset({"SA11AI"}),
+        individual_refunds=frozenset({"SB28A"}),
+        pac_receipts=frozenset({"SA11C"}),
+        pac_refunds=frozenset({"SB28C"}),
+        requires_candidate=False,
+    ),
+}
+
+
 def _money(value):
     if isinstance(value, bool) or not isinstance(value, (str, int, Decimal)):
         raise ValueError("Selected contribution report requires exact source money")
@@ -49,19 +94,48 @@ def _sum(values):
         return sum(values, Decimal(0))
 
 
-def candidate_for_report(candidate_id, committee_history, candidates, report):
+def _amendment_tail(report) -> list[str]:
+    chain = report.get("amendment_chain")
+    if not isinstance(chain, list) or not chain:
+        return []
+    last = chain[-1]
+    if isinstance(last, bool):
+        return []
+    if isinstance(last, Decimal):
+        if not last.is_finite() or last != int(last):
+            return []
+        return [str(int(last))]
+    if not isinstance(last, (str, int)):
+        return []
+    return [str(last)]
+
+
+def candidate_for_report(candidate_id, committee_history, candidates, report, *, requires_candidate: bool = True):
     """Require explicit native linkage and an observation predating the report.
 
     The current committee can name candidates for different offices. Source
     first/last filing dates are evidence of observation, never authorization dates.
     A date-specific authorization request still needs the original statements.
+    For Form 3X non-candidate committees, ``candidate_id`` must be ``None`` and
+    no candidate linkage is asserted.
     """
-    if candidate_id not in committee_history.get("candidate_ids", []):
+    if not requires_candidate:
+        if candidate_id is not None:
+            raise ValueError("Non-candidate Form 3X contribution report cannot assert a candidate association")
+        if committee_history.get("candidate_ids"):
+            raise ValueError("Form 3X committee history unexpectedly lists candidate IDs")
+        return "not_applicable_form_3x_non_candidate_committee; no candidate authorization asserted"
+    linked_ids = committee_history.get("candidate_ids") or []
+    if not isinstance(linked_ids, list) or not isinstance(candidate_id, str) or candidate_id not in linked_ids:
         raise ValueError("Selected candidate lacks source committee linkage")
+    cov_start = report.get("coverage_start_date")
+    if not isinstance(cov_start, str) or len(cov_start) < 10:
+        raise ValueError("Selected contribution report lacks coverage_start_date")
     selected = [row for row in candidates if row.get("candidate_id") == candidate_id]
-    if len(selected) != 1 or selected[0].get("first_file_date", "9999") > report["coverage_start_date"][:10]:
+    if len(selected) != 1 or (selected[0].get("first_file_date") or "9999") > cov_start[:10]:
         raise ValueError("Current candidate observation does not establish the selected report-period association")
-    if report["cycle"] not in selected[0].get("cycles", []):
+    cycles = selected[0].get("cycles") or []
+    if not isinstance(cycles, list) or report["cycle"] not in cycles:
         raise ValueError("Candidate association is outside the selected cycle")
     return "native_committee_cycle_link_and_candidate_observed_before_report; daily authorization dates not asserted"
 
@@ -73,21 +147,39 @@ def contribution_profiles(rows, selection, *, report, filing_id, source_url, cap
     Publisher most_recent and amendment_chain bind the retained filing. Memo
     rows stay visible and excluded. Negative receipts are signed adjustments,
     distinct from Schedule B refunds. Employer labels never identify donors.
+    Zero-PAC or zero-individual effective reports are admitted only when the
+    official report's matching period totals reconcile exactly to 0.
     """
+    filing_text = str(filing_id)
+    most_recent_num = report.get("most_recent_file_number")
     if (report.get("most_recent") is not True or report.get("is_amended") is not False
-            or report.get("file_number") != int(filing_id)
-            or report.get("most_recent_file_number") != Decimal(filing_id)
-            or report.get("amendment_chain", [])[-1:] != [filing_id]):
+            or isinstance(report.get("file_number"), bool)
+            or report.get("file_number") != int(filing_text)
+            or isinstance(most_recent_num, bool)
+            or most_recent_num is None
+            or most_recent_num != Decimal(filing_text)
+            or _amendment_tail(report) != [filing_text]):
         raise ValueError("Retained filing is not the publisher-selected effective report")
     if report.get("fec_url") != source_url or report.get("committee_id") != committee_history.get("committee_id"):
         raise ValueError("Selected report identity differs from retained filing or committee history")
-    association = candidate_for_report(candidate_id, committee_history, candidates, report)
-    header = rows[0]
-    native_cover = json.loads(rows[1]["metadata_json"])
-    mapping = filing_cover_mapping_for("8.5", native_cover.get("record_type"))
-    if mapping is None or mapping.form != "F3":
-        raise ValueError("Selected contribution population requires its native Form 3 cover")
-    cover, _ = map_filing_cover(rows[1], selection, mapping, layout=load_layout(mapping), header_row=header)
+    row_iter = iter(rows)
+    header = next(row_iter, None)
+    cover_row = next(row_iter, None)
+    if header is None or cover_row is None:
+        raise ValueError("Selected contribution filing lacks header and cover records")
+    header_meta = json.loads(header["metadata_json"])
+    declared_version = header_meta.get("format_version")
+    if not isinstance(declared_version, str) or not declared_version:
+        raise ValueError("Selected contribution filing lacks a native format version")
+    native_cover = json.loads(cover_row["metadata_json"])
+    cover_mapping = filing_cover_mapping_for(declared_version, native_cover.get("record_type"))
+    if cover_mapping is None or cover_mapping.form not in SUPPORTED_FORMS:
+        raise ValueError("Selected contribution population requires a reviewed Form 3, 3P, or 3X cover")
+    spec = SUPPORTED_FORMS[cover_mapping.form]
+    association = candidate_for_report(
+        candidate_id, committee_history, candidates, report, requires_candidate=spec.requires_candidate
+    )
+    cover, _ = map_filing_cover(cover_row, selection, cover_mapping, layout=load_layout(cover_mapping), header_row=header)
     if (cover["reporting_committee_id"] != report["committee_id"]
             or cover["period_start"] is None or cover["period_end"] is None
             or cover["period_start"].isoformat() != report["coverage_start_date"][:10]
@@ -96,12 +188,17 @@ def contribution_profiles(rows, selection, *, report, filing_id, source_url, cap
         raise ValueError("Retained filing cover differs from the matching official report identity or coverage")
     mapped = []
     layouts = {}
-    for row in rows[1:]:
+    schedule_types = spec.schedule_types
+    for idx, row in enumerate(row_iter):
+        if idx % 512 == 0:
+            checkpoint()
         native = json.loads(row["metadata_json"])
         kind = native.get("record_type")
-        if kind not in {"SA11AI", "SA11C", "SB20A", "SB20C"}:
+        if kind not in schedule_types:
             continue
-        mapping = filing_mapping_for("8.5", kind)
+        mapping = filing_mapping_for(declared_version, kind)
+        if mapping is None:
+            raise ValueError(f"Unsupported schedule layout for version {declared_version!r} and record type {kind!r}")
         if mapping not in layouts:
             layouts[mapping] = load_layout(mapping)
         values, _ = map_filing_financial(row, selection, mapping, layout=layouts[mapping], header_row=header)
@@ -114,33 +211,38 @@ def contribution_profiles(rows, selection, *, report, filing_id, source_url, cap
         mapped.append(values)
     # Source selection qualifies membership only. It does not alter the existing
     # observation-level current_financial_total_qualified policy.
-    records = tuple(FinancialRecord(r["record_id"], str(r.get("transaction_id")), r["amount"],
-        selection.source_sha256, filing_id) for r in mapped)
     if any(not r.get("transaction_id") for r in mapped):
         raise ValueError("Contribution observation lacks its native transaction ID")
-    selected = select_scope(filing_id, records, (), base_membership_sha256=membership_pin(records),
+    records = tuple(FinancialRecord(r["record_id"], str(r.get("transaction_id")), r["amount"],
+        selection.source_sha256, filing_text) for r in mapped)
+    selected = select_scope(filing_text, records, (), base_membership_sha256=membership_pin(records),
                            base_evidence_sha256=selection.source_sha256, base_complete=True)
     selected.require_members()
-    by_family = defaultdict(list)
+    by_family: dict[str, list[dict]] = defaultdict(list)
     for row in mapped:
-        by_family["pac" if row["form_type"] in {"SA11C", "SB20C"} else "individual"].append(row)
-    if set(by_family) != {"individual", "pac"}:
-        raise ValueError("Both declared contribution families are required")
+        by_family["pac" if row["form_type"] in spec.pac_types else "individual"].append(row)
+    capture_note = (
+        "Capture time of the historical original remains unknown."
+        if captured_at is None
+        else "Original capture time recorded in captured_at."
+    )
     result = {PROFILES: [], DECISIONS: []}
-    for family, members in sorted(by_family.items()):
-        if family == "pac" and any(r["form_type"] == "SA11C" and r.get("entity_type") != "PAC" for r in members):
+    for family in ("individual", "pac"):
+        members = by_family.get(family, [])
+        if family == "pac" and any(r["form_type"] in spec.pac_receipts and r.get("entity_type") != "PAC" for r in members):
             raise ValueError("Other-committee receipt is not source-classified as a PAC")
-        profile_id = selection.source_sha256 + "/" + filing_id + "/" + family
+        profile_id = selection.source_sha256 + "/" + filing_text + "/" + family
         common = dict(profile_id=profile_id, committee_id=report["committee_id"],
             committee_name=report["committee_name"], candidate_id=candidate_id, candidate_association_basis=association,
-            filing_id=filing_id, source_sha256=selection.source_sha256, source_url=source_url, captured_at=captured_at,
+            filing_id=filing_text, source_sha256=selection.source_sha256, source_url=source_url, captured_at=captured_at,
             period_start=report["coverage_start_date"][:10], period_end=report["coverage_end_date"][:10],
             source_cycle=report["cycle"], source_evidence_json=json_bytes(evidence).decode(), policy_version=POLICY,
             coverage_note="Complete selected report, not a complete election cycle. Recipient-side observations only. "
                 "Native optional trailing-field omissions remain distinct from empty fields. Reported labels are not "
-                "resolved people; no unique-donor or employer-donation claim. Current committee name is separate "
+                "resolved people; no unique-donor or employer-donation claim (subject to 52 U.S.C. 30111(a)(4) "
+                "sale-or-use restrictions). Current committee name is separate "
                 "from the retained filing title. Coverage dates describe the report; earlier transaction dates "
-                "remain included and explicitly marked. Capture time of the historical original remains unknown.")
+                f"remain included and explicitly marked. {capture_note}")
         receipts, refunds, memos = [], [], []
         breakdown = defaultdict(lambda: {"amount": Decimal(0), "records": 0})
         for row in members:

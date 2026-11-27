@@ -1,21 +1,78 @@
 name: Refresh — fec_research_profiles
-# Manual-dispatch refresh workflow for the fec-research-profiles family (ss-wjvp).
-# build-fec-research-profiles builds strictly offline from explicitly retained FEC
-# originals in CentralRawArchiveStore with no network acquisition (live API scaling
-# is tracked separately in ss-44um). This workflow fails closed when no retained
-# selection_path or archive_root is present on the runner, validates the built
-# candidate generation, and publishes via publish-local-generation only when
-# inputs.skip_upload == false.
+# Manual-dispatch refresh workflow for the fec-research-profiles family (ss-wjvp, ss-44um).
+# fec-research-profiles stays in LOCAL_FAMILIES and publishes through publish-local-generation.
+# Two modes are supported:
+#   - acquire (default in workflow_dispatch): acquires multi-cycle committee disclosures,
+#     Schedule E outside-spending aggregates, and Form 3 / 3P / 3X official reports via
+#     OpenFEC API (CI secrets DATA_GOV_API_KEY / API_GOV) + docquery.fec.gov into
+#     CentralRawArchiveStore, pre-verifying every admitted scope, then builds offline.
+#   - offline: builds strictly offline from explicitly retained selection_path + archive_root
+#     on the runner with no network acquisition (fails closed when omitted or missing).
+# Default skip_upload=true performs a bounded dry-run build and candidate validation into
+# $RUNNER_TEMP without modifying R2.
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: 'Execution mode: acquire (live OpenFEC + docquery multi-cycle acquisition) or offline (retained selection_path + archive_root)'
+        required: false
+        default: 'acquire'
+        type: choice
+        options:
+          - acquire
+          - offline
+      cycles:
+        description: 'Acquire mode: comma-separated two-year cycles for outside spending and contribution cohorts (e.g. 2020,2022,2024,2026)'
+        required: false
+        default: '2020,2022,2024,2026'
+        type: string
+      committee_cycles:
+        description: 'Acquire mode: comma-separated cycles for /v1/committees/ census (e.g. 2024,2026) or "all" for the unfiltered registry'
+        required: false
+        default: '2024,2026'
+        type: string
+      max_committee_pages:
+        description: 'Acquire mode: bounded /v1/committees/ page cap (0 = complete traversal of committee_cycles up to 5000 pages)'
+        required: false
+        default: '0'
+        type: string
+      outside_candidates_per_cycle:
+        description: 'Acquire mode: auto-discovered Schedule E candidates per cycle balanced across P/S/H (0-200)'
+        required: false
+        default: '15'
+        type: string
+      outside_candidates:
+        description: 'Acquire mode: optional comma-separated CANDIDATE_ID:CYCLE pins (e.g. S6OH00163:2024)'
+        required: false
+        default: ''
+        type: string
+      contribution_reports_per_cycle:
+        description: 'Acquire mode: auto-discovered reconciled Form 3/3P/3X reports per cycle (0-100)'
+        required: false
+        default: '6'
+        type: string
+      contribution_forms:
+        description: 'Acquire mode: comma-separated OpenFEC report entity types (house-senate,presidential,pac-party)'
+        required: false
+        default: 'house-senate,presidential,pac-party'
+        type: string
+      contribution_filings:
+        description: 'Acquire mode: optional comma-separated COMMITTEE_ID:FILING_ID:CYCLE[:CANDIDATE_ID] pins'
+        required: false
+        default: ''
+        type: string
+      max_requests:
+        description: 'Acquire mode: bounded HTTP request cap across OpenFEC + docquery (1-5000; default 900 fits inside 1,000 req/hr quota with headroom)'
+        required: false
+        default: '900'
+        type: string
       selection_path:
-        description: 'Path on the runner to a retained FEC research profiles selection JSON (required; fails closed if omitted or missing)'
+        description: 'Offline mode: path on the runner to a retained v1 or v2 FEC research profiles selection JSON (required in offline mode)'
         required: false
         default: ''
         type: string
       archive_root:
-        description: 'Path on the runner to the retained CentralRawArchiveStore root holding the pinned FEC originals (required; fails closed if omitted or missing)'
+        description: 'Offline mode: path on the runner to the retained CentralRawArchiveStore root holding the pinned FEC originals (required in offline mode)'
         required: false
         default: ''
         type: string
@@ -40,7 +97,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     steps:
       - name: Checkout
@@ -85,6 +142,17 @@ jobs:
       - name: Validate required retained inputs
         id: validate
         env:
+          MODE: ${{ inputs.mode }}
+          CYCLES: ${{ inputs.cycles }}
+          COMMITTEE_CYCLES: ${{ inputs.committee_cycles }}
+          MAX_COMMITTEE_PAGES: ${{ inputs.max_committee_pages }}
+          OUTSIDE_PER_CYCLE: ${{ inputs.outside_candidates_per_cycle }}
+          OUTSIDE_CANDIDATES: ${{ inputs.outside_candidates }}
+          CONTRIB_PER_CYCLE: ${{ inputs.contribution_reports_per_cycle }}
+          CONTRIB_FORMS: ${{ inputs.contribution_forms }}
+          CONTRIB_FILINGS: ${{ inputs.contribution_filings }}
+          MAX_REQUESTS: ${{ inputs.max_requests }}
+          HAS_API_KEY: ${{ (secrets.DATA_GOV_API_KEY != '' || secrets.API_GOV != '') && 'true' || 'false' }}
           SELECTION_PATH: ${{ inputs.selection_path }}
           ARCHIVE_ROOT: ${{ inputs.archive_root }}
           EXPECT_PRIOR: ${{ inputs.expect_prior }}
@@ -103,90 +171,265 @@ jobs:
           from pathlib import Path
 
           from spicy_docs.storage.raw_archive import CentralRawArchiveStore, default_raw_archive_root
+          from spicy_regs.pipelines import fec_research_profiles as frp
 
-          selection_raw = os.environ.get("SELECTION_PATH", "").strip()
-          archive_raw = os.environ.get("ARCHIVE_ROOT", "").strip()
-          if not selection_raw:
-              raise SystemExit(
-                  "Refusing run: selection_path is required. fec-research-profiles builds strictly offline from "
-                  "retained FEC originals (CentralRawArchiveStore) with no network acquisition."
-              )
-          if not archive_raw:
-              raise SystemExit(
-                  "Refusing run: archive_root is required. Provide the retained CentralRawArchiveStore root "
-                  "holding the pinned FEC originals on the runner."
-              )
-
-          selection_path = Path(selection_raw).expanduser().resolve()
-          if not selection_path.is_file():
-              raise SystemExit(
-                  f"Refusing run: selection_path does not exist on this runner: {selection_path}"
-              )
-          archive_root = Path(archive_raw).expanduser().resolve()
-          if not archive_root.is_dir():
-              raise SystemExit(
-                  f"Refusing run: archive_root does not exist as a directory on this runner: {archive_root}"
-              )
+          mode = (os.environ.get("MODE") or "offline").strip()
+          if mode not in {"offline", "acquire"}:
+              raise SystemExit(f"Refusing run: unsupported mode {mode!r} (expected 'acquire' or 'offline')")
 
           expect_prior = os.environ.get("EXPECT_PRIOR", "").strip()
           if expect_prior and not re.fullmatch(r"(sha256:)?[0-9a-f]{8,64}", expect_prior):
               raise SystemExit("expect_prior must be 8-64 lowercase hex chars (optional sha256: prefix)")
 
-          try:
-              selection = json.loads(selection_path.read_text(encoding="utf-8"))
-          except Exception as exc:
-              raise SystemExit(f"Refusing run: selection_path is not valid JSON ({exc})") from exc
-          required_keys = {"committees", "outside", "outside_candidate", "outside_cycle", "contribution"}
-          if not isinstance(selection, dict) or not required_keys <= set(selection):
-              missing = sorted(required_keys - set(selection if isinstance(selection, dict) else ()))
-              raise SystemExit(f"Refusing run: selection JSON is missing required keys: {', '.join(missing)}")
+          work_dir = Path(os.environ["RUNNER_TEMP"]) / "fec-research-profiles"
+          skip_upload = os.environ.get("SKIP_UPLOAD", "true").strip()
 
-          def _pin(entry: object, label: str) -> tuple[str, int | None]:
-              if not isinstance(entry, dict):
-                  raise SystemExit(f"Refusing run: {label} entry must be a JSON object")
-              digest = entry.get("response_sha256") or entry.get("sha256")
-              if not isinstance(digest, str) or not digest.strip():
-                  raise SystemExit(f"Refusing run: {label} entry is missing response_sha256/sha256")
-              byte_size = entry["byte_size"] if "byte_size" in entry else entry.get("bytes")
-              return digest, byte_size
-
-          store = CentralRawArchiveStore(archive_root, create=False)
-          pinned: list[tuple[str, int | None]] = []
-          for item in selection["committees"]:
-              pinned.append(_pin(item, "committees"))
-          for query in selection["outside"]:
-              for page in query["pages"]:
-                  pinned.append(_pin(page, f"outside[{query.get('name', '?')}]"))
-          pinned.append(_pin(selection["contribution"]["original"], "contribution.original"))
-          for query in selection["contribution"]["queries"]:
-              for page in query["pages"]:
-                  pinned.append(_pin(page, f"contribution.queries[{query.get('name', '?')}]"))
-          missing_digests = []
-          for digest, byte_size in pinned:
-              try:
-                  store.describe_blob(digest, byte_size)
-              except FileNotFoundError:
-                  missing_digests.append(digest)
-          if missing_digests:
-              raise SystemExit(
-                  f"Refusing run: {len(missing_digests)} pinned original(s) missing from archive_root "
-                  f"(first: {missing_digests[0]})"
-              )
-
-          if os.environ.get("SKIP_UPLOAD") == "false":
-              shared = default_raw_archive_root().resolve()
-              if archive_root != shared:
+          if mode == "offline":
+              selection_raw = os.environ.get("SELECTION_PATH", "").strip()
+              archive_raw = os.environ.get("ARCHIVE_ROOT", "").strip()
+              if not selection_raw:
                   raise SystemExit(
-                      f"Refusing publish: archive_root ({archive_root}) must match the shared raw archive "
-                      f"({shared}) required by publish-local-generation; use skip_upload=true for scratch builds."
+                      "Refusing run: selection_path is required. fec-research-profiles offline mode builds strictly "
+                      "from retained FEC originals (CentralRawArchiveStore) with no network acquisition."
+                  )
+              if not archive_raw:
+                  raise SystemExit(
+                      "Refusing run: archive_root is required. Provide the retained CentralRawArchiveStore root "
+                      "holding the pinned FEC originals on the runner."
                   )
 
-          work_dir = Path(os.environ["RUNNER_TEMP"]) / "fec-research-profiles"
-          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
-              out.write(f"work_dir={work_dir}\n")
-              out.write(f"selection_path={selection_path}\n")
-              out.write(f"archive_root={archive_root}\n")
+              selection_path = Path(selection_raw).expanduser().resolve()
+              if not selection_path.is_file():
+                  raise SystemExit(
+                      f"Refusing run: selection_path does not exist on this runner: {selection_path}"
+                  )
+              archive_root = Path(archive_raw).expanduser().resolve()
+              if not archive_root.is_dir():
+                  raise SystemExit(
+                      f"Refusing run: archive_root does not exist as a directory on this runner: {archive_root}"
+                  )
+
+              try:
+                  selection = json.loads(selection_path.read_text(encoding="utf-8"))
+              except Exception as exc:
+                  raise SystemExit(f"Refusing run: selection_path is not valid JSON ({exc})") from exc
+              try:
+                  pinned = frp.iter_selection_pins(selection)
+              except Exception as exc:
+                  raise SystemExit(f"Refusing run: {exc}") from exc
+
+              store = CentralRawArchiveStore(archive_root, create=False)
+              missing_digests = []
+              for _label, digest, byte_size in pinned:
+                  try:
+                      store.describe_blob(digest, byte_size)
+                  except FileNotFoundError:
+                      missing_digests.append(digest)
+              if missing_digests:
+                  raise SystemExit(
+                      f"Refusing run: {len(missing_digests)} pinned original(s) missing from archive_root "
+                      f"(first: {missing_digests[0]})"
+                  )
+
+              if skip_upload == "false":
+                  shared = default_raw_archive_root().resolve()
+                  if archive_root != shared:
+                      raise SystemExit(
+                          f"Refusing publish: archive_root ({archive_root}) must match the shared raw archive "
+                          f"({shared}) required by publish-local-generation; use skip_upload=true for scratch builds."
+                      )
+
+              with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
+                  out.write("mode=offline\n")
+                  out.write(f"work_dir={work_dir}\n")
+                  out.write(f"selection_path={selection_path}\n")
+                  out.write(f"archive_root={archive_root}\n")
+          else:
+              if os.environ.get("HAS_API_KEY", "").strip() != "true":
+                  raise SystemExit(
+                      "Refusing run: acquire mode requires GitHub Actions secret DATA_GOV_API_KEY or API_GOV."
+                  )
+              try:
+                  cycles = frp._validate_cycles(frp._parse_csv_cycles(os.environ.get("CYCLES", "")))
+                  comm_raw = os.environ.get("COMMITTEE_CYCLES", "").strip()
+                  if comm_raw.lower() in {"", "all"}:
+                      committee_cycles_csv = "all"
+                  else:
+                      committee_cycles = frp._validate_cycles(frp._parse_csv_cycles(comm_raw))
+                      committee_cycles_csv = ",".join(str(c) for c in committee_cycles)
+
+                  raw_comm_pages = os.environ.get("MAX_COMMITTEE_PAGES", "0").strip() or "0"
+                  if not re.fullmatch(r"\d+", raw_comm_pages):
+                      raise ValueError(f"Invalid max_committee_pages: {raw_comm_pages!r}")
+                  max_committee_pages = int(raw_comm_pages)
+                  if not 0 <= max_committee_pages <= frp.MAX_COMMITTEE_PAGES:
+                      raise ValueError(f"max_committee_pages out of range 0-{frp.MAX_COMMITTEE_PAGES}")
+
+                  raw_outside_per = os.environ.get("OUTSIDE_PER_CYCLE", "15").strip() or "0"
+                  if not re.fullmatch(r"\d+", raw_outside_per):
+                      raise ValueError(f"Invalid outside_candidates_per_cycle: {raw_outside_per!r}")
+                  outside_per = int(raw_outside_per)
+                  if not 0 <= outside_per <= 200:
+                      raise ValueError("outside_candidates_per_cycle must be between 0 and 200")
+
+                  outside_pins = [item.strip() for item in os.environ.get("OUTSIDE_CANDIDATES", "").split(",") if item.strip()]
+                  for item in outside_pins:
+                      frp._parse_outside_candidate(item)
+                  if outside_per == 0 and not outside_pins:
+                      raise ValueError("Specify outside_candidates_per_cycle > 0 or outside_candidates")
+
+                  raw_contrib_per = os.environ.get("CONTRIB_PER_CYCLE", "6").strip() or "0"
+                  if not re.fullmatch(r"\d+", raw_contrib_per):
+                      raise ValueError(f"Invalid contribution_reports_per_cycle: {raw_contrib_per!r}")
+                  contrib_per = int(raw_contrib_per)
+                  if not 0 <= contrib_per <= 100:
+                      raise ValueError("contribution_reports_per_cycle must be between 0 and 100")
+
+                  forms = [item.strip() for item in os.environ.get("CONTRIB_FORMS", "").split(",") if item.strip()]
+                  if not forms or any(form not in frp.REPORT_ENTITY_FORMS for form in forms):
+                      raise ValueError(f"contribution_forms must be chosen from {sorted(frp.REPORT_ENTITY_FORMS)}")
+
+                  contrib_pins = [item.strip() for item in os.environ.get("CONTRIB_FILINGS", "").split(",") if item.strip()]
+                  for item in contrib_pins:
+                      frp._parse_contribution_filing(item)
+                  if contrib_per == 0 and not contrib_pins:
+                      raise ValueError("Specify contribution_reports_per_cycle > 0 or contribution_filings")
+
+                  raw_max_req = os.environ.get("MAX_REQUESTS", "900").strip()
+                  if not re.fullmatch(r"[1-9]\d*", raw_max_req):
+                      raise ValueError(f"Invalid max_requests: {raw_max_req!r}")
+                  max_requests = int(raw_max_req)
+                  if not 1 <= max_requests <= 5000:
+                      raise ValueError("max_requests must be between 1 and 5000")
+              except ValueError as exc:
+                  raise SystemExit(f"Refusing run: {exc}") from exc
+
+              selection_path = work_dir / "selection.json"
+              archive_root = (
+                  work_dir / "raw-archive"
+                  if skip_upload == "true"
+                  else default_raw_archive_root().resolve()
+              )
+              with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
+                  out.write("mode=acquire\n")
+                  out.write(f"work_dir={work_dir}\n")
+                  out.write(f"selection_path={selection_path}\n")
+                  out.write(f"archive_root={archive_root}\n")
+                  out.write(f"cycles_csv={','.join(str(c) for c in cycles)}\n")
+                  out.write(f"committee_cycles_csv={committee_cycles_csv}\n")
+                  out.write(f"max_committee_pages={max_committee_pages}\n")
+                  out.write(f"outside_per_cycle={outside_per}\n")
+                  out.write(f"outside_candidates_csv={','.join(outside_pins)}\n")
+                  out.write(f"contrib_per_cycle={contrib_per}\n")
+                  out.write(f"contrib_forms_csv={','.join(dict.fromkeys(forms))}\n")
+                  out.write(f"contrib_filings_csv={','.join(contrib_pins)}\n")
+                  out.write(f"max_requests={max_requests}\n")
           PY
+
+      - name: Read live publication index
+        id: live
+        if: steps.validate.outputs.mode == 'acquire'
+        env:
+          WORK_DIR: ${{ steps.validate.outputs.work_dir }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicygov.ai') }}
+          WORKFLOW_USER_AGENT: 'spicy-regs-refresh-fec-research-profiles/1.0'
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          INDEX_URL="${R2_PUBLIC_URL%/}/publication.v2.json"
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+            --retry 3 --connect-timeout 30 --max-time 60 \
+            -H "User-Agent: $WORKFLOW_USER_AGENT" \
+            -H "Cache-Control: no-cache" \
+            --output "$WORK_DIR/live-publication.v2.json" "$INDEX_URL"
+          LIVE_PRESENT=$(uv run --frozen python - "$WORK_DIR/live-publication.v2.json" <<'PY'
+          import sys
+          from pathlib import Path
+          from spicy_regs.sources import publication
+
+          index = publication.parse_index(Path(sys.argv[1]).read_bytes())
+          print("true" if "fec-research-profiles" in index["families"] else "false")
+          PY
+          )
+          READ_INDEX=""
+          if [ "$LIVE_PRESENT" = "true" ]; then
+            SPICY_REGS_R2_URL="$R2_PUBLIC_URL" uv run --frozen spicy-regs mirror "$WORK_DIR/live-mirror" \
+              --family fec-research-profiles --min-free-gib 4 > "$WORK_DIR/mirror-output.jsonl"
+            READ_INDEX=$(uv run --frozen python - "$WORK_DIR/live-mirror" "$WORK_DIR/mirror-output.jsonl" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          lines = [json.loads(line) for line in Path(sys.argv[2]).read_text().splitlines() if line.strip()]
+          snapshot = next(item["snapshot"] for item in reversed(lines) if "snapshot" in item)
+          print(root / snapshot)
+          PY
+            )
+          fi
+          echo "read_index=$READ_INDEX" >> "$GITHUB_OUTPUT"
+
+      - name: Acquire FEC research profile originals
+        if: steps.validate.outputs.mode == 'acquire'
+        env:
+          WORK_DIR: ${{ steps.validate.outputs.work_dir }}
+          SELECTION_PATH: ${{ steps.validate.outputs.selection_path }}
+          ARCHIVE_ROOT: ${{ steps.validate.outputs.archive_root }}
+          CYCLES_CSV: ${{ steps.validate.outputs.cycles_csv }}
+          COMMITTEE_CYCLES_CSV: ${{ steps.validate.outputs.committee_cycles_csv }}
+          MAX_COMMITTEE_PAGES: ${{ steps.validate.outputs.max_committee_pages }}
+          OUTSIDE_PER_CYCLE: ${{ steps.validate.outputs.outside_per_cycle }}
+          OUTSIDE_CANDIDATES_CSV: ${{ steps.validate.outputs.outside_candidates_csv }}
+          CONTRIB_PER_CYCLE: ${{ steps.validate.outputs.contrib_per_cycle }}
+          CONTRIB_FORMS_CSV: ${{ steps.validate.outputs.contrib_forms_csv }}
+          CONTRIB_FILINGS_CSV: ${{ steps.validate.outputs.contrib_filings_csv }}
+          MAX_REQUESTS: ${{ steps.validate.outputs.max_requests }}
+          SKIP_UPLOAD: ${{ inputs.skip_upload }}
+          DATA_GOV_API_KEY: ${{ secrets.DATA_GOV_API_KEY }}
+          API_GOV: ${{ secrets.API_GOV }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          ACQUIRE_ARGS=(
+            acquire
+            --output-dir "$WORK_DIR/acquire"
+            --selection-out "$SELECTION_PATH"
+            --cycles "$CYCLES_CSV"
+            --committee-cycles "$COMMITTEE_CYCLES_CSV"
+            --max-committee-pages "$MAX_COMMITTEE_PAGES"
+            --outside-candidates-per-cycle "$OUTSIDE_PER_CYCLE"
+            --contribution-reports-per-cycle "$CONTRIB_PER_CYCLE"
+            --contribution-forms "$CONTRIB_FORMS_CSV"
+            --max-requests "$MAX_REQUESTS"
+          )
+          if [ "$SKIP_UPLOAD" = "true" ]; then
+            export SPICYGOV_RAW_ROOT="$ARCHIVE_ROOT"
+            ACQUIRE_ARGS+=(--archive-root "$ARCHIVE_ROOT")
+          else
+            unset SPICYGOV_RAW_ROOT
+          fi
+          if [ -n "$OUTSIDE_CANDIDATES_CSV" ]; then
+            IFS=',' read -r -a OUTSIDE_ITEMS <<< "$OUTSIDE_CANDIDATES_CSV"
+            for item in "${OUTSIDE_ITEMS[@]}"; do
+              if [ -n "$item" ]; then
+                ACQUIRE_ARGS+=(--outside-candidate "$item")
+              fi
+            done
+          fi
+          if [ -n "$CONTRIB_FILINGS_CSV" ]; then
+            IFS=',' read -r -a CONTRIB_ITEMS <<< "$CONTRIB_FILINGS_CSV"
+            for item in "${CONTRIB_ITEMS[@]}"; do
+              if [ -n "$item" ]; then
+                ACQUIRE_ARGS+=(--contribution-filing "$item")
+              fi
+            done
+          fi
+          uv run --frozen python -m spicy_regs.pipelines.fec_research_profiles "${ACQUIRE_ARGS[@]}" \
+            | tee "$WORK_DIR/acquire-result.json"
+          mkdir -p output
+          cp "$SELECTION_PATH" output/selection.json
 
       - name: Build and validate candidate generation
         id: build
@@ -194,23 +437,32 @@ jobs:
           WORK_DIR: ${{ steps.validate.outputs.work_dir }}
           SELECTION_PATH: ${{ steps.validate.outputs.selection_path }}
           ARCHIVE_ROOT: ${{ steps.validate.outputs.archive_root }}
+          READ_INDEX: ${{ steps.live.outputs.read_index }}
           SKIP_UPLOAD: ${{ inputs.skip_upload }}
         run: |
           set -euo pipefail
           export TMPDIR="$RUNNER_TEMP"
           unset R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          BUILD_ARGS=(
+            --selection "$SELECTION_PATH"
+            --output-dir "$WORK_DIR/build"
+          )
           if [ "$SKIP_UPLOAD" = "true" ]; then
             export SPICYGOV_RAW_ROOT="$ARCHIVE_ROOT"
           else
             unset SPICYGOV_RAW_ROOT
           fi
+          if [ -n "${READ_INDEX:-}" ]; then
+            BUILD_ARGS+=(--read-index "$READ_INDEX")
+          fi
 
-          uv run --frozen build-fec-research-profiles \
-            --selection "$SELECTION_PATH" \
-            --output-dir "$WORK_DIR/build" \
+          uv run --frozen build-fec-research-profiles "${BUILD_ARGS[@]}" \
             | tee "$WORK_DIR/build-result.json"
 
           mkdir -p output
+          if [ -f "$WORK_DIR/build/summary.json" ]; then
+            cp "$WORK_DIR/build/summary.json" output/summary.json
+          fi
           uv run --frozen python - "$WORK_DIR/build-result.json" "$WORK_DIR/build/generation" <<'PY'
           import json
           import os
@@ -308,6 +560,8 @@ jobs:
           name: refresh-fec-research-profiles-audit-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             output/invocation.json
+            output/selection.json
+            output/summary.json
             output/candidate-validation.json
             output/publish-receipt/
           if-no-files-found: ignore
