@@ -3,6 +3,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
+from spicy_regs.fec_financial_rules import IDENTITY_VERSION
 from spicy_regs.fec_native_conversion import build_retained_family, filing_reference_subjects, staged_snapshot
 from spicy_regs.conversion_reads import ConversionReadOperation
 from spicy_regs.transforms.assemble_fec_query import FilingAssociationInputs, TypedInput, _sha
@@ -35,7 +36,7 @@ def reference(label, target, *, source='source', source_key='11'):
     return dict(record_id=pin(label), filing_key=filing_key(source_key), source_filing_record_id=pin(source),
                 target_filing_key=filing_key(target) if target is not None else None,
                 native_target_file_number=target, relation_type='amendment_chain_member',
-                identity_version='fec-typed-observation/1', mapping_version='fec-identity-observations/2',
+                identity_version=IDENTITY_VERSION, mapping_version='fec-identity-observations/2',
                 source_authority='official-fec', source_namespace='fec-openfec-file-number',
                 filing_link_status='native_file_number', target_resolution_status='native_reference_unresolved',
                 source_sha256=WITNESS['sha256'], collection_id='filings', source_record_id=source,

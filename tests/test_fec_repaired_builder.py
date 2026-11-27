@@ -550,9 +550,11 @@ def test_header_subjects_admits_controlled_archive_member_upgrade(tmp_path):
         source_locator_json=loc_json,
         metadata_json=json.dumps(dict(kind="header", format_version="8.5", fields=["HDR", "FEC", "8.5"])),
     )
+    from spicy_regs.fec_financial_rules import IDENTITY_VERSION
+
     target = dict(
         record_id="f-1",
-        identity_version="fec-typed-observation/1",
+        identity_version=IDENTITY_VERSION,
         mapping_version="fec-identity-observations/2",
         filing_key=filing_key("1981955"),
         report_number="1981955",

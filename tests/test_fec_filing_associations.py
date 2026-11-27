@@ -9,6 +9,7 @@ import pyarrow as pa
 import pytest
 
 from spicy_regs.relationship_views.fec_filing_associations import (
+    TARGET_IDENTITY_VERSION,
     financial_header_association_sql,
     financial_number_association_sql,
 )
@@ -33,7 +34,7 @@ NAMESPACE = "fec-bulk-individual-contributions"
 def filing(rid="metadata-1", number="123"):
     return dict(
         record_id=rid,
-        identity_version="fec-typed-observation/1",
+        identity_version=TARGET_IDENTITY_VERSION,
         mapping_version="fec-identity-observations/2",
         filing_key=filing_key(number),
         report_number=number,

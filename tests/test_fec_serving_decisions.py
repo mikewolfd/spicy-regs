@@ -7,6 +7,7 @@ import duckdb
 import pyarrow as pa
 import pytest
 
+from spicy_regs.fec_financial_rules import LEGACY_IDENTITY_VERSION
 from spicy_regs.fec_serving_decisions import decision_program, evaluate
 from spicy_regs.relationship_views.fec_filing_associations import (
     financial_header_association_sql,
@@ -19,7 +20,12 @@ NEW = "sha256:" + "b" * 64
 
 def population():
     filings = [
-        dict(filing(rid=rid, number=number), mapping_version="fec-identity-observations/1", **changes)
+        dict(
+            filing(rid=rid, number=number),
+            identity_version=LEGACY_IDENTITY_VERSION,
+            mapping_version="fec-identity-observations/1",
+            **changes,
+        )
         for rid, number, changes in [
             ("one", "123", {}),
             ("two", "123", {}),

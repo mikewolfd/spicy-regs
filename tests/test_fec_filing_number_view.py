@@ -12,6 +12,7 @@ import pytest
 
 from spicy_regs.relationship_views.fec_filing_associations import (
     FILE_NUMBER_MAPPINGS,
+    TARGET_IDENTITY_VERSION,
     financial_number_association_sql,
 )
 from spicy_regs.transforms.fec_filing_associations import associate_filing_numbers
@@ -48,7 +49,7 @@ def source(**changes):
 def metadata():
     return dict(
         record_id=pin("metadata"),
-        identity_version="fec-typed-observation/1",
+        identity_version=TARGET_IDENTITY_VERSION,
         mapping_version="fec-identity-observations/2",
         filing_key=KEY,
         report_number="123",
