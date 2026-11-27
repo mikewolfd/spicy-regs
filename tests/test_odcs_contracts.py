@@ -73,6 +73,12 @@ def _custom_map(node: dict, vendor: str) -> dict[str, object]:
     return {cp["property"]: cp["value"] for cp in node.get("customProperties", ()) if cp.get("vendor") == vendor}
 
 
+def _enrolled_contract(family: str, *, contracts_dir: Path = odcs.DEFAULT_ODCS_DIR) -> dict:
+    loaded = odcs.load_enrolled_family_contract(family, contracts_dir=contracts_dir)
+    assert loaded is not None
+    return loaded[0]
+
+
 def _parquet_bytes(schema: pa.Schema) -> bytes:
     buf = io.BytesIO()
     pq.write_table(_table_for_schema(schema, count=1), buf)
@@ -263,12 +269,12 @@ def test_pilot_ddk_domain_tags_and_secondary_domains():
 
 
 def test_canonical_refspec_urn_mappings_rin_regex_and_relationships(tmp_path: Path):
-    bill_contract, _ = odcs.load_enrolled_family_contract("bill-family")
-    fr_contract, _ = odcs.load_enrolled_family_contract("federal-register")
-    rm_contract, _ = odcs.load_enrolled_family_contract("rulemaking")
-    members_contract, _ = odcs.load_enrolled_family_contract("members")
-    votes_contract, _ = odcs.load_enrolled_family_contract("roll-call-votes")
-    rosters_contract, _ = odcs.load_enrolled_family_contract("committee-rosters")
+    bill_contract = _enrolled_contract("bill-family")
+    fr_contract = _enrolled_contract("federal-register")
+    rm_contract = _enrolled_contract("rulemaking")
+    members_contract = _enrolled_contract("members")
+    votes_contract = _enrolled_contract("roll-call-votes")
+    rosters_contract = _enrolled_contract("committee-rosters")
 
     # Columns without a canonical RefSpec URN omit refspec.urn while keeping refspec.facet and ddk.concept.
     bill_id_prop = _prop_by_name(bill_contract, "congress_bills", "bill_id")
@@ -344,7 +350,7 @@ def test_canonical_refspec_urn_mappings_rin_regex_and_relationships(tmp_path: Pa
     # Executive orders family carries urn:rkaf:us:eo: and urn:rkaf:us:frdoc:.
     eo_dir = tmp_path / "eo-odcs"
     odcs.export_odcs_contracts(eo_dir, families=["executive-orders"])
-    eo_contract, _ = odcs.load_enrolled_family_contract("executive-orders", contracts_dir=eo_dir)
+    eo_contract = _enrolled_contract("executive-orders", contracts_dir=eo_dir)
     assert (
         _custom_map(_prop_by_name(eo_contract, "executive_order_observations", "executive_order_number"), "refspec")[
             "urn"
@@ -412,7 +418,7 @@ def test_all_40_pilot_tables_round_trip_to_parquet_with_zero_schema_drift(tmp_pa
     checked = 0
 
     for fam in odcs.PILOT_FAMILIES:
-        contract, _ = odcs.load_enrolled_family_contract(fam)
+        contract = _enrolled_contract(fam)
         declared_odcs_objs = {s["name"]: s for s in contract["schema"]}
         declared_pa = odcs.contract_declared_schemas(contract)
         candidates: dict[str, Path] = {}
@@ -568,7 +574,7 @@ def test_http_range_file_enforces_206_content_length_and_seek_bounds():
 
 
 def test_audit_parquet_parity_r2_fails_closed_on_403_500_and_partial_shard_failures(tmp_path: Path):
-    amdt_contract, _ = odcs.load_enrolled_family_contract("amendments")
+    amdt_contract = _enrolled_contract("amendments")
     amdt_schema = odcs.contract_declared_schemas(amdt_contract)["amendments"]
     valid_pq = _parquet_bytes(amdt_schema)
 
@@ -688,7 +694,7 @@ def test_local_publication_odcs_guard_passes_and_refuses_all_drift_modes_on_dry_
     # 2. court-opinions (NO inline _family_schemas) is strictly gated by enrolled ODCS contract.
     court_contracts_dir = tmp_path / "odcs-court"
     odcs.export_odcs_contracts(court_contracts_dir, families=["court-opinions"])
-    court_contract, _ = odcs.load_enrolled_family_contract("court-opinions", contracts_dir=court_contracts_dir)
+    court_contract = _enrolled_contract("court-opinions", contracts_dir=court_contracts_dir)
     court_schema = odcs.contract_declared_schemas(court_contract)["court_opinions"]
     assert local_publication._family_schemas("court-opinions") is None
 
@@ -957,7 +963,7 @@ def test_local_publication_publish_path_refuses_odcs_drift_before_uploading_or_a
     """publish() itself fails closed on ODCS drift BEFORE touching credentials, R2, or pointers."""
     court_contracts_dir = tmp_path / "odcs-court"
     odcs.export_odcs_contracts(court_contracts_dir, families=["court-opinions"])
-    court_contract, _ = odcs.load_enrolled_family_contract("court-opinions", contracts_dir=court_contracts_dir)
+    court_contract = _enrolled_contract("court-opinions", contracts_dir=court_contracts_dir)
     court_schema = odcs.contract_declared_schemas(court_contract)["court_opinions"]
     drifted_schema = pa.schema([f for f in court_schema if f.name != "opinion_type"])
 
@@ -995,7 +1001,7 @@ def test_local_publication_publish_path_refuses_odcs_drift_before_uploading_or_a
 
 def test_verify_family_schemas_enforces_committed_pilot_contracts_directly(tmp_path: Path):
     """_verify_family_schemas enforces committed pilot ODCS contracts for hosted pilot families too."""
-    fr_contract, _ = odcs.load_enrolled_family_contract("federal-register")
+    fr_contract = _enrolled_contract("federal-register")
     fr_schema = odcs.contract_declared_schemas(fr_contract)["federal_register"]
     fr_ok_gen, _ = _build_local_gen(
         tmp_path, "fr-ok", "federal-register", {"federal_register": _table_for_schema(fr_schema)}
@@ -1007,7 +1013,7 @@ def test_verify_family_schemas_enforces_committed_pilot_contracts_directly(tmp_p
     assert fr_summary["domain"] == "spicygov"
     assert fr_summary["tables"]["federal_register"]["files_checked"] == 1
 
-    amdt_contract, _ = odcs.load_enrolled_family_contract("amendments")
+    amdt_contract = _enrolled_contract("amendments")
     amendments_schema = odcs.contract_declared_schemas(amdt_contract)["amendments"]
     ok_dir = tmp_path / "amdt-ok"
     ok_dir.mkdir()

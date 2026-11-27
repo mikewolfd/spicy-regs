@@ -1152,7 +1152,8 @@ def odcs_property_to_pyarrow(prop: Mapping[str, Any]) -> pa.DataType:
     logical = prop.get("logicalType")
     physical = str(prop.get("physicalType") or "").strip()
     physical_upper = physical.upper()
-    opts = prop.get("logicalTypeOptions") if isinstance(prop.get("logicalTypeOptions"), Mapping) else {}
+    raw_opts = prop.get("logicalTypeOptions")
+    opts: Mapping[str, Any] = raw_opts if isinstance(raw_opts, Mapping) else {}
 
     if logical is None and prop.get("properties"):
         logical = "object"
@@ -1286,6 +1287,10 @@ def _resolve_expected_arrow_schema(expected: Any) -> pa.Schema:
     )
 
 
+def _as_mapping(value: Any) -> Mapping[str, Any] | None:
+    return value if isinstance(value, Mapping) else None
+
+
 def _ddk_fields_to_pyarrow(schema_dict: Mapping[str, Any]) -> pa.Schema:
     aliases = {
         "Utf8": pa.string(),
@@ -1311,10 +1316,13 @@ def _ddk_fields_to_pyarrow(schema_dict: Mapping[str, Any]) -> pa.Schema:
             if value not in aliases:
                 raise ODCSContractError(f"Unsupported DDK Arrow alias {value!r}")
             return aliases[value]
-        if isinstance(value, Mapping) and len(value) == 1:
-            kind, detail = next(iter(value.items()))
+        mapping = _as_mapping(value)
+        if mapping is not None and len(mapping) == 1:
+            kind, detail = next(iter(mapping.items()))
             try:
                 if kind == "Struct":
+                    if not isinstance(detail, Sequence) or isinstance(detail, (str, bytes)):
+                        raise ODCSContractError(f"Invalid DDK Arrow Struct fields: {detail!r}")
                     return pa.struct([field(child) for child in detail])
                 if kind == "List":
                     return pa.list_(field(detail))
@@ -1335,10 +1343,11 @@ def _ddk_fields_to_pyarrow(schema_dict: Mapping[str, Any]) -> pa.Schema:
                 raise ODCSContractError(f"Invalid DDK Arrow type declaration {value!r}: {exc}") from exc
         raise ODCSContractError(f"Unsupported DDK Arrow type declaration {value!r}")
 
-    def field(value: Mapping[str, Any]) -> pa.Field:
-        if not isinstance(value, Mapping) or "name" not in value or "data_type" not in value:
+    def field(value: Any) -> pa.Field:
+        mapping = _as_mapping(value)
+        if mapping is None or "name" not in mapping or "data_type" not in mapping:
             raise ODCSContractError(f"Invalid DDK Arrow field descriptor: {value!r}")
-        return pa.field(str(value["name"]), dtype(value["data_type"]), nullable=bool(value.get("nullable", True)))
+        return pa.field(str(mapping["name"]), dtype(mapping["data_type"]), nullable=bool(mapping.get("nullable", True)))
 
     fields = schema_dict.get("fields")
     if not isinstance(fields, list):
@@ -1817,27 +1826,29 @@ def validate_odcs_v320_contract(
         if not isinstance(items, list):
             errors.append(f"{path}.customProperties must be a list")
             return
-        for idx, item in enumerate(items):
-            if not isinstance(item, Mapping):
+        for idx, raw_item in enumerate(items):
+            item = _as_mapping(raw_item)
+            if item is None:
                 errors.append(f"{path}.customProperties[{idx}] must be an object")
                 continue
             extra_keys = set(item) - {"id", "property", "value", "description", "vendor"}
             if extra_keys:
                 errors.append(f"{path}.customProperties[{idx}] has invalid keys {sorted(extra_keys)}")
-            if not isinstance(item.get("property"), str) or not item["property"]:
+            prop_name = item.get("property")
+            if not isinstance(prop_name, str) or not prop_name:
                 errors.append(f"{path}.customProperties[{idx}] missing property name")
             if "value" not in item:
                 errors.append(f"{path}.customProperties[{idx}] missing value")
             vendor = item.get("vendor")
             if vendor is not None and (not isinstance(vendor, str) or not _VENDOR_RE.fullmatch(vendor)):
                 errors.append(f"{path}.customProperties[{idx}] invalid vendor {vendor!r}")
-            if vendor == "ddk" and item.get("property") == "conceptKind":
+            if vendor == "ddk" and prop_name == "conceptKind":
                 if item.get("value") not in DDK_CONCEPT_KINDS:
                     errors.append(
                         f"{path}.customProperties[{idx}] invalid DDK conceptKind {item.get('value')!r}; "
                         f"expected one of {sorted(DDK_CONCEPT_KINDS)}"
                     )
-            if vendor == "refspec" and item.get("property") == "urn":
+            if vendor == "refspec" and prop_name == "urn":
                 if item.get("value") not in CANONICAL_REFSPEC_URNS:
                     errors.append(f"{path}.customProperties[{idx}] unverified RefSpec URN {item.get('value')!r}")
 
@@ -1851,8 +1862,9 @@ def validate_odcs_v320_contract(
     seen_table_names: set[str] = set()
     seen_table_ids: set[str] = set()
 
-    def check_prop(prop: Any, path: str, *, require_name: bool) -> None:
-        if not isinstance(prop, Mapping):
+    def check_prop(raw_prop: Any, path: str, *, require_name: bool) -> None:
+        prop = _as_mapping(raw_prop)
+        if prop is None:
             errors.append(f"{path} must be an object")
             return
         if require_name:
@@ -1876,9 +1888,10 @@ def validate_odcs_v320_contract(
                 for cidx, child in enumerate(children):
                     check_prop(child, f"{path}.properties[{cidx}]", require_name=True)
 
-    for tidx, obj in enumerate(schemas):
+    for tidx, raw_obj in enumerate(schemas):
         tpath = f"$.schema[{tidx}]"
-        if not isinstance(obj, Mapping):
+        obj = _as_mapping(raw_obj)
+        if obj is None:
             errors.append(f"{tpath} must be an object")
             continue
         tname = obj.get("name")
@@ -1903,9 +1916,10 @@ def validate_odcs_v320_contract(
             errors.append(f"{tpath}.properties must be a non-empty list")
         else:
             col_names: set[str] = set()
-            for pidx, prop in enumerate(props):
-                check_prop(prop, f"{tpath}.properties[{pidx}]", require_name=True)
-                pname = prop.get("name") if isinstance(prop, Mapping) else None
+            for pidx, raw_prop in enumerate(props):
+                check_prop(raw_prop, f"{tpath}.properties[{pidx}]", require_name=True)
+                prop_map = _as_mapping(raw_prop)
+                pname = prop_map.get("name") if prop_map is not None else None
                 if isinstance(pname, str):
                     if pname in col_names:
                         errors.append(f"{tpath} repeats column {pname!r}")
@@ -1917,9 +1931,10 @@ def validate_odcs_v320_contract(
                 errors.append(f"{tpath}.relationships must be a list")
             else:
                 seen_rel_ids: set[str] = set()
-                for ridx, rel in enumerate(rels):
+                for ridx, raw_rel in enumerate(rels):
                     rpath = f"{tpath}.relationships[{ridx}]"
-                    if not isinstance(rel, Mapping):
+                    rel = _as_mapping(raw_rel)
+                    if rel is None:
                         errors.append(f"{rpath} must be an object")
                         continue
                     extra_rel = set(rel) - {"id", "type", "from", "to", "customProperties"}
@@ -1946,9 +1961,11 @@ def validate_odcs_v320_contract(
                                     errors.append(f"{rpath}.{side} invalid ShorthandReference {entry!r}")
                         else:
                             errors.append(f"{rpath}.{side} missing or empty")
-                    if type(rel.get("from")) is not type(rel.get("to")):
+                    from_val = rel.get("from")
+                    to_val = rel.get("to")
+                    if type(from_val) is not type(to_val):
                         errors.append(f"{rpath} 'from' and 'to' must both be strings or both be arrays")
-                    elif isinstance(rel.get("from"), list) and len(rel["from"]) != len(rel["to"]):
+                    elif isinstance(from_val, list) and isinstance(to_val, list) and len(from_val) != len(to_val):
                         errors.append(f"{rpath} composite 'from' and 'to' lengths differ")
                     check_custom_props(rel.get("customProperties"), rpath)
 
@@ -2449,6 +2466,7 @@ def audit_parquet_parity(
 
     try:
         if r2_base_url is not None:
+            assert active_client is not None
             base = r2_base_url.rstrip("/")
             pub_resp = active_client.get(f"{base}/publication.v2.json")
             pub_resp.raise_for_status()
