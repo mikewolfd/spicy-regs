@@ -16,7 +16,7 @@ Each input's latest completed read, including reads that found no observations. 
 | Column | Type | Description |
 | --- | --- | --- |
 | `scope_id` | `VARCHAR` | The scope this read replaced, spelled as `native_reference_scope_id` spells it; a complete read supersedes the scope's earlier read and every observation row it produced. |
-| `source_family` | `VARCHAR` | The scanner family that read the input: `uscode`, `ecfr`, `bill` or `law`. |
+| `source_family` | `VARCHAR` | The scanner family that read the input: `uscode`, `ecfr`, `bill`, `law` or `statute`. |
 | `source_record_key` | `VARCHAR` | The caller's record identity for the input, retained literally. |
 | `edition` | `VARCHAR` | The edition or request date the caller's checked capture metadata states, literally; NULL when it states none, never read from a filename. |
 | `input_sha256` | `VARCHAR` | `sha256:` digest of the exact XML bytes this read took. |
@@ -27,5 +27,8 @@ Each input's latest completed read, including reads that found no observations. 
 | `selected_shapes` | `VARCHAR[]` | The source shapes this read selected, as a Native list: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `unsupported_shapes` | `VARCHAR[]` | The shapes this read knowingly left out, as a Native list (`PARAUTH` and `SECAUTH` for eCFR); not a list of every form the scanner cannot read. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `manifest_sha256` | `VARCHAR` | `sha256:` digest of the selection manifest that named this input and any target pins. |
-| `rule_version` | `VARCHAR` | `native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only. |
+| `rule_version` | `VARCHAR` | `native-legal-reference/004` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only. |
+| `text_rendition` | `VARCHAR` | The named readable-text rendition produced for this input (`uslm-block-boundaries/1`, `ecfr-block-boundaries/1`, or `bill-dtd-block-boundaries/1`); NULL when no text rendition was produced. |
+| `text_offset_unit` | `VARCHAR` | The offset unit of character spans in text_rendition: `unicode_code_points` (0-based half-open code-point indices); NULL when text_rendition is NULL. |
+| `text_rendition_sha256` | `VARCHAR` | `sha256:` digest of the UTF-8 encoding of the complete text_rendition string; NULL when text_rendition is NULL. |
 | `body_version_id` | `VARCHAR` | Stable identity of the substantive captured document body, independent of extraction processing. |

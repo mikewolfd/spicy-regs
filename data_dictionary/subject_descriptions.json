@@ -1518,7 +1518,7 @@
   "native_legal_references": {
     "columns": {
       "scope_id": "The input's replacement scope, `native_reference_scope_id` over source_family, source_record_key and edition; a complete read replaces every row of its scope, and a successful empty read clears it.",
-      "source_family": "The scanner family that read the input: `uscode`, `ecfr`, `bill` or `law`, fixed by the shaper.",
+      "source_family": "The scanner family that read the input: `uscode`, `ecfr`, `bill`, `law` or `statute`, fixed by the shaper.",
       "source_record_key": "The caller's record identity for the input, retained literally.",
       "edition": "The edition or request date the caller's checked capture metadata states, literally; NULL when it states none, never read from a filename.",
       "body_version_id": "`sha256:` digest of the exact retained XML bytes the scanner read.",
@@ -1526,7 +1526,7 @@
       "occurrence_index": "The observation's zero-based position among the input's observations, both kinds counted together in the order the scanner reported them, as decimal text.",
       "source_path": "The observed element's positional XPath in the input (`/*[1]/*[2]`), never a byte offset.",
       "element_tag": "The observed element's tag, its namespace expanded (`{http://xml.house.gov/schemas/uslm/1.0}ref`) where the input declares one.",
-      "observation_kind": "`native_reference` for a bill or law observation, `native_reference` or `source_credit` for a U.S. Code observation, `authority` (AUTH) or `source_note` (SOURCE) for an eCFR note.",
+      "observation_kind": "`native_reference` for a bill, law or Statutes at Large observation, `native_reference` or `source_credit` for a U.S. Code observation, `authority` (AUTH) or `source_note` (SOURCE) for an eCFR note.",
       "href": "The element's href exactly as stated, an empty string when stated empty; NULL when absent, and on every source credit and note.",
       "text": "The complete decoded text of a source credit or note, whitespace kept; NULL on a native reference.",
       "text_runs": "An eCFR note's text split at element boundaries, as a Native list whose strings join to text; NULL on U.S. Code rows. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
@@ -1534,7 +1534,13 @@
       "cfr_part": "The `N` of the nearest enclosing DIV5 part on an eCFR note; NULL when no part encloses it, and on U.S. Code rows.",
       "interpretation_status": "How the reading under rule_version read this observation: `native_section_href`, `native_statute_href`, `native_public_law_href` or `unsupported_href` for an href, `native_bill_usc_cite` for a qualified bill DTD cite, `partial_text_findings` or `no_qualified_text_findings` for text; it does not claim exhaustive extraction.",
       "target_candidates": "The typed targets the reading found, as a Native list in reading order, each with the outcome of the host's lookup in the target tables it selected; several targets in one note stay one row, and an unsupported href has none. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
-      "rule_version": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the scanners' selected shapes and the reading this row was produced under, comparable for equality only.",
+      "rule_version": "`native-legal-reference/004` (`NATIVE_LEGAL_REFERENCE_RULE`): the scanners' selected shapes and the reading this row was produced under, comparable for equality only.",
+      "text_rendition": "The named readable-text rendition into which text_span_start and text_span_end index (`uslm-block-boundaries/1`, `ecfr-block-boundaries/1`, or `bill-dtd-block-boundaries/1`); NULL when no text map was produced.",
+      "text_offset_unit": "The offset unit of text_span_start and text_span_end: `unicode_code_points` (0-based half-open code-point indices in text_rendition); NULL when text_rendition is NULL.",
+      "text_rendition_sha256": "`sha256:` digest of the UTF-8 encoding of the complete text_rendition string, binding the offsets to the exact rendition beside input_sha256 and source_path; NULL when text_rendition is NULL.",
+      "text_span_start": "Inclusive 0-based start offset of the observed element's text in text_rendition, as decimal text in text_offset_unit; NULL when the element carries no text or no text map was produced.",
+      "text_span_end": "Exclusive 0-based end offset of the observed element's text in text_rendition, as decimal text in text_offset_unit, so slicing text_rendition yields span_text; NULL when text_span_start is NULL.",
+      "span_text": "The exact slice of text_rendition at [text_span_start:text_span_end] for this element; NULL when text_span_start is NULL.",
       "native_element_id": "Publisher element identifier attached to this legal reference.",
       "native_idref": "Publisher identifier reference attached to this legal reference.",
       "native_class": "Publisher classification attached to this legal reference."
@@ -2235,7 +2241,7 @@
   "native_legal_reference_reads": {
     "columns": {
       "scope_id": "The scope this read replaced, spelled as `native_reference_scope_id` spells it; a complete read supersedes the scope's earlier read and every observation row it produced.",
-      "source_family": "The scanner family that read the input: `uscode`, `ecfr`, `bill` or `law`.",
+      "source_family": "The scanner family that read the input: `uscode`, `ecfr`, `bill`, `law` or `statute`.",
       "source_record_key": "The caller's record identity for the input, retained literally.",
       "edition": "The edition or request date the caller's checked capture metadata states, literally; NULL when it states none, never read from a filename.",
       "input_sha256": "`sha256:` digest of the exact XML bytes this read took.",
@@ -2246,7 +2252,10 @@
       "selected_shapes": "The source shapes this read selected, as a Native list: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "unsupported_shapes": "The shapes this read knowingly left out, as a Native list (`PARAUTH` and `SECAUTH` for eCFR); not a list of every form the scanner cannot read. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "manifest_sha256": "`sha256:` digest of the selection manifest that named this input and any target pins.",
-      "rule_version": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only.",
+      "rule_version": "`native-legal-reference/004` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only.",
+      "text_rendition": "The named readable-text rendition produced for this input (`uslm-block-boundaries/1`, `ecfr-block-boundaries/1`, or `bill-dtd-block-boundaries/1`); NULL when no text rendition was produced.",
+      "text_offset_unit": "The offset unit of character spans in text_rendition: `unicode_code_points` (0-based half-open code-point indices); NULL when text_rendition is NULL.",
+      "text_rendition_sha256": "`sha256:` digest of the UTF-8 encoding of the complete text_rendition string; NULL when text_rendition is NULL.",
       "body_version_id": "Stable identity of the substantive captured document body, independent of extraction processing."
     }
   },

@@ -12,7 +12,14 @@ from typing import Callable
 from spicy_docs.sources.cfr import EcfrSelection, ecfr_xml_locator, validate_ecfr_xml
 from spicy_docs.sources.uscode import ReleasePoint, TitleSelection, title_xml_locator
 from spicy_docs.sources.uscode.archive import read_title_archive
-from spicy_docs.sources.govinfo.uslm import PublicLawSelection, public_law_xml_locator, validate_public_law_xml
+from spicy_docs.sources.govinfo.uslm import (
+    PublicLawSelection,
+    StatutesAtLargeSelection,
+    public_law_xml_locator,
+    statutes_at_large_xml_locator,
+    validate_public_law_xml,
+    validate_statutes_at_large_xml,
+)
 from spicy_docs.sources.congress.bill_status import BillIdentity
 from spicy_docs.sources.congress.bill_text import bill_xml_locator, validate_bill_text
 
@@ -100,6 +107,20 @@ def qualify_source(spec: dict, body: bytes, read: Callable[[dict], bytes], retai
             "kind": kind,
             "metadata": asdict(metadata),
             "identity_basis": "native Congress, kind, number and citable form; no new acquisition claimed",
+        }
+    elif kind == "statute-native-xml":
+        request = StatutesAtLargeSelection(selection["volume"])
+        locator = statutes_at_large_xml_locator(request)
+        metadata = validate_statutes_at_large_xml(body, selection=request, final_url=locator, max_bytes=16 * 1024 * 1024)
+        record = f"STATUTE-{request.volume}"
+        if (spec["source_family"], spec["source_record_key"], spec["source_locator"]) != ("statute", record, locator):
+            raise ValueError("statutes at large source identity differs from validated native selection")
+        if spec["edition"] is not None:
+            raise ValueError("statutes at large edition must remain null; processing dates are not editions")
+        facts = {
+            "kind": kind,
+            "metadata": asdict(metadata),
+            "identity_basis": "native Statutes at Large volume; no new acquisition claimed",
         }
     else:
         raise ValueError("unsupported native input qualification")

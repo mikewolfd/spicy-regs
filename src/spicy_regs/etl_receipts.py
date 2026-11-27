@@ -799,7 +799,7 @@ def selected_subject_policy(policy: DatasetPolicy, paths: Sequence[ParquetInput]
     readers of already selected inputs use this explicit earlier-policy choice.
     """
     if (not paths and policy.dataset == "native_legal_reference_reads"
-            and policy.policy_version == "legislative-documents/2"):
+            and not policy.receipt_only):
         # Native scopes always write one main file, even for a successful
         # empty table. No files therefore names the exact earlier receipt-only
         # shape, never an invented empty current subject.

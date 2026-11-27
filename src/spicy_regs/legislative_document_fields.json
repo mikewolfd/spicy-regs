@@ -3861,7 +3861,7 @@
       {
         "name": "source_family",
         "source_type": "VARCHAR",
-        "meaning": "The scanner family that read the input: `uscode` or `ecfr`.",
+        "meaning": "The scanner family that read the input: `uscode`, `ecfr`, `bill`, `law` or `statute`.",
         "decision": "keep",
         "target": "source_family",
         "target_type": "string",
@@ -3960,11 +3960,38 @@
       {
         "name": "rule_version",
         "source_type": "VARCHAR",
-        "meaning": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only.",
+        "meaning": "`native-legal-reference/004` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only.",
         "decision": "keep",
         "target": "rule_version",
         "target_type": "string",
         "reason": "Recorded read scope and outcome; publish the original value so observations can navigate to their exact completed read."
+      },
+      {
+        "name": "text_rendition",
+        "source_type": "VARCHAR",
+        "meaning": "The named readable-text rendition produced for this input (`uslm-block-boundaries/1`, `ecfr-block-boundaries/1`, or `bill-dtd-block-boundaries/1`); NULL when no text rendition was produced.",
+        "decision": "keep",
+        "target": "text_rendition",
+        "target_type": "string",
+        "reason": "Identifies the readable-text rendition whose code-point offsets observation rows index into."
+      },
+      {
+        "name": "text_offset_unit",
+        "source_type": "VARCHAR",
+        "meaning": "The offset unit of character spans in text_rendition: `unicode_code_points` (0-based half-open code-point indices); NULL when text_rendition is NULL.",
+        "decision": "keep",
+        "target": "text_offset_unit",
+        "target_type": "string",
+        "reason": "Declares the exact character-offset unit for every span in text_rendition."
+      },
+      {
+        "name": "text_rendition_sha256",
+        "source_type": "VARCHAR",
+        "meaning": "`sha256:` digest of the UTF-8 encoding of the complete text_rendition string; NULL when text_rendition is NULL.",
+        "decision": "keep",
+        "target": "text_rendition_sha256",
+        "target_type": "string",
+        "reason": "Binds character-offset spans to the exact rendered text string beside input_sha256."
       }
     ],
     "derived_fields": {
@@ -3994,7 +4021,7 @@
       {
         "name": "source_family",
         "source_type": "VARCHAR",
-        "meaning": "The scanner family that read the input: `uscode` or `ecfr`, fixed by the shaper.",
+        "meaning": "The scanner family that read the input: `uscode`, `ecfr`, `bill`, `law` or `statute`, fixed by the shaper.",
         "decision": "keep",
         "target": "source_family",
         "target_type": "string",
@@ -4150,17 +4177,71 @@
         "meaning": "The typed targets the reading found, as a JSON array in reading order, each with the outcome of the host's lookup in the target tables it selected; several targets in one note stay one row, and an unsupported href has none.",
         "decision": "native-list",
         "target": "target_candidates",
-        "target_type": "list<native-legal-target/3>",
-        "reason": "Keep every retained candidate key, rule, recorded lookup outcome and target pin in source order; derive only zero-based array positions."
+        "target_type": "list<native-legal-target/4>",
+        "reason": "Keep every retained candidate key, rule, recorded lookup outcome, rendition span and target pin in source order; derive only zero-based array positions."
       },
       {
         "name": "rule_version",
         "source_type": "VARCHAR",
-        "meaning": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the scanners' selected shapes and the reading this row was produced under, comparable for equality only.",
+        "meaning": "`native-legal-reference/004` (`NATIVE_LEGAL_REFERENCE_RULE`): the scanners' selected shapes and the reading this row was produced under, comparable for equality only.",
         "decision": "keep",
         "target": "rule_version",
         "target_type": "string",
         "reason": "Source coordinates and recorded interpretation are needed to inspect the legal reference without consulting a receipt."
+      },
+      {
+        "name": "text_rendition",
+        "source_type": "VARCHAR",
+        "meaning": "The named readable-text rendition into which text_span_start and text_span_end index (`uslm-block-boundaries/1`, `ecfr-block-boundaries/1`, or `bill-dtd-block-boundaries/1`); NULL when no text map was produced.",
+        "decision": "keep",
+        "target": "text_rendition",
+        "target_type": "string",
+        "reason": "Names the exact readable-text rendition that character offsets locate cited text in."
+      },
+      {
+        "name": "text_offset_unit",
+        "source_type": "VARCHAR",
+        "meaning": "The offset unit of text_span_start and text_span_end: `unicode_code_points` (0-based half-open code-point indices in text_rendition); NULL when text_rendition is NULL.",
+        "decision": "keep",
+        "target": "text_offset_unit",
+        "target_type": "string",
+        "reason": "Names the exact offset unit for character spans beside positional XPath."
+      },
+      {
+        "name": "text_rendition_sha256",
+        "source_type": "VARCHAR",
+        "meaning": "`sha256:` digest of the UTF-8 encoding of the complete text_rendition string, binding the offsets to the exact rendition beside input_sha256 and source_path; NULL when text_rendition is NULL.",
+        "decision": "keep",
+        "target": "text_rendition_sha256",
+        "target_type": "string",
+        "reason": "Binds text_span_start..text_span_end to the exact readable-text rendition string."
+      },
+      {
+        "name": "text_span_start",
+        "source_type": "VARCHAR",
+        "meaning": "Inclusive 0-based start offset of the observed element's text in text_rendition, as decimal text in text_offset_unit; NULL when the element carries no text or no text map was produced.",
+        "decision": "flatten",
+        "target": "text_span_start",
+        "target_type": "int64",
+        "reason": "A declared character offset; convert strict integer text without rounding and retain original input in the receipt."
+      },
+      {
+        "name": "text_span_end",
+        "source_type": "VARCHAR",
+        "meaning": "Exclusive 0-based end offset of the observed element's text in text_rendition, as decimal text in text_offset_unit, so slicing text_rendition yields span_text; NULL when text_span_start is NULL.",
+        "decision": "flatten",
+        "target": "text_span_end",
+        "target_type": "int64",
+        "reason": "A declared character offset; convert strict integer text without rounding and retain original input in the receipt."
+      },
+      {
+        "name": "span_text",
+        "source_type": "VARCHAR",
+        "meaning": "The exact slice of text_rendition at [text_span_start:text_span_end] for this element; NULL when text_span_start is NULL.",
+        "decision": "keep",
+        "target": "span_text",
+        "target_type": "string",
+        "reason": "Publishes the exact cited text selected by [text_span_start:text_span_end] in text_rendition beside positional XPath."
       }
     ],
     "derived_fields": {

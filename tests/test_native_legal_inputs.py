@@ -108,3 +108,36 @@ def test_complete_native_exact_href_shapes_and_abstentions():
             assert status == "unsupported_href" and not candidates
     assert counts["native_statute_href"] > 0 and counts["native_public_law_href"] > 0
     assert counts["unsupported_href"] > 0
+
+
+def test_complete_statute_identity_and_refusals():
+    body = (FIXTURES / "statute-137-excerpt.xml").read_bytes()
+    url = "https://www.govinfo.gov/bulkdata/STATUTE/137/STATUTE-137.xml"
+    spec = {
+        "source_family": "statute",
+        "source_record_key": "STATUTE-137",
+        "edition": None,
+        "source_locator": url,
+        "qualification": {"kind": "statute-native-xml", "volume": 137},
+    }
+    facts = qualify_source(spec, body, lambda _: b"", lambda *a, **kw: None)
+    assert facts is not None
+    assert facts["kind"] == "statute-native-xml"
+    assert facts["metadata"]["source"] == "statutes-at-large"
+    assert facts["metadata"]["volume"] == "137"
+    assert facts["metadata"]["congress"] == "118"
+    assert facts["metadata"]["identity_basis"] == ("volume:native",)
+
+    with pytest.raises(ValueError, match="native volume"):
+        qualify_source(
+            spec,
+            body.replace(b"<volume>137</volume>", b"<volume>136</volume>", 1),
+            lambda _: b"",
+            lambda *a, **kw: None,
+        )
+    with pytest.raises(ValueError, match="edition"):
+        qualify_source({**spec, "edition": "2023"}, body, lambda _: b"", lambda *a, **kw: None)
+    with pytest.raises(ValueError, match="source identity"):
+        qualify_source({**spec, "source_record_key": "STATUTE-136"}, body, lambda _: b"", lambda *a, **kw: None)
+    with pytest.raises(ValueError, match="root"):
+        qualify_source(spec, b'<pLaw xmlns="http://schemas.gpo.gov/xml/uslm"><meta/><main>x</main></pLaw>', lambda _: b"", lambda *a, **kw: None)

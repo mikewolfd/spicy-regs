@@ -20,6 +20,7 @@ from functools import partial
 from typing import Any
 
 from spicy_docs.interpretation.native_legal_references import interpret_native_references
+from spicy_docs.reading.xml_text import read_xml_text_index
 from spicy_docs.schemas.native_reference_rows import (
     NATIVE_LEGAL_REFERENCE_READS,
     NATIVE_LEGAL_REFERENCES,
@@ -33,7 +34,7 @@ from spicy_docs.schemas.native_reference_rows import (
 from spicy_docs.sources.cfr.authority import scan_ecfr_authority_notes
 from spicy_docs.sources.uscode.references import scan_uscode_references
 from spicy_docs.sources.congress.native_references import scan_bill_references
-from spicy_docs.sources.govinfo.native_references import scan_law_references
+from spicy_docs.sources.govinfo.native_references import scan_law_references, scan_statute_references
 
 from spicy_regs.citation_resolution import NATIVE_RESOLUTION_RULE, NATIVE_ROUTES, resolve_citations
 from spicy_regs.identifiers import section_order_sql
@@ -96,7 +97,7 @@ def build_native_legal_references(
     if not isinstance(sources, list) or not 1 <= len(sources) <= 100:
         raise ValueError("manifest needs 1..100 sources")
     _retain(evidence, raw, role="selection-manifest")
-    rows, reads, scopes = [], [], set()
+    rows, reads, scopes, text_indexes = [], [], set(), {}
     total = 0
     with duckdb.connect() as cursor:
         snapshots = {}
@@ -144,7 +145,7 @@ def build_native_legal_references(
                     )
         for spec in sources:
             family, record, edition = spec["source_family"], spec["source_record_key"], spec["edition"]
-            if family not in {"ecfr", "uscode", "bill", "law"} or not isinstance(record, str) or not record:
+            if family not in {"ecfr", "uscode", "bill", "law", "statute"} or not isinstance(record, str) or not record:
                 raise ValueError("source family and nonblank record identity required")
             if edition is not None and (not isinstance(edition, str) or not edition):
                 raise ValueError("edition must be a nonblank literal or explicit null")
@@ -185,17 +186,33 @@ def build_native_legal_references(
             }
             fresh = []
 
-            def admit(observation, shaper):
-                if len(rows) + len(fresh) >= 10_000:
-                    raise ValueError("selected observation bound exceeded")
-                extra = (
-                    {"title": str(facts["metadata"]["title"])}
-                    if (family == "ecfr" and facts is not None and facts["metadata"]["title"] is not None)
-                    else {}
-                )
-                fresh.append(shaper(observation, occurrence_index=len(fresh), **context, **extra))
-
             try:
+                text_index = read_xml_text_index(
+                    body,
+                    source_family=family,
+                    allow_fragments=True,
+                    max_bytes=16 * 1024 * 1024,
+                )
+                text_indexes[(scope, context["input_sha256"])] = text_index
+
+                def admit(observation, shaper, *, index=text_index):
+                    if len(rows) + len(fresh) >= 10_000:
+                        raise ValueError("selected observation bound exceeded")
+                    extra = (
+                        {"title": str(facts["metadata"]["title"])}
+                        if (family == "ecfr" and facts is not None and facts["metadata"]["title"] is not None)
+                        else {}
+                    )
+                    fresh.append(
+                        shaper(
+                            observation,
+                            occurrence_index=len(fresh),
+                            text_span=index.span_for_xpath(observation.element.source_xpath),
+                            **context,
+                            **extra,
+                        )
+                    )
+
                 if family == "ecfr":
                     scan_ecfr_authority_notes(
                         body,
@@ -211,7 +228,13 @@ def build_native_legal_references(
                         max_observations=10_000,
                     )
                 else:
-                    scanner = scan_bill_references if family == "bill" else scan_law_references
+                    scanner = (
+                        scan_bill_references
+                        if family == "bill"
+                        else scan_law_references
+                        if family == "law"
+                        else scan_statute_references
+                    )
                     shaper = partial(shape_legislative_reference, source_family=family)
                     scanner(body, on_reference=lambda o: admit(o, shaper), max_observations=10_000)
             except Exception as error:
@@ -224,6 +247,9 @@ def build_native_legal_references(
                     source_bytes=len(body),
                     occurrence_count=len(fresh),
                     manifest_sha256=_digest(raw),
+                    text_rendition=text_index.rendition,
+                    text_offset_unit=text_index.offset_unit,
+                    text_rendition_sha256=text_index.rendition_sha256,
                     **context,
                 )
             )
@@ -239,7 +265,7 @@ def build_native_legal_references(
             coverage.update(resolved["coverage"])
             return resolved["occurrences"]
 
-        rows = interpret_native_references(rows, resolve=lookup)
+        rows = interpret_native_references(rows, resolve=lookup, text_indexes=text_indexes)
         evidence.event("native-reference-resolution", **coverage)
     output_dir.mkdir(parents=True, exist_ok=True)
     # Local replay uses its last complete output as prior; isolated rollup builds

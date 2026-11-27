@@ -437,10 +437,10 @@ def test_the_route_finds_what_the_release_point_prints_or_spans(con):
 
 
 def test_sealed_native_legal_references_generation_integrates_with_verdicts(tmp_path):
-    """End-to-end sealed legislative-documents/3 (rule/2) native Arrow target_candidates -> usc_citation_verdicts."""
+    """End-to-end sealed legislative-documents/4 (rule/2 + /004 spans) native Arrow target_candidates -> usc_citation_verdicts."""
     assert NATIVE_RESOLUTION_RULE == "selected-target-lookup/2"
-    assert NATIVE_LEGAL_REFERENCE_RULE == "native-legal-reference/003"
-    assert policy("native_legal_references").policy_version == "legislative-documents/3"
+    assert NATIVE_LEGAL_REFERENCE_RULE == "native-legal-reference/004"
+    assert policy("native_legal_references").policy_version == "legislative-documents/4"
 
     inputs = tmp_path / "inputs"
     inputs.mkdir()

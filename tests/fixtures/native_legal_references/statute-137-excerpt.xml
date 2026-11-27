@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><?xml-stylesheet type="text/css" href="uslm.css"?><statutesAtLarge xmlns="http://schemas.gpo.gov/xml/uslm" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xml:lang="en" xsi:schemaLocation="http://schemas.gpo.gov/xml/uslm https://www.govinfo.gov/schemas/xml/uslm/uslm-2.0.17.xsd">
+<meta><dc:publisher>United States Government Publishing Office</dc:publisher>
+<dc:creator>Office of the Federal Register</dc:creator><dc:creator>National Archives and Records Administration</dc:creator>
+<dc:format>text/xml</dc:format><dc:language>EN</dc:language>
+<dc:rights>Pursuant to Title 17 Section 105 of the United States Code, this file is not subject to copyright protection and is in the public domain.</dc:rights>
+<processedBy>Stage2.20250613</processedBy><processedDate>2026-04-15</processedDate>
+<congress>118</congress><session>1</session>
+<dc:date>2023</dc:date><volume>137</volume></meta>
+<main><collection role="statutesParts"><component role="statutesPart">
+<pLaw>
+
+<?I97 137 STAT. ?>
+<?I98 137 STAT. ?>
+<?I99 137 STAT. ?>
+<?I50 PUBLIC LAW 118–3—APR. 10, 2023?>
+<?I51 PUBLIC LAW 118–3—APR. 10, 2023?>
+<?I52 PUBLIC LAW 118–3—APR. 10, 2023?>
+<!--Disclaimer: Legislative measures that include compacts or other non-standard data structures will require additional modeling and may contain inconsistencies in the converted USLM XML.-->
+<meta><dc:title>Public Law 118–3: Relating to a national emergency declared by the President on March 13, 2020.</dc:title>
+<dc:type>Public Law</dc:type><docNumber>3</docNumber>
+<citableAs>Public Law 118–3</citableAs><citableAs/>
+<approvedDate>2023-04-10</approvedDate>
+<dc:date>2023-04-10</dc:date>
+<dc:publisher>United States Government Publishing Office</dc:publisher><dc:creator>National Archives and Records Administration</dc:creator><dc:creator>Office of the Federal Register</dc:creator><dc:format>text/xml</dc:format><dc:language>EN</dc:language><dc:rights>Pursuant to Title 17 Section 105 of the United States Code, this file is not subject to copyright protection and is in the public domain.</dc:rights>
+<processedBy>GPO Locator to USLM Converter 4.15.31;Stage2.20250702</processedBy><processedDate>2026-04-15</processedDate>
+<congress>118</congress><publicPrivate>public</publicPrivate>
+</meta>
+<preface><centerRunningHead>PUBLIC LAW 118–3—APR. 10, 2023</centerRunningHead>
+
+<dc:type>Public Law</dc:type><docNumber>118–3</docNumber>
+<congress value="118">118th Congress</congress>
+</preface>
+<main>
+<longTitle>
+<docTitle class="centered fontsize12" style="-uslm-lc:I658005">Joint Resolution</docTitle>
+<officialTitle class="indentUp0 firstIndent1 fontsize8" style="-uslm-lc:I658011">Relating to a national emergency declared by the President on March 13, 2020.<sidenote><p class="centered fontsize8" id="x097894a6-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658076"><approvedDate date="2023-04-10">Apr. 10, 2023</approvedDate></p><p class="centered fontsize8" id="x097894a7-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658076">[<ref href="/us/bill/118/hjres/7">H.J. Res. 7</ref>]<?GPOvSpace 08?></p></sidenote></officialTitle>
+</longTitle>
+<resolvingClause class="indentUp0 firstIndent0 fontsize10" style="-uslm-lc:I658120"><i>  Resolved   by   the   Senate   and   House   of   Representatives   of   the   United   States   of   America   in   Congress   assembled,</i></resolvingClause><sidenote><p class="leftAlign firstIndent0 fontsize8" id="x097894a8-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658180">COVID–19.</p><p class="leftAlign firstIndent0 fontsize8" id="x097894a9-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658180"><ref href="/us/usc/t50/s1621">50 USC 1621 note</ref>.</p></sidenote>
+<section class="inline">
+<content class="inline"> That, pursuant to section 202 of the National Emergencies Act (<ref href="/us/usc/t50/s1622">50 U.S.C. 1622</ref>), the national emergency declared by the finding of the President on March 13, 2020, in Proclamation 9994 (<ref href="/us/fr/85/15337">85 Fed. Reg. 15337</ref>) is hereby terminated.</content>
+</section>
+<action>
+<actionDescription style="-uslm-lc:I658030">Approved</actionDescription> <date date="2023-04-10">April 10, 2023</date>.</action>
+</main>
+<legislativeHistory>
+<heading style="-uslm-lc:I658031"><inline class="underline">LEGISLATIVE HISTORY</inline>—<ref href="/us/bill/118/hjres/7">H.J. Res. 7</ref>:</heading>
+<note>
+<heading style="-uslm-lc:I658032">CONGRESSIONAL RECORD, Vol. 169 (2023):</heading>
+<p class="indentUp4 firstIndent-1" id="x097894aa-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658035">Feb. 1, considered and passed House.</p><p class="indentUp4 firstIndent-1" id="x097894ab-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658035">Mar. 29, considered and passed Senate.</p></note>
+</legislativeHistory>
+</pLaw>
+<pLaw>
+
+<?I97 137 STAT. ?>
+<?I98 137 STAT. ?>
+<?I99 137 STAT. ?>
+<?I50 PUBLIC LAW 118–6—JUNE 14, 2023?>
+<?I51 PUBLIC LAW 118–6—JUNE 14, 2023?>
+<?I52 PUBLIC LAW 118–6—JUNE 14, 2023?>
+
+
+<!--Disclaimer: Legislative measures that include compacts or other non-standard data structures will require additional modeling and may contain inconsistencies in the converted USLM XML.-->
+<meta><dc:title>Public Law 118–6: To increase, effective as of December 1, 2023, the rates of compensation for veterans with service-connected disabilities and the rates of dependency and indemnity compensation for the survivors of certain disabled veterans, and for other purposes.</dc:title>
+<dc:type>Public Law</dc:type><docNumber>6</docNumber>
+<citableAs>Public Law 118–6</citableAs><citableAs>137 Stat. 50</citableAs>
+<approvedDate>2023-06-14</approvedDate>
+<dc:date>2023-06-14</dc:date>
+<dc:publisher>United States Government Publishing Office</dc:publisher><dc:creator>National Archives and Records Administration</dc:creator><dc:creator>Office of the Federal Register</dc:creator><dc:format>text/xml</dc:format><dc:language>EN</dc:language><dc:rights>Pursuant to Title 17 Section 105 of the United States Code, this file is not subject to copyright protection and is in the public domain.</dc:rights>
+<processedBy>GPO Locator to USLM Converter 4.15.31;Stage2.20250702</processedBy><processedDate>2026-04-15</processedDate>
+<congress>118</congress><publicPrivate>public</publicPrivate>
+</meta>
+<preface><centerRunningHead>PUBLIC LAW 118–6—JUNE 14, 2023</centerRunningHead>
+<page identifier="/us/stat/137/50">137 STAT. 50</page>
+<dc:type>Public Law</dc:type><docNumber>118–6</docNumber>
+<congress value="118">118th Congress</congress>
+</preface>
+<main>
+<longTitle>
+<docTitle class="centered fontsize12" style="-uslm-lc:I658005">An Act</docTitle>
+<officialTitle class="indentUp0 firstIndent1 fontsize8" style="-uslm-lc:I658011">To increase, effective as of December 1, 2023, the rates of compensation for veterans with service-connected disabilities and the rates of dependency and indemnity compensation for the survivors of certain disabled veterans, and for other purposes.<sidenote><p class="centered fontsize8" id="x0976bfbe-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658076"><approvedDate date="2023-06-14">June 14, 2023</approvedDate></p><p class="centered fontsize8" id="x0976bfbf-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658076">[<ref href="/us/bill/118/s/777">S. 777</ref>]<?GPOvSpace 08?></p></sidenote></officialTitle>
+</longTitle>
+<enactingFormula style="-uslm-lc:I658120"><i>  Be it enacted by the Senate and House of Representa­tives of the United States of America in Congress assembled,</i></enactingFormula><sidenote><p class="leftAlign firstIndent0 fontsize8" id="x0976bfc0-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658180">Veterans’ Compensation</p><p class="leftAlign firstIndent0 fontsize8" id="x0976bfc1-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658180">Cost-of-Living Adjustment </p><p class="leftAlign firstIndent0 fontsize8" id="x0976bfc2-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658180">Act of 2023.</p></sidenote>
+<section style="-uslm-lc:I658146"><num class="bold" value="1">SECTION 1. </num><heading>SHORT TITLE.<sidenote><p class="leftAlign firstIndent0 fontsize8" id="x0976bfc3-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658180"><ref href="/us/usc/t38/s101">38 USC 101 note</ref>.</p></sidenote></heading><content style="-uslm-lc:I658120">  This Act may be cited as the “<shortTitle role="act">Veterans’ Compensation Cost-of-Living Adjustment Act of 2023</shortTitle>” or the “<shortTitle role="act">Veterans’ COLA Act of 2023</shortTitle>”.</content></section>
+<section style="-uslm-lc:I658141"><num class="fontsize12" value="2">SEC. 2. </num><heading>INCREASE IN RATES OF DISABILITY COMPENSATION AND DEPENDENCY AND INDEMNITY COMPENSATION.</heading><subsection class="firstIndent0 fontsize10" id="y097734f4-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658120"><num class="fontsize10" style="-uslm-lc:emspace2" value="a">(a) </num><sidenote><p class="leftAlign firstIndent0 fontsize8" id="x097734f5-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658180"><ref href="/us/usc/t38/s1114">38 USC 1114 note</ref>.</p></sidenote><heading class="fontsize10"><inline class="smallCaps">Rate Adjustment</inline>.—</heading><content>Effective on December 1, 2023, the Secretary of Veterans Affairs shall increase, in accordance with subsection (c), the dollar amounts in effect on November 30, 2023, for the payment of disability compensation and dependency and indemnity compensation under the provisions specified in subsection (b).</content></subsection>
+<subsection class="firstIndent0 fontsize10" id="y097734f6-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658120"><num class="fontsize10" style="-uslm-lc:emspace2" value="b">(b) </num><heading class="fontsize10"><inline class="smallCaps">Amounts To Be Increased</inline>.—</heading><chapeau>The dollar amounts to be increased pursuant to subsection (a) are the following:</chapeau><paragraph class="fontsize10" id="y097734f7-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658122"><num class="fontsize10" style="-uslm-lc:emspace2" value="1">(1) </num><heading class="fontsize10"><inline class="smallCaps">Wartime disability compensation</inline>.—</heading><content>Each of the dollar amounts under <ref href="/us/usc/t38/s1114">section 1114 of title 38, United States Code</ref>.</content></paragraph>
+<paragraph class="fontsize10" id="y097734f8-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658122"><num class="fontsize10" style="-uslm-lc:emspace2" value="2">(2) </num><heading class="fontsize10"><inline class="smallCaps">Additional compensation for dependents</inline>.—</heading><content>Each of the dollar amounts under section 1115(1) of such title.</content></paragraph>
+<paragraph class="fontsize10" id="y097734f9-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658122"><num class="fontsize10" style="-uslm-lc:emspace2" value="3">(3) </num><heading class="fontsize10"><inline class="smallCaps">Clothing allowance</inline>.—</heading><content>The dollar amount under section 1162 of such title.</content></paragraph>
+<paragraph class="fontsize10" id="y097734fa-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658122"><num class="fontsize10" style="-uslm-lc:emspace2" value="4">(4) </num><heading class="fontsize10"><inline class="smallCaps">Dependency and indemnity compensation to surviving spouse</inline>.—</heading><content>Each of the dollar amounts under subsections (a) through (d) of section 1311 of such title.</content></paragraph>
+<paragraph class="fontsize10" id="y097734fb-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658122"><num class="fontsize10" style="-uslm-lc:emspace2" value="5">(5) </num><heading class="fontsize10"><inline class="smallCaps">Dependency and indemnity compensation to children</inline>.—</heading><content>Each of the dollar amounts under sections 1313(a) and 1314 of such title.</content></paragraph>
+</subsection>
+<subsection class="firstIndent0 fontsize10" id="y097734fc-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658120"><num class="fontsize10" style="-uslm-lc:emspace2" value="c">(c) </num><heading class="fontsize10"><inline class="smallCaps">Determination of Increase</inline>.—</heading><content>Each dollar amount described in subsection (b) shall be increased by the same percentage as the percentage by which benefit amounts payable under title II of the Social Security Act (<ref href="/us/usc/t42/s401/etseq">42 U.S.C. 401 et seq.</ref>) are increased effective December 1, 2023, as a result of a determination under section 215(i) of such Act (<ref href="/us/usc/t42/s415/i">42 U.S.C. 415(i)</ref>).</content></subsection>
+<subsection class="firstIndent0 fontsize10" id="y097734fd-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658120"><num class="fontsize10" style="-uslm-lc:emspace2" value="d">(d) </num><sidenote><p class="leftAlign firstIndent0 fontsize8" id="x097734fe-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658180"><ref href="/us/usc/t38/s1114">38 USC 1114 note</ref>.</p></sidenote><heading class="fontsize10"><inline class="smallCaps">Special Rule</inline>.—</heading><content>The Secretary of Veterans Affairs may adjust administratively, consistent with the increases made under subsection (a), the rates of disability compensation payable to persons under <ref href="/us/pl/85/857/s10">section 10 of Public Law 85–857</ref> (<ref href="/us/stat/72/1263">72 Stat. 1263</ref>) who <page identifier="/us/stat/137/51">137 STAT. 51</page>
+have not received compensation under <ref href="/us/usc/t38/ch11">chapter 11 of title 38, United States Code</ref>.</content></subsection>
+</section>
+<section style="-uslm-lc:I658141"><num class="fontsize12" value="3">SEC. 3. </num><sidenote><p class="leftAlign firstIndent0 fontsize8" id="x097734ff-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658180"><ref href="/us/usc/t38/s1114">38 USC 1114 note</ref>.</p></sidenote><heading>PUBLICATION OF ADJUSTED RATES.</heading><content style="-uslm-lc:I658120">  The<sidenote><p class="leftAlign firstIndent0 fontsize8" id="x09773500-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658180">Federal Register,</p><p class="leftAlign firstIndent0 fontsize8" id="x09773501-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658180">publication.</p></sidenote> Secretary of Veterans Affairs shall publish in the Federal Register the amounts specified in section 2(b), as increased under that section, not later than the date on which the matters specified in section 215(i)(2)(D) of the Social Security Act (<ref href="/us/usc/t42/s415/i/2/D">42 U.S.C. 415(i)(2)(D)</ref>) are required to be published by reason of a determination made under section 215(i) of such Act during fiscal year 2024.</content></section>
+<action>
+<actionDescription style="-uslm-lc:I658030">Approved</actionDescription> <date date="2023-06-14">June 14, 2023</date>.</action>
+</main>
+<legislativeHistory>
+<heading style="-uslm-lc:I658031"><inline class="underline">LEGISLATIVE HISTORY</inline>—<ref href="/us/bill/118/s/777">S. 777</ref> (<ref href="/us/bill/118/hr/7777">H.R. 7777</ref>):</heading>
+<note>
+<headingText style="-uslm-lc:I658032">HOUSE REPORTS:</headingText> ┐No. <ref href="/us/hrpt/118/591">118–591</ref> (<committee>Comm. on Veterans’ Affairs</committee>) accompanying<br/><ref href="/us/bill/118/hr/7777">H.R. 7777</ref>.
+</note>
+<note>
+<heading style="-uslm-lc:I658032">CONGRESSIONAL RECORD, Vol. 169 (2023):</heading>
+<p class="indentUp4 firstIndent-1" id="x09775c12-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658035">Mar. 30, considered and passed Senate.</p><p class="indentUp4 firstIndent-1" id="x09775c13-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658035">May 22, considered and passed House.</p></note>
+</legislativeHistory>
+</pLaw>
+<pLaw>
+
+<?I97 137 STAT. ?>
+<?I98 137 STAT. ?>
+<?I99 137 STAT. ?>
+<?I50 PUBLIC LAW 118–24—DEC. 19, 2023?>
+<?I51 PUBLIC LAW 118–24—DEC. 19, 2023?>
+<?I52 PUBLIC LAW 118–24—DEC. 19, 2023?>
+
+
+<!--Disclaimer: Legislative measures that include compacts or other non-standard data structures will require additional modeling and may contain inconsistencies in the converted USLM XML.-->
+<meta><dc:title>Public Law 118–24: To exempt for an additional 4-year period, from the application of the means-test presumption of abuse under chapter 7, qualifying members of reserve components of the Armed Forces and members of the Nation al Guard who, after September 11, 2001, are called to active duty or to perform a homeland defense activity for not less than 90 days.</dc:title>
+<dc:type>Public Law</dc:type><docNumber>24</docNumber>
+<citableAs>Public Law 118–24</citableAs><citableAs>137 Stat. 128</citableAs>
+<approvedDate>2023-12-19</approvedDate>
+<dc:date>2023-12-19</dc:date>
+<dc:publisher>United States Government Publishing Office</dc:publisher><dc:creator>National Archives and Records Administration</dc:creator><dc:creator>Office of the Federal Register</dc:creator><dc:format>text/xml</dc:format><dc:language>EN</dc:language><dc:rights>Pursuant to Title 17 Section 105 of the United States Code, this file is not subject to copyright protection and is in the public domain.</dc:rights>
+<processedBy>GPO Locator to USLM Converter 4.15.31;Stage2.20250702</processedBy><processedDate>2026-04-15</processedDate>
+<congress>118</congress><publicPrivate>public</publicPrivate>
+</meta>
+<preface><centerRunningHead>PUBLIC LAW 118–24—DEC. 19, 2023</centerRunningHead>
+<page identifier="/us/stat/137/128">137 STAT. 128</page>
+<dc:type>Public Law</dc:type><docNumber>118–24</docNumber>
+<congress value="118">118th Congress</congress>
+</preface>
+<main>
+<longTitle>
+<docTitle class="centered fontsize12" style="-uslm-lc:I658005">An Act</docTitle>
+<officialTitle class="indentUp0 firstIndent1 fontsize8" style="-uslm-lc:I658011">To exempt for an additional 4-year period, from the application of the means-test presumption of abuse under chapter 7, qualifying members of reserve components of the Armed Forces and members of the Nation al Guard who, after September 11, 2001, are called to active duty or to perform a homeland defense activity for not less than 90 days.<sidenote><p class="centered fontsize8" id="x09acc42b-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658076"><approvedDate date="2023-12-19">Dec. 19, 2023</approvedDate></p><p class="centered fontsize8" id="x09acc42c-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658076">[<ref href="/us/bill/118/hr/3315">H.R. 3315</ref>]<?GPOvSpace 08?></p></sidenote></officialTitle>
+</longTitle>
+<enactingFormula style="-uslm-lc:I658120"><i>  Be it enacted by the Senate and House of Representa­tives of the United States of America in Congress assembled,</i></enactingFormula><sidenote><p class="leftAlign firstIndent0 fontsize8" id="x09aceb3d-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658180">National Guard and Reservists Debt Relief Extension Act of 2023.</p></sidenote>
+<section style="-uslm-lc:I658146"><num class="bold" value="1">SECTION 1. </num><sidenote><p class="leftAlign firstIndent0 fontsize8" id="x09aceb3e-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658180"><ref href="/us/usc/t11/s101">11 USC 101 note</ref>.</p></sidenote><heading>SHORT TITLE.</heading><content style="-uslm-lc:I658120">  This Act may be cited as the “<shortTitle role="act">National Guard and Reservists Debt Relief Extension Act of 2023</shortTitle>”.</content></section>
+<section role="instruction" style="-uslm-lc:I658141"><num class="fontsize12" value="2">SEC. 2. </num><heading>NATIONAL GUARD AND RESERVISTS DEBT RELIEF AMENDMENT.</heading><content style="-uslm-lc:I658120">  Section 4(b) of the National Guard and Reservists Debt Relief Act of 2008 (<ref href="/us/pl/110/438">Public Law 110–438</ref>; <ref href="/us/stat/122/5000">122 Stat. 5000</ref>)<sidenote><p class="leftAlign firstIndent0 fontsize8" id="x09aceb3f-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658180"><ref href="/us/usc/t11/s707">11 USC 707 note</ref>.</p></sidenote> <amendingAction type="amend">is amended</amendingAction> by <amendingAction type="delete">striking</amendingAction> “<quotedText>15-year</quotedText>” and <amendingAction type="insert">inserting</amendingAction> “<quotedText>19-year</quotedText>”.</content></section>
+<action>
+<actionDescription style="-uslm-lc:I658030">Approved</actionDescription> <date date="2023-12-19">December 19, 2023</date>.</action>
+</main>
+<legislativeHistory>
+<heading style="-uslm-lc:I658031"><inline class="underline">LEGISLATIVE HISTORY</inline>—<ref href="/us/bill/118/hr/3315">H.R. 3315</ref>:</heading>
+<note>
+<headingText style="-uslm-lc:I658032">HOUSE REPORTS:</headingText> ┐No. <ref href="/us/hrpt/118/283">118–283</ref> (<committee>Comm. on the Judiciary</committee>).
+</note>
+<note>
+<heading style="-uslm-lc:I658032">CONGRESSIONAL RECORD, Vol. 169 (2023):</heading>
+<p class="indentUp4 firstIndent-1" id="x09aceb40-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658035">Dec. 11, considered and passed House.</p><p class="indentUp4 firstIndent-1" id="x09aceb41-38fb-11f1-850e-1d8f7df6e243" style="-uslm-lc:I658035">Dec. 14, considered and passed Senate.</p></note>
+</legislativeHistory>
+</pLaw>
+</component></collection></main></statutesAtLarge>
