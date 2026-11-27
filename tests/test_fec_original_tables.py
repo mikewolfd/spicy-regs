@@ -347,3 +347,190 @@ def test_court_page_retains_native_text_and_deferred_links_without_legal_identit
     assert "The court issued its opinion." in page["text"] and "ignore this script" not in page["text"]
     assert json.loads(page["links_json"])[0]["body_status"] == "deferred_pdf"
     assert page["content_scope"] == "whole_original"
+
+
+EXPECTED_EXCLUDED_HTTP200_PREFIXES = {
+    "5b146c6d": ("table_scope_refusal", "out_of_scope_unfiltered_federal_search_portal"),
+    "76036826": ("accepted_coverage_limit", "search_directory_covered_by_fec_oversight_recommendations"),
+    "7777c3ab": ("source_backed_refusal", "image_viewer_shell_no_text_body"),
+    "7c9e650a": ("accepted_coverage_limit", "search_directory_covered_by_fec_oversight_recommendations"),
+    "85f89bc9": ("accepted_coverage_limit", "search_directory_covered_by_fec_oversight_recommendations"),
+    "a2898228": ("table_scope_refusal", "committee_filing_directory_table_out_of_prose_scope"),
+}
+
+
+def test_committed_selection_records_explicit_dispositions_for_all_six_excluded_http200_pages():
+    from pathlib import Path
+
+    from spicy_regs.transforms.fec_original_tables import excluded_page_dispositions
+
+    dispositions = excluded_page_dispositions()
+    assert len(dispositions) == 6
+    by_prefix = {sha[7:15]: (item["category"], item["reason_code"]) for sha, item in dispositions.items()}
+    assert by_prefix == EXPECTED_EXCLUDED_HTTP200_PREFIXES
+    repo_root = Path(__file__).resolve().parents[1]
+    for sha, item in dispositions.items():
+        assert item["disposition"] == "excluded_with_reason", sha
+        assert item["extractor_refusal"] == "unsupported_body_boundaries", sha
+        assert (repo_root / item["visual_review_doc"]).is_file(), item["visual_review_doc"]
+
+
+def test_selection_dispositions_validation_refuses_missing_unknown_or_mismatched_entries(tmp_path):
+    from spicy_regs.transforms.fec_original_tables import SELECTION_PATH, excluded_page_dispositions
+
+    base = json.loads(SELECTION_PATH.read_text())
+    path = tmp_path / "selection.json"
+
+    # Missing top-level excluded_page_dispositions fails closed.
+    missing = {k: v for k, v in base.items() if k != "excluded_page_dispositions"}
+    path.write_text(json.dumps(missing))
+    with pytest.raises(ValueError, match="excluded_page_dispositions"):
+        excluded_page_dispositions(path)
+
+    # Unknown SHA fails closed.
+    unknown = json.loads(SELECTION_PATH.read_text())
+    sample = next(iter(unknown["excluded_page_dispositions"].values()))
+    unknown["excluded_page_dispositions"]["sha256:" + "0" * 64] = sample
+    path.write_text(json.dumps(unknown))
+    with pytest.raises(ValueError, match="unknown source page"):
+        excluded_page_dispositions(path)
+
+    # Receipt-less gap 58bf2215 cannot be hidden under excluded_page_dispositions.
+    no_receipt = json.loads(SELECTION_PATH.read_text())
+    gap = next(e for e in no_receipt["originals"] if e["acquisition_receipt"] is None)
+    no_receipt["excluded_page_dispositions"][gap["source_sha256"]] = {**sample, "source_url": gap["source_url"]}
+    path.write_text(json.dumps(no_receipt))
+    with pytest.raises(ValueError, match="receipt-less"):
+        excluded_page_dispositions(path)
+
+    # Mismatched source_url fails closed.
+    bad_url = json.loads(SELECTION_PATH.read_text())
+    first_sha = next(iter(bad_url["excluded_page_dispositions"]))
+    bad_url["excluded_page_dispositions"][first_sha]["source_url"] = "https://www.fec.gov/wrong"
+    path.write_text(json.dumps(bad_url))
+    with pytest.raises(ValueError, match="source_url differs"):
+        excluded_page_dispositions(path)
+
+
+def test_rebuild_enforces_explicit_per_sha_dispositions_for_excluded_http200_pages(archive):
+    page = b"<html><head><title>Directory</title></head><body><h1>Directory</h1><p>Rows</p></body></html>"
+    entry = admit(archive, "fec_reference_source_pages", page, page_type="filing_form_reference")
+    sha = entry["source_sha256"]
+    disposition = {
+        "disposition": "excluded_with_reason",
+        "category": "table_scope_refusal",
+        "reason_code": "directory_page_out_of_scope",
+        "extractor_refusal": "unsupported_body_boundaries",
+        "source_url": entry["source_url"],
+        "covered_by_tables": [],
+        "visual_review_doc": "docs/fec-source-pages-visual-review.md",
+        "rationale": "Visual review confirmed directory table rather than reference prose.",
+    }
+
+    # Undispositioned HTTP-200 unsupported_body_boundaries refusal fails closed.
+    with pytest.raises(ValueError, match="lacks an explicit disposition"):
+        rebuild("fec_reference_source_pages", store=archive, originals=[entry], dispositions={})
+
+    # Explicitly dispositioned page succeeds and surfaces its disposition on the result.
+    result = rebuild("fec_reference_source_pages", store=archive, originals=[entry], dispositions={sha: disposition})
+    assert result.rows == []
+    assert result.refusals == [(sha, "unsupported_body_boundaries")]
+    assert result.dispositions == {sha: disposition}
+
+    # A disposed page that unexpectedly becomes body_extracted fails closed.
+    admitted_html = b"<html><head><title>MUR 1</title></head><body>" + BANNER * 2 + b"<h1>MUR 1</h1><p>Text</p>" + FOOTER + b"</body></html>"
+    admitted_entry = admit(archive, "fec_reference_source_pages", admitted_html, page_type="official_legal_document_reference")
+    with pytest.raises(ValueError, match="was not refused as declared"):
+        rebuild(
+            "fec_reference_source_pages",
+            store=archive,
+            originals=[admitted_entry],
+            dispositions={admitted_entry["source_sha256"]: {**disposition, "source_url": admitted_entry["source_url"]}},
+        )
+
+    # A disposed page that fails HTTP status fails closed instead of silently matching.
+    failed_entry = admit(archive, "fec_reference_source_pages", page, status=500, page_type="filing_form_reference")
+    with pytest.raises(ValueError, match="refused by receipt"):
+        rebuild(
+            "fec_reference_source_pages",
+            store=archive,
+            originals=[failed_entry],
+            dispositions={failed_entry["source_sha256"]: disposition},
+        )
+
+    # An unseen stale disposition key fails closed.
+    with pytest.raises(ValueError, match="were not encountered"):
+        rebuild(
+            "fec_reference_source_pages",
+            store=archive,
+            originals=[entry],
+            dispositions={sha: disposition, "sha256:" + "f" * 64: disposition},
+        )
+
+
+def test_rebuilt_schemas_match_typed_dictionary_with_zero_source_context_pointer_columns():
+    import base64
+    from pathlib import Path
+
+    import pyarrow as pa
+
+    from spicy_regs.transforms.fec_original_tables import SCHEMAS
+
+    typed_path = Path(__file__).resolve().parents[1] / "data_dictionary" / "fec_typed_schemas.json"
+    typed = json.loads(typed_path.read_text())["tables"]
+    # Zero source_context_pointer columns across all 50 declared fec-query tables and all 4 rebuilt schemas.
+    assert [name for name, spec in typed.items() if any(col[0] == "source_context_pointer" for col in spec["columns"])] == []
+    assert [name for name, schema in SCHEMAS.items() if "source_context_pointer" in schema.names] == []
+    for table in TABLES:
+        declared_schema = pa.ipc.read_schema(pa.BufferReader(base64.b64decode(typed[table]["arrow_schema_ipc_base64"])))
+        assert SCHEMAS[table].equals(declared_schema, check_metadata=False), table
+
+
+def test_record_evidence_filter_drops_all_eight_retired_and_rebuilt_tables(tmp_path):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from spicy_regs.fec_native_conversion import REBUILT_TABLES, RETIRED_TABLES, referenced_evidence
+
+    excluded_targets = sorted(
+        name.removesuffix(".parquet") for name in (RETIRED_TABLES["fec-query"] | REBUILT_TABLES["fec-query"].keys())
+    )
+    assert len(excluded_targets) == 8
+    schema = pa.schema([("target_table", pa.string()), ("target_record_id", pa.string())])
+    source = tmp_path / "source_evidence.parquet"
+    destination = tmp_path / "filtered_evidence.parquet"
+    rows = [{"target_table": target, "target_record_id": f"id-{i}"} for i, target in enumerate(excluded_targets)]
+    rows.append({"target_table": "fec_receipts", "target_record_id": "kept-1"})
+    pq.write_table(pa.Table.from_pylist(rows, schema=schema), source)
+
+    dropped = referenced_evidence(source, destination, "fec-query")
+    kept = pq.read_table(destination).to_pylist()
+    assert dropped == 8
+    assert kept == [{"target_table": "fec_receipts", "target_record_id": "kept-1"}]
+    assert not any(row["target_table"] in set(excluded_targets) for row in kept)
+
+
+def test_committed_selection_rebuilds_exact_expected_rows_and_dispositions_against_local_raw_archive():
+    from pathlib import Path
+
+    import pyarrow as pa
+
+    from spicy_regs.transforms.fec_original_tables import SCHEMAS, excluded_page_dispositions, expected_rows
+
+    local_raw = Path("~/Work/corpora/spicyregs/raw").expanduser()
+    if not (local_raw / "objects").is_dir():
+        pytest.skip("Local central raw archive is unavailable in this environment")
+    store = CentralRawArchiveStore(local_raw, create=False)
+    for table in TABLES:
+        result = rebuild(table, store=store)
+        assert len(result.rows) == expected_rows(table), table
+        pa.Table.from_pylist(result.rows, schema=SCHEMAS[table])
+        if table == "fec_reference_source_pages":
+            assert len(result.refusals) == 15
+            assert sorted(reason for _, reason in result.refusals) == (
+                ["http_status_500"] * 8 + ["no_acquisition_receipt"] + ["unsupported_body_boundaries"] * 6
+            )
+            assert set(result.dispositions) == set(excluded_page_dispositions())
+        else:
+            assert result.refusals == []
+            assert result.dispositions == {}

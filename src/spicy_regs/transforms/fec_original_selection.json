@@ -1,5 +1,81 @@
 {
- "basis": "Originals of the receipt-derived FEC tables (live fec-query 784b23da) with their capture-import acquisition receipts (ss-wfop); written by work/fec-receipt-tables-validate-20261030/write_original_selection.py",
+ "basis": "Originals of the receipt-derived FEC tables (live fec-query 784b23da) with their capture-import acquisition receipts (ss-wfop) and explicit visual-review dispositions for excluded HTTP-200 source pages (ss-j4vz); written by work/fec-receipt-tables-validate-20261030/write_original_selection.py",
+ "excluded_page_dispositions": {
+  "sha256:5b146c6dfecdb4454aa699d4b4c2645b2041f3f430004a59c62bd74c54784795": {
+   "category": "table_scope_refusal",
+   "covered_by_tables": [
+    "fec_oversight_recommendations"
+   ],
+   "disposition": "excluded_with_reason",
+   "extractor_refusal": "unsupported_body_boundaries",
+   "rationale": "Unfiltered all-government Oversight.gov open-recommendations search portal (page 1 of 12,238 displaying 25 non-FEC federal recommendations such as GSA/PBS and Commerce/NTIA; 0 of 25 rows are FEC). Structured FEC OIG recommendations already live in fec_oversight_recommendations (31 rows across 6 FEC OIG reports).",
+   "reason_code": "out_of_scope_unfiltered_federal_search_portal",
+   "source_url": "https://www.oversight.gov/reports/recommendations",
+   "visual_review_doc": "docs/fec-source-pages-visual-review.md"
+  },
+  "sha256:7603682615cd9a23e4a9943aa2cb498eeb30b7610a0545a12e0e39654449faa4": {
+   "category": "accepted_coverage_limit",
+   "covered_by_tables": [
+    "fec_oversight_recommendations"
+   ],
+   "disposition": "excluded_with_reason",
+   "extractor_refusal": "unsupported_body_boundaries",
+   "rationale": "Paginated Oversight.gov Drupal search/filter directory (submitting_oig_rec[]=236, displaying 1-25 of 31 FEC OIG open recommendations) with unfiltered federal-wide KPI boilerplate (12,257 Open Recommendations). All 25 listed recommendations match verbatim in structured table fec_oversight_recommendations (25/25 exact match).",
+   "reason_code": "search_directory_covered_by_fec_oversight_recommendations",
+   "source_url": "https://www.oversight.gov/reports/recommendations?submitting_oig_rec%5B%5D=236",
+   "visual_review_doc": "docs/fec-source-pages-visual-review.md"
+  },
+  "sha256:7777c3aba1990822596ac0c63f59d63207f3ef7c5fa01d120e8a7696309639c7": {
+   "category": "source_backed_refusal",
+   "covered_by_tables": [
+    "fec_reference_source_pages",
+    "fec_filings"
+   ],
+   "disposition": "excluded_with_reason",
+   "extractor_refusal": "unsupported_body_boundaries",
+   "rationale": "HTML PDF image-viewer frame shell (Page by Page Report Display, Page 1 of 2) containing only a leaked CGI header line, navigation controls, and an external PDF embed (/pdf/873/202606089870450873/202606089870450873_000001.pdf) with zero filing body text. PDF/image rendering is explicitly deferred; the underlying C00871426 F99 filing HTML (1981955/) is already admitted in fec_reference_source_pages (sha256:af750f5c...) and linked in fec_filings.",
+   "reason_code": "image_viewer_shell_no_text_body",
+   "source_url": "https://docquery.fec.gov/cgi-bin/fecimg/?202606089870450873",
+   "visual_review_doc": "docs/fec-source-pages-visual-review.md"
+  },
+  "sha256:7c9e650a260305d313234a4bd40c18dbdcc9881153ccd3d103dd453f1fda1b33": {
+   "category": "accepted_coverage_limit",
+   "covered_by_tables": [
+    "fec_oversight_recommendations"
+   ],
+   "disposition": "excluded_with_reason",
+   "extractor_refusal": "unsupported_body_boundaries",
+   "rationale": "Oversight.gov Drupal search/filter directory (agency-reviewe-investigated-rec[]=77, items_per_page=50, displaying 1-31 of 31 FEC open recommendations) with unfiltered federal-wide KPI boilerplate (12,256 Open Recommendations). All 31 listed recommendations match verbatim in structured table fec_oversight_recommendations (31/31 exact match).",
+   "reason_code": "search_directory_covered_by_fec_oversight_recommendations",
+   "source_url": "https://www.oversight.gov/reports/recommendations?agency-reviewe-investigated-rec%5B%5D=77&items_per_page=50",
+   "visual_review_doc": "docs/fec-source-pages-visual-review.md"
+  },
+  "sha256:85f89bc9151976bf4b4b95ddcf1f38f76da03758a403b40515e277344b811ccb": {
+   "category": "accepted_coverage_limit",
+   "covered_by_tables": [
+    "fec_oversight_recommendations"
+   ],
+   "disposition": "excluded_with_reason",
+   "extractor_refusal": "unsupported_body_boundaries",
+   "rationale": "Oversight.gov Drupal search/filter directory (submitting_oig_rec[]=236, items_per_page=50, displaying 1-31 of 31 FEC OIG open recommendations, identical recommendation set to sha256:7c9e650a...) with unfiltered federal-wide KPI boilerplate (12,257 Open Recommendations). All 31 listed recommendations match verbatim in structured table fec_oversight_recommendations (31/31 exact match).",
+   "reason_code": "search_directory_covered_by_fec_oversight_recommendations",
+   "source_url": "https://www.oversight.gov/reports/recommendations?submitting_oig_rec%5B%5D=236&items_per_page=50",
+   "visual_review_doc": "docs/fec-source-pages-visual-review.md"
+  },
+  "sha256:a2898228d9a542ff9ed855dafe9b42981ac81597afb51818a16960750e36db1a": {
+   "category": "table_scope_refusal",
+   "covered_by_tables": [
+    "fec_reference_source_pages",
+    "fec_filing_report_observations"
+   ],
+   "disposition": "excluded_with_reason",
+   "extractor_refusal": "unsupported_body_boundaries",
+   "rationale": "Committee electronic-filing directory HTML table for HENRY E. BROWN JR. FOR CONGRESS (C00341529) listing 178 structured rows (FEC-1403 1998 YEAR-END through FEC-1359148 2019 F3T TERMINATION REPORT) with zero narrative reference prose; out of scope for flat-text fec_reference_source_pages, which admits individual court cases, MUR pages, and individual FEC Form 3/99 HTML filings. Accepted coverage limit: sampled fec_filings currently has 0/178 rows for C00341529, while individual Form 3 filing FEC-2761 (row 176) is admitted in fec_reference_source_pages (sha256:613e1365...) and one F3A report appears in fec_filing_report_observations; original remains preserved in CentralRawArchiveStore.",
+   "reason_code": "committee_filing_directory_table_out_of_prose_scope",
+   "source_url": "https://docquery.fec.gov/cgi-bin/forms/C00341529/",
+   "visual_review_doc": "docs/fec-source-pages-visual-review.md"
+  }
+ },
  "expected_rows": {
   "fec_historical_ie_statistics": 1086,
   "fec_reference_filing_feed_items": 794,
