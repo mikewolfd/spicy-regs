@@ -188,3 +188,114 @@ Per-table bill/law rebuilds, pre-bulk history and full congressional coverage
 require their own evidence; see the Stream E execution ledger. Local source
 journals and qualification facts can contain private paths and must pass the
 release lane's public-field review before publication.
+
+## Wave 1 declared BILLS/PLAW cohort (`ss-qggu`)
+
+`manifests/native_legal_wave1.json` declares a bounded, reproducible Wave 1
+replay cohort (`native-legal-wave1-119th-bills-plaw-v1`) selected strictly from
+retained 119th Congress originals in the central raw archive (zero new network
+acquisition) and validated under `bill-dtd-xml` and `law-native-xml`:
+
+- **Composition & measured bounds:** 50 complete XML inputs (`<= 75` target,
+  `<= 100` pipeline cap) totaling `14,132,042` bytes (`13.48 MiB <= 32 MiB`
+  target, `<= 64 MiB` cap) and `7,064` observations (`<= 8,000` target,
+  `<= 10,000` cap), yielding `3,401` exact U.S. Code section candidates:
+  - 25 `bill` DTD XML packages (`3,158,658` bytes; `1,628` observations;
+    `1,250` `native_bill_usc_cite`, `378` `unsupported_href`) spanning Senate
+    enrolled (`BILLS-119s5enr`), House engrossed (`eh`), reported (`rh`),
+    placed-on-calendar-Senate (`pcs`), and introduced (`ih`) printings.
+  - 25 `law` USLM XML enactments (`10,973,384` bytes; `5,436` observations;
+    `2,151` `native_section_href`, `593` `native_public_law_href`, `183`
+    `native_statute_href`, `2,509` `unsupported_href`) spanning House- and
+    Senate-origin 119th Public Laws (`PLAW-119publ1` through `PLAW-119publ108`).
+- **Scope-preserving merge:** Replaying `manifests/native_legal_wave1.json`
+  against the existing two-scope prior (`uscode` Title 1 `119-103` with `821`
+  observations + `ecfr` Title 1 `requested-as-of:2026-08-10` with `60`
+  observations) merges by `scope_id` into `7,945` sealed `native_legal_references`
+  rows and `52` `native_legal_reference_reads` rows covering all four
+  `source_family` values (`bill`, `ecfr`, `law`, `uscode`).
+- **Portable replay:** `manifests/native_legal_wave1.json` embeds no local
+  machine paths (compatible with `CaptureEvidence`'s published-control check).
+  Each source entry records its exact `sha256`, byte count, canonical GovInfo
+  `source_locator`, `qualification` block, and central raw archive descriptor
+  (`archive_object` plus `archive_encoding` or `archive_zip_member`). Stage the
+  verified original XML bytes under `inputs/<filename>` beside a copy of the
+  manifest before running `run-rollup-native-legal-references`.
+
+### Raw visual review (2026-11-27, bounded sample)
+
+A bounded visual inspection of rendered original XML/HTML excerpts verified
+attribute extraction and `usc_place` separation against retained originals:
+
+- **BILLS DTD XML (3 packages):**
+  - `BILLS-119s5enr` (`objects/sha256/df/df4b19ff...`, `sha256:df4b19ff99c27f8f6dcc5098fe82c726e33666c78d65126d1622f611bf8b94c9`,
+    L15 chars 2268 & 6743): `<external-xref legal-doc="usc" parsable-cite="usc/8/1226">8 U.S.C. 1226(c)</external-xref>`
+    and `usc/8/1225` extract as `native_bill_usc_cite` (`8-1226`, `8-1225`),
+    recording the enclosing section without fabricating subsection tails.
+  - `BILLS-119hr6644eh` (`objects/sha256/99/99317586...`, `sha256:99317586072b7117889ff6d2bbc9cc888cf52b4931356211788d28a166dd996b`,
+    L108 char 22396, L131 char 32754, L266 char 104745): `usc/42/12705d` and
+    `usc/42/5302` extract cleanly; `legal-doc="public-law" parsable-cite="pl/117/58"`
+    remains `unsupported_href`. **Publisher idiom observed:** congressional bill
+    DTD XML places the word `note` outside the tag (`<external-xref legal-doc="usc" parsable-cite="usc/42/8301">42 U.S.C. 8301</external-xref> note)`).
+  - `BILLS-119hr8646rh` (`objects/sha256/97/975fef02...gz`, decoded `sha256:975fef02625a869c314d1e2c7b5841039dbf028cd2159b68e92256d536700ffb`,
+    L15 chars 7478, 7606, 10477): `usc/7/6924` and `usc/40/121` extract as
+    `native_bill_usc_cite`; `pl/115/334` remains `unsupported_href`.
+- **PLAW USLM XML (3 enactments):**
+  - `PLAW-119publ1.xml` (`119-public-1`, `sha256:ee0e7a5d534411f78dd325405c42d386a1cfcf14f3870c93f5488874bb7acb54`,
+    L29, L32, L50), `PLAW-119publ27.xml` (`119-public-27`, `sha256:9c7bf33496c2f65085234dbf7f5cecaa72919520912c43f9f7769264e261d282`,
+    L29, L32), and `PLAW-119publ101.xml` (`119-public-101`, `sha256:9f4bc8d57d39bf4d84442f3e68e0fd679a62878ce7c78909e687a70401616a8e`,
+    L35, L38, L248): body `<ref href="/us/usc/t8/s1226">` and `/us/usc/t12/s1701x`
+    extract as `native_section_href` (`8-1226`, `12-1701x`); `/us/bill/119/...`
+    stays `unsupported_href`. **Publisher idiom observed:** GPO USLM `<sidenote>`
+    markup assigns a bare section `href` (`/us/usc/t8/s1101`, `/us/usc/t12/s5901`,
+    `/us/usc/t12/s1701`) even when the visible sidenote text reads `"8 USC 1101 note"`.
+    Under `native-legal-reference/003` (attribute-only extraction, `text` NULL),
+    those literal hrefs remain `native_section_href`; `ancestors_json` preserves
+    the enclosing `sidenote` element so Wave 4 (`ss-tdf4` / `ss-xpyk`) can
+    distinguish sidenote note-labels from body citations once span/text
+    extraction lands.
+- **OLRC classification `nt new` controls (2 HTML originals):**
+  - 119th Cong. 1st Sess. (`objects/sha256/4b/4be913e3...gz`, decoded
+    `sha256:4be913e3e1554d4f23b948f9a0cd071857dda3ae15e570d08c4a9d30084f2550`,
+    L329): `8 1101 nt new 119-1 1 139 Stat. 3` -> `usc_place = 'note'`.
+  - 119th Cong. 2nd Sess. (`objects/sha256/b0/b007f218...gz`, decoded
+    `sha256:b007f218b16e0bb8314d85cf86acd8d42dda6b2066c94f40f394360bd6873236`,
+    L331): `1 1 nt new 119-74 3 140 Stat. 5` -> `usc_place = 'note'`.
+  - In `usc_citation_verdicts` (`usc-release-point-verdict-v2`), both controls
+    remain distinct from their printed main sections (`8-1101` and `1-1`) and
+    emit `verdict = 'not_checked_non_section_place'`, `reason = 'non_section_place'`,
+    `release_point_rows = 0`.
+- **Sample limits:** Visual inspection covered 6 legislative XMLs (3 BILLS, 3
+  PLAW) and 2 OLRC session HTML tables; it verifies scanner fidelity, manifest
+  qualification, and `usc_place` separation for this bounded Wave 1 cohort and
+  does not claim exhaustive coverage of all 119th Congress printings.
+
+## Relationship-view integration and Wave 4 seam
+
+- **`usc_citation_verdicts` (`usc-release-point-verdict-v2`):** Keyed by
+  `(usc_title, usc_section_key, usc_place)` across `document_citations`,
+  `law_code_sections`, `table3_records`, and sealed `native_legal_references`
+  (unnesting native Arrow `LIST<STRUCT<...>>` column `target_candidates` via
+  `UNNEST(target_candidates)`). Exact native XML section targets
+  (`native_section_href`, `native_bill_usc_cite`) attribute to
+  `usc_place = 'section'`; text-parsed findings (`partial_text_findings` and
+  `document_citations`) attribute to `usc_place = 'unstated'`; classification
+  and Table III places (`section`, `note`, `preceding`, `note_preceding`) carry
+  verbatim (NULL/blank coalesced to `unstated`). Only `section` and `unstated`
+  rows join `usc_release_point_sections`; `note`, `preceding`, and
+  `note_preceding` rows emit `not_checked_non_section_place`
+  (`reason = 'non_section_place'`, `release_point_rows = 0`).
+- **Wave 1 boundary & Wave 4 handoff:**
+  - Wave 1 (`ss-qggu`) intentionally holds `NATIVE_LEGAL_REFERENCE_RULE` at
+    `native-legal-reference/003` and `NATIVE_RESOLUTION_RULE` at
+    `selected-target-lookup/1`.
+  - **`ss-xpyk` (Wave 4):** Migrates `native_legal_references` target lookup to
+    `selected-target-lookup/2` and adds `usc_oracle_*` legal-status and
+    annual-presence enrichment, building directly on `usc-release-point-verdict-v2`'s
+    `(usc_title, usc_section_key, usc_place)` key and `nt new` negative controls.
+  - **`ss-tdf4` (Wave 4):** Adds character-offset spans and surrounding text
+    context beside XPath `source_path`, extends native scanning to Statutes at
+    Large (`STATUTE-*.xml`), and bumps past `native-legal-reference/003`.
+  - **`ss-2sor` (Wave 4):** Upgrades `document_citations` extraction with
+    proposed-section and enclosing-section grammar while maintaining parity
+    between `document_citations` and `native_legal_references`.
