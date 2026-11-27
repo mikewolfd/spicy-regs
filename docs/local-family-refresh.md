@@ -95,7 +95,18 @@ $UV publish-local-generation --generation "$GENERATION" --evidence "$EVIDENCE" \
 
 The dry run runs the real publication guards against a private disk store
 holding a copy of the public index (`--live-index` names a saved copy), and
-its receipt lists each table's rows beside the live rows. The publish compares
+its receipt lists each table's rows beside the live rows. Before creating its
+temporary store or writing any file, `--dry-run` checks free space on
+`--output`'s target volume against its projected temporary bytes and refuses
+when less than 40 GiB would remain free. Local generation members, unchanged
+copied members, and source-evidence blobs are verified byte-for-byte through the
+`DiskStore` S3/multipart API (preserving every immutability check, Content-MD5
+and composite multipart ETag, SHA-256 read-back, and conditional pointer check)
+as read-only local references without duplicating multi-GB payloads into
+temporary multipart scratch or reassembly files on disk; `dry-run.json` records
+both `store_bytes_written` (what a real R2 publish would upload) and
+`store_disk_bytes_written` (actual local temporary bytes written, limited to the
+small index and input-proof metadata). The publish compares
 with the index stored in the bucket, read with the credentials; the two are
 the same object unless a publish lands in between, which `--expect-prior`
 catches. Neither creates `--output` until every guard has passed, so a refused
@@ -291,9 +302,10 @@ An edition is added by decision, not on a schedule. Mirror the family first
 (`--family uscode-editions`, about 600 MB), then acquire, build, audit and
 prepare as [the family's page](uscode-editions.md#adding-an-edition) shows. The
 preparation prints `generation` and `evidence`, the `$GENERATION` and
-`$EVIDENCE` of the publish steps. The dry run copies the changed members and
-every evidence blob into a temporary store beside `--output` (ss-p9fm), about
-0.7 GB for one corpus addition; check free disk first. The first publish after 2026-11-11 also drops the
+`$EVIDENCE` of the publish steps. The dry run verifies changed members and
+evidence blobs byte-for-byte as read-only local references without duplicating
+their bytes on disk, and refuses up front if projected temporary writes would
+leave less than 40 GiB free on `--output`'s volume. The first publish after 2026-11-11 also drops the
 family's receipt member, which publication accepts because
 `docs/pins/receipt-archive.json` pins the live generation.
 

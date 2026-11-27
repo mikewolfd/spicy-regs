@@ -80,7 +80,7 @@ def test_generation_publication_and_ordinary_query(tmp_path, monkeypatch):
     assert rows==[('010001','1',Decimal('0')),('010001','2',Decimal('9'))]
 
 
-def test_maintained_local_cli_admits_hospital_and_requires_evidence(tmp_path, monkeypatch):
+def test_maintained_local_cli_admits_hospital_and_requires_evidence(tmp_path, monkeypatch, ample_disk_space):
     from spicy_regs.local_publication import main
 
     body = original()

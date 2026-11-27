@@ -227,6 +227,12 @@ removed at the next start.
      --expect-prior sha256:85589a33b63f22bfac522e5f2c41210eb69437b763b81380562eda1fd33ef298 --output "$WORK/opinions-receipt"
    ```
 
+   The `--dry-run` step enforces an upfront 40 GiB remaining free-space floor on
+   `--output`'s volume before creating any temporary files, and verifies the
+   51.5 GiB export and generation Parquet files byte-for-byte through the
+   multipart `DiskStore` path as read-only local references without duplicating
+   their payload bytes into multipart scratch or reassembly files on disk (only
+   small index, input-proof, and receipt metadata files are written locally).
    Publication uploads the evidence, the 51.5 GiB export included (D1), to
    `source-evidence/blobs/sha256/` and reads each blob back once: about 103 GiB
    of transfer, whose time depends on the uplink (not measured).

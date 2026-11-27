@@ -2,14 +2,19 @@
 
 from datetime import date
 from decimal import Decimal
+import base64
+import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 from types import SimpleNamespace
 
+from botocore.exceptions import ClientError
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from rulespec_artifacts import ArtifactVerificationError
 import yaml
 
 from spicy_regs import local_publication as command
@@ -18,6 +23,8 @@ from spicy_regs.source_evidence import ARCHIVE_REFERENCE, CaptureEvidence
 from spicy_regs.sources import publication, r2
 from spicy_regs.sources.disk_store import DiskStore
 from tests.generation_fakes import Store
+
+pytestmark = pytest.mark.usefixtures("ample_disk_space")
 
 FAMILY = "irs-form990"
 
@@ -511,3 +518,202 @@ def test_cms_drug_spending_families_are_registered_and_dry_run_accepted(tmp_path
     receipt = json.loads((output / "dry-run.json").read_text())
     assert receipt["status"] == "dry_run_accepted" and receipt["family"] == family
     assert receipt["artifactDigest"] == "sha256:" + digest
+
+
+def test_dry_run_refuses_before_writing_when_projected_free_space_falls_below_40_gib(tmp_path, monkeypatch):
+    """Upfront 40 GiB floor refuses before creating parent dirs or .dry-run-store-* scratch."""
+    directory, _, evidence = generation(tmp_path, "guarded", {"irs990_filings": ["a", "b"]})
+    live = tmp_path / "publication.v2.json"
+    live.write_text(json.dumps(publication.empty_index()))
+    missing_parent = tmp_path / "not-created-yet"
+    output = missing_parent / "dry-run-out"
+
+    probed: list[Path] = []
+
+    def below_floor(path: Path):
+        probed.append(Path(path))
+        return SimpleNamespace(free=command.DRY_RUN_FREE_FLOOR_BYTES - 1024**3)
+
+    monkeypatch.setattr(shutil, "disk_usage", below_floor)
+    with pytest.raises(publication.PublicationError, match="below the 40 GiB floor"):
+        command.main([
+            "--generation", str(directory), "--family", FAMILY, "--evidence", str(evidence),
+            "--dry-run", "--scratch-raw", "--live-index", str(live), "--output", str(output),
+        ])
+    assert probed == [tmp_path.resolve()]
+    assert not missing_parent.exists()
+    assert not list(tmp_path.glob(".dry-run-store-*"))
+
+    # Even when current free space exceeds 40 GiB slightly, subtracting projected temp bytes still refuses.
+    root = command._candidate(directory, FAMILY, (evidence,))
+    args = SimpleNamespace(
+        generation=directory, family=FAMILY, evidence=[evidence], added_table=[],
+        expect_prior=None, output=output, live_index=live, scratch_raw=True,
+    )
+    local_sources = command._dry_run_local_sources(directory, FAMILY, root, None, (evidence,))
+    projected = command._projected_dry_run_bytes(
+        directory, FAMILY, root, (evidence,), live.read_bytes(), local_sources=local_sources,
+    )
+    assert projected > 1024
+    with pytest.raises(publication.PublicationError, match="below the 40 GiB floor"):
+        command.dry_run(args, root, disk_usage=lambda _: SimpleNamespace(free=command.DRY_RUN_FREE_FLOOR_BYTES + 1024))
+    assert not missing_parent.exists()
+    assert not list(tmp_path.glob(".dry-run-store-*"))
+
+    # At exact floor + projected bytes, dry_run is admitted and succeeds.
+    receipt = command.dry_run(
+        args, root, disk_usage=lambda _: SimpleNamespace(free=command.DRY_RUN_FREE_FLOOR_BYTES + projected),
+    )
+    assert receipt["status"] == "dry_run_accepted"
+    assert not list(missing_parent.glob(".dry-run-store-*"))
+
+
+def test_dry_run_multipart_verifies_without_duplicating_payload_bytes(tmp_path, monkeypatch):
+    """Multipart evidence blobs, changed tables and copied members verify with zero payload bytes written to disk."""
+    from spicy_regs.sources import disk_store as disk_store_module
+
+    # Build a prior generation with one large table that stays unchanged across refreshes.
+    unchanged_ids = [os.urandom(256).hex() for _ in range(700)]  # > 350 KiB uncompressible
+    first, _, first_ev = generation(
+        tmp_path, "first", {"irs990_filings": ["a", "b"], "irs990_officers": unchanged_ids},
+    )
+    live_store = DiskStore(tmp_path / "live-store", bucket="live")
+    publication.publish_generation(
+        first, client=live_store, bucket="live", prior_index=publication.empty_index(),
+        evidence_directories=(first_ev,),
+    )
+    live = tmp_path / "publication.v2.json"
+    live.write_bytes(live_store.objects[publication.INDEX_V2_KEY].read_bytes())
+
+    # Build candidate with a >350 KiB changed table, the unchanged >350 KiB table, and a 1 MiB evidence blob.
+    changed_ids = [os.urandom(256).hex() for _ in range(700)]
+    declared = command._family_schemas(FAMILY) or {}
+    src = tmp_path / "second-source"
+    src.mkdir()
+    changed_path = src / "irs990_filings.parquet"
+    unchanged_path = src / "irs990_officers.parquet"
+    pq.write_table(_table_for_schema(declared["irs990_filings"], changed_ids), changed_path)
+    shutil.copyfile(first / "irs990_officers.parquet", unchanged_path)
+
+    ev_blob = os.urandom(1024 * 1024)  # 1 MiB uncompressible evidence original
+    ev = CaptureEvidence(tmp_path / "second-build", FAMILY)
+    ev.retain_bytes(ev_blob, stage="bulk-export", raw_source=True)
+    second = tmp_path / "second"
+    build_generation(
+        second, family=FAMILY, files=[changed_path, unchanged_path],
+        expected_keys=["irs990_filings.parquet", "irs990_officers.parquet"], inputs=ev.inputs(),
+    )
+    ev.finish()
+
+    changed_size = (second / "irs990_filings.parquet").stat().st_size
+    unchanged_size = (second / "irs990_officers.parquet").stat().st_size
+    assert changed_size > 256 * 1024 and unchanged_size > 256 * 1024
+
+    # Lower PART_BYTES to 64 KiB so both the 1 MiB evidence blob and changed Parquet table take the multipart path.
+    monkeypatch.setattr(publication, "PART_BYTES", 64 * 1024)
+
+    observed = SimpleNamespace(upload_parts=0, peak_bytes=0, multipart_dir_created=False, disk_bytes=-1)
+
+    def dir_bytes(root_path: Path) -> int:
+        return sum(p.stat().st_size for p in root_path.rglob("*") if p.is_file())
+
+    class ObservingDiskStore(DiskStore):
+        def _record(self) -> None:
+            observed.peak_bytes = max(observed.peak_bytes, dir_bytes(self.root))
+            if (self.root / "multipart").exists():
+                observed.multipart_dir_created = True
+            observed.disk_bytes = self.disk_bytes_written
+
+        def put_object(self, **kwargs):
+            result = super().put_object(**kwargs)
+            self._record()
+            return result
+
+        def copy_object(self, **kwargs):
+            result = super().copy_object(**kwargs)
+            self._record()
+            return result
+
+        def upload_part(self, **kwargs):
+            observed.upload_parts += 1
+            result = super().upload_part(**kwargs)
+            self._record()
+            return result
+
+        def complete_multipart_upload(self, **kwargs):
+            result = super().complete_multipart_upload(**kwargs)
+            self._record()
+            return result
+
+    monkeypatch.setattr(disk_store_module, "DiskStore", ObservingDiskStore)
+
+    output = run(
+        tmp_path, "multipart-dry-run", second, ev.artifact_dir,
+        "--dry-run", "--scratch-raw", "--live-index", str(live),
+    )
+    receipt = json.loads((output / "dry-run.json").read_text())
+    assert receipt["status"] == "dry_run_accepted"
+    assert receipt["store_members_copied"] == 1
+    assert observed.upload_parts >= 20  # >=16 parts for 1 MiB blob + >=5 parts for changed Parquet
+    assert not observed.multipart_dir_created
+    # store_bytes_written still reflects what a real R2 publish would upload (excluding the server-side copied table).
+    assert receipt["store_bytes_written"] >= len(ev_blob) + changed_size
+    assert receipt["store_bytes_written"] < len(ev_blob) + changed_size + unchanged_size
+    # Actual local temporary disk writes are strictly metadata only (well below a single 64 KiB part).
+    assert receipt["store_disk_bytes_written"] == observed.disk_bytes
+    assert observed.peak_bytes < 64 * 1024
+    assert receipt["store_disk_bytes_written"] < 64 * 1024
+
+    # Projection reflects zero-copy references vs unreferenced full-copy peak (~2x largest blob).
+    root = command._candidate(second, FAMILY, (ev.artifact_dir,))
+    local_sources = command._dry_run_local_sources(
+        second, FAMILY, root, publication.parse_index(live.read_bytes())["families"][FAMILY], (ev.artifact_dir,),
+    )
+    zero_copy_proj = command._projected_dry_run_bytes(
+        second, FAMILY, root, (ev.artifact_dir,), live.read_bytes(), local_sources=local_sources,
+    )
+    copy_proj = command._projected_dry_run_bytes(
+        second, FAMILY, root, (ev.artifact_dir,), live.read_bytes(), local_sources=None,
+    )
+    assert zero_copy_proj < 256 * 1024
+    assert copy_proj >= 2 * len(ev_blob) + changed_size + unchanged_size
+
+
+@pytest.mark.parametrize("recompute_md5", [False, True])
+def test_dry_run_multipart_preserves_corruption_refusals(tmp_path, monkeypatch, recompute_md5):
+    """Damaged multipart bytes still refuse via BadDigest or read-back verification even in zero-copy dry-run mode."""
+    from spicy_regs.sources import disk_store as disk_store_module
+
+    ev_blob = os.urandom(256 * 1024)
+    declared = command._family_schemas(FAMILY) or {}
+    src = tmp_path / "src"
+    src.mkdir()
+    pq_path = src / "irs990_filings.parquet"
+    pq.write_table(_table_for_schema(declared["irs990_filings"], ["a"]), pq_path)
+    ev = CaptureEvidence(tmp_path / "build", FAMILY)
+    ev.retain_bytes(ev_blob, stage="bulk-export", raw_source=True)
+    gen_dir = tmp_path / "gen"
+    build_generation(gen_dir, family=FAMILY, files=[pq_path], expected_keys=[pq_path.name], inputs=ev.inputs())
+    ev.finish()
+    live = tmp_path / "live.json"
+    live.write_text(json.dumps(publication.empty_index()))
+    monkeypatch.setattr(publication, "PART_BYTES", 64 * 1024)
+
+    class CorruptingDiskStore(DiskStore):
+        def upload_part(self, **kwargs):
+            if "/blobs/sha256/" in kwargs["Key"] and kwargs["PartNumber"] == 2:
+                damaged = bytes([kwargs["Body"][0] ^ 0xFF]) + kwargs["Body"][1:]
+                kwargs["Body"] = damaged
+                if recompute_md5:
+                    kwargs["ContentMD5"] = base64.b64encode(hashlib.md5(damaged, usedforsecurity=False).digest()).decode()
+            return super().upload_part(**kwargs)
+
+    monkeypatch.setattr(disk_store_module, "DiskStore", CorruptingDiskStore)
+    expected_error = ArtifactVerificationError if recompute_md5 else ClientError
+    with pytest.raises(expected_error):
+        run(
+            tmp_path, "corrupt-dry-run", gen_dir, ev.artifact_dir,
+            "--dry-run", "--scratch-raw", "--live-index", str(live),
+        )
+    assert not (tmp_path / "corrupt-dry-run").exists()
+    assert not list(tmp_path.glob(".dry-run-store-*"))
