@@ -47,11 +47,18 @@ not establish an atomic or current publisher snapshot. Counts with different
 units or selections cannot form a completeness percentage.
 
 Per-table source reviews are observations with `metadata_kind: source-coverage`,
-`table`, and `table_version`. The public catalog displays their note only beside
-the exact SHA-256 table version reviewed. It keeps those notes out of the generic
-observations list, whose public shape omits the version. Required source coverage
-stays unknown until the complete required identity set is established. External
-sources remain explicit. Historical build evidence retains its separate meaning.
+`table`, and `table_version`. An exact SHA-256 `table_version` match displays
+directly beside that table. Across routine data-only republishes, the exporter
+carries forward the latest non-superseded review at or before the live
+generation when the table's family, schema, policy, and acquisition route
+bindings are unchanged, explicitly flagging the table with
+`coverageNoteMatch: "carried"` and `coverageNoteReviewedVersion`. Any change to
+schema, policy, or acquisition route invalidates carry-forward and requires a
+fresh review. The exporter keeps `source-coverage` observations out of the
+generic observations list, whose public shape omits those bindings. Required
+source coverage stays unknown until the complete required identity set is
+established. External sources remain explicit. Historical build evidence retains
+its separate meaning.
 
 Resolve uncertain origins from retained receipts, native identifiers and actual
 file contents, then acquisition scripts or publisher documentation. Record the

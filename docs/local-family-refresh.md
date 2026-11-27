@@ -303,12 +303,15 @@ Nothing in the repository fails when these go stale; each is prose or a
 reviewed note that stops describing the live table. Update them in the commit
 that records the refresh.
 
-- **Source-coverage notes.** `source_catalog/config/registry.v1.json` holds one
-  reviewed `source-coverage` observation per table, bound to a `table_version`
-  (the generation digest). The catalog shows a note only beside that exact
-  version ([shared-source-catalog.md](shared-source-catalog.md)), so after a
-  publish the family's tables show no reviewed note until an observation for
-  the new digest is added. The old observations stay: they describe the old
+- **Source-coverage notes.** `source_catalog/config/registry.v1.json` holds
+  reviewed `source-coverage` observations per table, bound to a `table_version`
+  (the generation digest), family, schema, and acquisition route. Routine
+  data-only republishes carry forward the latest matching review at or before
+  the live generation with `coverageNoteMatch: "carried"` and
+  `coverageNoteReviewedVersion` ([shared-source-catalog.md](shared-source-catalog.md)).
+  When a publish changes a table's schema, policy, or acquisition route,
+  carry-forward invalidates and the table shows no reviewed note until a fresh
+  observation is added. The old observations stay: they describe the old
   generation.
 - **`docs/grants-opportunities.md`** names the accepted 2026-10-20 ZIP, source
   release and generation digests. They remain true of that export. Add the

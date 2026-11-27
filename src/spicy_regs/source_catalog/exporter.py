@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -368,27 +369,422 @@ def public_coverage(report: dict) -> dict:
     return result
 
 
-def source_coverage_note(table: dict, evidence: list[tuple[str, dict]]) -> str | None:
-    """Show a reviewed source note only for its exact published table version.
+_SHA256_RE = re.compile(r"sha256:[a-f0-9]{64}")
+_TIMESTAMP_RE = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})"
+)
+_ROUTE_SIGNATURE_KEYS = (
+    "id",
+    "delivery_method",
+    "lifecycle",
+    "custodian",
+    "content_behavior",
+    "access_url",
+)
 
-    Observations already survive registry-driven rebuilds. This selection keeps
-    source inventory evidence separate from historical build reconciliation.
+
+def _is_sha256(value: object) -> bool:
+    return isinstance(value, str) and bool(_SHA256_RE.fullmatch(value))
+
+
+def _parse_timestamp(value: object) -> datetime | None:
+    if not isinstance(value, str) or not _TIMESTAMP_RE.fullmatch(value):
+        return None
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return parsed if parsed.tzinfo is not None else None
+
+
+def _schema_signature(
+    entry: dict, *, descriptor_key: str
+) -> tuple[tuple[tuple[str, str], ...], tuple[str, ...]] | None:
+    container = entry.get("schema") if isinstance(entry.get("schema"), dict) else entry.get(descriptor_key)
+    if not isinstance(container, dict):
+        return None
+    raw_columns = container.get("columns")
+    if not isinstance(raw_columns, list) or not raw_columns:
+        return None
+    columns: list[tuple[str, str]] = []
+    for column in raw_columns:
+        if (
+            not isinstance(column, (list, tuple))
+            or len(column) != 2
+            or not isinstance(column[0], str)
+            or not column[0].strip()
+            or not isinstance(column[1], str)
+            or not column[1].strip()
+        ):
+            return None
+        columns.append((column[0], column[1]))
+    raw_partitions = (
+        container["partitionColumns"]
+        if "partitionColumns" in container
+        else container.get("partition_columns")
+    )
+    if raw_partitions is None:
+        partitions: tuple[str, ...] = ()
+    elif isinstance(raw_partitions, list) and all(isinstance(col, str) and col.strip() for col in raw_partitions):
+        partitions = tuple(raw_partitions)
+    else:
+        return None
+    return (tuple(columns), partitions)
+
+
+def _policy_signature(entry: dict) -> tuple[bool, str | None]:
+    policy_fields: dict[str, Any] = {}
+    for key in ("policy", "policy_version", "schema_policy"):
+        if key not in entry or entry[key] is None:
+            continue
+        value = entry[key]
+        if key == "policy_version":
+            if not isinstance(value, str) or not value.strip():
+                return False, None
+        elif isinstance(value, str):
+            if not value.strip():
+                return False, None
+        elif not isinstance(value, dict) or not value:
+            return False, None
+        policy_fields[key] = value
+    if not policy_fields:
+        return True, None
+    return True, json.dumps(policy_fields, sort_keys=True, separators=(",", ":"))
+
+
+def _route_definition_signature(route: dict) -> tuple[str | None, ...]:
+    return tuple(
+        route[key] if isinstance(route.get(key), str) and route[key].strip() else None
+        for key in _ROUTE_SIGNATURE_KEYS
+    )
+
+
+def _explicit_route_binding(entry: dict) -> tuple[bool, tuple[str, Any] | None]:
+    present = [
+        key
+        for key in ("route_id", "route_ids", "acquisition_route", "acquisition_routes", "routes")
+        if key in entry and entry[key] is not None
+    ]
+    if not present:
+        return True, None
+    normalized: dict[str, Any] = {}
+    for key in present:
+        value = entry[key]
+        if key == "route_id":
+            if not isinstance(value, str) or not value.strip():
+                return False, None
+            normalized["ids"] = (value,)
+        elif key == "route_ids":
+            if not isinstance(value, list) or not value or any(not isinstance(v, str) or not v.strip() for v in value):
+                return False, None
+            normalized["ids"] = tuple(sorted(set(value)))
+        elif key == "acquisition_route":
+            if isinstance(value, str) and value.strip():
+                normalized["values"] = (value,)
+            elif isinstance(value, dict) and value:
+                normalized["defs"] = (_route_definition_signature(value),)
+            else:
+                return False, None
+        else:
+            if not isinstance(value, list) or not value:
+                return False, None
+            if all(isinstance(v, str) and v.strip() for v in value):
+                normalized["ids" if key == "routes" else "values"] = tuple(sorted(set(value)))
+            elif all(isinstance(v, dict) and v for v in value):
+                normalized["defs"] = tuple(sorted(_route_definition_signature(v) for v in value))
+            else:
+                return False, None
+    if len(normalized) == 1:
+        kind, payload = next(iter(normalized.items()))
+        return True, (kind, payload)
+    return True, ("combined", tuple(sorted(normalized.items())))
+
+
+def _parent_table_names(values: Any) -> tuple[str, ...] | None:
+    if not isinstance(values, list):
+        return None
+    names: set[str] = set()
+    for item in values:
+        raw = item.get("table") if isinstance(item, dict) else item
+        if not isinstance(raw, str) or not raw.strip():
+            return None
+        name = raw.removesuffix(".parquet")
+        if name != "etl_receipts" and not name.endswith("/etl_receipts"):
+            names.add(name)
+    return tuple(sorted(names))
+
+
+def _source_route_signatures(values: Any) -> tuple[str, ...] | None:
+    if not isinstance(values, list):
+        return None
+    signatures: list[str] = []
+    for item in values:
+        if isinstance(item, str) and item.strip():
+            signatures.append(item)
+        elif isinstance(item, dict) and item:
+            core = {
+                key: item[key]
+                for key in ("source_id", "publisher", "locator", "kind", "selection_rules")
+                if key in item and item[key] is not None
+            }
+            if not core:
+                return None
+            signatures.append(json.dumps(core, sort_keys=True, separators=(",", ":")))
+        else:
+            return None
+    return tuple(sorted(signatures))
+
+
+def _source_identifiers(values: Any) -> tuple[str, ...] | None:
+    if not isinstance(values, list) or any(not isinstance(v, str) or not v.strip() for v in values):
+        return None
+    return tuple(sorted(set(values)))
+
+
+def _routes_match(
+    table: dict,
+    obs: dict,
+    *,
+    routes: list[dict] | None,
+    evidence: list[tuple[str, dict]],
+) -> bool:
+    table_route_ok, table_explicit = _explicit_route_binding(table)
+    obs_route_ok, obs_explicit = _explicit_route_binding(obs)
+    if not table_route_ok or not obs_route_ok:
+        return False
+
+    obs_source_routes = _source_route_signatures(obs["source_routes"]) if "source_routes" in obs else None
+    obs_source_ids = _source_identifiers(obs["source_identifiers"]) if "source_identifiers" in obs else None
+    obs_parents = _parent_table_names(obs["parent_tables"]) if "parent_tables" in obs else None
+    obs_family_parents = (
+        _parent_table_names(obs["recorded_family_parent_tables"])
+        if "recorded_family_parent_tables" in obs
+        else None
+    )
+
+    if (
+        obs_explicit is None
+        and not obs_source_routes
+        and not obs_source_ids
+        and not obs_parents
+    ):
+        return False
+
+    collection_route_ids = (
+        tuple(sorted({r["id"] for r in routes if isinstance(r.get("id"), str) and r["id"].strip()}))
+        if routes is not None
+        else None
+    )
+    collection_route_defs = (
+        tuple(sorted(_route_definition_signature(r) for r in routes))
+        if routes is not None
+        else None
+    )
+    collection_routes_by_id = (
+        {r["id"]: _route_definition_signature(r) for r in routes if isinstance(r.get("id"), str) and r["id"].strip()}
+        if routes is not None
+        else None
+    )
+
+    def _check_against_collection(binding: tuple[str, Any], *, require_full_set: bool) -> bool:
+        kind, payload = binding
+        if kind == "combined":
+            return all(_check_against_collection(part, require_full_set=require_full_set) for part in payload)
+        if routes is None:
+            return not require_full_set
+        if not routes:
+            return False
+        if kind in {"ids", "values"}:
+            if require_full_set:
+                return collection_route_ids == payload
+            return collection_routes_by_id is not None and all(rid in collection_routes_by_id for rid in payload)
+        if kind == "defs":
+            if require_full_set:
+                return collection_route_defs == payload
+            return all(
+                collection_routes_by_id is not None
+                and sig[0] is not None
+                and collection_routes_by_id.get(sig[0]) == sig
+                for sig in payload
+            )
+        return False
+
+    if table_explicit is not None:
+        if obs_explicit != table_explicit:
+            return False
+        if routes is not None and not _check_against_collection(table_explicit, require_full_set=False):
+            return False
+    elif obs_explicit is not None:
+        if not _check_against_collection(obs_explicit, require_full_set=True):
+            return False
+
+    if "source_routes" in table and table["source_routes"] is not None:
+        table_source_routes = _source_route_signatures(table["source_routes"])
+        if table_source_routes is None or obs_source_routes != table_source_routes:
+            return False
+
+    if "source_identifiers" in table and table["source_identifiers"] is not None:
+        table_source_ids = _source_identifiers(table["source_identifiers"])
+        if table_source_ids is None or obs_source_ids != table_source_ids:
+            return False
+
+    if "parent_tables" in table and table["parent_tables"] is not None:
+        table_parents = _parent_table_names(table["parent_tables"])
+        if table_parents is None or table_parents != (obs_parents or ()):
+            return False
+    else:
+        derived_parents = tuple(
+            sorted(
+                {
+                    item["to_id"].removesuffix(".parquet")
+                    for kind, item in evidence
+                    if kind == "relationships"
+                    and item.get("kind") == "derived-from"
+                    and item.get("from_id") == table["id"]
+                    and isinstance(item.get("to_id"), str)
+                    and item["to_id"].strip()
+                }
+            )
+        )
+        if derived_parents and derived_parents != (obs_parents or ()):
+            return False
+
+    if "family_parent_tables" in table and table["family_parent_tables"] is not None:
+        table_family_parents = _parent_table_names(table["family_parent_tables"])
+        if table_family_parents is None:
+            return False
+        if "recorded_family_parent_tables" in obs:
+            if table_family_parents != (obs_family_parents or ()):
+                return False
+
+    return True
+
+
+def resolve_source_coverage_note(
+    table: dict,
+    evidence: list[tuple[str, dict]],
+    *,
+    routes: list[dict] | None = None,
+) -> dict[str, Any] | None:
+    """Resolve a reviewed source-coverage note for a published table version.
+
+    Exact ``table_version`` matches always win without being flagged as carried.
+    Across routine data-only republishes, the latest non-superseded review at or
+    before the live generation carries forward only when family, table schema,
+    policy, and acquisition route bindings remain unchanged; route, schema, or
+    policy changes invalidate carry-forward and require a fresh review.
     """
     version = table.get("artifact_digest")
-    if not isinstance(version, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", version):
+    if not _is_sha256(version):
         return None
-    notes = set()
-    for kind, item in evidence:
-        if (kind == "observations" and item.get("metadata_kind") == "source-coverage"
-                and item.get("table") == table["id"]
-                and item.get("table_version") == version):
+    assert isinstance(version, str)
+
+    candidates = [
+        item
+        for kind, item in evidence
+        if kind == "observations"
+        and item.get("metadata_kind") == "source-coverage"
+        and item.get("table") == table["id"]
+    ]
+    if not candidates:
+        return None
+
+    exact = [item for item in candidates if item.get("table_version") == version]
+    if exact:
+        notes: set[str] = set()
+        for item in exact:
             note = item.get("note")
             if not isinstance(note, str) or not note.strip():
                 raise ValueError("Source coverage observation requires a note")
             notes.add(note)
-    if len(notes) > 1:
-        raise ValueError("Conflicting source coverage notes for the same table version")
-    return next(iter(notes), None)
+        if len(notes) > 1:
+            raise ValueError("Conflicting source coverage notes for the same table version")
+        return {
+            "note": next(iter(notes)),
+            "match": "exact",
+            "carried": False,
+            "reviewed_version": version,
+        }
+
+    table_family = table.get("family")
+    if not isinstance(table_family, str) or not table_family.strip():
+        return None
+    table_schema = _schema_signature(table, descriptor_key="publication_descriptor")
+    if table_schema is None:
+        return None
+    table_policy_ok, table_policy = _policy_signature(table)
+    if not table_policy_ok:
+        return None
+    table_published_at: datetime | None = None
+    if "published_at" in table and table["published_at"] is not None:
+        table_published_at = _parse_timestamp(table["published_at"])
+        if table_published_at is None:
+            return None
+
+    eligible: list[tuple[dict, datetime | None]] = []
+    for item in candidates:
+        obs_version = item.get("table_version")
+        if not _is_sha256(obs_version):
+            continue
+        if item.get("family") != table_family:
+            continue
+        obs_schema = _schema_signature(item, descriptor_key="publication_member")
+        if obs_schema is None or obs_schema != table_schema:
+            continue
+        obs_policy_ok, obs_policy = _policy_signature(item)
+        if not obs_policy_ok or obs_policy != table_policy:
+            continue
+        if not _routes_match(table, item, routes=routes, evidence=evidence):
+            continue
+        obs_recorded_at: datetime | None = None
+        if "recorded_at" in item and item["recorded_at"] is not None:
+            obs_recorded_at = _parse_timestamp(item["recorded_at"])
+            if obs_recorded_at is None:
+                continue
+        if table_published_at is not None and obs_recorded_at is not None and obs_recorded_at > table_published_at:
+            continue
+        note = item.get("note")
+        if not isinstance(note, str) or not note.strip():
+            raise ValueError("Source coverage observation requires a note")
+        eligible.append((item, obs_recorded_at))
+
+    if not eligible:
+        return None
+
+    superseded = {
+        item["prior_review"]
+        for item, _ in eligible
+        if isinstance(item.get("prior_review"), str) and item["prior_review"].strip()
+    }
+    current = [(item, recorded) for item, recorded in eligible if item.get("id") not in superseded]
+    if not current:
+        raise ValueError("Conflicting source coverage notes for the same table")
+
+    if len(current) > 1:
+        if all(recorded is not None for _, recorded in current):
+            latest_time = max(recorded for _, recorded in current if recorded is not None)
+            current = [(item, recorded) for item, recorded in current if recorded == latest_time]
+
+    notes = {item["note"] for item, _ in current}
+    versions = {item["table_version"] for item, _ in current}
+    if len(notes) > 1 or len(versions) > 1:
+        raise ValueError("Conflicting source coverage notes for the same table")
+
+    chosen = current[0][0]
+    return {
+        "note": chosen["note"],
+        "match": "carried",
+        "carried": True,
+        "reviewed_version": chosen["table_version"],
+    }
+
+
+def source_coverage_note(
+    table: dict,
+    evidence: list[tuple[str, dict]],
+    *,
+    routes: list[dict] | None = None,
+) -> str | None:
+    """Return the reviewed source-coverage note text for a published table, if eligible."""
+    resolved = resolve_source_coverage_note(table, evidence, routes=routes)
+    return resolved["note"] if resolved is not None else None
 
 
 def export_file_pages(db, output: Path, *, cid: str, folder: str, common: dict, internal: bool, page_size: int, retained: bool = False, references=None, publisher=None, emit=None, page_rows=None, legacy_provenance=True) -> list[dict]:
@@ -542,8 +938,10 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
             if not periods:
                 periods = [{"kind": "unknown", "label": "Unknown", "basis": "no-qualified-period-assertion"}]
             routes = []
+            raw_routes: list[dict] = []
             for row in db.execute("SELECT data FROM routes WHERE collection_id=? ORDER BY id", (cid,)):
                 item = json.loads(row[0])
+                raw_routes.append(item)
                 route = {
                     "id": item["id"],
                     "label": safe_text(item.get("label", item["id"])),
@@ -583,9 +981,12 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
                         "coverage_note": "coverageNote",
                     },
                 )
-                note = source_coverage_note(item, evidence)
-                if note is not None:
-                    table["coverageNote"] = note if internal else safe_text(note)
+                resolved = resolve_source_coverage_note(item, evidence, routes=raw_routes)
+                if resolved is not None:
+                    table["coverageNote"] = resolved["note"] if internal else safe_text(resolved["note"])
+                    if resolved["carried"]:
+                        table["coverageNoteMatch"] = "carried"
+                        table["coverageNoteReviewedVersion"] = resolved["reviewed_version"]
                 if item.get("publication") is not None:
                     table["publication"] = public_reconciliation(item["publication"])
                     if table.get("artifactDigest") != table["publication"]["version"]:
@@ -668,8 +1069,8 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
                 },
             }
             for kind, item in evidence:
-                # Version-bound source notes appear only beside their matching
-                # table; the generic observation shape omits the version pin.
+                # Source-coverage reviews appear only beside their resolved
+                # table; the generic observation shape omits version/route pins.
                 if kind == "observations" and item.get("metadata_kind") == "source-coverage":
                     continue
                 if kind == "errors":
