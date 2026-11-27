@@ -8,6 +8,7 @@ import re
 
 import pyarrow as pa
 
+from spicy_regs.runtime_bounds import checkpoint
 from spicy_regs.transforms.fec_query import exact_amount
 
 POLICY = "fec-publisher-outside-spending/1"
@@ -49,12 +50,20 @@ def outside_profiles(spenders, totals, *, candidate_id, cycle, evidence, electio
     """
     if election is not None:
         raise ValueError("Publisher cycle aggregate does not qualify an election-specific comparison")
-    if type(cycle) is not int or cycle % 2 or not re.fullmatch(r"[HPS][A-Z0-9]{8}", candidate_id):
+    if (
+        type(cycle) is not int
+        or cycle < 1978
+        or cycle % 2
+        or not isinstance(candidate_id, str)
+        or not re.fullmatch(r"[HPS][A-Z0-9]{8}", candidate_id)
+    ):
         raise ValueError("Select an explicit candidate ID and two-year cycle")
     selected = {}
     sums = defaultdict(lambda: Decimal(0))
     groups = defaultdict(list)
-    for row in spenders:
+    for idx, row in enumerate(spenders):
+        if idx % 256 == 0:
+            checkpoint()
         if row.get("candidate_id") != candidate_id or row.get("cycle") != cycle:
             raise ValueError("Spender aggregate differs from the selected candidate/cycle")
         indicator = row.get("support_oppose_indicator")

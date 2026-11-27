@@ -1,128 +1,173 @@
-# Bounded FEC research outputs
+# FEC research profiles and election outputs
 
-The new profiles extend existing FEC readers, relationship mapping, exact-money
-field mappings and financial membership selection. They do not replace the FEC
-ingestion path or qualify every retained transaction as current or additive.
-Builds read selected originals and write a fresh local generation with source
-evidence. Publication uses the existing generation and local-publication routes.
+The `fec-research-profiles` family builds five receipts-free Parquet tables from
+retained FEC originals in `CentralRawArchiveStore`:
+
+- `fec_committee_relationship_profiles` (`fec-disclosed-relationships/1`)
+- `fec_contribution_profiles` (`fec-selected-report-contributions/1`)
+- `fec_contribution_decisions` (`fec-selected-report-contributions/1`)
+- `fec_outside_spending_profiles` (`fec-publisher-outside-spending/1`)
+- `fec_outside_spending_spenders` (`fec-publisher-outside-spending/1`)
+
+These outputs extend existing FEC readers, relationship mapping, exact-money
+field mappings, and financial membership selection without modifying Arrow
+schemas or replacing whole-corpus `fec-query`. Builds stream all five tables in
+bounded Arrow batches (`WRITE_BATCH_SIZE = 2000`) and publish through
+`publish-local-generation` (`LOCAL_FAMILIES`).
 
 ## Committee disclosures
 
 `fec_committee_relationship_profiles` preserves each selected native committee
-occurrence. The maintained `api_relationships` mapping retains every affiliation
-and sponsor field, missing/null/empty distinctions, multiplicity and unresolved
-names. Sponsor-ID and sponsor-object arrays remain separate source witnesses.
-Names never become IDs. Source retrieval and filing dates do not establish a
-relationship effective date, ownership, a transfer or candidate authorization.
+occurrence from `/v1/committees/`. The maintained `api_relationships` mapping
+retains every affiliation and sponsor field, missing/null/empty distinctions,
+multiplicity, and unresolved labels. Sponsor-ID and sponsor-object arrays remain
+separate source witnesses. Names never become IDs. Source retrieval and filing
+dates do not establish a relationship effective date, ownership, a transfer, or
+candidate authorization.
 
-The initial selection names retained OpenFEC pages of the activity-cycle query
-in `profile-selection.json`. It is a page selection, not a committee census or
-a historical affiliation timeline. Conflicting snapshots remain separate profiles.
+Scaled v2 selections declare `committee_population`:
+
+- `complete_traversal`: contiguous pages `1..N` with exact publisher pagination
+  (`is_count_exact == true`, constant `count`, and total rows reconciled to
+  `count`).
+- `bounded_page_prefix`: an explicit capped prefix (`--max-committee-pages > 0`)
+  when fewer pages than the publisher total are requested.
+- `sampled_pages`: legacy v1 pilot or explicitly hand-pinned page selections.
+
+Existing retained `/v1/committees/` pages from a prior selection JSON or a
+`build_fec_committees` `pages.jsonl` capture directory can be reused via
+`--reuse-committees-from` without re-fetching unchanged pages.
 
 ## Contributions
 
-`fec_contribution_profiles` and `fec_contribution_decisions` cover recipient
-committee `C00921817`, effective filing `1943202`, in cycle 2026. The report
-covers October–December 2025. Its native title says Senate; later committee
-history also includes a House candidacy. The declared Senate association is
-`S6AL00484`, supported by native committee linkage and candidate observations
-predating the report. A later House observation fails the period control.
-First/last filing dates are not daily authorization dates.
+`fec_contribution_profiles` and `fec_contribution_decisions` qualify recipient-side
+Schedule A receipts and matching Schedule B refunds across reviewed electronic
+**Form 3** (`SA11AI`/`SA11C`/`SB20A`/`SB20C`), **Form 3P**
+(`SA17A`/`SA17C`/`SB28A`/`SB28C`), and **Form 3X**
+(`SA11AI`/`SA11C`/`SB28A`/`SB28C`) effective reports across supported format
+versions (including 8.5, 8.4, 8.2, 8.1, and 8.0 where reviewed cover and
+schedule layouts exist).
 
-The official report's `most_recent`, `is_amended`, `most_recent_file_number`
-and `amendment_chain` must identify the retained filing. Unknown successor files
-or changed official amounts refuse. The complete original is decoded by the
-source reader and mapped by the existing filing definitions. Native transaction
-IDs qualify membership through `select_scope`; repeated keys refuse. The existing
-selection tests cover replacements, deletions and equivalent representations.
+Every admitted report enforces:
 
-Only recipient-side Schedule A receipts and matching Schedule B refunds enter
-the calculation. Memo entries remain queryable and excluded. Positive receipts,
-negative receipt adjustments and refunds remain distinct. Gross positive receipts
-plus signed adjustments reproduce reported itemized receipts; refunds reproduce
-their matching source report measure. Unitemized amounts remain separate and
-are never attributed to named itemized donors. PAC IDs group PAC observations;
-individual states and employer labels do not establish people or employer gifts.
-
-The selected report includes September transaction dates. Those records remain
-in the report population and explicitly say `outside_report_coverage`; report
-coverage is not a transaction-date filter. Missing optional trailing fields
-remain missing. The original acquisition time remains unknown. The independently
-captured official report supplies reconciliation and effective-report evidence,
-not a fabricated historical download time.
-
-The source-reconciled example reports PAC receipts of $12,000 and individual
-itemized receipts of $80,188.58, with $500 of individual refunds. These figures
-describe this named report. They are not complete-cycle contribution totals.
+- Publisher effective-report binding: `most_recent == true`, `is_amended == false`,
+  matching `file_number`, `most_recent_file_number`, and `amendment_chain[-1]`,
+  plus exact cover match on `reporting_committee_id`, `period_start`,
+  `period_end`, and `report_code`.
+- Candidate association: Form 3 / 3P reports require explicit committee-history
+  linkage and a pre-report candidate observation in the selected cycle; Form 3X
+  non-candidate committees require `candidate_id = null` and empty
+  `candidate_ids` in committee history.
+- Exact official-report reconciliation: signed itemized receipts and refunds for
+  both `individual` and `pac` families must reconcile to the penny against the
+  official `/v1/committee/{id}/reports/` period measures, and
+  `signed + unitemized == total_individual_contributions_period`. Legitimate
+  zero-PAC or zero-individual effective reports are admitted only when the
+  official report declares `$0.00` for that family's matching period measures.
+- Separation of roles: memo entries stay visible and excluded; positive receipts,
+  negative adjustments, and Schedule B refunds stay distinct; unitemized amounts
+  are never attributed to named donors. Individual donor data remains subject to
+  `52 U.S.C. 30111(a)(4)` sale-or-use restrictions.
 
 ## Independent spending
 
-`fec_outside_spending_profiles` and `fec_outside_spending_spenders` consume the
-publisher's `/schedules/schedule_e/by_candidate/` and
-`/schedules/schedule_e/totals/by_candidate/` aggregates for candidate
-`S6OH00163`, cycle 2024. Complete observed page/count membership is checked.
-Each candidate/cycle/support/oppose group must reconcile exactly to its separate
-official total. Repeated native aggregate keys refuse; raw transactions and
-alternative captures are never added to the publisher measures.
+`fec_outside_spending_profiles` and `fec_outside_spending_spenders` consume
+OpenFEC `/v1/schedules/schedule_e/by_candidate/` and
+`/v1/schedules/schedule_e/totals/by_candidate/` across multi-cycle Presidential
+(`P`), Senate (`S`), and House (`H`) cohorts. Each `(candidate_id, cycle)` scope
+verifies exact pagination (up to `MAX_AGGREGATE_PAGES = 100` pages / 10,000 rows
+per query) and penny-exact group-to-total reconciliation per `S`/`O` indicator.
 
-The [publisher methodology](https://github.com/fecgov/openFEC/blob/develop/webservices/docs.py)
-states that these aggregates omit memo items and 24/48-hour notices. The native
-aggregate does not give individual election codes or event-date extrema. Those
-limits remain explicit; a specific-election request refuses. This is an observed
-publisher snapshot, not a frozen all-outside-spending census. Spenders count
-distinct source filer IDs, including separate Form 5 identity namespaces; native
-transaction counts are not spender counts.
+Per [OpenFEC methodology](https://github.com/fecgov/openFEC/blob/develop/webservices/docs.py),
+these publisher aggregates omit memo items and 24/48-hour notices, group all
+elections in a two-year cycle (election-specific requests refuse), and preserve
+Form 5 (`C9xxxxxxx` -> `fec_form5_filer`), committee (`Cxxxxxxxx` ->
+`fec_committee`), and `unresolved` filer namespaces separately.
 
 ## Official Senate results
 
-`fec_election_workbook_rows` retains every literal row of the official Federal
-Elections 2022 workbook, including House, summaries and appendices.
-`fec_election_results` interprets the reviewed Senate sheet into separate native
-vote-column observations. Full and unexpired terms, primary/general/runoff,
-ranked-choice rounds, zero votes, write-ins, source text and footnotes survive.
-Candidate IDs stay separate from unresolved write-in/aggregate identities.
+`fec_election_workbook_rows` and `fec_election_results` are built separately by
+`build-fec-election-results` (`spicy_regs.pipelines.fec_election_results`). See
+its module docstring and tests for workbook/sheet edition scope.
 
-The general ballot-line column can reproduce a contest total. Combined-party
-totals repeat across party lines and must not be added. Ranked-choice rounds
-overlap each other and the reported general column. The appendix is retained
-as overlapping source evidence, not an additional set of votes. Other editions
-and interpretation of House/appendix layouts remain outside this named scope.
+## Repeatable acquisition, build, and GitHub Actions runbook
 
-## Build and inspect
+### Secret and archive boundaries
 
-Run Python through `uv run` in the coordinated source environment:
+- **Never place `DATA_GOV_API_KEY` or `API_GOV` in local `.env`.** OpenFEC API
+  acquisition runs on GitHub Actions via `.github/workflows/refresh-fec-research-profiles.yml`
+  using repository secrets (`DATA_GOV_API_KEY` or `API_GOV`).
+- **No paid routes or proxies.** Acquisition hits only official
+  `api.open.fec.gov` (credential via `X-Api-Key` header only) and keyless
+  `docquery.fec.gov`.
+- **Default dry-run safety.** `skip_upload` defaults to `true`, writing to a
+  scratch archive in `$RUNNER_TEMP`. Real publishes (`skip_upload=false`) unset
+  `SPICYGOV_RAW_ROOT`, `R2_ALLOW_SHRINK`, and `R2_MIN_SIZE_RATIO` and re-read
+  live `publication.v2.json` with an explicit `User-Agent`.
+
+### GitHub Actions dispatch (recommended for live scaling)
+
+1. Dry-run verification (`skip_upload=true`):
+   ```sh
+   gh workflow run refresh-fec-research-profiles.yml \
+     -f mode=acquire \
+     -f cycles=2020,2022,2024,2026 \
+     -f committee_cycles=2024,2026 \
+     -f max_committee_pages=0 \
+     -f outside_candidates_per_cycle=25 \
+     -f contribution_reports_per_cycle=8 \
+     -f contribution_forms=house-senate,presidential,pac-party \
+     -f max_requests=850 \
+     -f skip_upload=true
+   ```
+2. Inspect the uploaded `refresh-fec-research-profiles-audit-*` artifact
+   (`selection.json`, `summary.json`, `candidate-validation.json`) to review
+   admitted vs skipped scopes and exact row counts.
+3. Live publication (`skip_upload=false`):
+   ```sh
+   gh workflow run refresh-fec-research-profiles.yml \
+     -f mode=acquire \
+     -f cycles=2020,2022,2024,2026 \
+     -f committee_cycles=2024,2026 \
+     -f max_committee_pages=0 \
+     -f outside_candidates_per_cycle=25 \
+     -f contribution_reports_per_cycle=8 \
+     -f contribution_forms=house-senate,presidential,pac-party \
+     -f max_requests=850 \
+     -f skip_upload=false
+   ```
+
+### Offline replay from retained originals
+
+Both v1 (pilot) and v2 (multi-cycle) selections build strictly offline:
 
 ```sh
-uv run python -m spicy_regs.pipelines.fec_research_profiles \
-  --selection /work/profile-selection.json --output-dir /work/new-profiles
-uv run python -m spicy_regs.pipelines.fec_election_results \
-  --capture /work/workbook-capture.json --output-dir /work/new-results
+TMPDIR=/private/tmp uv run --frozen build-fec-research-profiles \
+  --selection /work/selection.json \
+  --output-dir /work/new-profiles
 ```
 
-Both commands refuse existing output directories and mismatched input bytes.
-Keep failed attempts and prior generations; replay uses the same retained
-originals in a new directory. The election evidence records actual reader-code
-digests separately from installed package metadata. Coordinated source-branch
-proof does not establish a released source wheel or public serving acceptance.
+Pass `--read-index` (from `spicy-regs mirror`) to bind the prior published
+generation, and use `publish-local-generation --family fec-research-profiles`
+for guarded local dry-runs or publication.
 
-Ordinary queries include:
+## Example queries
 
 ```sql
-SELECT contribution_family, candidate_id, signed_itemized_receipts,
-       itemized_refunds, net_itemized_flow, period_start, period_end
-FROM fec_contribution_profiles;
+SELECT source_cycle, contribution_family, count(*) AS reports,
+       sum(included_records) AS included_rows, sum(memo_records) AS memo_rows
+FROM fec_contribution_profiles
+GROUP BY 1, 2
+ORDER BY 1, 2;
 
-SELECT support_oppose, total, reported_spender_count, election_basis
-FROM fec_outside_spending_profiles;
+SELECT source_cycle, substr(candidate_id, 1, 1) AS office, support_oppose,
+       count(*) AS candidates, sum(reported_spender_count) AS spender_links
+FROM fec_outside_spending_profiles
+GROUP BY 1, 2, 3
+ORDER BY 1, 2, 3;
 
-SELECT candidate_name, party, votes, source_row, source_column
-FROM fec_election_results
-WHERE state = 'NY' AND stage = 'general' AND round = 'reported'
-  AND row_kind = 'candidate';
+SELECT designation, count(*) AS committee_occurrences
+FROM fec_committee_relationship_profiles
+GROUP BY 1
+ORDER BY 2 DESC;
 ```
-
-SpicyGov presents these decisions through its normal metadata and Parquet reader.
-Local generation, MCP, private-publication and browser checks establish bounded
-local delivery. The coordinator owns package integration, independent review,
-public selection and hosted acceptance. Existing `ss-42nr`/`ss-u9s8` correction
-limits and the whole-file FEC metadata interpretation binding remain in force.
