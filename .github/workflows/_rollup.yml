@@ -208,6 +208,11 @@ on:
         required: false
         default: false
         type: boolean
+      senate_paid_ladder:
+        description: "committee_rosters: opt in to the paid walled-fetch ladder (Zyte/Firecrawl) for today's Senate file; manual dispatch only"
+        required: false
+        default: false
+        type: boolean
       producer_ref:
         description: 'Optional producer checkout ref; blank preserves the caller revision'
         required: false
@@ -369,14 +374,16 @@ jobs:
           # and roll-call-votes, whose Senate files senate.gov refuses to runners (a Senate read pays only
           # after its direct attempt is refused: two session menus, 25 correction re-reads and each new
           # vote a night, ss-bruk). Zyte answered senate.gov with a ban (520, unbilled) on 2026-11-09.
-          # committee-rosters reads today's Senate committee file through the paid ladder (--senate-paid-ladder, owner
-          # decision 2026-11-08): Zyte, then Firecrawl, then a Zyte browser session, only after the direct read is refused.
-          ZYTE_TOKEN: ${{ (inputs.command == 'run-rollup-gao-recommendations' || inputs.command == 'run-rollup-roll-call-votes' || inputs.command == 'run-rollup-committee-rosters' || (inputs.command == 'run-rollup-gao-reports' && inputs.gao_product_pages)) && secrets.ZYTE_TOKEN || '' }}
-          FIRECRAWL_API_KEY: ${{ inputs.command == 'run-rollup-committee-rosters' && secrets.FIRECRAWL_API_KEY || '' }}
+          # committee-rosters only uses the paid ladder (--senate-paid-ladder, Zyte/Firecrawl) when explicitly
+          # opted in via inputs.senate_paid_ladder (never on scheduled runs, ss-bruk); otherwise a direct Senate
+          # 403 preserves prior Senate rows with a warning annotation and retained refusal evidence.
+          ZYTE_TOKEN: ${{ (inputs.command == 'run-rollup-gao-recommendations' || inputs.command == 'run-rollup-roll-call-votes' || (inputs.command == 'run-rollup-committee-rosters' && inputs.senate_paid_ladder) || (inputs.command == 'run-rollup-gao-reports' && inputs.gao_product_pages)) && secrets.ZYTE_TOKEN || '' }}
+          FIRECRAWL_API_KEY: ${{ (inputs.command == 'run-rollup-committee-rosters' && inputs.senate_paid_ladder) && secrets.FIRECRAWL_API_KEY || '' }}
           # Passed via env (not interpolated into the command) to keep the run
           # step free of any templated string in an executable position.
           COMMAND: ${{ inputs.command }}
           SKIP_UPLOAD: ${{ inputs.skip_upload }}
+          SENATE_PAID_LADDER: ${{ inputs.senate_paid_ladder }}
         run: |
           if [ "$SKIP_UPLOAD" = "true" ]; then
             UPLOAD_ARG="--skip-upload"
@@ -387,7 +394,7 @@ jobs:
           if [ "$COMMAND" = 'build-fec-observations' ]; then
             ARGS+=(--manifest "$RUNNER_TEMP/fec-retained-inputs/manifest.json")
           fi
-          if [ "$COMMAND" = 'run-rollup-committee-rosters' ]; then
+          if [ "$COMMAND" = 'run-rollup-committee-rosters' ] && [ "$SENATE_PAID_LADDER" = "true" ]; then
             ARGS+=(--senate-paid-ladder)
           fi
           # Retain shared originals and receipts even when a build fails.

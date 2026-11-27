@@ -8,8 +8,12 @@ name: CI alerts
 on:
   workflow_run:
     workflows:
+      - Check comments freshness
       - Check published table freshness
+      - ETL (new pipeline)
+      - Materialize — rulemaking join surface
       - Plan generation retention
+      - Publish comments mirror
       - Publish explorer metadata
       - Refresh congressional votes and terms
       - Rollup — agency_monthly_volume

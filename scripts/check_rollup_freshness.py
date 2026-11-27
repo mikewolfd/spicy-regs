@@ -108,6 +108,7 @@ EXTERNAL_DATE_CHECKS = (
 DATE_CHECKS = BASE_TABLE_CHECKS + EXTERNAL_DATE_CHECKS
 
 RULEMAKING_BUDGET_DAYS = 4
+COMMENTS_POINTER_BUDGET_DAYS = 4
 ROW_CHANGE_BUDGETS = {"usaspending_recipients": 14}
 SKIPPED = {
     "hearing_bill_links": "derived cover links; recall unmeasured, no daily watermark",
@@ -449,6 +450,31 @@ def evaluate_rulemaking_freshness(
     return []
 
 
+def evaluate_comments_pointer_freshness(
+    families: Mapping[str, Mapping],
+    today: date,
+    *,
+    budget_days: int = COMMENTS_POINTER_BUDGET_DAYS,
+) -> list[str]:
+    """Check ``publication.v2.json`` ``families.comments.publishedAt`` lag when managed."""
+    entry = families.get("comments")
+    if entry is None:
+        return []
+    published = _parse_latest(entry.get("publishedAt"))
+    if published is None:
+        print("STALE: comments pointer (publication.v2.json families.comments) has no parseable publishedAt")
+        return ["comments pointer (publication.v2.json families.comments): no parseable publishedAt"]
+    age = (today - published).days
+    status = "OK" if age <= budget_days else "STALE"
+    print(
+        f"{status}: comments pointer (publication.v2.json families.comments) "
+        f"published={published} age={age}d budget={budget_days}d"
+    )
+    if age > budget_days:
+        return [f"comments pointer (publication.v2.json families.comments) is {age}d old (budget {budget_days}d)"]
+    return []
+
+
 def evaluate_family_ages(families: Mapping[str, Mapping], rows: Sequence[FreshnessRow], today: date) -> list[str]:
     """Print every family's age beside its declared cadence; return failures for declared families behind it.
 
@@ -529,6 +555,7 @@ def main() -> int:
     args.state_file.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
     if args.table is None:
         failures.extend(evaluate_family_ages(index["families"], rows, args.today))
+        failures.extend(evaluate_comments_pointer_freshness(index["families"], args.today))
         if check_rulemaking:
             failures.extend(evaluate_rulemaking_freshness(rulemaking_snapshot, args.today))
 

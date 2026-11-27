@@ -213,11 +213,75 @@ def test_the_opt_in_builds_the_ladder_acquirer(monkeypatch, tmp_path):
     assert built["budget"] is bcr.ROSTER_BUDGET and "evidence" in built
 
 
-def test_the_hosted_rollup_passes_the_ladder_flag_and_its_keys_to_committee_rosters_only():
-    shared = (Path(__file__).parents[1] / ".github/workflows/_rollup.yml").read_text()
+def test_the_hosted_rollup_gates_the_ladder_flag_and_keys_behind_explicit_opt_in():
+    import yaml
+
+    workflows = Path(__file__).parents[1] / ".github" / "workflows"
+    shared_text = (workflows / "_rollup.yml").read_text()
+    shared_doc = yaml.safe_load(shared_text)
+    shared_on = shared_doc[True] if True in shared_doc else shared_doc["on"]
+    ladder_input = shared_on["workflow_call"]["inputs"]["senate_paid_ladder"]
+    assert ladder_input["type"] == "boolean"
+    assert ladder_input["default"] is False
+    assert ladder_input.get("required", False) is False
+
+    run_step = next(step for step in shared_doc["jobs"]["rollup"]["steps"] if step.get("name") == "Run rollup")
+    env = run_step["env"]
+    assert env["SENATE_PAID_LADDER"] == "${{ inputs.senate_paid_ladder }}"
+    assert "if [ \"$COMMAND\" = 'run-rollup-committee-rosters' ]; then\n" not in run_step["run"]
     assert (
-        "if [ \"$COMMAND\" = 'run-rollup-committee-rosters' ]; then\n            ARGS+=(--senate-paid-ladder)" in shared
+        "if [ \"$COMMAND\" = 'run-rollup-committee-rosters' ] && [ \"$SENATE_PAID_LADDER\" = \"true\" ]; then\n"
+        "  ARGS+=(--senate-paid-ladder)\n"
+        "fi"
+        in run_step["run"]
     )
-    assert "inputs.command == 'run-rollup-committee-rosters' && secrets.FIRECRAWL_API_KEY || ''" in shared
-    zyte = next(line for line in shared.splitlines() if line.strip().startswith("ZYTE_TOKEN:"))
-    assert "inputs.command == 'run-rollup-committee-rosters'" in zyte
+    assert "(inputs.command == 'run-rollup-committee-rosters' && inputs.senate_paid_ladder)" in env["ZYTE_TOKEN"]
+    assert (
+        env["FIRECRAWL_API_KEY"]
+        == "${{ (inputs.command == 'run-rollup-committee-rosters' && inputs.senate_paid_ladder) && secrets.FIRECRAWL_API_KEY || '' }}"
+    )
+
+    caller_doc = yaml.safe_load((workflows / "rollup-committee-rosters.yml").read_text())
+    caller_on = caller_doc[True] if True in caller_doc else caller_doc["on"]
+    dispatch_input = caller_on["workflow_dispatch"]["inputs"]["senate_paid_ladder"]
+    assert dispatch_input["type"] == "boolean"
+    assert dispatch_input["default"] is False
+    assert (
+        caller_doc["jobs"]["run"]["with"]["senate_paid_ladder"]
+        == "${{ github.event_name == 'workflow_dispatch' && inputs.senate_paid_ladder || false }}"
+    )
+
+
+def test_default_committee_rosters_build_does_not_enable_paid_ladder(monkeypatch, tmp_path):
+    from spicy_regs.pipelines.rollups.committee_rosters import CommitteeRostersRollup
+
+    assert CommitteeRostersRollup.senate_paid_ladder is False
+
+    def _forbid_ladder(**kwargs):
+        raise AssertionError("LadderCommitteeRosterAcquirer must not be built without explicit opt-in")
+
+    monkeypatch.setattr("spicy_regs.sources.senate_roster_ladder.LadderCommitteeRosterAcquirer", _forbid_ladder)
+
+    class _DirectAcquirer:
+        def __init__(self, *, budget):
+            self.budget = budget
+
+        def acquire_house(self, *, congress, session=None, max_bytes=None, archived_at=None):
+            from spicy_docs.sources.congress.committee_rosters import parse_house_member_data
+
+            return SimpleNamespace(
+                roster=parse_house_member_data(HOUSE_XML, congress=congress, session=session),
+                capture=SimpleNamespace(observed_at="2026-11-26T00:00:00Z"),
+            )
+
+        def acquire_senate(self, *, max_bytes=None, archived_at=None):
+            from spicy_docs.sources.congress.committee_rosters import parse_senate_cvc
+
+            return SimpleNamespace(
+                roster=parse_senate_cvc(XML),
+                capture=SimpleNamespace(observed_at="2026-11-26T00:00:00Z"),
+            )
+
+    monkeypatch.setattr(bcr, "CommitteeRosterAcquirer", _DirectAcquirer)
+    _, assignments, _ = bcr.build_committee_rosters(tmp_path, reader=StubListingReader(), download_prior=no_download)
+    assert {row["chamber"] for row in pq.read_table(assignments).to_pylist()} == {"house", "senate"}

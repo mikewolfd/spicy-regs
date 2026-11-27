@@ -30,6 +30,10 @@ RUNBOOK = "docs/publication-status.md"
 
 CORE_WORKFLOW_SCHEDULES: tuple[tuple[str, timedelta], ...] = (
     ("Check published table freshness", STALE_AFTER),
+    ("Check comments freshness", STALE_AFTER),
+    ("ETL (new pipeline)", STALE_AFTER),
+    ("Publish comments mirror", STALE_AFTER),
+    ("Materialize — rulemaking join surface", STALE_AFTER),
     ("Rollup — bill family", STALE_AFTER),
     ("Rollup — laws", STALE_AFTER),
     ("Refresh congressional votes and terms", STALE_AFTER),
@@ -38,6 +42,35 @@ CORE_WORKFLOW_SCHEDULES: tuple[tuple[str, timedelta], ...] = (
     ("Rollup — committee_reports", STALE_AFTER),
     ("Rollup — executive_order_observations", WEEKDAY_STALE_AFTER),
 )
+
+#: Workflows whose runs can conclude ``success`` while skipping publishing (e.g. an 18:25 retry
+#: no-op or a ``skip_upload=true`` dispatch) or whose daily execution runs inside a parent
+#: workflow via ``workflow_call``. Each entry lists ``(provider_workflow, required_jobs)`` pairs
+#: where every required job must conclude ``success`` (not ``skipped``) to count as published.
+PUBLISHING_PROVIDERS: Mapping[str, tuple[tuple[str, tuple[str, ...]], ...]] = {
+    "ETL (new pipeline)": (
+        ("ETL (new pipeline)", ("etl-new", "refresh-consumers / verify")),
+    ),
+    "Publish comments mirror": (
+        ("Publish comments mirror", ("refresh / mirror / publish", "refresh / verify")),
+        ("ETL (new pipeline)", ("refresh-consumers / mirror / publish", "refresh-consumers / verify")),
+    ),
+    "Materialize — rulemaking join surface": (
+        ("Materialize — rulemaking join surface", ("materialize",)),
+        ("ETL (new pipeline)", ("refresh-consumers / rulemaking / materialize",)),
+    ),
+}
+
+#: Required publishing jobs that must conclude ``success`` before a green ``workflow_run``
+#: closes an open ``ci-failure`` alert for the workflow.
+RECOVERY_REQUIRED_JOBS: Mapping[str, tuple[str, ...]] = {
+    "ETL (new pipeline)": ("etl-new", "refresh-consumers / verify"),
+    "Publish comments mirror": ("refresh / mirror / publish", "refresh / verify"),
+    "Materialize — rulemaking join surface": ("materialize",),
+    "Publish explorer metadata": ("publish",),
+}
+
+PROVIDER_RUN_SCAN_LIMIT = 10
 
 
 class IssuesDisabledError(RuntimeError):
@@ -106,6 +139,26 @@ def report(title: str, body: str, *, env: Mapping[str, str] = os.environ) -> Non
     gh("issue", "create", "--title", title, "--label", LABEL, "--body-file", "-", stdin=body)
 
 
+def run_jobs(run_id: int | str, attempt: int | str | None = None) -> list[dict]:
+    """Return jobs for a workflow run."""
+    cmd = ["run", "view", str(run_id)]
+    if attempt is not None:
+        cmd.extend(["--attempt", str(attempt)])
+    cmd.extend(["--json", "jobs"])
+    return json.loads(gh(*cmd))["jobs"]
+
+
+def _jobs_succeeded(jobs: list[dict], required_jobs: tuple[str, ...]) -> tuple[bool, list[str]]:
+    """Return ``(ok, non_success_reasons)`` requiring every named job to conclude ``success``."""
+    conclusions = {job["name"]: job.get("conclusion") for job in jobs}
+    missing = [
+        f"{name}={conclusions.get(name) or 'missing'}"
+        for name in required_jobs
+        if conclusions.get(name) != "success"
+    ]
+    return (not missing, missing)
+
+
 def recent_completed_runs(workflow: str, branch: str = "main", *, limit: int = 20) -> list[dict]:
     """Return recent completed runs on ``branch`` sorted newest-first."""
     return json.loads(
@@ -121,7 +174,7 @@ def recent_completed_runs(workflow: str, branch: str = "main", *, limit: int = 2
             "--limit",
             str(limit),
             "--json",
-            "databaseId,conclusion,url,updatedAt",
+            "databaseId,conclusion,url,updatedAt,attempt",
         )
     )
 
@@ -157,9 +210,7 @@ def failure(run: dict, *, min_consecutive: int = 1, env: Mapping[str, str] = os.
             f"{run['name']} failed on {branch} ({streak}/{min_consecutive} consecutive); waiting before opening issue."
         )
         return
-    jobs = json.loads(
-        gh("run", "view", str(run["id"]), "--attempt", str(run["run_attempt"]), "--json", "jobs")
-    )["jobs"]
+    jobs = run_jobs(run["id"], run.get("run_attempt"))
     lines = [
         f"**{run['name']}** concluded `{run['conclusion']}` on `{branch}` (consecutive failures: {streak}).",
         "",
@@ -181,11 +232,21 @@ def failure(run: dict, *, min_consecutive: int = 1, env: Mapping[str, str] = os.
 
 
 def recovered(run: dict) -> None:
-    """Close the workflow's open ci-failure issue once it succeeds on main."""
+    """Close the workflow's open ci-failure issue once a real publishing/check run succeeds on main."""
     number = open_issue(run["name"])
     if number is None:
         print(f"No open {LABEL} issue for {run['name']}.")
         return
+    required = RECOVERY_REQUIRED_JOBS.get(run["name"])
+    if required is not None:
+        jobs = run_jobs(run["id"], run.get("run_attempt"))
+        ok, missing = _jobs_succeeded(jobs, required)
+        if not ok:
+            print(
+                f"Keeping #{number} open for {run['name']}: {run['html_url']} concluded success "
+                f"but skipped publishing ({', '.join(missing)})."
+            )
+            return
     branch = run.get("head_branch") or "main"
     gh(
         "issue",
@@ -223,12 +284,80 @@ def newest(workflow: str, status: str) -> dict | None:
     return runs[0] if runs else None
 
 
+def _parse_timestamp(raw: str) -> datetime:
+    return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+
+
+def _evaluate_publishing_workflow(
+    workflow: str,
+    max_age: timedelta,
+    now: datetime,
+    *,
+    runs_cache: dict[str, list[dict]],
+    jobs_cache: dict[tuple[int, int | None], list[dict]],
+) -> tuple[bool, str]:
+    """Check whether any provider workflow ran its required publishing jobs within ``max_age``."""
+    best_publish: tuple[datetime, str, dict] | None = None
+    skipped_green: tuple[datetime, str, dict, list[str]] | None = None
+    for provider_wf, required_jobs in PUBLISHING_PROVIDERS[workflow]:
+        runs = runs_cache.get(provider_wf)
+        if runs is None:
+            runs = recent_completed_runs(provider_wf, branch="main", limit=PROVIDER_RUN_SCAN_LIMIT)
+            runs_cache[provider_wf] = runs
+        for run in runs:
+            if run.get("conclusion") == "cancelled":
+                continue
+            finished = _parse_timestamp(run["updatedAt"])
+            if best_publish is not None and finished <= best_publish[0]:
+                break
+            run_id = run.get("databaseId")
+            attempt = run.get("attempt")
+            if run_id is None:
+                continue
+            cache_key = (int(run_id), int(attempt) if attempt is not None else None)
+            jobs = jobs_cache.get(cache_key)
+            if jobs is None:
+                jobs = run_jobs(run_id, attempt)
+                jobs_cache[cache_key] = jobs
+            ok, missing = _jobs_succeeded(jobs, required_jobs)
+            if ok:
+                best_publish = (finished, provider_wf, run)
+                break
+            if run.get("conclusion") == "success" and (skipped_green is None or finished > skipped_green[0]):
+                skipped_green = (finished, provider_wf, run, missing)
+    if best_publish is None:
+        if skipped_green is not None:
+            _, s_wf, s_run, s_missing = skipped_green
+            return (
+                True,
+                f'- Newest publishing "{workflow}" run on main: none found '
+                f'(latest green "{s_wf}" run {s_run["url"]} skipped publishing: {", ".join(s_missing)})',
+            )
+        return True, f'- Newest publishing "{workflow}" run on main: none found'
+    finished, p_wf, p_run = best_publish
+    age = now - finished
+    is_overdue = age > max_age
+    via = "" if p_wf == workflow else f' via "{p_wf}"'
+    note = ""
+    if is_overdue and skipped_green is not None and skipped_green[0] > finished:
+        _, s_wf, s_run, s_missing = skipped_green
+        note = f'; newer green "{s_wf}" run {s_run["url"]} skipped publishing ({", ".join(s_missing)})'
+    return (
+        is_overdue,
+        f'- Newest publishing "{workflow}" run on main{via}: {p_run["url"]} ({p_run["conclusion"]}), '
+        f'finished {p_run["updatedAt"]}, {age.total_seconds() / 3600:.1f} hours ago '
+        f'(limit {max_age.total_seconds() / 3600:.0f}h){note}',
+    )
+
+
 def freshness(now: datetime, *, disabled: str = "", env: Mapping[str, str] = os.environ) -> None:
     """Alert if any active core scheduled rollup or freshness check went silent past its window."""
     if disabled == "true":
         print("CI alerts freshness check is switched off; skipping.")
         return
     states = workflow_states()
+    runs_cache: dict[str, list[dict]] = {}
+    jobs_cache: dict[tuple[int, int | None], list[dict]] = {}
     lines: list[str] = []
     stale = False
     for workflow, max_age in CORE_WORKFLOW_SCHEDULES:
@@ -236,12 +365,31 @@ def freshness(now: datetime, *, disabled: str = "", env: Mapping[str, str] = os.
         if state is not None and state != "active":
             lines.append(f'- Skipped "{workflow}" (`{state}`)')
             continue
-        run = newest(workflow, "completed")
+        if workflow in PUBLISHING_PROVIDERS:
+            is_overdue, line = _evaluate_publishing_workflow(
+                workflow,
+                max_age,
+                now,
+                runs_cache=runs_cache,
+                jobs_cache=jobs_cache,
+            )
+            stale |= is_overdue
+            lines.append(line)
+            continue
+        recent = recent_completed_runs(workflow, branch="main", limit=5)
+        run = next((item for item in recent if item.get("conclusion") not in {"skipped", "cancelled"}), None)
         if run is None:
             stale = True
-            lines.append(f'- Newest completed "{workflow}" run on main: none found')
+            skipped = next((item for item in recent if item.get("conclusion") == "skipped"), None)
+            if skipped is not None:
+                lines.append(
+                    f'- Newest completed "{workflow}" run on main: none executed '
+                    f'(latest run {skipped["url"]} was `skipped` at {skipped["updatedAt"]})'
+                )
+            else:
+                lines.append(f'- Newest completed "{workflow}" run on main: none found')
             continue
-        finished = datetime.fromisoformat(run["updatedAt"].replace("Z", "+00:00"))
+        finished = _parse_timestamp(run["updatedAt"])
         age = now - finished
         is_overdue = age > max_age
         stale |= is_overdue
@@ -284,8 +432,15 @@ def main(
             failure(run, min_consecutive=args.min_consecutive, env=env)
         else:
             recovered(run)
-    except IssuesDisabledError:
-        print("Repository has GitHub Issues disabled; skipping ci_alerts issue update.", file=sys.stderr)
+    except IssuesDisabledError as exc:
+        repo = env.get("GH_REPO", "target repository")
+        msg = (
+            f"Cannot deliver CI alert: GitHub Issues are disabled on {repo}. "
+            "Enable repository Issues or configure an active alert destination."
+        )
+        print(f"::error title=CI alerts delivery failed::{msg}", flush=True)
+        print(msg, file=sys.stderr)
+        raise SystemExit(1) from exc
 
 
 if __name__ == "__main__":
