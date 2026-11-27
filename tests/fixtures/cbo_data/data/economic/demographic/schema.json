@@ -1,0 +1,42 @@
+{
+  "dataset": "demographic",
+  "publication_id": "57059",
+  "title": "Demographic Projections",
+  "source_url": "https://www.cbo.gov/publication/57059",
+  "description": "CBO projections of population, fertility, mortality, and migration by age, sex, and other dimensions.",
+  "frequency": "annual",
+  "date_format": "YYYY (4-digit year)",
+  "format_note": "Demographic data is stored in tidy (multi-column) format rather than the 3-column long format used for economic data, since demographics have multi-dimensional keys (age, sex, etc.).",
+  "domains": {
+    "population_bls": {
+      "description": "Civilian noninstitutional population by age and sex (BLS basis)",
+      "columns": ["year", "age", "sex", "number_of_people"],
+      "units": {"number_of_people": "Thousands of people"}
+    },
+    "population_census": {
+      "description": "Civilian noninstitutional population by age and sex (Census basis)",
+      "columns": ["year", "age", "sex", "number_of_people"],
+      "units": {"number_of_people": "Thousands of people"}
+    },
+    "fertility": {
+      "description": "Fertility rates by age and place of birth",
+      "columns": ["year", "age", "place_of_birth", "births_per_1000_females"],
+      "units": {"births_per_1000_females": "Births per 1,000 females"}
+    },
+    "mortality": {
+      "description": "Mortality rates by age and sex",
+      "columns": ["year", "age", "sex", "deaths_per_1000_people"],
+      "units": {"deaths_per_1000_people": "Deaths per 1,000 people"}
+    },
+    "migration": {
+      "description": "Migration flows by age, sex, immigration status, and direction",
+      "columns": ["year", "age", "sex", "immigration_status", "migration_flow", "number_of_people"],
+      "units": {"number_of_people": "Number of people"}
+    },
+    "ss_area_population": {
+      "description": "Social Security area population by age, sex, and marital status",
+      "columns": ["year", "age", "marital", "sex", "number_of_people"],
+      "units": {"number_of_people": "Number of people"}
+    }
+  }
+}

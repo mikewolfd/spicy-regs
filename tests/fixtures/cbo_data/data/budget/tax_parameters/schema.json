@@ -1,0 +1,823 @@
+{
+  "dataset": "tax_parameters",
+  "publication_id": "53724",
+  "title": "Tax Parameters and Effective Marginal Tax Rates",
+  "source_url": "https://www.cbo.gov/publication/53724",
+  "description": "CBO's projections of individual income tax parameters by filing status, effective marginal tax rates on labor and capital income, and tax wedges among types of investment. Extracted from an Excel workbook with 4-5 sheets covering tax brackets, deductions, credits, AMT parameters, EITC, EMTRs, and tax wedges.",
+  "frequency": "annual_cy",
+  "date_format": "CY (e.g., CY2022, CY2035)",
+  "canonical_columns": ["date", "variable", "value"],
+  "notes": {
+    "units": "Varies by variable: dollar amounts, percentages, percentage points, index values, or counts.",
+    "calendar_year": "All values are on a calendar-year basis.",
+    "filing_status_codes": "single = Single; mfj = Married Filing Jointly; hoh = Head of Household; mfs = Married Filing Separately.",
+    "eitc_child_codes": "0 = no qualifying children; 1 = one child; 2 = two children; 3plus = three or more children.",
+    "vintage_variation": "Some variables appear only in certain vintages (e.g., personal exemption and PEP thresholds in older vintages; delta EMTR variables in 2026-02 only).",
+    "actual_year": "The first column is the most recent actual year; remaining columns are projections."
+  },
+  "dimensional_approach": "Option A: filing status and child count are encoded in the variable name (e.g., tp_bracket_1_single, tp_eitc_max_credit_3plus).",
+  "tables": {
+    "tax_parameters": "Sheet 1 — Individual Income Tax Parameters (statutory rates, brackets, deductions, exemptions, AMT, CTC, EITC, economic parameters)",
+    "emtr_labor": "Sheet 2 — Effective Marginal Tax Rates on Labor Income",
+    "emtr_capital": "Sheet 3 — Effective Marginal Tax Rates on Capital Income",
+    "tax_wedges": "Sheet 4 — Differences in Tax Wedges Among Types of Investment",
+    "delta_emtr_capital": "Sheet 5 — Changes in Effective Marginal Tax Rates on Capital Income (some vintages only)"
+  },
+  "fields": {
+    "tp_n_statutory_rates": {
+      "description": "Number of statutory individual income tax rate brackets",
+      "unit": "Count",
+      "category": "tax_parameters"
+    },
+    "tp_rate_1": {
+      "description": "Statutory individual income tax rate, bracket 1 (lowest)",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_rate_2": {
+      "description": "Statutory individual income tax rate, bracket 2",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_rate_3": {
+      "description": "Statutory individual income tax rate, bracket 3",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_rate_4": {
+      "description": "Statutory individual income tax rate, bracket 4",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_rate_5": {
+      "description": "Statutory individual income tax rate, bracket 5",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_rate_6": {
+      "description": "Statutory individual income tax rate, bracket 6",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_rate_7": {
+      "description": "Statutory individual income tax rate, bracket 7 (highest)",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_1_single": {
+      "description": "Taxable income threshold for bracket 1, single filers",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_1_mfj": {
+      "description": "Taxable income threshold for bracket 1, married filing jointly",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_1_hoh": {
+      "description": "Taxable income threshold for bracket 1, head of household",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_1_mfs": {
+      "description": "Taxable income threshold for bracket 1, married filing separately",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_2_single": {
+      "description": "Taxable income threshold for bracket 2, single filers",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_2_mfj": {
+      "description": "Taxable income threshold for bracket 2, married filing jointly",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_2_hoh": {
+      "description": "Taxable income threshold for bracket 2, head of household",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_2_mfs": {
+      "description": "Taxable income threshold for bracket 2, married filing separately",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_3_single": {
+      "description": "Taxable income threshold for bracket 3, single filers",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_3_mfj": {
+      "description": "Taxable income threshold for bracket 3, married filing jointly",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_3_hoh": {
+      "description": "Taxable income threshold for bracket 3, head of household",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_3_mfs": {
+      "description": "Taxable income threshold for bracket 3, married filing separately",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_4_single": {
+      "description": "Taxable income threshold for bracket 4, single filers",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_4_mfj": {
+      "description": "Taxable income threshold for bracket 4, married filing jointly",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_4_hoh": {
+      "description": "Taxable income threshold for bracket 4, head of household",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_4_mfs": {
+      "description": "Taxable income threshold for bracket 4, married filing separately",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_5_single": {
+      "description": "Taxable income threshold for bracket 5, single filers",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_5_mfj": {
+      "description": "Taxable income threshold for bracket 5, married filing jointly",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_5_hoh": {
+      "description": "Taxable income threshold for bracket 5, head of household",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_5_mfs": {
+      "description": "Taxable income threshold for bracket 5, married filing separately",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_6_single": {
+      "description": "Taxable income threshold for bracket 6, single filers",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_6_mfj": {
+      "description": "Taxable income threshold for bracket 6, married filing jointly",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_6_hoh": {
+      "description": "Taxable income threshold for bracket 6, head of household",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_6_mfs": {
+      "description": "Taxable income threshold for bracket 6, married filing separately",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_7_single": {
+      "description": "Taxable income threshold for bracket 7, single filers",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_7_mfj": {
+      "description": "Taxable income threshold for bracket 7, married filing jointly",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_7_hoh": {
+      "description": "Taxable income threshold for bracket 7, head of household",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_bracket_7_mfs": {
+      "description": "Taxable income threshold for bracket 7, married filing separately",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_std_deduction_single": {
+      "description": "Standard deduction, single filers",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_std_deduction_mfj": {
+      "description": "Standard deduction, married filing jointly",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_std_deduction_hoh": {
+      "description": "Standard deduction, head of household",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_std_deduction_mfs": {
+      "description": "Standard deduction, married filing separately",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_std_deduction_dependent": {
+      "description": "Standard deduction, dependents",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_additional_deduction_single_hoh": {
+      "description": "Additional standard deduction for elderly/blind, single and head of household filers",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_additional_deduction_mfj_mfs": {
+      "description": "Additional standard deduction for elderly/blind, married filing jointly and separately",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_personal_exemption": {
+      "description": "Personal exemption amount (zero when suspended under TCJA)",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_salt_limit_single": {
+      "description": "State and local tax (SALT) deduction cap, single filers",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_salt_limit_mfj": {
+      "description": "State and local tax (SALT) deduction cap, married filing jointly",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_salt_limit_hoh": {
+      "description": "State and local tax (SALT) deduction cap, head of household",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_salt_limit_mfs": {
+      "description": "State and local tax (SALT) deduction cap, married filing separately",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_itemized_limit_single": {
+      "description": "Pease limitation threshold on itemized deductions, single filers",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_itemized_limit_mfj": {
+      "description": "Pease limitation threshold on itemized deductions, married filing jointly",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_itemized_limit_hoh": {
+      "description": "Pease limitation threshold on itemized deductions, head of household",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_itemized_limit_mfs": {
+      "description": "Pease limitation threshold on itemized deductions, married filing separately",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_pep_threshold_single": {
+      "description": "Personal exemption phaseout (PEP) income threshold, single filers",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_pep_threshold_mfj": {
+      "description": "Personal exemption phaseout (PEP) income threshold, married filing jointly",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_pep_threshold_hoh": {
+      "description": "Personal exemption phaseout (PEP) income threshold, head of household",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_pep_threshold_mfs": {
+      "description": "Personal exemption phaseout (PEP) income threshold, married filing separately",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_amt_rate_1": {
+      "description": "Alternative minimum tax rate, bracket 1",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_amt_rate_2": {
+      "description": "Alternative minimum tax rate, bracket 2",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_amt_bracket_2_single": {
+      "description": "AMT income threshold where bracket 2 rate begins, single filers",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_amt_bracket_2_mfj": {
+      "description": "AMT income threshold where bracket 2 rate begins, married filing jointly",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_amt_bracket_2_hoh": {
+      "description": "AMT income threshold where bracket 2 rate begins, head of household",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_amt_bracket_2_mfs": {
+      "description": "AMT income threshold where bracket 2 rate begins, married filing separately",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_amt_exemption_single": {
+      "description": "AMT exemption amount, single filers",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_amt_exemption_mfj": {
+      "description": "AMT exemption amount, married filing jointly",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_amt_exemption_hoh": {
+      "description": "AMT exemption amount, head of household",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_amt_exemption_mfs": {
+      "description": "AMT exemption amount, married filing separately",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_amt_phaseout_single": {
+      "description": "AMT exemption phaseout income threshold, single filers",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_amt_phaseout_mfj": {
+      "description": "AMT exemption phaseout income threshold, married filing jointly",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_amt_phaseout_hoh": {
+      "description": "AMT exemption phaseout income threshold, head of household",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_amt_phaseout_mfs": {
+      "description": "AMT exemption phaseout income threshold, married filing separately",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_ctc_per_child": {
+      "description": "Child tax credit amount per qualifying child",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_ctc_per_other_dependent": {
+      "description": "Credit amount per other dependent (non-child dependent credit)",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_ctc_max_refundable": {
+      "description": "Maximum refundable (additional) child tax credit per child",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_ctc_refund_threshold": {
+      "description": "Earned income threshold for refundable child tax credit",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_ctc_refund_rate": {
+      "description": "Phase-in rate for refundable child tax credit",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_earned_income_0": {
+      "description": "EITC earned income amount at which maximum credit is reached, no children",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_earned_income_1": {
+      "description": "EITC earned income amount at which maximum credit is reached, 1 child",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_earned_income_2": {
+      "description": "EITC earned income amount at which maximum credit is reached, 2 children",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_earned_income_3plus": {
+      "description": "EITC earned income amount at which maximum credit is reached, 3+ children",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_phaseout_single_0": {
+      "description": "EITC phaseout begins (single/HoH filers), no children",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_phaseout_single_1": {
+      "description": "EITC phaseout begins (single/HoH filers), 1 child",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_phaseout_single_2": {
+      "description": "EITC phaseout begins (single/HoH filers), 2 children",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_phaseout_single_3plus": {
+      "description": "EITC phaseout begins (single/HoH filers), 3+ children",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_phaseout_mfj_0": {
+      "description": "EITC phaseout begins (married filing jointly), no children",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_phaseout_mfj_1": {
+      "description": "EITC phaseout begins (married filing jointly), 1 child",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_phaseout_mfj_2": {
+      "description": "EITC phaseout begins (married filing jointly), 2 children",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_phaseout_mfj_3plus": {
+      "description": "EITC phaseout begins (married filing jointly), 3+ children",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_max_credit_0": {
+      "description": "EITC maximum credit amount, no children",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_max_credit_1": {
+      "description": "EITC maximum credit amount, 1 child",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_max_credit_2": {
+      "description": "EITC maximum credit amount, 2 children",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_max_credit_3plus": {
+      "description": "EITC maximum credit amount, 3+ children",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_phasein_rate_0": {
+      "description": "EITC phase-in rate, no children",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_phasein_rate_1": {
+      "description": "EITC phase-in rate, 1 child",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_phasein_rate_2": {
+      "description": "EITC phase-in rate, 2 children",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_phasein_rate_3plus": {
+      "description": "EITC phase-in rate, 3+ children",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_phaseout_rate_0": {
+      "description": "EITC phaseout rate, no children",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_phaseout_rate_1": {
+      "description": "EITC phaseout rate, 1 child",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_phaseout_rate_2": {
+      "description": "EITC phaseout rate, 2 children",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_eitc_phaseout_rate_3plus": {
+      "description": "EITC phaseout rate, 3+ children",
+      "unit": "Percent",
+      "category": "tax_parameters"
+    },
+    "tp_cpi_u": {
+      "description": "Consumer Price Index for All Urban Consumers (CPI-U)",
+      "unit": "Index",
+      "category": "tax_parameters"
+    },
+    "tp_c_cpi_u": {
+      "description": "Chained Consumer Price Index for All Urban Consumers (C-CPI-U)",
+      "unit": "Index",
+      "category": "tax_parameters"
+    },
+    "tp_ss_max_earnings": {
+      "description": "Social Security maximum taxable earnings",
+      "unit": "Dollars",
+      "category": "tax_parameters"
+    },
+    "tp_emtr_labor_iit": {
+      "description": "Effective marginal tax rate on labor income from individual income taxes",
+      "unit": "Percent",
+      "category": "emtr_labor"
+    },
+    "tp_emtr_labor_payroll": {
+      "description": "Effective marginal tax rate on labor income from payroll taxes",
+      "unit": "Percent",
+      "category": "emtr_labor"
+    },
+    "tp_emtr_labor_combined": {
+      "description": "Effective marginal tax rate on labor income, combined (individual income + payroll)",
+      "unit": "Percent",
+      "category": "emtr_labor"
+    },
+    "tp_emtr_capital_overall": {
+      "description": "Overall effective marginal tax rate on capital income",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_business": {
+      "description": "EMTR on capital income from business investment",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_business_equipment": {
+      "description": "EMTR on capital income from business equipment",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_business_structures": {
+      "description": "EMTR on capital income from business structures",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_business_residential": {
+      "description": "EMTR on capital income from business residential structures",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_business_rd_software": {
+      "description": "EMTR on capital income from business R&D and software",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_business_other_ip": {
+      "description": "EMTR on capital income from business other intellectual property",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_business_inventories": {
+      "description": "EMTR on capital income from business inventories",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_business_equity": {
+      "description": "EMTR on capital income from equity-financed business investment",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_business_debt": {
+      "description": "EMTR on capital income from debt-financed business investment",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_business_c_corp": {
+      "description": "EMTR on capital income from C-corporation business investment",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_business_passthrough": {
+      "description": "EMTR on capital income from pass-through business investment",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_housing": {
+      "description": "EMTR on capital income from owner-occupied housing",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_housing_equity": {
+      "description": "EMTR on capital income from equity-financed housing",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_housing_debt": {
+      "description": "EMTR on capital income from debt-financed housing",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_overall_incl_land": {
+      "description": "Overall EMTR on capital income including land",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_business_incl_land": {
+      "description": "EMTR on capital income from business investment including land",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_business_land": {
+      "description": "EMTR on capital income from business land",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_emtr_capital_housing_incl_land": {
+      "description": "EMTR on capital income from housing including land",
+      "unit": "Percent",
+      "category": "emtr_capital"
+    },
+    "tp_wedge_business": {
+      "description": "Tax wedge on business investment",
+      "unit": "Percentage points",
+      "category": "tax_wedges"
+    },
+    "tp_wedge_business_equity": {
+      "description": "Tax wedge on equity-financed business investment",
+      "unit": "Percentage points",
+      "category": "tax_wedges"
+    },
+    "tp_wedge_business_debt": {
+      "description": "Tax wedge on debt-financed business investment",
+      "unit": "Percentage points",
+      "category": "tax_wedges"
+    },
+    "tp_wedge_business_diff_financing": {
+      "description": "Difference in tax wedge between equity- and debt-financed business investment",
+      "unit": "Percentage points",
+      "category": "tax_wedges"
+    },
+    "tp_wedge_business_c_corp": {
+      "description": "Tax wedge on C-corporation business investment",
+      "unit": "Percentage points",
+      "category": "tax_wedges"
+    },
+    "tp_wedge_business_passthrough": {
+      "description": "Tax wedge on pass-through business investment",
+      "unit": "Percentage points",
+      "category": "tax_wedges"
+    },
+    "tp_wedge_business_diff_legal_form": {
+      "description": "Difference in tax wedge between C-corporation and pass-through business investment",
+      "unit": "Percentage points",
+      "category": "tax_wedges"
+    },
+    "tp_wedge_business_diff_asset_pairs": {
+      "description": "Average absolute difference in tax wedge among pairs of business asset types",
+      "unit": "Percentage points",
+      "category": "tax_wedges"
+    },
+    "tp_wedge_business_diff_industry_pairs": {
+      "description": "Average absolute difference in tax wedge among pairs of industries",
+      "unit": "Percentage points",
+      "category": "tax_wedges"
+    },
+    "tp_wedge_housing": {
+      "description": "Tax wedge on owner-occupied housing",
+      "unit": "Percentage points",
+      "category": "tax_wedges"
+    },
+    "tp_wedge_diff_housing_business": {
+      "description": "Difference in tax wedge between housing and business investment",
+      "unit": "Percentage points",
+      "category": "tax_wedges"
+    },
+    "tp_wedge_housing_equity": {
+      "description": "Tax wedge on equity-financed housing",
+      "unit": "Percentage points",
+      "category": "tax_wedges"
+    },
+    "tp_wedge_housing_debt": {
+      "description": "Tax wedge on debt-financed housing",
+      "unit": "Percentage points",
+      "category": "tax_wedges"
+    },
+    "tp_wedge_housing_diff_financing": {
+      "description": "Difference in tax wedge between equity- and debt-financed housing",
+      "unit": "Percentage points",
+      "category": "tax_wedges"
+    },
+    "tp_wedge_renter_structures": {
+      "description": "Tax wedge on rental housing structures",
+      "unit": "Percentage points",
+      "category": "tax_wedges"
+    },
+    "tp_wedge_diff_owner_renter": {
+      "description": "Difference in tax wedge between owner-occupied and rental housing",
+      "unit": "Percentage points",
+      "category": "tax_wedges"
+    },
+    "tp_delta_emtr_capital_overall": {
+      "description": "Change in overall EMTR on capital income",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_business": {
+      "description": "Change in EMTR on capital income from business investment",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_business_equipment": {
+      "description": "Change in EMTR on capital income from business equipment",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_business_structures": {
+      "description": "Change in EMTR on capital income from business structures",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_business_residential": {
+      "description": "Change in EMTR on capital income from business residential structures",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_business_rd_software": {
+      "description": "Change in EMTR on capital income from business R&D and software",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_business_other_ip": {
+      "description": "Change in EMTR on capital income from business other intellectual property",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_business_inventories": {
+      "description": "Change in EMTR on capital income from business inventories",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_business_equity": {
+      "description": "Change in EMTR on capital income from equity-financed business investment",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_business_debt": {
+      "description": "Change in EMTR on capital income from debt-financed business investment",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_business_c_corp": {
+      "description": "Change in EMTR on capital income from C-corporation business investment",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_business_passthrough": {
+      "description": "Change in EMTR on capital income from pass-through business investment",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_housing": {
+      "description": "Change in EMTR on capital income from owner-occupied housing",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_housing_equity": {
+      "description": "Change in EMTR on capital income from equity-financed housing",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_housing_debt": {
+      "description": "Change in EMTR on capital income from debt-financed housing",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_overall_incl_land": {
+      "description": "Change in overall EMTR on capital income including land",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_business_incl_land": {
+      "description": "Change in EMTR on capital income from business investment including land",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_business_land": {
+      "description": "Change in EMTR on capital income from business land",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    },
+    "tp_delta_emtr_capital_housing_incl_land": {
+      "description": "Change in EMTR on capital income from housing including land",
+      "unit": "Percentage points",
+      "category": "delta_emtr_capital"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "dataset": "potential_gdp",
+  "publication_id": "51137",
+  "title": "Potential GDP and Underlying Inputs",
+  "source_url": "https://www.cbo.gov/publication/51137",
+  "description": "CBO estimates of potential GDP and its underlying inputs (labor force, capital services, TFP). This is a legacy standalone publication; the last release was August 2019. Post-2020, these variables are included in historical_economic (Pub 55022) and economic_projections (Pub 51135).",
+  "frequency": "quarterly and annual",
+  "canonical_columns": ["date", "variable", "value"],
+  "output_files": {
+    "annual_{vintage}.csv": "Annual levels from Supplemental Table 1 (1949-2029)",
+    "quarterly_{vintage}.csv": "Quarterly potential GDP and unemployment rates from Supplemental Table 2 (1949q1-2029q4)"
+  },
+  "notes": {
+    "post_2020": "After January 2020, potential GDP data is available in historical_economic (55022) and economic_projections (51135). This dataset provides the pre-2020 standalone format.",
+    "base_year": "Values are in chained 2012 dollars (the base year used in 2019 publications)"
+  },
+  "annual_fields": {
+    "potential_gdp": {"description": "Potential GDP (overall economy)", "unit": "Billions of chained 2012 dollars"},
+    "potential_labor_force": {"description": "Potential labor force", "unit": "Millions of people"},
+    "potential_lf_productivity": {"description": "Potential labor force productivity", "unit": "Ratio of potential GDP to potential labor force"},
+    "nfb_potential_gdp": {"description": "Potential GDP, nonfarm business sector", "unit": "Billions of chained 2012 dollars"},
+    "nfb_potential_hours_worked": {"description": "Potential hours worked, nonfarm business", "unit": "Index, 2012 actual = 100"},
+    "nfb_capital_services_index": {"description": "Index of capital services, nonfarm business", "unit": "Index, 2012 = 100, lagged one year"},
+    "nfb_potential_tfp": {"description": "Potential total factor productivity, nonfarm business", "unit": "Index, 2012 actual = 100"},
+    "nfb_potential_labor_productivity": {"description": "Potential labor productivity, nonfarm business", "unit": "Ratio of potential GDP to potential hours worked"},
+    "nfb_capital_share": {"description": "Capital share of income, nonfarm business", "unit": "Fraction"}
+  },
+  "quarterly_fields": {
+    "potential_gdp_real": {"description": "Real potential GDP", "unit": "Billions of chained 2012 dollars"},
+    "potential_gdp_nominal": {"description": "Nominal potential GDP", "unit": "billions_of_dollars"},
+    "unemployment_rate_long_term": {"description": "Underlying long-term rate of unemployment", "unit": "Percent"},
+    "unemployment_rate_natural": {"description": "Natural rate of unemployment", "unit": "Percent"},
+    "output_gap": {"description": "Output gap", "unit": "Percentage of potential GDP"}
+  }
+}

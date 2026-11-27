@@ -1,0 +1,604 @@
+{
+  "dataset": "historical_economic",
+  "publication_id": "55022",
+  "title": "Historical Data and Economic Projections",
+  "source_url": "https://www.cbo.gov/publication/55022",
+  "description": "Data on output, prices, labor market measures, interest rates, income, potential GDP, and its underlying inputs from 1949 through the most recent year completed, plus CBO projections.",
+  "frequency": "quarterly",
+  "date_format": "YYYYqN (e.g., 1949q1, 2026q4)",
+  "canonical_columns": ["date", "variable", "value"],
+  "annual_derivation": {
+    "calendar_year": "Average of Q1-Q4 in the same calendar year",
+    "fiscal_year": "Average of Q4 of prior CY + Q1-Q3 of labeled FY year (Oct-Sep)"
+  },
+  "fields": {
+    "gdp": {
+      "description": "Gross Domestic Product",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "output"
+    },
+    "gnp": {
+      "description": "Gross National Product",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "output"
+    },
+    "potential_gdp": {
+      "description": "Nominal Potential Gross Domestic Product",
+      "unit": "billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "output"
+    },
+    "real_gdp": {
+      "description": "Real Gross Domestic Product",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "output"
+    },
+    "real_gnp": {
+      "description": "Real Gross National Product",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "output"
+    },
+    "real_potential_gdp": {
+      "description": "Real Potential Gross Domestic Product",
+      "unit": "Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "output"
+    },
+    "real_gdp_nfb": {
+      "description": "Real Gross Value Added: Nonfarm Business",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "output"
+    },
+    "potential_lf": {
+      "description": "Potential Labor Force",
+      "unit": "Millions of people",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "potential_gdp"
+    },
+    "potential_lf_prod": {
+      "description": "Potential Labor Force Productivity",
+      "unit": "index",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "potential_gdp"
+    },
+    "potential_lfpr": {
+      "description": "Potential Labor Force Participation Rate",
+      "unit": "%",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "potential_gdp"
+    },
+    "noncyclical_rate_of_unemployment": {
+      "description": "Noncyclical Rate of Unemployment",
+      "unit": "%",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "potential_gdp"
+    },
+    "output_gap": {
+      "description": "Output Gap (Percentage of Potential GDP)",
+      "unit": "% of potential GDP",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "output"
+    },
+    "nfb_real_potential_gdp": {
+      "description": "Nonfarm Business Sector: Real Potential Gross Domestic Product",
+      "unit": "index",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "potential_gdp"
+    },
+    "nfb_potential_hrs_worked": {
+      "description": "Nonfarm Business Sector: Potential Hours Worked",
+      "unit": "Index: 2017 Actual = 100",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "potential_gdp"
+    },
+    "nfb_index_capital_services": {
+      "description": "Nonfarm Business Sector: Index of Capital Services",
+      "unit": "Index 2017 = 100",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "potential_gdp"
+    },
+    "nfb_potential_tfp": {
+      "description": "Nonfarm Business Sector: Potential Total Factor Productivity",
+      "unit": "Index: 2017 Actual = 100",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "potential_gdp"
+    },
+    "nfb_potential_lab_prod": {
+      "description": "Nonfarm Business Sector: Potential Labor Productivity",
+      "unit": "index",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "potential_gdp"
+    },
+    "nfb_capital_share": {
+      "description": "Nonfarm Business Sector: Capital Share of Income",
+      "unit": "ratio",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "potential_gdp"
+    },
+    "pce_price_index": {
+      "description": "Personal Consumption Expenditures (PCE): Chain Price Index",
+      "unit": "SA, 2017=100",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "prices"
+    },
+    "core_pce_price_index": {
+      "description": "PCE Excluding Food and Energy: Chain Price Index",
+      "unit": "SA, 2017=100",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "prices"
+    },
+    "pce_medical_price_index": {
+      "description": "PCE Medical Care: Chain Price Index (non-NIPA)",
+      "unit": "SA, 2017=100",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "prices"
+    },
+    "cpiu": {
+      "description": "CPI-U: All Items",
+      "unit": "SA, 1982-84=100",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "prices"
+    },
+    "core_cpiu": {
+      "description": "CPI-U: All Items Less Food and Energy",
+      "unit": "SA, 1982-84=100",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "prices"
+    },
+    "chained_cpiu": {
+      "description": "Chained CPI-U: All Items",
+      "unit": "NSA, Dec-99=100",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "prices"
+    },
+    "cpiu_medical_price_index": {
+      "description": "CPI-U: Medical Care",
+      "unit": "SA, 1982-84=100",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "prices"
+    },
+    "gdp_price_index": {
+      "description": "GDP: Chain Price Index",
+      "unit": "SA, 2017=100",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "prices"
+    },
+    "eci_wages_salaries": {
+      "description": "ECI: Wages & Salaries: Private Industry Workers",
+      "unit": "SA, Dec-05=100",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "prices"
+    },
+    "oil_rac_imported": {
+      "description": "Refiners' Acquisition Cost of Crude Oil: Imported: DOE",
+      "unit": "$/BBL",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "prices"
+    },
+    "oil_rac_composite": {
+      "description": "Refiners' Acquisition Cost of Crude Oil: Composite: DOE",
+      "unit": "$/BBL",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "prices"
+    },
+    "oil_price_wti_spot": {
+      "description": "Cushing OK West Texas Intermediate Spot Price FOB (SUSPENDED)",
+      "unit": "$/BBL",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "prices"
+    },
+    "nat_gas_price_henry_hub": {
+      "description": "Natural Gas Price, Henry Hub, LA",
+      "unit": "$/mmbtu",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "prices"
+    },
+    "house_price_index_fhfa": {
+      "description": "FHFA House Price Index: Purchase Only, United States",
+      "unit": "SA, Q1-91=100",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "prices"
+    },
+    "exchange_rate_export_weighted": {
+      "description": "Nominal Exchange Rate Index, Export Weighted",
+      "unit": "1970Q1=100",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "prices"
+    },
+    "unemployment_rate": {
+      "description": "Civilian Unemployment Rate: 16 Years & Over",
+      "unit": "SA, %",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "labor"
+    },
+    "labor_force_census": {
+      "description": "Civilian Labor Force: 16 Years & Over, based on CBO's Census Through 2020 Plus CBO Projection of the civilian noninstitutionalized population age 16 or older",
+      "unit": "SA, Mil.",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "labor"
+    },
+    "labor_force": {
+      "description": "Civilian Labor Force: 16 Years & Over, based on CBO's BLS Through 2025 Plus CBO Projection of the civilian noninstitutionalized population age 16 or older",
+      "unit": "SA, Mil.",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "labor"
+    },
+    "lfpr_16yo_census": {
+      "description": "Labor Force Participation Rate, based on CBO's Census Through 2020 Plus CBO Projection of the civilian noninstitutionalized population age 16 or older",
+      "unit": "SA, %",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "labor"
+    },
+    "lfpr_16yo": {
+      "description": "Labor Force Participation Rate, based on CBO's BLS Through 2025 Plus CBO Projection of the civilian noninstitutionalized population age 16 or older",
+      "unit": "SA, %",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "labor"
+    },
+    "empl_civ_16yo_census": {
+      "description": "Civilian Employment: 16 Years & Over, based on CBO's Census Through 2020 Plus CBO Projection of the civilian noninstitutionalized population age 16 or older",
+      "unit": "SA, Mil.",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "labor"
+    },
+    "empl_civ_16yo": {
+      "description": "Civilian Employment: 16 Years & Over, based on CBO's BLS Through 2025 Plus CBO Projection of the civilian noninstitutionalized population age 16 or older",
+      "unit": "SA, Mil.",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "labor"
+    },
+    "empl_payroll_nf": {
+      "description": "All Employees: Total Nonfarm",
+      "unit": "SA, Mil.",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "labor"
+    },
+    "output_per_hr_nfb": {
+      "description": "Nonfarm Business Sector: Output Per Hour of All Persons",
+      "unit": "SA, 2017=1",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "labor"
+    },
+    "hours_nfb": {
+      "description": "Nonfarm Business Sector: Hours of All Persons",
+      "unit": "SA, 2017=100",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "labor"
+    },
+    "population_civ_16yo_census": {
+      "description": "Civilian Noninstitutional Population: 16 Years & Over, CBO's Census Through 2020 Plus CBO Projection",
+      "unit": "NSA, Mil.",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "labor"
+    },
+    "population_civ_16yo": {
+      "description": "Civilian Noninstitutional Population: 16 Years & Over, CBO's BLS Through 2025 Plus CBO Projection",
+      "unit": "NSA, Mil.",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "labor"
+    },
+    "households": {
+      "description": "Households (Total Occupied Housing Units)",
+      "unit": "count",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "labor"
+    },
+    "treasury_note_rate_10yr": {
+      "description": "10-Year Treasury Note Yield at Constant Maturity",
+      "unit": "% p.a.",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "interest_rates"
+    },
+    "treasury_bill_rate_3mo": {
+      "description": "3-Month Treasury Bills, Secondary Market",
+      "unit": "% p.a.",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "interest_rates"
+    },
+    "fed_funds_rate": {
+      "description": "Federal Funds (Effective) Rate",
+      "unit": "% p.a.",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "interest_rates"
+    },
+    "gdi": {
+      "description": "Gross Domestic Income",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "income"
+    },
+    "personal_income": {
+      "description": "Personal Income",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "income"
+    },
+    "compensation": {
+      "description": "Compensation of Employees, Paid",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "income"
+    },
+    "wages_and_salaries": {
+      "description": "Wage and Salaries",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "income"
+    },
+    "nonwage_income": {
+      "description": "Nonwage Personal Income",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "income"
+    },
+    "prop_inc_farm_adj": {
+      "description": "Proprietors' Income, Farm, With IVA & CCAdj",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "income"
+    },
+    "prop_inc_nonfarm_adj": {
+      "description": "Proprietors' Income, Nonfarm, With IVA & CCAdj",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "income"
+    },
+    "rental_inc_adj": {
+      "description": "Income, rental, With CCAdj",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "income"
+    },
+    "interest_inc_pers": {
+      "description": "Personal Interest Income",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "income"
+    },
+    "dividend_inc_pers": {
+      "description": "Personal Dividend Income",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "income"
+    },
+    "corp_profits_adj": {
+      "description": "Corporate Profits With IVA & CCAdj",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "income"
+    },
+    "corp_profits_domestic_adj": {
+      "description": "Profits, Corporate, Domestic, With IVA & CCAdj",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "income"
+    },
+    "pce": {
+      "description": "Personal Consumption Expenditures (PCE)",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "expenditures"
+    },
+    "gross_pri_dom_invest": {
+      "description": "Gross Private Domestic Investment",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "expenditures"
+    },
+    "nonres_fixed_invest": {
+      "description": "Private Nonresidential Fixed Investment",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "expenditures"
+    },
+    "res_fixed_invest": {
+      "description": "Private Residential Investment",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "expenditures"
+    },
+    "change_pri_inv": {
+      "description": "Change in Private Inventories",
+      "unit": "SAAR, billions_of_dollars",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "expenditures"
+    },
+    "government_c_gi": {
+      "description": "Government Consumption Expenditures & Gross Investment",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "expenditures"
+    },
+    "federal_government_c_gi": {
+      "description": "Federal Government Consumption & Gross Investment",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "expenditures"
+    },
+    "sl_government_c_gi": {
+      "description": "State & Local Government Consumption & Gross Investment",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "expenditures"
+    },
+    "net_exports": {
+      "description": "Net Exports of Goods and Services",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "trade"
+    },
+    "exports": {
+      "description": "Exports of Goods & Services",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "trade"
+    },
+    "imports": {
+      "description": "Imports of Goods & Services",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "trade"
+    },
+    "current_account_balance": {
+      "description": "Balance on Current Account, NIPAs",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "trade"
+    },
+    "real_pce": {
+      "description": "Real Personal Consumption Expenditures (PCE)",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "real_expenditures"
+    },
+    "real_gross_pri_dom_invest": {
+      "description": "Real Gross Private Domestic Investment",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "real_expenditures"
+    },
+    "real_nonres_fixed_invest": {
+      "description": "Real Private Nonresidential Fixed Investment",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "real_expenditures"
+    },
+    "real_res_fixed_invest": {
+      "description": "Real Private Residential Investment",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "real_expenditures"
+    },
+    "real_change_pri_invest": {
+      "description": "Real Change in Private Inventories",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "real_expenditures"
+    },
+    "real_government_c_gi": {
+      "description": "Real Government Consumption Expenditures & Gross Investment",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "real_expenditures"
+    },
+    "real_federal_government_c_gi": {
+      "description": "Real Federal Government Consumption & Gross Investment",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "real_expenditures"
+    },
+    "real_sl_government_c_gi": {
+      "description": "Real State & Local Government Consumption & Gross Investment",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "real_expenditures"
+    },
+    "real_net_exports": {
+      "description": "Real Net Exports of Goods and Services",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "real_expenditures"
+    },
+    "real_exports": {
+      "description": "Real Exports of Goods & Services",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "real_expenditures"
+    },
+    "real_imports": {
+      "description": "Real Imports of Goods & Services",
+      "unit": "SAAR, Bil.Chn.2017.$",
+      "aggregation": "mean",
+      "source_frequency": "quarterly",
+      "category": "real_expenditures"
+    }
+  }
+}

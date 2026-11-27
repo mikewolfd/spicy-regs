@@ -1,0 +1,202 @@
+{
+  "dataset": "long_term_budget",
+  "publication_id": "51119",
+  "title": "Long-Term Budget Projections",
+  "source_url": "https://www.cbo.gov/publication/51119",
+  "description": "CBO's extended baseline projections of revenues, spending, deficits, and debt over a 30-year horizon, typically expressed as a percentage of GDP.",
+  "frequency": "annual_fy",
+  "date_format": "FY (e.g., FY2026, FY2056)",
+  "canonical_columns": ["date", "variable", "value"],
+  "notes": {
+    "units": "Summary projections are percentage of GDP unless otherwise noted. GDP itself is in trillions of dollars. Health care cost growth is in percentage points.",
+    "fiscal_year": "Federal fiscal year (Oct 1 through Sep 30).",
+    "horizon": "Extends 20 years beyond the 10-year budget baseline."
+  },
+  "tables": {
+    "summary": "Sheet 1 — Summary Data for CBO's Extended Baseline Projections (% of GDP)",
+    "health_cost_growth": "Sheet 2 — Projected Additional Cost Growth for Health Care (percentage points)",
+    "hi_trust_fund": "Sheet 3 — Hospital Insurance Trust Fund Income, Expenditures, and Balances (% of GDP)"
+  },
+  "fields": {
+    "lt_rev_individual_income_gdp_share": {
+      "description": "Projected individual income tax revenues as % of GDP",
+      "unit": "% of GDP",
+      "category": "revenues"
+    },
+    "lt_rev_payroll_gdp_share": {
+      "description": "Projected payroll tax revenues as % of GDP",
+      "unit": "% of GDP",
+      "category": "revenues"
+    },
+    "lt_rev_corporate_income_gdp_share": {
+      "description": "Projected corporate income tax revenues as % of GDP",
+      "unit": "% of GDP",
+      "category": "revenues"
+    },
+    "lt_rev_customs_gdp_share": {
+      "description": "Projected customs duties as % of GDP (2026-02 only)",
+      "unit": "% of GDP",
+      "category": "revenues"
+    },
+    "lt_rev_other_gdp_share": {
+      "description": "Other projected revenues as % of GDP",
+      "unit": "% of GDP",
+      "category": "revenues"
+    },
+    "lt_rev_total_gdp_share": {
+      "description": "Total projected revenues as % of GDP",
+      "unit": "% of GDP",
+      "category": "revenues"
+    },
+    "lt_mand_social_security_gdp_share": {
+      "description": "Social Security spending as % of GDP",
+      "unit": "% of GDP",
+      "category": "spending"
+    },
+    "lt_mand_medicare_gdp_share": {
+      "description": "Medicare spending as % of GDP",
+      "unit": "% of GDP",
+      "category": "spending"
+    },
+    "lt_mand_medicaid_chip_gdp_share": {
+      "description": "Medicaid, CHIP, and premium tax credits as % of GDP",
+      "unit": "% of GDP",
+      "category": "spending"
+    },
+    "lt_mand_other_gdp_share": {
+      "description": "Other mandatory spending as % of GDP",
+      "unit": "% of GDP",
+      "category": "spending"
+    },
+    "lt_outlays_discretionary_gdp_share": {
+      "description": "Discretionary spending as % of GDP",
+      "unit": "% of GDP",
+      "category": "spending"
+    },
+    "lt_outlays_noninterest_gdp_share": {
+      "description": "Total noninterest spending as % of GDP",
+      "unit": "% of GDP",
+      "category": "spending"
+    },
+    "lt_outlays_net_interest_gdp_share": {
+      "description": "Net interest spending as % of GDP",
+      "unit": "% of GDP",
+      "category": "spending"
+    },
+    "lt_outlays_total_gdp_share": {
+      "description": "Total spending as % of GDP",
+      "unit": "% of GDP",
+      "category": "spending"
+    },
+    "lt_primary_deficit_gdp_share": {
+      "description": "Primary deficit (-) or surplus as % of GDP",
+      "unit": "% of GDP",
+      "category": "deficit"
+    },
+    "lt_deficit_total_gdp_share": {
+      "description": "Total deficit (-) or surplus as % of GDP",
+      "unit": "% of GDP",
+      "category": "deficit"
+    },
+    "lt_debt_held_by_public_gdp_share": {
+      "description": "Federal debt held by the public as % of GDP",
+      "unit": "% of GDP",
+      "category": "debt"
+    },
+    "lt_medicare_offsetting_receipts_gdp_share": {
+      "description": "Medicare offsetting receipts as % of GDP",
+      "unit": "% of GDP",
+      "category": "addendum"
+    },
+    "lt_gdp_trillions": {
+      "description": "Gross domestic product in trillions of dollars",
+      "unit": "Trillions of $",
+      "category": "addendum"
+    },
+    "lt_gross_federal_debt_gdp_share": {
+      "description": "Gross federal debt as % of GDP",
+      "unit": "% of GDP",
+      "category": "addendum"
+    },
+    "lt_health_cost_growth_medicare_a": {
+      "description": "Projected additional cost growth for Medicare Part A",
+      "unit": "Percentage points",
+      "category": "health_cost_growth"
+    },
+    "lt_health_cost_growth_medicare_b": {
+      "description": "Projected additional cost growth for Medicare Part B",
+      "unit": "Percentage points",
+      "category": "health_cost_growth"
+    },
+    "lt_health_cost_growth_medicare_d": {
+      "description": "Projected additional cost growth for Medicare Part D",
+      "unit": "Percentage points",
+      "category": "health_cost_growth"
+    },
+    "lt_health_cost_growth_medicare_total": {
+      "description": "Projected additional cost growth for Medicare (total)",
+      "unit": "Percentage points",
+      "category": "health_cost_growth"
+    },
+    "lt_health_cost_growth_medicaid": {
+      "description": "Projected additional cost growth for Medicaid",
+      "unit": "Percentage points",
+      "category": "health_cost_growth"
+    },
+    "lt_hi_contributions_gdp_share": {
+      "description": "HI Trust Fund contributions as % of GDP",
+      "unit": "% of GDP",
+      "category": "hi_trust_fund"
+    },
+    "lt_hi_taxation_benefits_gdp_share": {
+      "description": "HI Trust Fund taxation of benefits as % of GDP",
+      "unit": "% of GDP",
+      "category": "hi_trust_fund"
+    },
+    "lt_hi_premiums_gdp_share": {
+      "description": "HI Trust Fund premiums as % of GDP",
+      "unit": "% of GDP",
+      "category": "hi_trust_fund"
+    },
+    "lt_hi_other_income_gdp_share": {
+      "description": "HI Trust Fund other income as % of GDP",
+      "unit": "% of GDP",
+      "category": "hi_trust_fund"
+    },
+    "lt_hi_income_excl_interest_gdp_share": {
+      "description": "HI Trust Fund income excluding interest as % of GDP",
+      "unit": "% of GDP",
+      "category": "hi_trust_fund"
+    },
+    "lt_hi_interest_gdp_share": {
+      "description": "HI Trust Fund interest as % of GDP",
+      "unit": "% of GDP",
+      "category": "hi_trust_fund"
+    },
+    "lt_hi_expenditures_gdp_share": {
+      "description": "HI Trust Fund expenditures as % of GDP",
+      "unit": "% of GDP",
+      "category": "hi_trust_fund"
+    },
+    "lt_hi_balance_gdp_share": {
+      "description": "HI Trust Fund beginning-of-year balance as % of GDP",
+      "unit": "% of GDP",
+      "category": "hi_trust_fund"
+    },
+    "lt_hi_noninterest_surplus_gdp_share": {
+      "description": "HI Trust Fund noninterest deficit (-) or surplus as % of GDP",
+      "unit": "% of GDP",
+      "category": "hi_trust_fund"
+    },
+    "lt_hi_end_of_year_balance_gdp_share": {
+      "description": "HI Trust Fund end-of-year balance as % of GDP",
+      "unit": "% of GDP",
+      "category": "hi_trust_fund"
+    },
+    "lt_hi_total_deficit_surplus_gdp_share": {
+      "description": "HI Trust Fund total deficit (-) or surplus as % of GDP",
+      "unit": "% of GDP",
+      "category": "hi_trust_fund"
+    }
+  }
+}

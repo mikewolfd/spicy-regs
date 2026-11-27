@@ -344,6 +344,13 @@
       "url": "https://forms.irs.gov/app/pod/dataDownload/fullData",
       "kind": "government",
       "note": "Official Section 527 bulk archive (PolOrgsFullData.zip) with Form 8871, Form 8872, schedules, and transmission metadata."
+    },
+    "cbo-data": {
+      "id": "cbo-data",
+      "name": "Congressional Budget Office Open Data Repository",
+      "url": "https://github.com/US-CBO/cbo-data",
+      "kind": "government",
+      "note": "Commit-pinned US-CBO/cbo-data budget, economic, trust-fund, and demographic baseline CSVs and schemas."
     }
   },
   "families": {
@@ -813,6 +820,11 @@
     "irs-527": {
       "sources": [
         "irs-527"
+      ]
+    },
+    "cbo-data": {
+      "sources": [
+        "cbo-data"
       ]
     }
   },
@@ -1454,6 +1466,76 @@
     "irs527_expenditures": {
       "sources": [
         "irs-527"
+      ]
+    },
+    "cbo_historical_budget": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_ten_year_budget": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_long_term_budget": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_trust_fund": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_spending_detail": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_revenue_detail": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_tax_parameters": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_automatic_stabilizers": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_historical_economic": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_economic_projections": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_long_term_economic": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_potential_gdp": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_demographic": {
+      "sources": [
+        "cbo-data"
+      ]
+    },
+    "cbo_data_snapshots": {
+      "sources": [
+        "cbo-data"
       ]
     }
   }

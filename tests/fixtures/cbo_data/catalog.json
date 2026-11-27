@@ -1,0 +1,1088 @@
+{
+  "@context": "https://project-open-data.cio.gov/v1.1/schema/catalog.jsonld",
+  "@type": "dcat:Catalog",
+  "title": "CBO Open Data Repository",
+  "description": "Machine-readable, tidy versions of CBO's Budget and Economic Data. Primary audience: AI agents and automated systems.",
+  "publisher": {
+    "@type": "org:Organization",
+    "name": "Congressional Budget Office",
+    "subOrganizationOf": {
+      "name": "United States Congress"
+    }
+  },
+  "generated": "2026-05-14T19:49:19Z",
+  "datasets": [
+    {
+      "@type": "dcat:Dataset",
+      "identifier": "historical_economic",
+      "title": "Historical Data and Economic Projections",
+      "description": "Data on output, prices, labor market measures, interest rates, income, potential GDP, and its underlying inputs from 1949 through the most recent year completed.",
+      "publisher": {
+        "name": "Congressional Budget Office"
+      },
+      "contactPoint": {
+        "fn": "CBO",
+        "hasURL": "https://www.cbo.gov/publication/55022"
+      },
+      "accessLevel": "public",
+      "landingPage": "https://www.cbo.gov/publication/55022",
+      "publication_id": "55022",
+      "frequency": "quarterly",
+      "field_count": 84,
+      "schema_path": "data/economic/historical_economic/schema.json",
+      "vintages": [
+        "2026-02",
+        "2024-06",
+        "2024-02",
+        "2023-07",
+        "2023-02",
+        "2022-05"
+      ],
+      "distribution": [
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_cy_2026-02.csv",
+          "downloadURL": "data/economic/historical_economic/annual_cy_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "annual_cy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2026-02.csv",
+          "downloadURL": "data/economic/historical_economic/annual_fy_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "annual_fy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "quarterly_2022-05.csv",
+          "downloadURL": "data/economic/historical_economic/quarterly_2022-05.csv",
+          "vintage": "2022-05",
+          "file_type": "quarterly"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "quarterly_2023-02.csv",
+          "downloadURL": "data/economic/historical_economic/quarterly_2023-02.csv",
+          "vintage": "2023-02",
+          "file_type": "quarterly"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "quarterly_2023-07.csv",
+          "downloadURL": "data/economic/historical_economic/quarterly_2023-07.csv",
+          "vintage": "2023-07",
+          "file_type": "quarterly"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "quarterly_2024-02.csv",
+          "downloadURL": "data/economic/historical_economic/quarterly_2024-02.csv",
+          "vintage": "2024-02",
+          "file_type": "quarterly"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "quarterly_2024-06.csv",
+          "downloadURL": "data/economic/historical_economic/quarterly_2024-06.csv",
+          "vintage": "2024-06",
+          "file_type": "quarterly"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "quarterly_2026-02.csv",
+          "downloadURL": "data/economic/historical_economic/quarterly_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "quarterly"
+        }
+      ],
+      "temporal": "1949-01-01/2036-12-31"
+    },
+    {
+      "@type": "dcat:Dataset",
+      "identifier": "economic_projections",
+      "title": "Economic Projections",
+      "description": "Projections of output, prices, labor market measures, interest rates, and income.",
+      "publisher": {
+        "name": "Congressional Budget Office"
+      },
+      "contactPoint": {
+        "fn": "CBO",
+        "hasURL": "https://www.cbo.gov/publication/51135"
+      },
+      "accessLevel": "public",
+      "landingPage": "https://www.cbo.gov/publication/51135",
+      "publication_id": "51135",
+      "frequency": "quarterly",
+      "field_count": 148,
+      "schema_path": "data/economic/economic_projections/schema.json",
+      "vintages": [
+        "2026-02",
+        "2025-09",
+        "2025-01",
+        "2024-06",
+        "2024-02"
+      ],
+      "distribution": [
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "calendar_2024-02.csv",
+          "downloadURL": "data/economic/economic_projections/calendar_2024-02.csv",
+          "vintage": "2024-02",
+          "file_type": "calendar"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "calendar_2024-06.csv",
+          "downloadURL": "data/economic/economic_projections/calendar_2024-06.csv",
+          "vintage": "2024-06",
+          "file_type": "calendar"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "calendar_2025-01.csv",
+          "downloadURL": "data/economic/economic_projections/calendar_2025-01.csv",
+          "vintage": "2025-01",
+          "file_type": "calendar"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "calendar_2025-09.csv",
+          "downloadURL": "data/economic/economic_projections/calendar_2025-09.csv",
+          "vintage": "2025-09",
+          "file_type": "calendar"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "calendar_2026-02.csv",
+          "downloadURL": "data/economic/economic_projections/calendar_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "calendar"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "fiscal_2024-02.csv",
+          "downloadURL": "data/economic/economic_projections/fiscal_2024-02.csv",
+          "vintage": "2024-02",
+          "file_type": "fiscal"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "fiscal_2024-06.csv",
+          "downloadURL": "data/economic/economic_projections/fiscal_2024-06.csv",
+          "vintage": "2024-06",
+          "file_type": "fiscal"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "fiscal_2025-01.csv",
+          "downloadURL": "data/economic/economic_projections/fiscal_2025-01.csv",
+          "vintage": "2025-01",
+          "file_type": "fiscal"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "fiscal_2025-09.csv",
+          "downloadURL": "data/economic/economic_projections/fiscal_2025-09.csv",
+          "vintage": "2025-09",
+          "file_type": "fiscal"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "fiscal_2026-02.csv",
+          "downloadURL": "data/economic/economic_projections/fiscal_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "fiscal"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "quarterly_2024-02.csv",
+          "downloadURL": "data/economic/economic_projections/quarterly_2024-02.csv",
+          "vintage": "2024-02",
+          "file_type": "quarterly"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "quarterly_2024-06.csv",
+          "downloadURL": "data/economic/economic_projections/quarterly_2024-06.csv",
+          "vintage": "2024-06",
+          "file_type": "quarterly"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "quarterly_2025-01.csv",
+          "downloadURL": "data/economic/economic_projections/quarterly_2025-01.csv",
+          "vintage": "2025-01",
+          "file_type": "quarterly"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "quarterly_2025-09.csv",
+          "downloadURL": "data/economic/economic_projections/quarterly_2025-09.csv",
+          "vintage": "2025-09",
+          "file_type": "quarterly"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "quarterly_2026-02.csv",
+          "downloadURL": "data/economic/economic_projections/quarterly_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "quarterly"
+        }
+      ],
+      "temporal": "2021-01-01/2036-12-31"
+    },
+    {
+      "@type": "dcat:Dataset",
+      "identifier": "long_term_economic",
+      "title": "Long-Term Economic Projections",
+      "description": "Extensions of 10-year economic projections for additional decades.",
+      "publisher": {
+        "name": "Congressional Budget Office"
+      },
+      "contactPoint": {
+        "fn": "CBO",
+        "hasURL": "https://www.cbo.gov/publication/57054"
+      },
+      "accessLevel": "public",
+      "landingPage": "https://www.cbo.gov/publication/57054",
+      "publication_id": "57054",
+      "frequency": "annual",
+      "field_count": 39,
+      "schema_path": "data/economic/long_term_economic/schema.json",
+      "vintages": [
+        "2026-02",
+        "2025-03",
+        "2024-03"
+      ],
+      "distribution": [
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "levels_2024-03.csv",
+          "downloadURL": "data/economic/long_term_economic/levels_2024-03.csv",
+          "vintage": "2024-03",
+          "file_type": "levels"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "levels_2025-03.csv",
+          "downloadURL": "data/economic/long_term_economic/levels_2025-03.csv",
+          "vintage": "2025-03",
+          "file_type": "levels"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "levels_2026-02.csv",
+          "downloadURL": "data/economic/long_term_economic/levels_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "levels"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "lfp_rates_2024-03.csv",
+          "downloadURL": "data/economic/long_term_economic/lfp_rates_2024-03.csv",
+          "vintage": "2024-03",
+          "file_type": "lfp_rates"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "lfp_rates_2025-03.csv",
+          "downloadURL": "data/economic/long_term_economic/lfp_rates_2025-03.csv",
+          "vintage": "2025-03",
+          "file_type": "lfp_rates"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "lfp_rates_2026-02.csv",
+          "downloadURL": "data/economic/long_term_economic/lfp_rates_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "lfp_rates"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "rates_2024-03.csv",
+          "downloadURL": "data/economic/long_term_economic/rates_2024-03.csv",
+          "vintage": "2024-03",
+          "file_type": "rates"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "rates_2025-03.csv",
+          "downloadURL": "data/economic/long_term_economic/rates_2025-03.csv",
+          "vintage": "2025-03",
+          "file_type": "rates"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "rates_2026-02.csv",
+          "downloadURL": "data/economic/long_term_economic/rates_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "rates"
+        }
+      ],
+      "temporal": "1994-01-01/2100-12-31"
+    },
+    {
+      "@type": "dcat:Dataset",
+      "identifier": "potential_gdp",
+      "title": "Potential GDP and Underlying Inputs",
+      "description": "Estimates of potential GDP and its underlying inputs. Post-2020, these are included in historical_economic (55022) and economic_projections (51135).",
+      "publisher": {
+        "name": "Congressional Budget Office"
+      },
+      "contactPoint": {
+        "fn": "CBO",
+        "hasURL": "https://www.cbo.gov/publication/51137"
+      },
+      "accessLevel": "public",
+      "landingPage": "https://www.cbo.gov/publication/51137",
+      "publication_id": "51137",
+      "frequency": "quarterly",
+      "field_count": 14,
+      "schema_path": "data/economic/potential_gdp/schema.json",
+      "vintages": [
+        "2019-08"
+      ],
+      "distribution": [
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_2019-08.csv",
+          "downloadURL": "data/economic/potential_gdp/annual_2019-08.csv",
+          "vintage": "2019-08",
+          "file_type": "annual"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "quarterly_2019-08.csv",
+          "downloadURL": "data/economic/potential_gdp/quarterly_2019-08.csv",
+          "vintage": "2019-08",
+          "file_type": "quarterly"
+        }
+      ],
+      "temporal": "1949-01-01/2029-12-31"
+    },
+    {
+      "@type": "dcat:Dataset",
+      "identifier": "demographic",
+      "title": "Demographic Projections",
+      "description": "Projections of the size of the population, immigration, emigration, mortality, and fertility.",
+      "publisher": {
+        "name": "Congressional Budget Office"
+      },
+      "contactPoint": {
+        "fn": "CBO",
+        "hasURL": "https://www.cbo.gov/publication/57059"
+      },
+      "accessLevel": "public",
+      "landingPage": "https://www.cbo.gov/publication/57059",
+      "publication_id": "57059",
+      "frequency": "annual",
+      "field_count": 6,
+      "schema_path": "data/economic/demographic/schema.json",
+      "vintages": [
+        "2026-01",
+        "2025-09",
+        "2025-01"
+      ],
+      "distribution": [
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "fertility_2025-01.csv",
+          "downloadURL": "data/economic/demographic/fertility_2025-01.csv",
+          "vintage": "2025-01",
+          "file_type": "fertility"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "fertility_2025-09.csv",
+          "downloadURL": "data/economic/demographic/fertility_2025-09.csv",
+          "vintage": "2025-09",
+          "file_type": "fertility"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "fertility_2026-01.csv",
+          "downloadURL": "data/economic/demographic/fertility_2026-01.csv",
+          "vintage": "2026-01",
+          "file_type": "fertility"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "migration_2025-01.csv",
+          "downloadURL": "data/economic/demographic/migration_2025-01.csv",
+          "vintage": "2025-01",
+          "file_type": "migration"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "migration_2025-09.csv",
+          "downloadURL": "data/economic/demographic/migration_2025-09.csv",
+          "vintage": "2025-09",
+          "file_type": "migration"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "migration_2026-01.csv",
+          "downloadURL": "data/economic/demographic/migration_2026-01.csv",
+          "vintage": "2026-01",
+          "file_type": "migration"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "mortality_2025-01.csv",
+          "downloadURL": "data/economic/demographic/mortality_2025-01.csv",
+          "vintage": "2025-01",
+          "file_type": "mortality"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "mortality_2025-09.csv",
+          "downloadURL": "data/economic/demographic/mortality_2025-09.csv",
+          "vintage": "2025-09",
+          "file_type": "mortality"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "mortality_2026-01.csv",
+          "downloadURL": "data/economic/demographic/mortality_2026-01.csv",
+          "vintage": "2026-01",
+          "file_type": "mortality"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "population_bls_2025-01.csv",
+          "downloadURL": "data/economic/demographic/population_bls_2025-01.csv",
+          "vintage": "2025-01",
+          "file_type": "population_bls"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "population_bls_2025-09.csv",
+          "downloadURL": "data/economic/demographic/population_bls_2025-09.csv",
+          "vintage": "2025-09",
+          "file_type": "population_bls"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "population_bls_2026-01.csv",
+          "downloadURL": "data/economic/demographic/population_bls_2026-01.csv",
+          "vintage": "2026-01",
+          "file_type": "population_bls"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "population_census_2025-01.csv",
+          "downloadURL": "data/economic/demographic/population_census_2025-01.csv",
+          "vintage": "2025-01",
+          "file_type": "population_census"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "population_census_2025-09.csv",
+          "downloadURL": "data/economic/demographic/population_census_2025-09.csv",
+          "vintage": "2025-09",
+          "file_type": "population_census"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "population_census_2026-01.csv",
+          "downloadURL": "data/economic/demographic/population_census_2026-01.csv",
+          "vintage": "2026-01",
+          "file_type": "population_census"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "ss_area_population_2025-01.csv",
+          "downloadURL": "data/economic/demographic/ss_area_population_2025-01.csv",
+          "vintage": "2025-01",
+          "file_type": "ss_area_population"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "ss_area_population_2025-09.csv",
+          "downloadURL": "data/economic/demographic/ss_area_population_2025-09.csv",
+          "vintage": "2025-09",
+          "file_type": "ss_area_population"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "ss_area_population_2026-01.csv",
+          "downloadURL": "data/economic/demographic/ss_area_population_2026-01.csv",
+          "vintage": "2026-01",
+          "file_type": "ss_area_population"
+        }
+      ],
+      "temporal": "2020-01-01/2099-12-31"
+    },
+    {
+      "@type": "dcat:Dataset",
+      "identifier": "historical_budget",
+      "title": "Historical Budget Data",
+      "description": "Data on revenues, outlays, and the deficit or surplus from 1962 through the most recent year completed.",
+      "publisher": {
+        "name": "Congressional Budget Office"
+      },
+      "contactPoint": {
+        "fn": "CBO",
+        "hasURL": "https://www.cbo.gov/publication/51134"
+      },
+      "accessLevel": "public",
+      "landingPage": "https://www.cbo.gov/publication/51134",
+      "publication_id": "51134",
+      "frequency": "annual_fy",
+      "field_count": 66,
+      "schema_path": "data/budget/historical_budget/schema.json",
+      "vintages": [
+        "2026-02",
+        "2025-01",
+        "2024-02"
+      ],
+      "distribution": [
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2024-02.csv",
+          "downloadURL": "data/budget/historical_budget/annual_fy_2024-02.csv",
+          "vintage": "2024-02",
+          "file_type": "annual_fy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2025-01.csv",
+          "downloadURL": "data/budget/historical_budget/annual_fy_2025-01.csv",
+          "vintage": "2025-01",
+          "file_type": "annual_fy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2026-02.csv",
+          "downloadURL": "data/budget/historical_budget/annual_fy_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "annual_fy"
+        }
+      ],
+      "temporal": "1962-01-01/2025-12-31"
+    },
+    {
+      "@type": "dcat:Dataset",
+      "identifier": "ten_year_budget",
+      "title": "10-Year Budget Projections",
+      "description": "Projections of spending and revenues by category and of deficits and debt held by the public.",
+      "publisher": {
+        "name": "Congressional Budget Office"
+      },
+      "contactPoint": {
+        "fn": "CBO",
+        "hasURL": "https://www.cbo.gov/publication/51118"
+      },
+      "accessLevel": "public",
+      "landingPage": "https://www.cbo.gov/publication/51118",
+      "publication_id": "51118",
+      "frequency": "annual_fy",
+      "field_count": 372,
+      "schema_path": "data/budget/ten_year_budget/schema.json",
+      "vintages": [
+        "2026-02",
+        "2025-01",
+        "2024-06"
+      ],
+      "distribution": [
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2024-06.csv",
+          "downloadURL": "data/budget/ten_year_budget/annual_fy_2024-06.csv",
+          "vintage": "2024-06",
+          "file_type": "annual_fy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2025-01.csv",
+          "downloadURL": "data/budget/ten_year_budget/annual_fy_2025-01.csv",
+          "vintage": "2025-01",
+          "file_type": "annual_fy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2026-02.csv",
+          "downloadURL": "data/budget/ten_year_budget/annual_fy_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "annual_fy"
+        }
+      ],
+      "temporal": "2023-01-01/2036-12-31"
+    },
+    {
+      "@type": "dcat:Dataset",
+      "identifier": "long_term_budget",
+      "title": "Long-Term Budget Projections",
+      "description": "Extensions of 10-year budget projections for additional decades.",
+      "publisher": {
+        "name": "Congressional Budget Office"
+      },
+      "contactPoint": {
+        "fn": "CBO",
+        "hasURL": "https://www.cbo.gov/publication/51119"
+      },
+      "accessLevel": "public",
+      "landingPage": "https://www.cbo.gov/publication/51119",
+      "publication_id": "51119",
+      "frequency": "annual_fy",
+      "field_count": 36,
+      "schema_path": "data/budget/long_term_budget/schema.json",
+      "vintages": [
+        "2026-02",
+        "2025-03"
+      ],
+      "distribution": [
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2025-03.csv",
+          "downloadURL": "data/budget/long_term_budget/annual_fy_2025-03.csv",
+          "vintage": "2025-03",
+          "file_type": "annual_fy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2026-02.csv",
+          "downloadURL": "data/budget/long_term_budget/annual_fy_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "annual_fy"
+        }
+      ],
+      "temporal": "2025-01-01/2056-12-31"
+    },
+    {
+      "@type": "dcat:Dataset",
+      "identifier": "trust_fund",
+      "title": "10-Year Trust Fund Projections",
+      "description": "Trust fund balances projected in CBO's baseline.",
+      "publisher": {
+        "name": "Congressional Budget Office"
+      },
+      "contactPoint": {
+        "fn": "CBO",
+        "hasURL": "https://www.cbo.gov/publication/51136"
+      },
+      "accessLevel": "public",
+      "landingPage": "https://www.cbo.gov/publication/51136",
+      "publication_id": "51136",
+      "frequency": "annual_fy",
+      "field_count": 51,
+      "schema_path": "data/budget/trust_fund/schema.json",
+      "vintages": [
+        "2026-02",
+        "2025-01",
+        "2024-06"
+      ],
+      "distribution": [
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2024-06.csv",
+          "downloadURL": "data/budget/trust_fund/annual_fy_2024-06.csv",
+          "vintage": "2024-06",
+          "file_type": "annual_fy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2025-01.csv",
+          "downloadURL": "data/budget/trust_fund/annual_fy_2025-01.csv",
+          "vintage": "2025-01",
+          "file_type": "annual_fy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2026-02.csv",
+          "downloadURL": "data/budget/trust_fund/annual_fy_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "annual_fy"
+        }
+      ],
+      "temporal": "2023-01-01/2036-12-31"
+    },
+    {
+      "@type": "dcat:Dataset",
+      "identifier": "revenue_detail",
+      "title": "Revenue Projections, by Category",
+      "description": "Projections of revenues by category, estimates of the effects of extending tax provisions scheduled to expire within ten years, and estimates of selected policy options affecting revenues.",
+      "publisher": {
+        "name": "Congressional Budget Office"
+      },
+      "contactPoint": {
+        "fn": "CBO",
+        "hasURL": "https://www.cbo.gov/publication/51138"
+      },
+      "accessLevel": "public",
+      "landingPage": "https://www.cbo.gov/publication/51138",
+      "publication_id": "51138",
+      "frequency": "annual_fy",
+      "field_count": 242,
+      "schema_path": "data/budget/revenue_detail/schema.json",
+      "vintages": [
+        "2026-02",
+        "2025-01",
+        "2024-06"
+      ],
+      "distribution": [
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_cy_2024-06.csv",
+          "downloadURL": "data/budget/revenue_detail/annual_cy_2024-06.csv",
+          "vintage": "2024-06",
+          "file_type": "annual_cy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_cy_2025-01.csv",
+          "downloadURL": "data/budget/revenue_detail/annual_cy_2025-01.csv",
+          "vintage": "2025-01",
+          "file_type": "annual_cy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_cy_2026-02.csv",
+          "downloadURL": "data/budget/revenue_detail/annual_cy_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "annual_cy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_cy_iit_2024-06.csv",
+          "downloadURL": "data/budget/revenue_detail/annual_cy_iit_2024-06.csv",
+          "vintage": "2024-06",
+          "file_type": "annual_cy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_cy_iit_2025-01.csv",
+          "downloadURL": "data/budget/revenue_detail/annual_cy_iit_2025-01.csv",
+          "vintage": "2025-01",
+          "file_type": "annual_cy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_cy_iit_2026-02.csv",
+          "downloadURL": "data/budget/revenue_detail/annual_cy_iit_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "annual_cy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2024-06.csv",
+          "downloadURL": "data/budget/revenue_detail/annual_fy_2024-06.csv",
+          "vintage": "2024-06",
+          "file_type": "annual_fy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2025-01.csv",
+          "downloadURL": "data/budget/revenue_detail/annual_fy_2025-01.csv",
+          "vintage": "2025-01",
+          "file_type": "annual_fy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2026-02.csv",
+          "downloadURL": "data/budget/revenue_detail/annual_fy_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "annual_fy"
+        }
+      ],
+      "temporal": "1982-01-01/2036-12-31"
+    },
+    {
+      "@type": "dcat:Dataset",
+      "identifier": "spending_detail",
+      "title": "Spending Projections, by Budget Account",
+      "description": "Projections of budget authority and outlays at the budget account level, organized by Treasury Identification Number.",
+      "publisher": {
+        "name": "Congressional Budget Office"
+      },
+      "contactPoint": {
+        "fn": "CBO",
+        "hasURL": "https://www.cbo.gov/publication/51142"
+      },
+      "accessLevel": "public",
+      "landingPage": "https://www.cbo.gov/publication/51142",
+      "publication_id": "51142",
+      "frequency": "annual_fy",
+      "field_count": 12,
+      "schema_path": "data/budget/spending_detail/schema.json",
+      "vintages": [
+        "2026-02",
+        "2025-01",
+        "2024-06"
+      ],
+      "distribution": [
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2024-06.csv",
+          "downloadURL": "data/budget/spending_detail/annual_fy_2024-06.csv",
+          "vintage": "2024-06",
+          "file_type": "annual_fy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2025-01.csv",
+          "downloadURL": "data/budget/spending_detail/annual_fy_2025-01.csv",
+          "vintage": "2025-01",
+          "file_type": "annual_fy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2026-02.csv",
+          "downloadURL": "data/budget/spending_detail/annual_fy_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "annual_fy"
+        }
+      ],
+      "temporal": "2024-01-01/2036-12-31"
+    },
+    {
+      "@type": "dcat:Dataset",
+      "identifier": "automatic_stabilizers",
+      "title": "Estimates of Automatic Stabilizers",
+      "description": "Deficit or surplus with and without CBO's estimate of automatic stabilizers, and related estimates of GDP and unemployment gaps.",
+      "publisher": {
+        "name": "Congressional Budget Office"
+      },
+      "contactPoint": {
+        "fn": "CBO",
+        "hasURL": "https://www.cbo.gov/publication/51139"
+      },
+      "accessLevel": "public",
+      "landingPage": "https://www.cbo.gov/publication/51139",
+      "publication_id": "51139",
+      "frequency": "annual_fy",
+      "field_count": 20,
+      "schema_path": "data/budget/automatic_stabilizers/schema.json",
+      "vintages": [
+        "2024-11",
+        "2023-06"
+      ],
+      "distribution": [
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2023-06.csv",
+          "downloadURL": "data/budget/automatic_stabilizers/annual_fy_2023-06.csv",
+          "vintage": "2023-06",
+          "file_type": "annual_fy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_fy_2024-11.csv",
+          "downloadURL": "data/budget/automatic_stabilizers/annual_fy_2024-11.csv",
+          "vintage": "2024-11",
+          "file_type": "annual_fy"
+        }
+      ],
+      "temporal": "1965-01-01/2034-12-31"
+    },
+    {
+      "@type": "dcat:Dataset",
+      "identifier": "tax_parameters",
+      "title": "Tax Parameters and Effective Marginal Tax Rates",
+      "description": "Parameters used in CBO's microsimulation tax model and effective marginal tax rates on labor and capital.",
+      "publisher": {
+        "name": "Congressional Budget Office"
+      },
+      "contactPoint": {
+        "fn": "CBO",
+        "hasURL": "https://www.cbo.gov/publication/53724"
+      },
+      "accessLevel": "public",
+      "landingPage": "https://www.cbo.gov/publication/53724",
+      "publication_id": "53724",
+      "frequency": "annual_cy",
+      "field_count": 159,
+      "schema_path": "data/budget/tax_parameters/schema.json",
+      "vintages": [
+        "2026-02",
+        "2025-01",
+        "2024-06"
+      ],
+      "distribution": [
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_cy_2024-06.csv",
+          "downloadURL": "data/budget/tax_parameters/annual_cy_2024-06.csv",
+          "vintage": "2024-06",
+          "file_type": "annual_cy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_cy_2025-01.csv",
+          "downloadURL": "data/budget/tax_parameters/annual_cy_2025-01.csv",
+          "vintage": "2025-01",
+          "file_type": "annual_cy"
+        },
+        {
+          "@type": "dcat:Distribution",
+          "mediaType": "text/csv",
+          "format": "CSV",
+          "title": "annual_cy_2026-02.csv",
+          "downloadURL": "data/budget/tax_parameters/annual_cy_2026-02.csv",
+          "vintage": "2026-02",
+          "file_type": "annual_cy"
+        }
+      ],
+      "temporal": "2021-01-01/2036-12-31"
+    }
+  ]
+}
