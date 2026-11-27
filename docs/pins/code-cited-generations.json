@@ -292,6 +292,24 @@
     },
     {
       "family": "committee-reports",
+      "artifactDigest": "sha256:909edab7dbfce8beb8575f28da7302b5196aa6882fea267c829b2b3d935f282a",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 55905467
+    },
+    {
+      "family": "committee-reports",
       "artifactDigest": "sha256:925b245110c59ae3a605da56c0ac95fdb79a75aa74c0ecb21868af8398bb07b5",
       "citedBy": [
         {
@@ -673,6 +691,42 @@
       "storedBytes": null
     },
     {
+      "family": "fec-candidate-history",
+      "artifactDigest": "sha256:a192d517e9c03ea556bc166e9f2d94d1f59e055e4ce8cd930912782337c64fff",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 21253244
+    },
+    {
+      "family": "fec-committee-history",
+      "artifactDigest": "sha256:7a273f7a46e72006e9cf47d53f46bb54bc35d6e6a93fec159c16a57e614d2c12",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 52507965
+    },
+    {
       "family": "fec-committees",
       "artifactDigest": "sha256:4a93358f4ffbbcb299da9231e1d521dc4972ed3982240d3b780328421cd284a4",
       "citedBy": [
@@ -685,6 +739,42 @@
       "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
       "storedAtListing": "root only",
       "storedBytes": null
+    },
+    {
+      "family": "fec-committees",
+      "artifactDigest": "sha256:d72753ddbc90db6663f3176d3786a4800a6215d7f89c206fbedccb88835ab08b",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 220653141
+    },
+    {
+      "family": "fec-financial-profiles",
+      "artifactDigest": "sha256:a954c74c00d9e7f8b1c2d3c5eb2f21c506efe63735f7dcf0e9b8756ad0a92721",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 11072051
     },
     {
       "family": "fec-observations",

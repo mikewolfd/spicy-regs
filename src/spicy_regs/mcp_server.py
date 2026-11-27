@@ -339,7 +339,7 @@ TABLES = (
     # without reaching past the server.
     "bill_family_backfills",
     "bill_family_backfill_walks",
-    "committee_report_reads",
+    "committee_report_read_outcomes",
     "document_citation_reads",
     "native_legal_references",
     "native_legal_reference_reads",

@@ -4,7 +4,7 @@
 
 **Bill activity events**
 
-One row per change detected between two runs of the bill family. Two instants per row: `occurred_at` is the publisher's, `detected_at` is the run's. All columns are stored as VARCHAR.
+One row per change detected between two runs of the bill family. `occurred_at` is the publisher's timestamp; the run's `detected_at` instant remains processing-only in ETL receipts. All columns are stored as VARCHAR.
 
 **Coverage.** Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. Each event compares a bill between two runs of the bill family, not the historical sequence of its actions. *(measured 2026-09-29)*
 

@@ -2351,7 +2351,7 @@ tables:
     columns:
       name: "Proceeding (docket) number, e.g. `17-108` or `23-320`. Primary key / dedup key, and the join key to the `name` of each entry in `fcc_filings.proceedings`."
       id_proceeding: "ECFS numeric identifier, reused across some docket names in retained data (301759 appears with both 17-108 and 87-432). Native filing-to-proceeding joins require name AND id_proceeding; the numeric ID alone is not globally unique. The table's primary key remains name."
-      description: "Proceeding title/subject (ECFS `description_display`, falling back to `description`), e.g. `Restoring Internet Freedom`. There is no program or topic field, and titles often leave the program out: Universal Service dockets include 13-184 (`Modernizing the E-rate Program for Schools and Libraries.`) and 02-60 (`In the Matter of Rural Health Care Support Mechanism`), neither of which says universal service, and high-cost programs such as the Rural Digital Opportunity Fund (19-126) and the 5G Fund (20-32) use their own names. Search titles together with bureau_code (WC, or CC for older dockets) and known docket numbers, and find related dockets by the proceedings filings name alongside an anchor docket in fcc_filings.proceeding_names_json (for Universal Service, the umbrella docket 96-45 and 10-90). A title search gives a floor, not a complete list."
+      description: "Proceeding title/subject (ECFS `description_display`, falling back to `description`), e.g. `Restoring Internet Freedom`. There is no program or topic field, and titles often leave the program out: Universal Service dockets include 13-184 (`Modernizing the E-rate Program for Schools and Libraries.`) and 02-60 (`In the Matter of Rural Health Care Support Mechanism`), neither of which says universal service, and high-cost programs such as the Rural Digital Opportunity Fund (19-126) and the 5G Fund (20-32) use their own names. Search titles together with bureau_code (WC, or CC for older dockets) and known docket numbers, and find related dockets by the proceedings filings name alongside an anchor docket in `fcc_filings.proceedings` (for Universal Service, the umbrella docket 96-45 and 10-90). A title search gives a floor, not a complete list."
       bureau_code: "Code of the FCC bureau that owns the proceeding (e.g. `WC`)."
       bureau_name: "Name of the FCC bureau that owns the proceeding (e.g. `Wireline Competition Bureau`)."
       rulemaking_or_docket: "ECFS `flag_rulemaking_or_docket`: `R` for rulemakings (RM- numbers), `D` for dockets."
@@ -2760,9 +2760,9 @@ tables:
       of the bill family, not the historical sequence of its actions.
     measured_on: "2026-09-29"
     summary: >-
-      One row per change detected between two runs of the bill family. Two instants
-      per row: `occurred_at` is the publisher's, `detected_at` is the run's. All
-      columns are stored as VARCHAR.
+      One row per change detected between two runs of the bill family. `occurred_at`
+      is the publisher's timestamp; the run's `detected_at` instant remains
+      processing-only in ETL receipts. All columns are stored as VARCHAR.
     data_quality: >-
       A `stage_changed` event compares a bill's actions, not its published
       stage: the prior stage is re-derived from the bill's published actions
@@ -3057,8 +3057,8 @@ tables:
     coverage: >-
       Sampled. Selected committee report packages from GovInfo, a mixed-Congress
       selection that grows as packages are added; not complete historical or
-      constituent-granule coverage. committee_report_reads records each package
-      read and its outcome.
+      constituent-granule coverage. committee_report_read_outcomes records each
+      package read and its outcome.
     measured_on: "2026-09-28"
     summary: >-
       One row per published part of a captured GovInfo committee report package,
@@ -3089,7 +3089,7 @@ tables:
       H.R. 3495 its constituent record names, where its row read before parts were keyed has
       NULL; its separate recital_bill_id is a text interpretation. Every part a record states is
       read, all or none: a package whose parts cannot all be read is refused in
-      committee_report_reads and keeps its prior rows. Parts, by decision 29
+      committee_report_read_outcomes and keeps its prior rows. Parts, by decision 29
       (`docs/decisions/fork-delivery-decisions-2026-09-22.md`): a report published in one part is
       one row whose part_id is its package id and whose part_number is NULL; a report published
       as parts is one row per part, part_id the part's granule id (CRPT-119hrpt455-pt2) and

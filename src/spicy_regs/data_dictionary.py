@@ -829,7 +829,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "bill_vote_references",
         "bill_family_backfills",
         "bill_family_backfill_walks",
-        "committee_report_reads",
+        "committee_report_read_outcomes",
         "document_citation_reads",
         "member_vote_terms",
         "scorecard_member_links",

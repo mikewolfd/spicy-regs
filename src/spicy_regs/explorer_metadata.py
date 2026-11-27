@@ -71,6 +71,14 @@ def validate_join(join: dict, schemas: dict[str, list]) -> tuple:
         raise ValueError("Join cardinality must be one, many, or unspecified")
     if join.get("kind") not in KINDS:
         raise ValueError("Unknown join resolution kind")
+    child_filter = join.get("child_filter")
+    if child_filter is not None:
+        if (not isinstance(child_filter, dict) or not child_filter
+                or not all(isinstance(k, str) and k and isinstance(v, str) and v for k, v in child_filter.items())):
+            raise ValueError(f"Join has invalid child_filter: {join}")
+        missing_filter = set(child_filter) - {c[0] for c in schemas[join["child"]]}
+        if missing_filter:
+            raise ValueError(f"Join {join['child']} child_filter names missing columns: {sorted(missing_filter)}")
     return (join["child"], tuple(join["child_columns"]), join["parent"], tuple(join["parent_columns"]))
 
 
@@ -225,8 +233,9 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
             omitted.append({"child": join["child"], "parent": join["parent"],
                             "reason": "One or both tables are outside the current public catalogs."})
             continue
-        missing_keys = [f"{join[side]}.{column}" for side in ("child", "parent")
-                        for column in join[f"{side}_columns"]
+        child_required = list(dict.fromkeys([*join["child_columns"], *(join.get("child_filter") or {})]))
+        missing_keys = [f"{join[side]}.{column}" for side, cols in (("child", child_required), ("parent", join["parent_columns"]))
+                        for column in cols
                         if column not in {c[0] for c in live[join[side]]["schema"]}]
         if missing_keys:
             omitted.append({"child": join["child"], "parent": join["parent"],
@@ -234,8 +243,9 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
             continue
         exposed = deepcopy(join)
         exposed["requiredFields"] = {
-            side: [{"path": column, "status": "published"} for column in join[f"{side}_columns"]]
-            for side in ("child", "parent")}
+            "child": [{"path": column, "status": "published"} for column in child_required],
+            "parent": [{"path": column, "status": "published"} for column in join["parent_columns"]],
+        }
         exposed["directions"] = directions(True)
         exposed["completeKey"] = {
             side: bool(record_identities[join[side]]) and

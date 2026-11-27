@@ -329,6 +329,7 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
                        meaning="The complete-read scope for this observed legal reference.", mode="row"))
     for source, target, columns in (
         ("committee_reports", "committee_report_read_outcomes", ("package_id",)),
+        ("hearing_transcripts", "committee_report_read_outcomes", ("package_id",)),
         ("document_citations", "document_citation_read_outcomes", ("document_kind", "document_key", "body_version_id")),
     ):
         specs.append(array(source + "_read_outcomes", source, (),
