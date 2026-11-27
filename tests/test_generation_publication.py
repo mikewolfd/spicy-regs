@@ -1009,3 +1009,365 @@ def test_declared_policy_column_retirement_publishes_while_keeping_rows_and_refu
     m_desc = pub.table_descriptor(m_published, "scorecard_member_links.parquet")
     assert m_desc is not None and m_desc["rows"] == n_rows
     assert {c[0] for c in m_desc["columns"]} == set(member_curr.subject_schema.names)
+
+
+def _evidence_fixture(tmp_path, body: bytes, name: str = "ev"):
+    import hashlib
+    from spicy_docs.transport.captured import CapturedBodyResponse
+
+    evidence_dir = tmp_path / name
+    evidence_dir.mkdir()
+    evidence = CaptureEvidence(evidence_dir, "test")
+    evidence.capture(
+        CapturedBodyResponse(
+            "https://source.test/export.bin",
+            "https://source.test/export.bin",
+            200,
+            "application/octet-stream",
+            "2026-11-27T00:00:00Z",
+            body,
+        ),
+        stage="used",
+    )
+    artifact = evidence.seal(outcome="build-complete")
+    digest = hashlib.sha256(body).hexdigest()
+    return evidence.artifact_dir, artifact, f"{pub.EVIDENCE_PREFIX}/blobs/sha256/{digest}", f"sha256:{digest}"
+
+
+def test_evidence_readback_resumes_mid_stream_streaming_errors_across_bounded_ranges(tmp_path, monkeypatch):
+    """ss-yw2f: multi-part evidence read-back uses bounded PART_BYTES ranges with IfMatch and resumes mid-range."""
+    from http.client import IncompleteRead
+    from io import BytesIO
+    from botocore.exceptions import IncompleteReadError, ReadTimeoutError, ResponseStreamingError
+    from urllib3.exceptions import ProtocolError
+
+    monkeypatch.setattr(pub, "PART_BYTES", 128)
+    monkeypatch.setattr(pub, "_READ_BACK_CHUNK", 32)
+    monkeypatch.setattr(pub.time, "sleep", lambda _: None)
+
+    body = bytes((i * 31) % 256 for i in range(310))
+    evidence_dir, artifact, blob_key, expected_sha = _evidence_fixture(tmp_path, body)
+    opened: list[BytesIO] = []
+    requests: list[tuple[str | None, str | None]] = []
+
+    class DroppingBody(BytesIO):
+        def __init__(self, data: bytes, fail_after: int, exc: BaseException):
+            super().__init__(data)
+            self._fail_after = fail_after
+            self._exc = exc
+            self._emitted = 0
+
+        def read(self, size=-1):
+            if self._emitted >= self._fail_after:
+                raise self._exc
+            take = self._fail_after - self._emitted if size < 0 else min(size, self._fail_after - self._emitted)
+            chunk = super().read(take)
+            self._emitted += len(chunk)
+            return chunk
+
+    class ResumableStore(Store):
+        def __init__(self):
+            super().__init__()
+            self.blob_calls = 0
+
+        def get_object(self, *, Bucket, Key, Range=None, IfMatch=None):
+            if Key != blob_key:
+                return super().get_object(Bucket=Bucket, Key=Key, Range=Range, IfMatch=IfMatch)
+            requests.append((Range, IfMatch))
+            self.blob_calls += 1
+            if self.blob_calls == 5:
+                raise ReadTimeoutError(endpoint_url="https://r2.test", error=TimeoutError("read timed out"))
+            result = super().get_object(Bucket=Bucket, Key=Key, Range=Range, IfMatch=IfMatch)
+            raw = result["Body"].read()
+            result["Body"].close()
+            if self.blob_calls == 1:
+                stream: BytesIO = DroppingBody(
+                    raw, 48, ResponseStreamingError(error=ProtocolError("broken", IncompleteRead(b"x" * 48, 80))),
+                )
+            elif self.blob_calls == 3:
+                stream = DroppingBody(raw, 64, IncompleteReadError(actual_bytes=64, expected_bytes=128))
+            else:
+                stream = BytesIO(raw)
+            opened.append(stream)
+            result["Body"] = stream
+            return result
+
+    store = ResumableStore()
+    pub.publish_evidence(store, "test", evidence_dir, artifact)
+    etag = store.head_object(Bucket="test", Key=blob_key)["ETag"]
+    assert requests == [
+        ("bytes=0-127", None),
+        ("bytes=48-127", etag),
+        ("bytes=128-255", etag),
+        ("bytes=192-255", etag),
+        ("bytes=256-309", etag),
+        ("bytes=256-309", etag),
+    ]
+    assert all(stream.closed for stream in opened)
+    assert store.objects[blob_key] == body
+    assert pub._stored_bytes_match(store, "test", blob_key, expected_size=len(body), expected_sha256=expected_sha)
+
+
+def test_evidence_readback_resumes_single_part_blob_with_range_and_if_match(tmp_path, monkeypatch):
+    """A single-part blob starts with one unranged GET and resumes from byte offset with Range + IfMatch."""
+    from http.client import IncompleteRead
+    from io import BytesIO
+    from botocore.exceptions import ResponseStreamingError
+
+    monkeypatch.setattr(pub, "_READ_BACK_CHUNK", 64)
+    monkeypatch.setattr(pub.time, "sleep", lambda _: None)
+
+    body = bytes((i * 17) % 256 for i in range(200))
+    evidence_dir, artifact, blob_key, _ = _evidence_fixture(tmp_path, body)
+    requests: list[tuple[str | None, str | None]] = []
+    opened: list[BytesIO] = []
+
+    class DropOnceBody(BytesIO):
+        def read(self, size=-1):
+            if self.tell() >= 64:
+                raise ResponseStreamingError(error=IncompleteRead(b"x" * 64, 136))
+            return super().read(min(size, 64 - self.tell()) if size >= 0 else 64 - self.tell())
+
+    class SinglePartDropStore(Store):
+        def get_object(self, *, Bucket, Key, Range=None, IfMatch=None):
+            if Key != blob_key:
+                return super().get_object(Bucket=Bucket, Key=Key, Range=Range, IfMatch=IfMatch)
+            requests.append((Range, IfMatch))
+            result = super().get_object(Bucket=Bucket, Key=Key, Range=Range, IfMatch=IfMatch)
+            if len(requests) == 1:
+                raw = result["Body"].read()
+                result["Body"].close()
+                result["Body"] = DropOnceBody(raw)
+            opened.append(result["Body"])
+            return result
+
+    store = SinglePartDropStore()
+    pub.publish_evidence(store, "test", evidence_dir, artifact)
+    etag = store.head_object(Bucket="test", Key=blob_key)["ETag"]
+    assert requests == [(None, None), ("bytes=64-199", etag)]
+    assert all(stream.closed for stream in opened)
+
+
+@pytest.mark.parametrize("mode", ["stored-second-range", "resumed-wire-corruption"])
+def test_evidence_readback_fails_cleanly_on_corrupted_resumed_range(tmp_path, monkeypatch, mode):
+    """Byte corruption in a subsequent or resumed range fails verification cleanly."""
+    from io import BytesIO
+    from botocore.exceptions import ResponseStreamingError
+
+    monkeypatch.setattr(pub, "PART_BYTES", 128)
+    monkeypatch.setattr(pub, "_READ_BACK_CHUNK", 32)
+    monkeypatch.setattr(pub.time, "sleep", lambda _: None)
+
+    body = bytes((i * 23) % 256 for i in range(260))
+    evidence_dir, artifact, blob_key, expected_sha = _evidence_fixture(tmp_path, body)
+
+    if mode == "stored-second-range":
+        store = Store()
+        corrupted = bytearray(body)
+        corrupted[150] ^= 0xFF
+        store.objects[blob_key] = bytes(corrupted)
+        store.etags[blob_key] = '"corrupt-multipart-etag-3"'
+        assert not pub._stored_bytes_match(store, "test", blob_key, expected_size=len(body), expected_sha256=expected_sha)
+        with pytest.raises(ArtifactVerificationError):
+            pub.publish_evidence(store, "test", evidence_dir, artifact)
+        return
+
+    class DropAt48(BytesIO):
+        def read(self, size=-1):
+            if self.tell() >= 48:
+                raise ResponseStreamingError(error="connection reset")
+            return super().read(min(size, 48 - self.tell()) if size >= 0 else 48 - self.tell())
+
+    class CorruptOnResumeStore(Store):
+        def __init__(self):
+            super().__init__()
+            self.calls = 0
+
+        def get_object(self, *, Bucket, Key, Range=None, IfMatch=None):
+            result = super().get_object(Bucket=Bucket, Key=Key, Range=Range, IfMatch=IfMatch)
+            if Key != blob_key:
+                return result
+            self.calls += 1
+            raw = result["Body"].read()
+            result["Body"].close()
+            if self.calls == 1:
+                result["Body"] = DropAt48(raw)
+            elif self.calls == 2:
+                tampered = bytearray(raw)
+                tampered[-1] ^= 0x01
+                result["Body"] = BytesIO(bytes(tampered))
+            else:
+                result["Body"] = BytesIO(raw)
+            return result
+
+    store = CorruptOnResumeStore()
+    with pytest.raises(pub.PublicationError, match="failed read-back"):
+        pub.publish_evidence(store, "test", evidence_dir, artifact)
+
+
+@pytest.mark.parametrize("mode", ["short-range-eof", "short-single-eof", "short-stored-object"])
+def test_evidence_readback_fails_cleanly_on_truncated_stream(tmp_path, monkeypatch, mode):
+    """Unexpected EOF before promised bytes or a truncated stored object refuses publication."""
+    from io import BytesIO
+
+    monkeypatch.setattr(pub, "PART_BYTES", 128)
+    monkeypatch.setattr(pub, "_READ_BACK_CHUNK", 32)
+    monkeypatch.setattr(pub.time, "sleep", lambda _: None)
+
+    size = 100 if mode == "short-single-eof" else 300
+    body = bytes((i * 19) % 256 for i in range(size))
+    evidence_dir, artifact, blob_key, expected_sha = _evidence_fixture(tmp_path, body)
+
+    if mode == "short-stored-object":
+        store = Store()
+        store.objects[blob_key] = body[:150]
+        assert not pub._stored_bytes_match(store, "test", blob_key, expected_size=len(body), expected_sha256=expected_sha)
+        with pytest.raises(ArtifactVerificationError):
+            pub.publish_evidence(store, "test", evidence_dir, artifact)
+        return
+
+    opened: list[BytesIO] = []
+
+    class TruncatingStore(Store):
+        def get_object(self, *, Bucket, Key, Range=None, IfMatch=None):
+            result = super().get_object(Bucket=Bucket, Key=Key, Range=Range, IfMatch=IfMatch)
+            if Key != blob_key:
+                return result
+            if mode == "short-single-eof" or Range == "bytes=128-255":
+                raw = result["Body"].read()
+                result["Body"].close()
+                result["Body"] = BytesIO(raw[:40])
+            opened.append(result["Body"])
+            return result
+
+    store = TruncatingStore()
+    with pytest.raises(pub.PublicationError, match="truncated"):
+        pub.publish_evidence(store, "test", evidence_dir, artifact)
+    assert opened and all(stream.closed for stream in opened)
+    prefix = f"{pub.EVIDENCE_PREFIX}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
+    assert f"{prefix}/artifact.json" not in store.objects
+
+
+@pytest.mark.parametrize("mode", ["if-match-412", "etag-drift-ignored-if-match", "ignored-range-200"])
+def test_evidence_readback_fails_cleanly_on_concurrent_object_replacement_or_etag_drift(tmp_path, monkeypatch, mode):
+    """Mid-read ETag change (412 or drifted response ETag) or ignored Range refuses cleanly."""
+    monkeypatch.setattr(pub, "PART_BYTES", 128)
+    monkeypatch.setattr(pub, "_READ_BACK_CHUNK", 32)
+    monkeypatch.setattr(pub.time, "sleep", lambda _: None)
+
+    body = bytes((i * 29) % 256 for i in range(300))
+    evidence_dir, artifact, blob_key, _ = _evidence_fixture(tmp_path, body)
+    opened = []
+
+    class ChangingStore(Store):
+        def __init__(self):
+            super().__init__()
+            self.blob_gets = 0
+
+        def get_object(self, *, Bucket, Key, Range=None, IfMatch=None):
+            if Key != blob_key:
+                return super().get_object(Bucket=Bucket, Key=Key, Range=Range, IfMatch=IfMatch)
+            self.blob_gets += 1
+            if mode == "if-match-412" and self.blob_gets == 2:
+                # Concurrent replacement with a new ETag even while holding identical bytes.
+                self.etags[blob_key] = '"replaced-etag-v2"'
+            result = super().get_object(Bucket=Bucket, Key=Key, Range=Range, IfMatch=IfMatch)
+            if mode == "etag-drift-ignored-if-match" and self.blob_gets == 2:
+                result["ETag"] = '"drifted-etag-v2"'
+            elif mode == "ignored-range-200" and self.blob_gets == 2:
+                result["ResponseMetadata"] = {"HTTPStatusCode": 200, "RetryAttempts": 0}
+            opened.append(result["Body"])
+            return result
+
+    store = ChangingStore()
+    expected_match = {
+        "if-match-412": "changed during read-back",
+        "etag-drift-ignored-if-match": "ETag changed",
+        "ignored-range-200": "did not honor Range",
+    }[mode]
+    with pytest.raises(pub.PublicationError, match=expected_match):
+        pub.publish_evidence(store, "test", evidence_dir, artifact)
+    assert all(stream.closed for stream in opened)
+    prefix = f"{pub.EVIDENCE_PREFIX}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
+    assert f"{prefix}/artifact.json" not in store.objects
+
+
+def test_evidence_readback_fails_cleanly_when_retries_exhausted(tmp_path, monkeypatch):
+    """Persistent transient stream errors stop at the retry cap, close all streams, and preserve cause."""
+    from io import BytesIO
+    from botocore.exceptions import ResponseStreamingError
+
+    monkeypatch.setattr(pub, "PART_BYTES", 128)
+    monkeypatch.setattr(pub, "_READ_BACK_CHUNK", 32)
+    monkeypatch.setattr(pub, "_READ_BACK_MAX_RETRIES", 3)
+    sleeps: list[float] = []
+    monkeypatch.setattr(pub.time, "sleep", lambda seconds: sleeps.append(seconds))
+
+    body = bytes((i * 13) % 256 for i in range(300))
+    evidence_dir, artifact, blob_key, _ = _evidence_fixture(tmp_path, body)
+    opened: list[BytesIO] = []
+
+    class AlwaysDropBody(BytesIO):
+        def read(self, size=-1):
+            if self.tell() >= 16:
+                raise ResponseStreamingError(error="persistent drop")
+            return super().read(min(size, 16 - self.tell()) if size >= 0 else 16 - self.tell())
+
+    class FlakyStore(Store):
+        def get_object(self, *, Bucket, Key, Range=None, IfMatch=None):
+            result = super().get_object(Bucket=Bucket, Key=Key, Range=Range, IfMatch=IfMatch)
+            if Key == blob_key:
+                raw = result["Body"].read()
+                result["Body"].close()
+                result["Body"] = AlwaysDropBody(raw)
+                opened.append(result["Body"])
+            return result
+
+    store = FlakyStore()
+    with pytest.raises(pub.PublicationError, match="after 3 retries") as exc_info:
+        pub.publish_evidence(store, "test", evidence_dir, artifact)
+    assert isinstance(exc_info.value.__cause__, ResponseStreamingError)
+    assert len(opened) == 4  # 1 initial attempt + 3 retries
+    assert sleeps == [1, 2, 4]
+    assert all(stream.closed for stream in opened)
+    prefix = f"{pub.EVIDENCE_PREFIX}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
+    assert f"{prefix}/artifact.json" not in store.objects
+
+
+def test_evidence_readback_handles_empty_blob_and_disk_store_multipart(tmp_path, monkeypatch):
+    """0-byte blobs never issue Range requests, and DiskStore supports multipart ranged evidence read-back."""
+    from botocore.exceptions import ReadTimeoutError
+    from spicy_regs.sources.disk_store import DiskStore
+
+    monkeypatch.setattr(pub, "PART_BYTES", 128)
+    monkeypatch.setattr(pub, "_READ_BACK_CHUNK", 32)
+    monkeypatch.setattr(pub.time, "sleep", lambda _: None)
+
+    empty_dir, empty_artifact, empty_key, _ = _evidence_fixture(tmp_path, b"", name="empty-ev")
+    empty_calls: list[tuple[str | None, str | None]] = []
+
+    class EmptyRetryStore(Store):
+        def get_object(self, *, Bucket, Key, Range=None, IfMatch=None):
+            if Key == empty_key:
+                empty_calls.append((Range, IfMatch))
+                if len(empty_calls) == 1:
+                    raise ReadTimeoutError(endpoint_url="https://r2.test", error=TimeoutError("timeout"))
+            return super().get_object(Bucket=Bucket, Key=Key, Range=Range, IfMatch=IfMatch)
+
+    store = EmptyRetryStore()
+    pub.publish_evidence(store, "test", empty_dir, empty_artifact)
+    assert empty_calls == [(None, None), (None, None)]
+    assert store.objects[empty_key] == b""
+
+    large_body = bytes((i * 7) % 256 for i in range(300))
+    large_dir, large_artifact, large_key, _ = _evidence_fixture(tmp_path, large_body, name="disk-ev")
+    disk = DiskStore(tmp_path / "disk-store", bucket="private")
+    pub.publish_evidence(disk, "private", large_dir, large_artifact)
+    blob_gets = [call for call in disk.calls if call["method"] == "get_object" and call["key"] == large_key]
+    etag = disk.head_object(Bucket="private", Key=large_key)["ETag"]
+    assert [(call.get("range"), call.get("if_match")) for call in blob_gets] == [
+        ("bytes=0-127", None),
+        ("bytes=128-255", etag),
+        ("bytes=256-299", etag),
+    ]
+    assert disk.objects[large_key].read_bytes() == large_body

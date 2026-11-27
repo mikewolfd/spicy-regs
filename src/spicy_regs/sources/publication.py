@@ -67,6 +67,10 @@ EVIDENCE_PREFIX = "source-evidence"
 EVIDENCE_WORKERS = 8
 #: Bytes per read when a stored evidence blob is read back, so eight concurrent read-backs hold eight chunks.
 _READ_BACK_CHUNK = 1024 * 1024
+#: Capped retries per ``PART_BYTES`` window during evidence blob read-back on transient S3 stream/transport errors.
+_READ_BACK_MAX_RETRIES = 6
+#: Capped total transient retries across all windows of one evidence blob read-back.
+_READ_BACK_MAX_TOTAL_RETRIES = 64
 #: An evidence manifest lists every retained body and its journal every
 #: capture, so both grow with a run's reads (house communications' 1,043
 #: captures: a 261 KB manifest and a 588 KB journal, 2026-09-26). Rulespec
@@ -1065,8 +1069,261 @@ def _missing(error: ClientError) -> bool:
 
 
 def _precondition(error: ClientError) -> bool:
-    """A refused conditional write; S3 reports a concurrent conditional write as ``ConditionalRequestConflict``."""
-    return error.response.get("Error", {}).get("Code") in {"412", "PreconditionFailed", "ConditionalRequestConflict"}
+    """A refused conditional write or read; S3 reports a concurrent conditional write as ``ConditionalRequestConflict``."""
+    return (
+        error.response.get("Error", {}).get("Code") in {"412", "PreconditionFailed", "ConditionalRequestConflict"}
+        or error.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 412
+    )
+
+
+def _invalid_range(error: ClientError) -> bool:
+    return (
+        error.response.get("Error", {}).get("Code") in {"416", "InvalidRange"}
+        or error.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 416
+    )
+
+
+def _is_transient_client_error(error: ClientError) -> bool:
+    code = str(error.response.get("Error", {}).get("Code") or "")
+    status = error.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+    return (
+        code in {"429", "500", "502", "503", "504", "SlowDown", "RequestTimeout",
+                 "InternalError", "ServiceUnavailable", "Throttling"}
+        or (isinstance(status, int) and _is_transient_status(status))
+    )
+
+
+def _is_strong_etag(etag: object) -> bool:
+    return isinstance(etag, str) and etag != '""' and _STRONG_ETAG.fullmatch(etag) is not None
+
+
+def _transient_s3_read_errors() -> tuple[type[BaseException], ...]:
+    from http.client import IncompleteRead
+
+    from botocore.exceptions import (
+        ConnectionClosedError,
+        ConnectionError as BotoConnectionError,
+        IncompleteReadError,
+        ReadTimeoutError,
+        ResponseStreamingError,
+    )
+    from urllib3.exceptions import ProtocolError, ReadTimeoutError as Urllib3ReadTimeoutError
+
+    return (
+        ResponseStreamingError,
+        IncompleteReadError,
+        ReadTimeoutError,
+        ConnectionClosedError,
+        BotoConnectionError,
+        ProtocolError,
+        Urllib3ReadTimeoutError,
+        IncompleteRead,
+    )
+
+
+def _stored_bytes_match(
+    client,
+    bucket: str,
+    key: str,
+    *,
+    expected_size: int,
+    expected_sha256: str,
+) -> bool:
+    """Read back a stored evidence blob in bounded ``PART_BYTES`` ranges and verify full-object size and SHA-256.
+
+    Objects up to ``PART_BYTES`` begin with a single unranged GET (keeping 1-GET cost and compatibility with
+    minimal test stores) and resume from the exact byte offset with ``Range`` and ``IfMatch`` on transient
+    botocore/urllib3 stream or transport errors. Objects larger than ``PART_BYTES`` read in bounded ``PART_BYTES``
+    windows pinned to one strong ``ETag`` via ``IfMatch``, resuming mid-window from the exact byte offset on
+    transient errors.
+
+    Returns ``False`` when the object is absent at byte 0 or its complete stored size/bytes differ from the
+    declared content address. Raises :class:`PublicationError` on mid-read object replacement or ETag drift
+    (412 / ETag mismatch / unexpected ``ContentRange`` or HTTP status), stream truncation before promised bytes,
+    missing/weak ETag when a ranged continuation is required, or exhausted retries.
+    """
+    from botocore.exceptions import ClientError
+
+    transient_errors = _transient_s3_read_errors()
+    digest = hashlib.sha256()
+    total_retries = 0
+    pinned_etag: str | None = None
+
+    def backoff_or_fail(window_retries: int, offset: int, exc: BaseException) -> None:
+        if window_retries > _READ_BACK_MAX_RETRIES or total_retries > _READ_BACK_MAX_TOTAL_RETRIES:
+            raise PublicationError(
+                f"Stored evidence blob {key} read-back failed at byte {offset} "
+                f"after {window_retries - 1} retries"
+            ) from exc
+        delay = min(2 ** (window_retries - 1), _TRANSIENT_MAX_BACKOFF_S)
+        logger.warning(
+            "Stored evidence blob {} read-back interrupted at byte {} ({}), retry {}/{}; waiting {}s",
+            key, offset, type(exc).__name__, window_retries, _READ_BACK_MAX_RETRIES, delay,
+        )
+        time.sleep(remaining_timeout(delay))
+
+    if expected_size == 0:
+        window_retries = 0
+        while True:
+            checkpoint()
+            try:
+                response = client.get_object(Bucket=bucket, Key=key)
+            except ClientError as exc:
+                if _missing(exc):
+                    return False
+                if _is_transient_client_error(exc):
+                    window_retries += 1
+                    total_retries += 1
+                    backoff_or_fail(window_retries, 0, exc)
+                    continue
+                raise
+            except transient_errors as exc:
+                window_retries += 1
+                total_retries += 1
+                backoff_or_fail(window_retries, 0, exc)
+                continue
+            body = response["Body"]
+            try:
+                content_length = response.get("ContentLength")
+                if content_length is not None and content_length != 0:
+                    return False
+                if body.read(_READ_BACK_CHUNK):
+                    return False
+                return "sha256:" + digest.hexdigest() == expected_sha256
+            except transient_errors as exc:
+                window_retries += 1
+                total_retries += 1
+                backoff_or_fail(window_retries, 0, exc)
+                continue
+            finally:
+                body.close()
+
+    multi_range = expected_size > PART_BYTES
+    offset = 0
+    while offset < expected_size:
+        window_end = min(offset + PART_BYTES, expected_size) - 1
+        window_retries = 0
+        while offset <= window_end:
+            checkpoint()
+            attempt_start = offset
+            ranged = multi_range or attempt_start > 0
+            expected_len = window_end - attempt_start + 1
+            request_kwargs: dict[str, object] = {"Bucket": bucket, "Key": key}
+            if ranged:
+                request_kwargs["Range"] = f"bytes={attempt_start}-{window_end}"
+            if pinned_etag is not None:
+                request_kwargs["IfMatch"] = pinned_etag
+            try:
+                response = client.get_object(**request_kwargs)
+            except ClientError as exc:
+                if _missing(exc):
+                    if attempt_start == 0 and pinned_etag is None:
+                        return False
+                    raise PublicationError(
+                        f"Stored evidence blob {key} disappeared during read-back at byte {attempt_start}"
+                    ) from exc
+                if _precondition(exc):
+                    raise PublicationError(
+                        f"Stored evidence blob {key} changed during read-back at byte {attempt_start} "
+                        f"(ETag {pinned_etag})"
+                    ) from exc
+                if _invalid_range(exc):
+                    if attempt_start == 0 and pinned_etag is None:
+                        return False
+                    raise PublicationError(
+                        f"Stored evidence blob {key} range became invalid during read-back at byte {attempt_start}"
+                    ) from exc
+                if _is_transient_client_error(exc):
+                    window_retries += 1
+                    total_retries += 1
+                    backoff_or_fail(window_retries, offset, exc)
+                    continue
+                raise
+            except transient_errors as exc:
+                window_retries += 1
+                total_retries += 1
+                backoff_or_fail(window_retries, offset, exc)
+                continue
+
+            body = response["Body"]
+            try:
+                etag = response.get("ETag")
+                if pinned_etag is None:
+                    if multi_range and not _is_strong_etag(etag):
+                        raise PublicationError(
+                            f"Stored evidence blob {key} has no strong ETag for ranged read-back"
+                        )
+                    if _is_strong_etag(etag):
+                        pinned_etag = etag
+                elif etag != pinned_etag:
+                    raise PublicationError(
+                        f"Stored evidence blob {key} ETag changed during read-back "
+                        f"(expected {pinned_etag!r}, got {etag!r})"
+                    )
+
+                content_length = response.get("ContentLength")
+                if ranged:
+                    status = response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+                    if status is not None and status != 206:
+                        raise PublicationError(
+                            f"Stored evidence blob {key} did not honor Range bytes={attempt_start}-{window_end} "
+                            f"(HTTP {status})"
+                        )
+                    content_range = response.get("ContentRange")
+                    expected_range = f"bytes {attempt_start}-{window_end}/{expected_size}"
+                    if content_range != expected_range:
+                        if attempt_start == 0 and isinstance(content_range, str):
+                            match = re.fullmatch(r"bytes 0-(\d+)/(\d+)", content_range)
+                            if match is not None and int(match[2]) != expected_size:
+                                return False
+                        raise PublicationError(
+                            f"Stored evidence blob {key} returned unexpected ContentRange {content_range!r} "
+                            f"(expected {expected_range!r})"
+                        )
+                    if content_length is not None and content_length != expected_len:
+                        raise PublicationError(
+                            f"Stored evidence blob {key} returned ContentLength {content_length} "
+                            f"for range bytes={attempt_start}-{window_end} (expected {expected_len})"
+                        )
+                elif content_length is not None and content_length != expected_size:
+                    return False
+
+                read_in_attempt = 0
+                while True:
+                    checkpoint()
+                    chunk = body.read(_READ_BACK_CHUNK)
+                    if not chunk:
+                        break
+                    read_in_attempt += len(chunk)
+                    if read_in_attempt > expected_len:
+                        if not ranged and attempt_start == 0:
+                            return False
+                        raise PublicationError(
+                            f"Stored evidence blob {key} exceeded requested range bytes={attempt_start}-{window_end}"
+                        )
+                    digest.update(chunk)
+                    offset += len(chunk)
+
+                if read_in_attempt < expected_len:
+                    if not ranged and attempt_start == 0 and content_length is None:
+                        return False
+                    raise PublicationError(
+                        f"Stored evidence blob {key} truncated during read-back at byte {offset} "
+                        f"(expected {expected_len} bytes, got {read_in_attempt})"
+                    )
+            except transient_errors as exc:
+                if offset > 0 and pinned_etag is None:
+                    raise PublicationError(
+                        f"Stored evidence blob {key} has no strong ETag to resume read-back at byte {offset}"
+                    ) from exc
+                window_retries += 1
+                total_retries += 1
+                backoff_or_fail(window_retries, offset, exc)
+                continue
+            finally:
+                body.close()
+
+    return (offset, "sha256:" + digest.hexdigest()) == (expected_size, expected_sha256)
 
 
 def _head(client, bucket: str, key: str, **options) -> dict | None:
@@ -1399,11 +1656,10 @@ def publish_evidence(client, bucket: str, path: Path, artifact, *, archive_root:
     """
     from collections import Counter
     from concurrent.futures import ThreadPoolExecutor
-    from rulespec_artifacts import MemberNotFoundError, admit_artifact, iter_member_descriptors
+    from rulespec_artifacts import admit_artifact, iter_member_descriptors
     from spicy_regs.source_evidence import EvidenceMemberSource
 
     local = EvidenceMemberSource(path, archive_root=archive_root)
-    shared = _S3Members(client, bucket, EVIDENCE_PREFIX)
     prefix = f"{EVIDENCE_PREFIX}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
     declared = {member.object_key: member for member in iter_member_descriptors(artifact, local)}
     blobs, metadata = [], []
@@ -1417,17 +1673,16 @@ def publish_evidence(client, bucket: str, path: Path, artifact, *, archive_root:
         blobs.append(key)
 
     def stored_bytes_match(key: str) -> bool:
-        """Read the stored blob once, in bounded chunks; ``True`` when it has the member's size and SHA-256."""
-        member, digest, size = declared[key], hashlib.sha256(), 0
-        try:
-            with shared.open(key) as stream:
-                while size <= member.byte_size and (chunk := stream.read(_READ_BACK_CHUNK)):
-                    checkpoint()
-                    digest.update(chunk)
-                    size += len(chunk)
-        except MemberNotFoundError:
-            return False
-        return (size, "sha256:" + digest.hexdigest()) == (member.byte_size, member.sha256)
+        """Read the stored blob back in bounded resumable ranges; ``True`` when size and SHA-256 match."""
+        member = declared[key]
+        assert member.sha256 is not None
+        return _stored_bytes_match(
+            client,
+            bucket,
+            f"{EVIDENCE_PREFIX}/{key}",
+            expected_size=member.byte_size,
+            expected_sha256=member.sha256,
+        )
 
     def store(key: str) -> str | None:
         """Make storage hold the blob; how its stored bytes were shown equal to the local ones, else ``None``."""
@@ -1461,6 +1716,8 @@ def publish_evidence(client, bucket: str, path: Path, artifact, *, archive_root:
         _EvidenceMembers(client, bucket, prefix, local, set(blobs), {key for key, how in shown.items() if how}),
         expected_pin=artifact.pin,
     )
+    if refused := [key for key, how in shown.items() if how is None]:
+        raise PublicationError(f"Stored evidence blob(s) failed read-back: {', '.join(refused)}")
 
 
 def publish_evidence_index(client, bucket: str, family: str, path: Path) -> str:
