@@ -1619,6 +1619,21 @@
       "tables": ["historical_veto_administrations", "historical_veto_snapshots"]
     },
     {
+      "id": "family:cbo-eval-projections",
+      "title": "CBO projection accuracy history (US-CBO/eval-projections)",
+      "publisher": "Congressional Budget Office",
+      "description": "Commit-pinned CBO historical baseline projections, legislative/economic/technical baseline changes, actuals, GDP, projection errors, and horizon summary statistics (1982-2025 actuals; baselines through February 2026).",
+      "source_names": ["cbo-eval-projections"],
+      "families": ["cbo-eval-projections"],
+      "tables": [
+        "cbo_projection_errors",
+        "cbo_projection_error_summary_stats",
+        "cbo_eval_actuals",
+        "cbo_eval_baselines",
+        "cbo_eval_baseline_changes"
+      ]
+    },
+    {
       "id": "family:ofac-sanctions",
       "title": "OFAC sanctions source files",
       "publisher": "U.S. Department of the Treasury",

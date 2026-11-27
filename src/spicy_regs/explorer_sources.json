@@ -344,6 +344,13 @@
       "url": "https://forms.irs.gov/app/pod/dataDownload/fullData",
       "kind": "government",
       "note": "Official Section 527 bulk archive (PolOrgsFullData.zip) with Form 8871, Form 8872, schedules, and transmission metadata."
+    },
+    "cbo-eval-projections": {
+      "id": "cbo-eval-projections",
+      "name": "Congressional Budget Office Projection Evaluation Data",
+      "url": "https://github.com/US-CBO/eval-projections",
+      "kind": "government",
+      "note": "Public-domain US-CBO/eval-projections replication data comparing CBO baseline projections against actual outlays, revenues, deficits, and debt from 1984 through FY2025 (revenues from 1982)."
     }
   },
   "families": {
@@ -814,6 +821,13 @@
       "sources": [
         "irs-527"
       ]
+    },
+    "cbo-eval-projections": {
+      "sources": [
+        "cbo-eval-projections"
+      ],
+      "transformation": "Commit-pinned normalization and arithmetic reconciliation of US-CBO/eval-projections actuals, baselines, baseline changes, projection errors, and horizon summary statistics.",
+      "evidence": "src/spicy_regs/transforms/build_cbo_eval_projections.py"
     }
   },
   "tables": {
@@ -1454,6 +1468,31 @@
     "irs527_expenditures": {
       "sources": [
         "irs-527"
+      ]
+    },
+    "cbo_projection_errors": {
+      "sources": [
+        "cbo-eval-projections"
+      ]
+    },
+    "cbo_projection_error_summary_stats": {
+      "sources": [
+        "cbo-eval-projections"
+      ]
+    },
+    "cbo_eval_actuals": {
+      "sources": [
+        "cbo-eval-projections"
+      ]
+    },
+    "cbo_eval_baselines": {
+      "sources": [
+        "cbo-eval-projections"
+      ]
+    },
+    "cbo_eval_baseline_changes": {
+      "sources": [
+        "cbo-eval-projections"
       ]
     }
   }

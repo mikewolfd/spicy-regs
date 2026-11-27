@@ -1,0 +1,3 @@
+component,category,subcategory,baseline_date,Spring_flag,Winter_flag,projected_fiscal_year,projected_year_number,value,actual_value,GDP,legislative_deficit_change,legislative_debt_change,adjusted_projection,projection_error,leg_change_pct_GDP,projection_error_pct_GDP
+debt,Total,Total,1984-02-01,True,False,1984,1,1330.000,1306.975,3949.175,-0.642,-0.642,1329.358,22.383,-0.016,0.567
+debt,Total,Total,2024-06-01,True,False,2025,2,30187.839,30172.402,30362.025,57.668,57.669,30245.508,73.106,0.190,0.241

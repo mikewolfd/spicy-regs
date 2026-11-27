@@ -1,0 +1,26 @@
+component,category,subcategory,changes_baseline_date,change_category,projected_fiscal_year,value
+deficit,Total,Total,1984-08-01,Legislative,1984,0.642
+deficit,Total,Total,2024-12-01,Legislative,2024,-0.001
+deficit,Total,Total,2025-01-01,Economic,2025,239.268
+deficit,Total,Total,2025-01-01,Legislative,2025,-34.69
+deficit,Total,Total,2025-01-01,Technical,2025,-138.618
+outlay,Net Interest,Net Interest,2024-12-01,Legislative,2024,
+outlay,Net Interest,Net Interest,2025-01-01,Economic,2025,-66.632
+outlay,Net Interest,Net Interest,2025-01-01,Legislative,2025,0.36
+outlay,Net Interest,Net Interest,2025-01-01,Technical,2025,2.846
+outlay,Total,Total,1984-08-01,Economic,1984,0.597
+outlay,Total,Total,1984-08-01,Legislative,1984,0.258
+outlay,Total,Total,2024-12-01,Legislative,2024,0.001
+outlay,Total,Total,2025-01-01,Economic,2025,-71.719
+outlay,Total,Total,2025-01-01,Legislative,2025,28.759
+outlay,Total,Total,2025-01-01,Technical,2025,102.265
+revenue,Customs Duties,Customs Duties,1984-08-01,Legislative,1984,0.0
+revenue,Customs Duties,Customs Duties,2024-12-01,Legislative,2024,0.0
+revenue,Customs Duties,Customs Duties,2025-01-01,Economic,2025,1.795
+revenue,Customs Duties,Customs Duties,2025-01-01,Legislative,2025,0.0
+revenue,Customs Duties,Customs Duties,2025-01-01,Technical,2025,2.472
+revenue,Total,Total,1984-08-01,Legislative,1984,0.9
+revenue,Total,Total,2024-12-01,Legislative,2024,0.0
+revenue,Total,Total,2025-01-01,Economic,2025,167.549
+revenue,Total,Total,2025-01-01,Legislative,2025,-5.931
+revenue,Total,Total,2025-01-01,Technical,2025,-36.353
