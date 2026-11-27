@@ -21,6 +21,7 @@ from urllib.parse import urlsplit
 from spicy_docs.reading.pdf_bytes import check_pdf_bytes
 from spicy_docs.sources.cbo import (
     CboCostEstimatesFeed,
+    CboEstimateItem,
     CboSourceError,
     archived_publication_id,
     card_row,
@@ -125,7 +126,7 @@ def _read_retained_pdf_only_cards(
     *,
     feed_bills,
     pdfs: Mapping[str, list],
-    items_by_pid: Mapping[str, object],
+    items_by_pid: Mapping[str, CboEstimateItem],
     congress: int,
 ) -> tuple[dict[str, dict], list[dict]]:
     """Read explicitly selected PDF-only WARC receipts with dual-backend native verification and feed corroboration.

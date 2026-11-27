@@ -38,7 +38,18 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
-- **Selected Wave 2 reader provider** `spicy_docs-0.85.0+readers.20261127.5` is built from
+- **Selected CBO PDF-only reader provider** `spicy_docs-0.85.0+readers.20261127.6` is built from
+  `de0cbb34143942ed9d0f0f6d736b9c4ecc7a9181` (tree `26d851eda87565229f567907ba68cdc05dc2f6b7`,
+  `mikewolfd/spicy-docs#58` on `fork/main`). It adds `FEED_CONTENT_CORROBORATED_RULE` and
+  `identity_from_feed_pdf` for PDF-only CBO cost cards (`ss-938z`), optional `generation` passthrough on
+  `structured_pdf_reader`, explicit schema grounding in `CBO_ESTIMATE_CARD`, and the 241-pair /
+  5-PDF-only Gemini parity record on top of `.20261127.5`. Two clean `git archive` builds are
+  byte-identical (`sha256:f0e6a451...`).
+  See [the receipt](spicy_docs-0.85.0+readers.20261127.6.json) for source, wheel and RECORD identity.
+  The superseded `.20261127.5` wheel is recoverable from this adoption commit's parent;
+  its receipt remains.
+
+- **Prior Wave 2 reader provider** `spicy_docs-0.85.0+readers.20261127.5` is built from
   `6d82ca7f945323d5030e5a951aeac87d27839e94` (tree `59fb1aea906cc5b352ca51cc8afb629c6908fa99`,
   `mikewolfd/spicy-docs#57` on `fork/main`). It combines readable-text citation spans and
   `STATUTE-*.xml` native references (`ss-tdf4`, `#53` / `.20261127.4`), verified ZIP spool reuse in
