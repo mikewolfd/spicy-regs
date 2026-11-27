@@ -719,6 +719,54 @@ def test_a_report_stating_no_congress_publishes_its_bills_unresolved_and_attache
     assert {row["bill_id"] for row in _rows(actions)} == {"119-hr-1093"}
 
 
+def test_crpt_119srpt6_context_resolves_without_automatic_previous_congress_fallback(tmp_path):
+    """ss-wqir AC #3: retrospective Senate reports resolve from explicit title/inline context, never congress - 1.
+
+    Authoritative GovInfo originals for CRPT-119srpt6 (mods.xml, .htm, and 49-page .pdf) do not mention S. 3897;
+    they cite S. Res. 116 (explicitly 112th Congress inline) and 118th-Congress bills S. 2973, S. 3084, and S. 3430
+    under a title stating the 118th Congress. Conversely, a 119th-Congress Senate report that states no covered
+    Congress leaves S. 3897 unresolved rather than guessing 118-s-3897.
+    """
+    srpt6_id = "CRPT-119srpt6"
+    srpt6_title = (
+        "REPORT ON THE ACTIVITIES OF THE COMMITTEE ON FINANCE OF THE UNITED STATES SENATE "
+        "DURING THE 118th CONGRESS PURSUANT TO Rule XXVI of the Standing Rules OF THE UNITED STATES SENATE"
+    )
+    srpt6_pages = [
+        [
+            "Committee on Finance, pursuant to S. Res. 116, 112th Congress.",
+            "The Committee marked up Taiwan Expedited Double-Tax Relief Act (S. 3084) on September 14, 2023.",
+            "S. 2973 and S. 3430 were also reported.",
+        ],
+    ]
+    stated_dir = tmp_path / "stated"
+    stated_dir.mkdir()
+    acquirer = _Acquirer({srpt6_id: _package(srpt6_id, pages=srpt6_pages, title=srpt6_title)})
+    activity, _, actions, citations = _build(stated_dir, _Reader({"CRPT": [_listing(srpt6_id, srpt6_title)]}), acquirer)
+
+    [report] = _rows(activity)
+    assert (report["congress"], report["covered_congress"], report["covered_congress_source"]) == ("119", "118", "title")
+    bill_keys = sorted(key for key, resolved, _ in _bill_citations(citations) if resolved == "true")
+    assert bill_keys == ["112-sres-116", "118-s-2973", "118-s-3084", "118-s-3430"]
+    assert {row["bill_id"] for row in _rows(actions)} == {"118-s-3084", "118-s-3430"}
+
+    # Negative guard: without an explicit covered-Congress statement, S. 3897 in a 119th Senate report stays unresolved
+    # instead of being guessed as 118-s-3897.
+    unstated_dir = tmp_path / "unstated"
+    unstated_dir.mkdir()
+    unstated_id = "CRPT-119srpt99"
+    unstated_title = "REPORT ON THE ACTIVITIES OF THE COMMITTEE ON FINANCE"
+    unstated_pages = [["The Committee considered S. 3897 during the session."]]
+    unstated_acq = _Acquirer({unstated_id: _package(unstated_id, pages=unstated_pages, title=unstated_title)})
+    activity2, _, actions2, citations2 = _build(
+        unstated_dir, _Reader({"CRPT": [_listing(unstated_id, unstated_title)]}), unstated_acq
+    )
+    [report2] = _rows(activity2)
+    assert (report2["congress"], report2["covered_congress"]) == ("119", None)
+    assert _bill_citations(citations2) == [("S3897", "false", None)]
+    assert _rows(actions2) == []
+
+
 # --------------------------------------------------------------------------
 # Whose committee wrote the report.
 # --------------------------------------------------------------------------

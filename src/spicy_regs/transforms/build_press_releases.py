@@ -40,7 +40,11 @@ Keyless: both feeds are public RSS; the bills table is read from R2.
 
 from __future__ import annotations
 
+import html
+from html.entities import html5 as _HTML5_ENTITIES
+import re
 from collections.abc import Callable, Collection, Iterable, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -63,7 +67,96 @@ from spicy_docs.sources.congress.press_releases import (
 
 from spicy_regs.sources import r2
 from spicy_regs.transforms.congress_scope import current_congress
-from spicy_regs.transforms.table_merge import merge_contract_table, published_table
+from spicy_regs.transforms.table_merge import merge_contract_table, published_table, set_column, write_in_place
+
+#: Well-formed, semicolon-terminated HTML character reference (named, decimal, or hex).
+#: Restricting to semicolon-terminated tokens avoids Python ``html.unescape``'s HTML5
+#: legacy behavior on bare tokens such as ``&reg`` or ``&copy`` in plain text.
+_HTML_ENTITY = re.compile(r"&(?:#[0-9]+|#[xX][0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]+);")
+
+
+def decode_title_entities(title: str | None) -> str | None:
+    """Decode one layer of well-formed HTML character references in a press-release title.
+
+    The Senate Appropriations RSS feed double-encodes typographic punctuation in
+    XML (e.g. ``&amp;#x2019;`` arrives from XML parsing as literal ``&#x2019;``).
+    Only complete semicolon-terminated character references that resolve to a
+    valid non-NUL, non-replacement Unicode character are decoded, so literal
+    ampersands (``Trump & Vought``), semicolon-less tokens (``AT&T``, ``&reg``),
+    and unknown references (``&notanentity;``) remain untouched.
+    """
+    if title is None or "&" not in title:
+        return title
+
+    def _replace(match: re.Match[str]) -> str:
+        token = match.group(0)
+        if token.startswith("&#"):
+            decoded = html.unescape(token)
+        else:
+            decoded = _HTML5_ENTITIES.get(token[1:])
+            if decoded is None:
+                return token
+        if decoded == token or "\x00" in decoded or "\ufffd" in decoded:
+            return token
+        return decoded
+
+    return _HTML_ENTITY.sub(_replace, title)
+
+
+def _decode_merged_titles(
+    path: Path,
+    *,
+    decoded_fresh: dict[str, tuple[str, str]],
+    evidence: CaptureEvidence | None = None,
+) -> Path:
+    """Decode double-encoded HTML entities on rotated-off prior rows too, and journal all decoded titles."""
+    import pyarrow.parquet as pq
+
+    table = pq.read_table(path)
+    release_ids = table["release_id"].to_pylist()
+    titles = table["title"].to_pylist()
+    updated_titles: list[str | None] = []
+    changes: list[dict[str, str]] = []
+    modified = False
+
+    for release_id, title in zip(release_ids, titles, strict=True):
+        if release_id in decoded_fresh:
+            original, decoded = decoded_fresh[release_id]
+            updated_titles.append(title)
+            changes.append(
+                {
+                    "release_id": str(release_id),
+                    "origin": "fresh",
+                    "original_title": original,
+                    "decoded_title": decoded,
+                }
+            )
+            continue
+        decoded = decode_title_entities(title)
+        updated_titles.append(decoded)
+        if decoded != title and title is not None and decoded is not None:
+            modified = True
+            changes.append(
+                {
+                    "release_id": str(release_id),
+                    "origin": "prior",
+                    "original_title": title,
+                    "decoded_title": decoded,
+                }
+            )
+
+    if modified:
+        write_in_place(set_column(table, "title", updated_titles), path)
+    if changes:
+        logger.info("Press releases: decoded HTML entities in {:,} title(s)", len(changes))
+        if evidence is not None:
+            evidence.event(
+                "press-release-title-decoded",
+                count=len(changes),
+                reason="decoded publisher double-encoded HTML character references in press_releases.title",
+                changes=changes,
+            )
+    return path
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -202,9 +295,18 @@ def build_press_releases(
     )
 
     captures = []
+    decoded_fresh: dict[str, tuple[str, str]] = {}
     for chamber, feed in PRESS_RELEASE_FEEDS.items():
         acquisition = acquirer.acquire_press_releases(feed)
         channel = acquisition.channel
+        normalized_releases = []
+        for release in channel.releases:
+            decoded_title = decode_title_entities(release.title)
+            if decoded_title is not None and decoded_title != release.title:
+                decoded_fresh[press_release_id(release.chamber, release.link)] = (release.title, decoded_title)
+                release = replace(release, title=decoded_title)
+            normalized_releases.append(release)
+        channel = replace(channel, releases=tuple(normalized_releases))
         logger.info("Press releases: {} feed — {:,} items", chamber, len(channel.releases))
         captures.append((feed, channel, acquisition.capture.observed_at))
 
@@ -261,4 +363,5 @@ def build_press_releases(
             undated,
             unscoped,
         )
-    return merge_contract_table(output_dir, "press_releases", rows, download_prior=download_prior)
+    merged = merge_contract_table(output_dir, "press_releases", rows, download_prior=download_prior)
+    return _decode_merged_titles(merged, decoded_fresh=decoded_fresh, evidence=evidence)
