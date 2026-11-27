@@ -7,29 +7,36 @@ operation chooses shared catalog/publication state. Bill/month PDFs remain gaps.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 import hashlib
 import json
 import os
 from pathlib import Path
+import re
 from types import SimpleNamespace
 from urllib.parse import urlsplit
 
+from spicy_docs.reading.pdf_bytes import check_pdf_bytes
 from spicy_docs.sources.cbo import (
     CboCostEstimatesFeed,
+    CboSourceError,
     archived_publication_id,
+    card_row,
     cbo_feed_bills,
     feed_item_pub_date,
     parse_cbo_cost_estimates_feed,
     select_estimate_pdf,
 )
-from spicy_docs.sources.web_archive import parse_cc_index, parse_cc_num_pages
+from spicy_docs.sources.web_archive import cc_record_locator, parse_cc_index, parse_cc_num_pages, read_warc_response
 from spicy_docs.storage.raw_archive import CentralRawArchiveStore, iter_acquisition_receipts
 
 from spicy_regs.transforms.bill_family_cbo import ArchiveSweep, latest_capture, _receipt
-from spicy_regs.transforms.cbo_archive_cards import read_retained_cards
+from spicy_regs.transforms.cbo_archive_cards import WARC_RECORD_ID, read_retained_cards
 
 MAX_SELECTION_BYTES = 64 * 1024 * 1024
+MAX_PDF_ONLY_BYTES = 32 * 1024 * 1024
 
 
 def _original(store, item):
@@ -113,6 +120,186 @@ def _groups(selection):
     return pages, pdfs
 
 
+def _read_retained_pdf_only_cards(
+    selection: Selection,
+    *,
+    feed_bills,
+    pdfs: Mapping[str, list],
+    items_by_pid: Mapping[str, object],
+    congress: int,
+) -> tuple[dict[str, dict], list[dict]]:
+    """Read explicitly selected PDF-only WARC receipts with dual-backend native verification and feed corroboration.
+
+    Only receipts named in ``pdf_only_receipt_keys`` are read. Missing or damaged
+    originals and weak archive identity abort; content-corroboration or parser
+    refusals stay explicit outcomes and never emit unverified card rows.
+    """
+    from spicy_docs.extraction.pages import DefaultReader
+    from spicy_docs.extraction.pypdf import PypdfReader
+    from spicy_docs.sources.cbo_pdf_cards import identity_from_feed_pdf, parse_pdf_card_text
+
+    pdf_keys = selection.document.get("pdf_only_receipt_keys")
+    if not pdf_keys:
+        return {}, []
+    if not isinstance(pdf_keys, list) or not 1 <= len(pdf_keys) <= 1000:
+        raise ValueError("pdf_only_receipt_keys must list between 1 and 1000 retained PDF receipts")
+    store = CentralRawArchiveStore(selection.archive_root, create=False)
+    captures = defaultdict(list)
+    observed_bytes = 0
+    for _, document in iter_acquisition_receipts(selection.archive_root, receipt_keys=pdf_keys):
+        receipt = document["receipt"]
+        if receipt.get("dataset_id") != "cbo-estimate-pdf" or len(document["files"]) != 1:
+            raise ValueError("Expected one CBO estimate PDF original per pdf_only_receipt_keys entry")
+        item_file = document["files"][0]
+        size = item_file["bytes"]
+        if size > MAX_PDF_ONLY_BYTES - observed_bytes:
+            raise ValueError("Retained PDF-only CBO originals exceed the 32-MiB input bound")
+        with store.open(item_file["sha256"]) as stream:
+            body = stream.read(size + 1)
+        digest = "sha256:" + hashlib.sha256(body).hexdigest()
+        if len(body) != size or digest.removeprefix("sha256:") != item_file["sha256"]:
+            raise ValueError("Retained PDF-only CBO original differs from its receipt")
+        observed_bytes += size
+        response = read_warc_response(body)
+        string_fields = (
+            "native_id",
+            "original_publisher_url",
+            "archive_timestamp",
+            "warc_record_id",
+            "index_digest",
+            "payload_sha1",
+            "index_sha256",
+            "warc_filename",
+            "crawl_id",
+        )
+        if not all(isinstance(receipt.get(name), str) and receipt[name].strip() for name in string_fields):
+            raise ValueError("Weak or conflicting CBO PDF archive identity")
+        identifier = receipt["native_id"]
+        timestamp = receipt["archive_timestamp"]
+        if (
+            receipt.get("authority") != "archive"
+            or receipt.get("archive_operator") != "Common Crawl"
+            or not re.fullmatch(r"[1-9][0-9]{0,8}", identifier)
+            or WARC_RECORD_ID.fullmatch(response.record_id) is None
+            or item_file.get("native_id", identifier) != identifier
+            or response.target_uri != receipt.get("original_publisher_url")
+            or not re.fullmatch(r"[0-9]{14}", timestamp)
+            or datetime.fromisoformat(response.warc_date.replace("Z", "+00:00")).strftime("%Y%m%d%H%M%S") != timestamp
+            or response.record_id != receipt.get("warc_record_id")
+            or response.payload_digest != receipt.get("index_digest", "").removeprefix("sha1:")
+            or response.payload_digest != receipt.get("payload_sha1")
+            or response.http_status != 200
+            or type(receipt.get("warc_length")) is not int
+            or receipt["warc_length"] != size
+            or type(receipt.get("warc_offset")) is not int
+            or receipt["warc_offset"] < 0
+            or not re.fullmatch(r"sha256:[0-9a-f]{64}", receipt.get("index_sha256", ""))
+            or not receipt["warc_filename"].startswith("crawl-data/" + receipt["crawl_id"] + "/")
+        ):
+            raise ValueError("Weak or conflicting CBO PDF archive identity")
+        cc_record_locator(receipt["warc_filename"])
+        check_pdf_bytes(response.payload, error_type=ValueError, label=f"archived CBO PDF {identifier}")
+        provenance = {
+            name: receipt[name]
+            for name in (
+                "authority",
+                "archive_operator",
+                "original_publisher_url",
+                "archive_timestamp",
+                "index_sha256",
+                "index_digest",
+                "crawl_id",
+                "warc_filename",
+                "warc_offset",
+                "warc_length",
+            )
+        }
+        provenance.update(
+            source_sha256=digest,
+            source_locator=response.record_id + "#payload/page=1",
+            receipt_object=document["receipt_object"],
+        )
+        captures[identifier].append((timestamp, digest, response, provenance))
+
+    qualified_rows: dict[str, dict] = {}
+    pdf_outcomes: list[dict] = []
+    for identifier, versions in sorted(captures.items()):
+        feed_item = items_by_pid.get(identifier)
+        if feed_item is None:
+            raise ValueError(f"Retained PDF-only CBO receipt is outside the selected feed: {identifier}")
+        by_timestamp = defaultdict(set)
+        for timestamp, digest, _, _ in versions:
+            by_timestamp[timestamp].add(digest)
+        if any(len(digests) != 1 for digests in by_timestamp.values()):
+            raise ValueError(f"Conflicting CBO PDF originals at one archive timestamp: {identifier}")
+        timestamp, digest, response, provenance = max(versions, key=lambda v: (v[0], v[1], v[3]["receipt_object"]))
+        pdf_path = urlsplit(response.target_uri).path
+        indexed = pdfs.get(pdf_path, ())
+        chosen = latest_capture(indexed)
+        if chosen is None or any(
+            provenance[key] != value
+            for key, value in {
+                "warc_filename": chosen.filename,
+                "warc_offset": chosen.offset,
+                "warc_length": chosen.length,
+                "index_digest": chosen.digest,
+                "archive_timestamp": chosen.timestamp,
+            }.items()
+        ):
+            pdf_outcomes.append(
+                {
+                    **provenance,
+                    "publication_id": identifier,
+                    "outcome": "not-retained",
+                    "reason": "PDF receipt does not match latest indexed PDF capture",
+                }
+            )
+            continue
+        try:
+            with DefaultReader().open(response.payload, "application/pdf") as document:
+                pymupdf_text = document.page(1).native().text
+            with PypdfReader().open(response.payload) as document:
+                pypdf_text = document.read_page(1)
+            identity = identity_from_feed_pdf(
+                feed_item,
+                feed_bills,
+                pdf_url=response.target_uri,
+                pdf_text=pymupdf_text,
+                source_sha256=digest,
+                source_locator=response.record_id + "#payload",
+            )
+            card_mu = parse_pdf_card_text(pymupdf_text, identity=identity)
+            card_pp = parse_pdf_card_text(pypdf_text, identity=identity)
+            if any(
+                getattr(card_mu, field) != getattr(card_pp, field)
+                for field in ("periods", "measures", "answers", "source_unit")
+            ):
+                raise CboSourceError("PDF-only native backends disagree on card values")
+        except CboSourceError as refused:
+            pdf_outcomes.append(
+                {**provenance, "publication_id": identifier, "outcome": "refused", "reason": str(refused)}
+            )
+            continue
+        timestamps = [candidate.timestamp for candidate in indexed if candidate.status == 200]
+        row = card_row(
+            card_mu,
+            card_source="pdf-native",
+            **provenance,
+            congress=congress,
+            publication_date=feed_item_pub_date(feed_item),
+            publication_title=feed_item.title,
+            publication_context=feed_item.description,
+            captures=len(timestamps),
+            earliest_timestamp=min(timestamps),
+            page_number=1,
+            extraction_method="spicy_docs.sources.cbo_pdf_cards.read_native_pdf_card",
+            identity_rule=identity.rule,
+        )
+        qualified_rows[identifier] = row
+        pdf_outcomes.append({**provenance, "publication_id": identifier, "outcome": "pdf-card", "reason": None})
+    return qualified_rows, pdf_outcomes
+
+
 def read_selected_cards(manifest_path, *, archive_root=None, congresses, output_dir, evidence=None):
     """Read every selected feed item, expose gaps and add qualified cards to the family.
 
@@ -130,7 +317,13 @@ def read_selected_cards(manifest_path, *, archive_root=None, congresses, output_
     held = {row["publication_id"]: row for row in table.to_pylist()}
     observed = {row["publication_id"]: row for row in retained["outcomes"]}
     pages, pdfs = _groups(selection)
-    bills = cbo_feed_bills(selection.feed, congress).by_publication()
+    feed_bills = cbo_feed_bills(selection.feed, congress)
+    bills = feed_bills.by_publication()
+    items_by_pid = {item.publication_id: item for item in selection.feed.items}
+    pdf_only_rows, pdf_only_outcomes = _read_retained_pdf_only_cards(
+        selection, feed_bills=feed_bills, pdfs=pdfs, items_by_pid=items_by_pid, congress=congress
+    )
+    pdf_only_observed = {entry["publication_id"]: entry for entry in pdf_only_outcomes}
     rows, outcomes = [], []
     for item in selection.feed.items:
         identifier = item.publication_id
@@ -138,12 +331,21 @@ def read_selected_cards(manifest_path, *, archive_root=None, congresses, output_
         pdf = select_estimate_pdf((), item, bills.get(identifier, ()), pdfs)
         outcome = {"publication_id": identifier, "bill_number": item.bill_number, "pdf_candidate": pdf}
         if chosen is None:
-            outcome.update(
-                outcome="pdf-identity-unresolved" if pdf else "neither-observed",
-                reason="bill/month is a candidate, not publication identity"
-                if pdf
-                else "no status-200 page or bill/month PDF in read indexes",
-            )
+            if identifier in pdf_only_rows and pdf is not None:
+                rows.append(pdf_only_rows[identifier])
+                outcome.update(outcome="pdf-card", reason=None)
+            elif identifier in pdf_only_observed:
+                outcome.update(
+                    outcome="pdf-identity-unresolved",
+                    reason=pdf_only_observed[identifier]["reason"],
+                )
+            else:
+                outcome.update(
+                    outcome="pdf-identity-unresolved" if pdf else "neither-observed",
+                    reason="bill/month is a candidate, not publication identity"
+                    if pdf
+                    else "no status-200 page or bill/month PDF in read indexes",
+                )
         else:
             actual = observed.get(identifier)
             if actual is None or any(
@@ -184,6 +386,7 @@ def read_selected_cards(manifest_path, *, archive_root=None, congresses, output_
         "outcomes": outcomes,
         "unread_indexes": selection.sweep.unread,
         "retained": retained,
+        "retained_pdf_only": pdf_only_outcomes,
         "source_accepted": False,
         "limits": "Full selected feed accounted; unretained originals, unresolved PDF identities and unread indexes remain gaps.",
     }
