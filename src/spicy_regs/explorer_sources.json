@@ -344,6 +344,20 @@
       "url": "https://forms.irs.gov/app/pod/dataDownload/fullData",
       "kind": "government",
       "note": "Official Section 527 bulk archive (PolOrgsFullData.zip) with Form 8871, Form 8872, schedules, and transmission metadata."
+    },
+    "house-disclosures": {
+      "id": "house-disclosures",
+      "name": "Office of the Clerk, U.S. House of Representatives Financial Disclosures",
+      "url": "https://disclosures-clerk.house.gov/",
+      "kind": "government",
+      "note": "Selected annual filing index snapshots and explicitly selected Periodic Transaction Report (PTR) PDFs. Other categories remain discovery entries; image-form extraction and source-wide completeness remain outside qualified scope."
+    },
+    "executive-disclosures": {
+      "id": "executive-disclosures",
+      "name": "Archived White House / OGE Public Financial Disclosures (Form 278e)",
+      "url": "https://www.oge.gov/web/OGE.nsf/publicresources_disclosure-faq",
+      "kind": "government",
+      "note": "Explicitly selected publicly posted archived White House OGE Form 278e annual packages (Kamala D. Harris 2021 and 2024 releases). Part 6 is qualified for the 2024 package only; the amended 2021 package remains lookup-only. Not complete executive or person-profile coverage."
     }
   },
   "families": {
@@ -814,6 +828,20 @@
       "sources": [
         "irs-527"
       ]
+    },
+    "house-disclosures": {
+      "sources": [
+        "house-disclosures"
+      ],
+      "transformation": "Retains selected annual House Clerk filing index snapshots and qualified native Periodic Transaction Report (PTR) PDF readings, keeping refused readings, source pages, and reviewed amendment references separate.",
+      "evidence": "src/spicy_regs/pipelines/house_disclosures.py"
+    },
+    "executive-disclosures": {
+      "sources": [
+        "executive-disclosures"
+      ],
+      "transformation": "Retains selected publicly posted archived White House OGE Form 278e filings, qualified Part 6 observations, and page/slot reconciliation from digest-pinned PDFs without inferring person profiles or net wealth.",
+      "evidence": "src/spicy_regs/pipelines/executive_disclosures.py"
     }
   },
   "tables": {

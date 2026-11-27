@@ -701,7 +701,7 @@
       "describing_opinion_id": "CourtListener opinion ID of the opinion that wrote the parenthetical. Joins court_opinions.opinion_id.",
       "text": "The parenthetical as the describing opinion wrote it.",
       "score": "Publisher's 0-to-1 estimate of how descriptive the text is.",
-      "group_id": "Publisher's group of parentheticals making the same point; NULL when ungrouped.",
+      "group_id": "Publisher's group label for parentheticals making the same point; NULL when ungrouped. Compare within this table only: the publisher declares but never exports its group table.",
       "dump_date": "The CourtListener bulk export the row was copied from (ISO date).",
       "source_sha256": "SHA-256 of the CourtListener export file the row was read from (`sha256:` and 64 hex digits): the original, kept in the raw archive and the run's source evidence."
     }
