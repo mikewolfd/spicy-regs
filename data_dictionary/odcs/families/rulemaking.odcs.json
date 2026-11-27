@@ -3129,12 +3129,12 @@
     {
       "vendor": "spicy-regs",
       "property": "tableMetadataSha256",
-      "value": "fcc4ca53889332fb8f93b427476162b00da95ba1b21cf114a3cdb46d11ec7a69"
+      "value": "e7f9877ec5a4957aa6a963ff3581db231bd734334c40a81e10f6ec83847644d6"
     },
     {
       "vendor": "spicy-regs",
       "property": "tableJoinsSha256",
-      "value": "95e668cfb9c0cc797c1f1090bb27417a171129a6abbebac00b211b7328e76297"
+      "value": "0af5448b2a6c9c0163410edaa103c058469191bc294eeb08be68a05770e884b5"
     }
   ]
 }
