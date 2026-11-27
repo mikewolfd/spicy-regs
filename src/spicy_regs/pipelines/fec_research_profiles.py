@@ -25,18 +25,21 @@ from typing import Any
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+from rulespec_artifacts import BlobIntegrityError
 
 from spicy_docs.sources.fec.catalog import official_url
 from spicy_docs.sources.fec.filings import filing_encoding, filing_records_from_stream
 from spicy_docs.sources.fec.metadata import parse_api
 from spicy_docs.sources.fec.retained import page_request
+from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
+from spicy_docs.transport.download import AcquisitionError, HttpRefusal, RateLimitExhausted
 from spicy_regs.contract_types import described_schema
 from spicy_regs.env_values import first_env
 from spicy_regs.generations import build_generation
 from spicy_regs.native_types import extra_field_checker
 from spicy_regs.pipelines.raw_releases import inherit_read_index
 from spicy_regs.runtime_bounds import checkpoint
-from spicy_regs.source_evidence import CaptureEvidence, local_path_name, without_local_paths
+from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError, local_path_name, without_local_paths
 from spicy_regs.transforms.build_fec_financial_profiles import json_bytes
 from spicy_regs.transforms.fec_committee_profiles import (
     SCHEMA as COMMITTEE_SCHEMA,
@@ -55,7 +58,7 @@ from spicy_regs.transforms.fec_outside_profiles import (
     SPENDERS as OUTSIDE_SPENDERS,
     outside_profiles,
 )
-from spicy_regs.transforms.fec_query import CollectionSelection
+from spicy_regs.transforms.fec_query import CollectionSelection, exact_amount
 
 FAMILY = "fec-research-profiles"
 SCHEMAS = {COMMITTEES: COMMITTEE_SCHEMA, **CONTRIBUTION_SCHEMAS, **OUTSIDE_SCHEMAS}
@@ -139,13 +142,18 @@ class _TableWriter:
                 checkpoint()
         return written
 
+    def finalize(self) -> None:
+        """Flush buffered rows and close the temporary Parquet file before atomic replacement."""
+        if self._committed or self._writer is None:
+            return
+        self._flush()
+        self._writer.close()
+        self._writer = None
+
     def commit(self) -> Path:
         if self._committed:
             return self.destination
-        self._flush()
-        assert self._writer is not None
-        self._writer.close()
-        self._writer = None
+        self.finalize()
         self._temporary.replace(self.destination)
         self._committed = True
         self._scratch.cleanup()
@@ -517,13 +525,15 @@ def build(
         selection_pin = evidence.retain_bytes(
             json_bytes(without_local_paths(dict(selection))), stage="fec-profile-selection"
         )["sha256"]
-        writers = {table: _TableWriter(output_dir / f"{table}.parquet", schema) for table, schema in SCHEMAS.items()}
+        for table, schema in SCHEMAS.items():
+            writers[table] = _TableWriter(output_dir / f"{table}.parquet", schema)
 
         # Stage 1: Committee disclosures (streamed 1 page at a time).
         committees = normalized["committees"]
         committee_population = normalized["committee_population"]
         seen_committee_pages: set[tuple[str, str]] = set()
         expected_committee_count: int | None = None
+        expected_committee_filters: list[tuple[str, str]] | None = None
         committee_rows_seen = 0
         for index, capture in enumerate(committees, 1):
             checkpoint()
@@ -532,11 +542,13 @@ def build(
             if page_key in seen_committee_pages:
                 raise ValueError("Duplicate committee page in selection")
             seen_committee_pages.add(page_key)
-            _pairs, page = page_request(
+            pairs, page = page_request(
                 capture["request_url"],
                 endpoint="https://api.open.fec.gov/v1/committees/",
                 order_by="committee_id",
             )
+            non_page_filters = sorted((k, v) for k, v in pairs if k != "page")
+            requested_per_page = int(dict(pairs)["per_page"])
             native = parse_api(_read(evidence, capture, "committee-disclosure-page", max_bytes=MAX_API_PAGE_BYTES))
             pagination = native.get("pagination", {})
             rows = native.get("results")
@@ -544,12 +556,19 @@ def build(
                 not isinstance(rows, list)
                 or len(rows) != capture["expected_results"]
                 or pagination.get("page") != page
+                or pagination.get("per_page") != requested_per_page
             ):
                 raise ValueError("Selected committee page does not match its retained population")
+            if committee_population in {"complete_traversal", "bounded_page_prefix"}:
+                if page != index:
+                    raise ValueError("Committee traversal pages must be contiguous starting at page 1")
+                if expected_committee_filters is None:
+                    expected_committee_filters = non_page_filters
+                elif non_page_filters != expected_committee_filters:
+                    raise ValueError("Committee traversal query filters changed across pages")
             if committee_population == "complete_traversal":
                 if (
-                    page != index
-                    or pagination.get("is_count_exact") is not True
+                    pagination.get("is_count_exact") is not True
                     or type(pagination.get("count")) is not int
                     or pagination["count"] < 0
                     or max(1, pagination.get("pages", 0)) != len(committees)
@@ -625,6 +644,8 @@ def build(
             writers[CONTRIBUTION_PROFILES].write(qualified[CONTRIBUTION_PROFILES])
             writers[CONTRIBUTION_DECISIONS].write(qualified[CONTRIBUTION_DECISIONS])
 
+        for table in SCHEMAS:
+            writers[table].finalize()
         paths = [writers[table].commit() for table in SCHEMAS]
         row_counts = {table: writers[table].row_count for table in SCHEMAS}
         summary = {
@@ -681,21 +702,31 @@ def _load_reused_committee_pages(
     entries: list[dict[str, Any]] = []
     population = "sampled_pages"
     if source_path.suffix == ".jsonl":
-        blobs_root = source_path.parent / "blobs"
+        blobs_root = (source_path.parent / "blobs").resolve()
         for line in source_path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
             row = json.loads(line)
-            ev = row["evidence"]
-            digest = ev["sha256"]
-            size = ev["bytes"]
+            ev = row.get("evidence")
+            digest, size = _capture_pin(ev, label="reused-committees-jsonl")
+            if size > MAX_API_PAGE_BYTES:
+                raise ValueError("Reused committee page exceeds its original byte bound")
             try:
                 evidence.store.describe_blob(digest, size)
             except FileNotFoundError:
-                blob_file = blobs_root / ev["blob_path"]
-                if not blob_file.is_file():
+                raw_blob_path = ev.get("blob_path") if isinstance(ev, Mapping) else None
+                if not isinstance(raw_blob_path, str) or not raw_blob_path or Path(raw_blob_path).is_absolute():
+                    raise ValueError("Reused committee blob_path must be a relative path") from None
+                blob_file = (blobs_root / raw_blob_path).resolve()
+                if not blob_file.is_relative_to(blobs_root):
+                    raise ValueError("Reused committee blob_path escapes capture blobs directory") from None
+                if blob_file.is_symlink() or not blob_file.is_file():
                     raise ValueError(f"Reused committee blob missing from archive and capture dir: {digest}") from None
-                evidence.retain_file(
+                with blob_file.open("rb") as blob_stream:
+                    observed_digest = "sha256:" + hashlib.file_digest(blob_stream, "sha256").hexdigest()
+                if blob_file.stat().st_size != size or observed_digest != digest:
+                    raise ValueError("Reused committee blob differs from its declared digest/size") from None
+                retained = evidence.retain_file(
                     blob_file,
                     stage="committee-disclosure-page-reuse",
                     raw_source=True,
@@ -703,6 +734,8 @@ def _load_reused_committee_pages(
                     original_location=row["request_url"],
                     observed_at=row.get("observed_at"),
                 )
+                if retained.get("sha256") != digest or retained.get("byte_size") != size:
+                    raise ValueError("Reused committee blob differs from its declared digest/size") from None
             entries.append(
                 {
                     "response_sha256": digest,
@@ -719,6 +752,8 @@ def _load_reused_committee_pages(
         population = str(prior.get("committee_population", "sampled_pages"))
         for item in prior["committees"]:
             digest, size = _capture_pin(item, label="reused-committees")
+            if size > MAX_API_PAGE_BYTES:
+                raise ValueError("Reused committee page exceeds its original byte bound")
             evidence.store.describe_blob(digest, size)
             entries.append(
                 {
@@ -732,8 +767,8 @@ def _load_reused_committee_pages(
     if max_pages > 0 and len(entries) > max_pages:
         entries = entries[:max_pages]
         population = "bounded_page_prefix"
-    if not entries:
-        raise ValueError("Reused committee page inventory is empty")
+    if not 1 <= len(entries) <= MAX_COMMITTEE_PAGES:
+        raise ValueError(f"Reused committee page inventory must contain 1..{MAX_COMMITTEE_PAGES} pages")
     return entries, population
 
 
@@ -770,7 +805,34 @@ def _report_money_present(report: Mapping[str, Any]) -> bool:
         value = report.get(field)
         if value is None or isinstance(value, bool) or not isinstance(value, (int, str, Decimal)):
             return False
+        _, status = exact_amount(str(value))
+        if status != "exact":
+            return False
     return True
+
+
+def _scrub_skip_reason(exc: BaseException, api_key: str) -> str:
+    """Scrub credentials and local paths before writing an error reason into selection.json."""
+    text = scrub_credential(str(exc), api_key)
+    if api_key:
+        text = text.replace(api_key, "<redacted>")
+    return local_path_name(text)
+
+
+def _is_fatal_acquisition_error(exc: BaseException, *, client: Any) -> bool:
+    """Return True when an acquisition failure must abort the whole run rather than skip one item."""
+    if isinstance(
+        exc,
+        (CredentialRefusedError, HttpRefusal, SourceEvidenceError, RateLimitExhausted, BlobIntegrityError, TimeoutError),
+    ):
+        return True
+    if isinstance(exc, AcquisitionError):
+        if client.http.request_count >= client.http.max_requests:
+            return True
+        message = str(exc).lower()
+        if any(token in message for token in ("budget exhausted", "deadline reached", "rate limit", "http 401", "http 403")):
+            return True
+    return False
 
 
 def _rank_candidate_reports(reports: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -829,12 +891,12 @@ def acquire(
     committee_cycles: Sequence[int] | None = DEFAULT_COMMITTEE_CYCLES,
     max_committee_pages: int = 0,
     reuse_committees_from: Path | None = None,
-    outside_candidates_per_cycle: int = 25,
+    outside_candidates_per_cycle: int = 15,
     outside_candidates: Sequence[tuple[str, int]] = (),
-    contribution_reports_per_cycle: int = 8,
+    contribution_reports_per_cycle: int = 6,
     contribution_forms: Sequence[str] = DEFAULT_CONTRIBUTION_FORMS,
     contribution_filings: Sequence[tuple[str, str, int, str | None]] = (),
-    max_requests: int = 850,
+    max_requests: int = 900,
     max_filing_bytes: int = MAX_ORIGINAL_BYTES,
     discovery_pages: int = 2,
     archive_root: Path | None = None,
@@ -1010,11 +1072,20 @@ def acquire(
                     if not qualified[OUTSIDE_PROFILES]:
                         raise ValueError("Outside-spending scope returned zero reconciled profiles")
                     outside_scopes.append({"candidate_id": cid, "cycle": cycle, "queries": queries})
-                except Exception as exc:
-                    if explicit:
+                except (
+                    CredentialRefusedError,
+                    HttpRefusal,
+                    SourceEvidenceError,
+                    RateLimitExhausted,
+                    BlobIntegrityError,
+                    TimeoutError,
+                ):
+                    raise
+                except (ValueError, AcquisitionError) as exc:
+                    if explicit or _is_fatal_acquisition_error(exc, client=client):
                         raise
                     skipped_outside.append(
-                        {"candidate_id": cid, "cycle": cycle, "reason": local_path_name(str(exc))}
+                        {"candidate_id": cid, "cycle": cycle, "reason": _scrub_skip_reason(exc, resolved_key)}
                     )
 
             # Phase 2: Contribution scopes (Form 3 / 3P / 3X official effective reports).
@@ -1030,9 +1101,9 @@ def acquire(
                 explicit_candidate_id: str | None = None,
                 expects_candidate: bool = True,
                 explicit: bool = False,
-            ) -> bool:
+            ) -> tuple[bool, str | None]:
                 if filing_id in admitted_filings:
-                    return False
+                    return False, None
                 try:
                     report_params: dict[str, Any] = {
                         "is_amended": False,
@@ -1150,19 +1221,29 @@ def acquire(
                         }
                     )
                     admitted_filings.add(filing_id)
-                    return True
-                except Exception as exc:
-                    if explicit:
+                    return True, None
+                except (
+                    CredentialRefusedError,
+                    HttpRefusal,
+                    SourceEvidenceError,
+                    RateLimitExhausted,
+                    BlobIntegrityError,
+                    TimeoutError,
+                ):
+                    raise
+                except (ValueError, AcquisitionError) as exc:
+                    if explicit or _is_fatal_acquisition_error(exc, client=client):
                         raise
+                    reason = _scrub_skip_reason(exc, resolved_key)
                     skipped_contributions.append(
                         {
                             "committee_id": committee_id,
                             "filing_id": filing_id,
                             "cycle": cycle,
-                            "reason": local_path_name(str(exc)),
+                            "reason": reason,
                         }
                     )
-                    return False
+                    return False, reason
 
             for committee_id, filing_id, cycle, candidate_id in contribution_filings:
                 checkpoint()
@@ -1190,15 +1271,21 @@ def acquire(
                             stage=f"discover-reports-{entity_type}-{cycle}",
                         )
                         candidates = _rank_candidate_reports(discovered_reports)
+                        if entity_type == "presidential":
+                            # Reviewed 8.5 Form 3P cover layout covers F3PN (new filings) only.
+                            candidates = [
+                                c for c in candidates if c.get("amendment_indicator") in {None, "N"}
+                            ]
                         admitted_here = 0
                         attempts = 0
+                        consecutive_unmapped_cover = 0
                         max_attempts = max(target * 3, target + 4)
                         expects_candidate = entity_type != "pac-party"
                         for candidate in candidates:
                             if admitted_here >= target or attempts >= max_attempts:
                                 break
                             attempts += 1
-                            ok = _qualify_and_admit_report(
+                            ok, skip_reason = _qualify_and_admit_report(
                                 candidate["committee_id"],
                                 str(candidate["file_number"]),
                                 cycle,
@@ -1209,6 +1296,15 @@ def acquire(
                             )
                             if ok:
                                 admitted_here += 1
+                                consecutive_unmapped_cover = 0
+                            elif skip_reason and "requires a reviewed Form 3, 3P, or 3X cover" in skip_reason:
+                                consecutive_unmapped_cover += 1
+                                # Pre-v8.5 cycles (e.g. 2020/2022 F3/F3P) lack reviewed cover layouts;
+                                # stop probing this bucket cleanly after 2 consecutive unmapped covers.
+                                if admitted_here == 0 and consecutive_unmapped_cover >= 2:
+                                    break
+                            else:
+                                consecutive_unmapped_cover = 0
 
             # Phase 3: Committee relationship profiles (reuse retained pages or walk /v1/committees/).
             if reuse_committees_from is not None:
@@ -1261,6 +1357,12 @@ def acquire(
                     committee_pages = descriptors
                     committee_available_pages = last_pag.get("pages")
                     committee_available_count = last_pag.get("count")
+                    if (
+                        last_pag.get("is_count_exact") is not True
+                        or not isinstance(committee_available_pages, int)
+                        or len(committee_pages) != max(1, committee_available_pages)
+                    ):
+                        raise ValueError("Committee traversal lacks exact complete publisher pagination")
                     committee_population = "complete_traversal"
 
             requests_used = client.http.request_count
@@ -1395,8 +1497,8 @@ def _acquire_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--outside-candidates-per-cycle",
         type=int,
-        default=25,
-        help="Auto-discovered outside-spending candidates per cycle balanced across P/S/H (default: 25)",
+        default=15,
+        help="Auto-discovered outside-spending candidates per cycle balanced across P/S/H (default: 15)",
     )
     parser.add_argument(
         "--outside-candidate",
@@ -1407,8 +1509,8 @@ def _acquire_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--contribution-reports-per-cycle",
         type=int,
-        default=8,
-        help="Auto-discovered reconciled contribution reports per cycle across selected forms (default: 8)",
+        default=6,
+        help="Auto-discovered reconciled contribution reports per cycle across selected forms (default: 6)",
     )
     parser.add_argument(
         "--contribution-forms",
@@ -1424,8 +1526,8 @@ def _acquire_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-requests",
         type=int,
-        default=850,
-        help="Bounded HTTP request budget across OpenFEC and docquery downloads (default: 850)",
+        default=900,
+        help="Bounded HTTP request budget across OpenFEC and docquery downloads (default: 900)",
     )
     parser.add_argument(
         "--max-filing-bytes",

@@ -39,7 +39,7 @@ on:
       outside_candidates_per_cycle:
         description: 'Acquire mode: auto-discovered Schedule E candidates per cycle balanced across P/S/H (0-200)'
         required: false
-        default: '25'
+        default: '15'
         type: string
       outside_candidates:
         description: 'Acquire mode: optional comma-separated CANDIDATE_ID:CYCLE pins (e.g. S6OH00163:2024)'
@@ -49,7 +49,7 @@ on:
       contribution_reports_per_cycle:
         description: 'Acquire mode: auto-discovered reconciled Form 3/3P/3X reports per cycle (0-100)'
         required: false
-        default: '8'
+        default: '6'
         type: string
       contribution_forms:
         description: 'Acquire mode: comma-separated OpenFEC report entity types (house-senate,presidential,pac-party)'
@@ -62,9 +62,9 @@ on:
         default: ''
         type: string
       max_requests:
-        description: 'Acquire mode: bounded HTTP request cap across OpenFEC + docquery (1-5000; default 850 stays under 1,000 req/hr)'
+        description: 'Acquire mode: bounded HTTP request cap across OpenFEC + docquery (1-5000; default 900 fits inside 1,000 req/hr quota with headroom)'
         required: false
-        default: '850'
+        default: '900'
         type: string
       selection_path:
         description: 'Offline mode: path on the runner to a retained v1 or v2 FEC research profiles selection JSON (required in offline mode)'
@@ -265,7 +265,7 @@ jobs:
                   if not 0 <= max_committee_pages <= frp.MAX_COMMITTEE_PAGES:
                       raise ValueError(f"max_committee_pages out of range 0-{frp.MAX_COMMITTEE_PAGES}")
 
-                  raw_outside_per = os.environ.get("OUTSIDE_PER_CYCLE", "25").strip() or "0"
+                  raw_outside_per = os.environ.get("OUTSIDE_PER_CYCLE", "15").strip() or "0"
                   if not re.fullmatch(r"\d+", raw_outside_per):
                       raise ValueError(f"Invalid outside_candidates_per_cycle: {raw_outside_per!r}")
                   outside_per = int(raw_outside_per)
@@ -278,7 +278,7 @@ jobs:
                   if outside_per == 0 and not outside_pins:
                       raise ValueError("Specify outside_candidates_per_cycle > 0 or outside_candidates")
 
-                  raw_contrib_per = os.environ.get("CONTRIB_PER_CYCLE", "8").strip() or "0"
+                  raw_contrib_per = os.environ.get("CONTRIB_PER_CYCLE", "6").strip() or "0"
                   if not re.fullmatch(r"\d+", raw_contrib_per):
                       raise ValueError(f"Invalid contribution_reports_per_cycle: {raw_contrib_per!r}")
                   contrib_per = int(raw_contrib_per)
@@ -295,7 +295,7 @@ jobs:
                   if contrib_per == 0 and not contrib_pins:
                       raise ValueError("Specify contribution_reports_per_cycle > 0 or contribution_filings")
 
-                  raw_max_req = os.environ.get("MAX_REQUESTS", "850").strip()
+                  raw_max_req = os.environ.get("MAX_REQUESTS", "900").strip()
                   if not re.fullmatch(r"[1-9]\d*", raw_max_req):
                       raise ValueError(f"Invalid max_requests: {raw_max_req!r}")
                   max_requests = int(raw_max_req)

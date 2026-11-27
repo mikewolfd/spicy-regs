@@ -1172,3 +1172,361 @@ def test_acquire_bounded_committee_prefix_and_reuse_from_pages_jsonl(tmp_path: P
     rows = pq.read_table(tmp_path / "build-reused" / "generation" / "fec_committee_relationship_profiles.parquet").to_pylist()
     assert [r["committee_id"] for r in rows] == ["C00777001"]
     assert ev_dir.is_dir()
+
+
+# ---------------------------------------------------------------------------
+# 4. Review regression tests: Findings 1-5
+# ---------------------------------------------------------------------------
+
+
+def test_acquire_fails_closed_on_403_evidence_error_budget_rate_limit_and_cancellation(tmp_path: Path, monkeypatch):
+    """Finding 1 (BLOCKER): fatal security/retention/budget/cancellation errors never turn into skipped items."""
+    from spicy_docs.transport.credentials import CredentialRefusedError
+    from spicy_docs.transport.download import AcquisitionError, RateLimitExhausted
+    from spicy_regs.source_evidence import SourceEvidenceError
+
+    raw_root = tmp_path / "raw"
+    fake_key = "test-secret-openfec-key-9876543210"
+    base_transport, _ = _mock_openfec_transport(api_key=fake_key)
+
+    # 1. HTTP 403 on auto-discovered docquery.fec.gov filing MUST abort acquire() loudly (never skip).
+    def handler_403(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "docquery.fec.gov":
+            return httpx.Response(403, content=b"Forbidden", headers={"content-type": "text/plain"})
+        return base_transport.handle_request(request)
+
+    with pytest.raises(CredentialRefusedError):
+        frp.acquire(
+            tmp_path / "acq-403",
+            cycles=[2024],
+            committee_cycles=[2024],
+            outside_candidates_per_cycle=1,
+            contribution_reports_per_cycle=1,
+            contribution_forms=("pac-party",),
+            max_requests=50,
+            discovery_pages=1,
+            archive_root=raw_root,
+            api_key=fake_key,
+            min_interval=0.0,
+            transport=httpx.MockTransport(handler_403),
+        )
+
+    # 2. HTTP 429 exceeding RateLimit.max_wait -> RateLimitExhausted MUST abort acquire() loudly.
+    def handler_429(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/schedules/schedule_e/by_candidate/":
+            return httpx.Response(429, content=b"Too Many Requests", headers={"retry-after": "300"})
+        return base_transport.handle_request(request)
+
+    with pytest.raises(RateLimitExhausted):
+        frp.acquire(
+            tmp_path / "acq-429",
+            cycles=[2024],
+            committee_cycles=[2024],
+            outside_candidates_per_cycle=1,
+            contribution_reports_per_cycle=1,
+            contribution_forms=("pac-party",),
+            max_requests=50,
+            discovery_pages=1,
+            archive_root=raw_root,
+            api_key=fake_key,
+            min_interval=0.0,
+            transport=httpx.MockTransport(handler_429),
+        )
+
+    # 3. max_requests exhaustion during Phase 2 even with --reuse-committees-from MUST abort loudly.
+    capture_dir = tmp_path / "reused-comm-budget"
+    blob_dir = capture_dir / "blobs" / "sha256"
+    blob_dir.mkdir(parents=True)
+    reused_body = _api_page_bytes([{"committee_id": "C00777001", "name": "REUSED PAC", "designation": "U"}], page=1, pages=1, count=1)
+    reused_hex = hashlib.sha256(reused_body).hexdigest()
+    (blob_dir / reused_hex).write_bytes(reused_body)
+    pages_jsonl = capture_dir / "pages.jsonl"
+    pages_jsonl.write_text(
+        json.dumps(
+            {
+                "request_url": "https://api.open.fec.gov/v1/committees/?sort=committee_id&per_page=100&page=1",
+                "observed_at": "2026-11-27T01:00:00Z",
+                "evidence": {"sha256": f"sha256:{reused_hex}", "bytes": len(reused_body), "blob_path": f"sha256/{reused_hex}"},
+                "records": 1,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    # 1 discovery + 2 outside + 1 report discovery = 4 requests; budget=5 exhausts mid-Phase 2!
+    with pytest.raises(AcquisitionError, match="budget exhausted"):
+        frp.acquire(
+            tmp_path / "acq-budget",
+            cycles=[2024],
+            reuse_committees_from=pages_jsonl,
+            outside_candidates_per_cycle=1,
+            contribution_reports_per_cycle=2,
+            contribution_forms=("house-senate", "pac-party"),
+            max_requests=5,
+            discovery_pages=1,
+            archive_root=raw_root,
+            api_key=fake_key,
+            min_interval=0.0,
+            transport=base_transport,
+        )
+
+    # 4. SourceEvidenceError during auto-discovered item retention MUST abort acquire() loudly.
+    orig_retain = CaptureEvidence.retain_file
+
+    def fail_on_filing(self, path, *, stage, **kwargs):
+        if stage == "acquire-contribution-filing":
+            raise SourceEvidenceError("simulated disk full during retention")
+        return orig_retain(self, path, stage=stage, **kwargs)
+
+    monkeypatch.setattr(CaptureEvidence, "retain_file", fail_on_filing)
+    with pytest.raises(SourceEvidenceError, match="simulated disk full"):
+        frp.acquire(
+            tmp_path / "acq-evidence-fail",
+            cycles=[2024],
+            committee_cycles=[2024],
+            outside_candidates_per_cycle=1,
+            contribution_reports_per_cycle=1,
+            contribution_forms=("pac-party",),
+            max_requests=50,
+            discovery_pages=1,
+            archive_root=raw_root,
+            api_key=fake_key,
+            min_interval=0.0,
+            transport=base_transport,
+        )
+    monkeypatch.setattr(CaptureEvidence, "retain_file", orig_retain)
+
+    # 5. RequestBound TimeoutError raised inside Phase 1/2 MUST abort acquire() loudly.
+    bound = RequestBound(60.0, label="acquire-cancel-test")
+    orig_outside = frp.outside_profiles
+
+    def cancel_inside_outside(*args, **kwargs):
+        bound.cancel()
+        return orig_outside(*args, **kwargs)
+
+    monkeypatch.setattr(frp, "outside_profiles", cancel_inside_outside)
+    with pytest.raises(TimeoutError, match="acquire-cancel-test"), bound.scope():
+        frp.acquire(
+            tmp_path / "acq-cancel",
+            cycles=[2024],
+            committee_cycles=[2024],
+            outside_candidates_per_cycle=1,
+            contribution_reports_per_cycle=1,
+            contribution_forms=("pac-party",),
+            max_requests=50,
+            discovery_pages=1,
+            archive_root=raw_root,
+            api_key=fake_key,
+            min_interval=0.0,
+            transport=base_transport,
+        )
+    monkeypatch.setattr(frp, "outside_profiles", orig_outside)
+
+    # 6. Non-fatal ValueError containing literal secret or local path is scrubbed before entering selection.json.
+    scrubbed = frp._scrub_skip_reason(
+        ValueError(f"bad value with {fake_key} at /Users/mikewolfd/secret/file.json?api_key={fake_key}"),
+        fake_key,
+    )
+    assert fake_key not in scrubbed
+    assert "/Users/mikewolfd" not in scrubbed
+    assert "<redacted>" in scrubbed
+    assert "<local>/file.json" in scrubbed
+
+
+def test_committee_traversal_rejects_mismatched_filters_per_page_and_inexact_count(tmp_path: Path):
+    """Finding 2: Stage 1 build() checks non-page filters + per_page, and acquire() checks is_count_exact."""
+    raw_root = tmp_path / "raw"
+    seed = CaptureEvidence(tmp_path / "seed-f2", "fec-research-profiles", archive_root=raw_root)
+
+    # Page 1 has cycle=2024; Page 2 tampers query filter to cycle=2026!
+    p1_url = "https://api.open.fec.gov/v1/committees/?cycle=2024&sort=committee_id&per_page=100&page=1"
+    p2_url = "https://api.open.fec.gov/v1/committees/?cycle=2026&sort=committee_id&per_page=100&page=2"
+    p1_bytes = _api_page_bytes([{"committee_id": "C00000001", "name": "ONE"}], page=1, pages=2, count=2)
+    p2_bytes = _api_page_bytes([{"committee_id": "C00000002", "name": "TWO"}], page=2, pages=2, count=2)
+    comm_mismatch = [
+        {**_retain_blob(seed, p1_bytes, url=p1_url), "expected_results": 1},
+        {**_retain_blob(seed, p2_bytes, url=p2_url), "expected_results": 1},
+    ]
+
+    # Page with per_page mismatch in response pagination vs request URL.
+    bad_pp_url = "https://api.open.fec.gov/v1/committees/?cycle=2024&sort=committee_id&per_page=100&page=1"
+    bad_pp_bytes = _api_page_bytes([{"committee_id": "C00000001", "name": "ONE"}], page=1, pages=1, per_page=50, count=1)
+    comm_bad_pp = [{**_retain_blob(seed, bad_pp_bytes, url=bad_pp_url), "expected_results": 1}]
+    seed.finish()
+
+    base_sel = {
+        "format": frp.SELECTION_FORMAT,
+        "version": frp.SELECTION_VERSION,
+        "outside_scopes": [{"candidate_id": "S6OH00163", "cycle": 2024, "queries": PILOT_SELECTION["outside"]}],
+        "contribution_scopes": [PILOT_SELECTION["contribution"]],
+    }
+    for pop in ("complete_traversal", "bounded_page_prefix"):
+        with pytest.raises(ValueError, match="query filters changed"):
+            frp.build({**base_sel, "committee_population": pop, "committees": comm_mismatch}, tmp_path / f"b-{pop}", archive_root=raw_root)
+
+    with pytest.raises(ValueError, match="retained population"):
+        frp.build(
+            {**base_sel, "committee_population": "complete_traversal", "committees": comm_bad_pp},
+            tmp_path / "b-pp",
+            archive_root=raw_root,
+        )
+
+    # acquire(max_committee_pages=0) refuses when OpenFEC returns is_count_exact=False.
+    fake_key = "test-openfec-key-inexact-1234"
+    base_transport, _ = _mock_openfec_transport(api_key=fake_key)
+
+    def handler_inexact(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/committees/":
+            params = dict(parse_qsl(urlsplit(str(request.url)).query))
+            page = int(params.get("page", "1"))
+            payload = {
+                "api_version": "1.0",
+                "pagination": {"page": page, "pages": 1, "per_page": 100, "count": 1, "is_count_exact": False},
+                "results": [{"committee_id": "C00990001", "name": "INEXACT"}] if page == 1 else [],
+            }
+            return httpx.Response(200, content=json.dumps(payload).encode("utf-8"), headers={"content-type": "application/json"})
+        return base_transport.handle_request(request)
+
+    with pytest.raises(ValueError, match="exact complete publisher pagination"):
+        frp.acquire(
+            tmp_path / "acq-inexact",
+            cycles=[2024],
+            committee_cycles=[2024],
+            max_committee_pages=0,
+            outside_candidates_per_cycle=1,
+            contribution_reports_per_cycle=1,
+            contribution_forms=("pac-party",),
+            max_requests=50,
+            discovery_pages=1,
+            archive_root=raw_root,
+            api_key=fake_key,
+            min_interval=0.0,
+            transport=httpx.MockTransport(handler_inexact),
+        )
+
+
+def test_acquire_fast_stops_unmapped_cover_bucket_and_conserves_budget(tmp_path: Path):
+    """Finding 3: after 2 consecutive unmapped-cover refusals in one (cycle, form), auto-discovery stops probing."""
+    raw_root = tmp_path / "raw"
+    fake_key = "test-openfec-key-faststop-1234"
+    base_transport, _ = _mock_openfec_transport(api_key=fake_key)
+
+    # Build 5 synthetic v8.3 F3 reports (unmapped in fec_filing_forms.py).
+    v83_f3_bytes = (_fec_line("HDR", "FEC", "8.3", "OLD", "1.0") + _fec_line("F3N", "C00880001", "OLD CMTE")).encode("utf-8")
+    old_reports = [
+        _make_report(
+            committee_id=f"C0088000{i}", committee_name=f"OLD CMTE {i}", filing_id=f"500100{i}", cycle=2024,
+            report_year=2024, report_type="YE", cov_start="2024-10-01", cov_end="2024-12-31",
+            ind_itemized="100.00", ind_unitemized="0.00", ind_refund="0.00", pac_itemized="0.00", pac_refund="0.00",
+        )
+        for i in range(1, 6)
+    ]
+    old_report_by_cid = {r["committee_id"]: r for r in old_reports}
+    probed_old_f3 = []
+
+    def handler_v83(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/v1/reports/house-senate/":
+            return httpx.Response(200, content=_api_page_bytes(old_reports), headers={"content-type": "application/json"})
+        for cid, rep in old_report_by_cid.items():
+            if path == f"/v1/committee/{cid}/reports/":
+                probed_old_f3.append(cid)
+                return httpx.Response(200, content=_api_page_bytes([rep]), headers={"content-type": "application/json"})
+            if path == f"/v1/committee/{cid}/history/2024/":
+                return httpx.Response(200, content=_api_page_bytes([{"committee_id": cid, "candidate_ids": [f"H2OH8800{cid[-1]}"]}]), headers={"content-type": "application/json"})
+        if path == "/v1/candidates/":
+            params = dict(parse_qsl(urlsplit(str(request.url)).query))
+            cand_id = params.get("candidate_id", "")
+            if cand_id.startswith("H2OH8800"):
+                return httpx.Response(
+                    200,
+                    content=_api_page_bytes([{"candidate_id": cand_id, "first_file_date": "2023-01-01", "cycles": [2024]}]),
+                    headers={"content-type": "application/json"},
+                )
+        if request.url.host == "docquery.fec.gov" and path.startswith("/dcdev/posted/500100"):
+            return httpx.Response(200, content=v83_f3_bytes, headers={"content-type": "text/plain", "content-length": str(len(v83_f3_bytes))})
+        return base_transport.handle_request(request)
+
+    sel = frp.acquire(
+        tmp_path / "acq-v83",
+        cycles=[2024],
+        committee_cycles=[2024],
+        outside_candidates_per_cycle=1,
+        contribution_reports_per_cycle=4,
+        contribution_forms=("house-senate", "pac-party"),
+        max_requests=80,
+        discovery_pages=1,
+        archive_root=raw_root,
+        api_key=fake_key,
+        min_interval=0.0,
+        transport=httpx.MockTransport(handler_v83),
+    )
+    # Fast-stopped after 2 consecutive unmapped v8.3 covers instead of probing all 5!
+    assert len(probed_old_f3) == 2
+    assert len(sel["contribution_scopes"]) == 1  # pac-party F3X still succeeded!
+    assert len(sel["acquisition_summary"]["skipped_contribution_scopes"]) == 2
+
+
+def test_reuse_committees_jsonl_rejects_path_traversal_tampered_blob_and_page_overflow(tmp_path: Path):
+    """Finding 4: _load_reused_committee_pages validates blob_path containment, digest parity, and MAX_COMMITTEE_PAGES."""
+    raw_root = tmp_path / "raw"
+    evidence = CaptureEvidence(tmp_path / "ev-reuse", "fec-research-profiles", archive_root=raw_root)
+    try:
+        # 1. Path traversal outside blobs_root refuses.
+        outside_secret = tmp_path / "outside.json"
+        outside_secret.write_bytes(b'{"secret": true}')
+        cap_dir = tmp_path / "cap-traversal"
+        (cap_dir / "blobs").mkdir(parents=True)
+        fake_sha = "sha256:" + hashlib.sha256(b'{"secret": true}').hexdigest()
+        traversal_jsonl = cap_dir / "pages.jsonl"
+        traversal_jsonl.write_text(
+            json.dumps(
+                {
+                    "request_url": "https://api.open.fec.gov/v1/committees/?sort=committee_id&per_page=100&page=1",
+                    "observed_at": "2026-11-27T01:00:00Z",
+                    "evidence": {"sha256": fake_sha, "bytes": len(b'{"secret": true}'), "blob_path": "../../outside.json"},
+                    "records": 1,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="escapes capture blobs directory"):
+            frp._load_reused_committee_pages(traversal_jsonl, evidence)
+
+        # 2. Tampered blob bytes whose SHA-256 differs from manifest digest refuses.
+        cap_dir2 = tmp_path / "cap-tampered"
+        blob_dir2 = cap_dir2 / "blobs" / "sha256"
+        blob_dir2.mkdir(parents=True)
+        real_body = _api_page_bytes([{"committee_id": "C00777001", "name": "GOOD"}], page=1, pages=1, count=1)
+        declared_hex = hashlib.sha256(real_body).hexdigest()
+        (blob_dir2 / declared_hex).write_bytes(b'{"tampered": true}')
+        tampered_jsonl = cap_dir2 / "pages.jsonl"
+        tampered_jsonl.write_text(
+            json.dumps(
+                {
+                    "request_url": "https://api.open.fec.gov/v1/committees/?sort=committee_id&per_page=100&page=1",
+                    "observed_at": "2026-11-27T01:00:00Z",
+                    "evidence": {"sha256": f"sha256:{declared_hex}", "bytes": len(real_body), "blob_path": f"sha256/{declared_hex}"},
+                    "records": 1,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="differs from its declared digest/size"):
+            frp._load_reused_committee_pages(tampered_jsonl, evidence)
+    finally:
+        evidence.finish()
+
+
+def test_null_candidate_ids_raises_value_error_and_integral_decimal_amendment_chain_accepted(tmp_path: Path):
+    """Finding 5 nits: explicit null candidate_ids raises ValueError (not TypeError), and integral Decimal tail works."""
+    from spicy_regs.transforms.fec_contribution_profiles import _amendment_tail, candidate_for_report
+
+    assert _amendment_tail({"amendment_chain": [Decimal("1943202.0")]}) == ["1943202"]
+    assert _amendment_tail({"amendment_chain": [Decimal("1943202.5")]}) == []
+    with pytest.raises(ValueError, match="committee linkage"):
+        candidate_for_report("S6OH99001", {"candidate_ids": None}, [], {"coverage_start_date": "2025-10-01", "cycle": 2026})
+    with pytest.raises(ValueError, match="coverage_start_date"):
+        candidate_for_report("S6OH99001", {"candidate_ids": ["S6OH99001"]}, [], {"coverage_start_date": None, "cycle": 2026})

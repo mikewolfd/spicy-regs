@@ -107,6 +107,18 @@ its module docstring and tests for workbook/sheet edition scope.
 
 ### GitHub Actions dispatch (recommended for live scaling)
 
+#### Default request-budget math (OpenFEC 60 req/min, 1,000 req/hr quota)
+
+With default `workflow_dispatch` inputs (`cycles=2020,2022,2024,2026`,
+`committee_cycles=2024,2026`, `max_committee_pages=0`,
+`outside_candidates_per_cycle=15`, `contribution_reports_per_cycle=6`,
+`contribution_forms=house-senate,presidential,pac-party`, `max_requests=900`):
+
+- **Phase 1 — Outside spending:** `4 cycles × 2 discovery pages = 8` + `60 candidate-cycles × ~2.5 pages ≈ 150` -> **~160 requests**.
+- **Phase 2 — Contributions:** `4 cycles × 3 entity types × 2 discovery pages = 24` + qualified Form 3 / 3P / 3X reports (`~12–18 × 4 reqs ≈ 48–72`) + fast-stopped probes on unmapped pre-v8.5 `F3`/`F3P` buckets (`v8.3` has no reviewed cover mappings; `v8.4` covers `F3X` only; `v8.5` covers `F3`, `F3PN`, and `F3X` — after 2 consecutive unmapped-cover refusals in one `(cycle, entity_type)`, auto-discovery stops probing that bucket cleanly) -> **~90–120 requests**.
+- **Phase 3 — Committees:** Complete `2024,2026` `/v1/committees/` traversal (`~250–350 pages`) -> **~300–350 requests**.
+- **Total:** **~550–630 requests** (~11–13 min at `1.1 s/req`), leaving **~270–350 requests of headroom** under `max_requests=900` and safely below OpenFEC's 1,000 req/hr standard key quota and the 120-minute workflow timeout. To expand further (e.g. `committee_cycles=all` at ~900 pages), either raise `max_requests` within a single multi-window run or reuse retained committee pages via `--reuse-committees-from`.
+
 1. Dry-run verification (`skip_upload=true`):
    ```sh
    gh workflow run refresh-fec-research-profiles.yml \
@@ -114,10 +126,10 @@ its module docstring and tests for workbook/sheet edition scope.
      -f cycles=2020,2022,2024,2026 \
      -f committee_cycles=2024,2026 \
      -f max_committee_pages=0 \
-     -f outside_candidates_per_cycle=25 \
-     -f contribution_reports_per_cycle=8 \
+     -f outside_candidates_per_cycle=15 \
+     -f contribution_reports_per_cycle=6 \
      -f contribution_forms=house-senate,presidential,pac-party \
-     -f max_requests=850 \
+     -f max_requests=900 \
      -f skip_upload=true
    ```
 2. Inspect the uploaded `refresh-fec-research-profiles-audit-*` artifact
@@ -130,10 +142,10 @@ its module docstring and tests for workbook/sheet edition scope.
      -f cycles=2020,2022,2024,2026 \
      -f committee_cycles=2024,2026 \
      -f max_committee_pages=0 \
-     -f outside_candidates_per_cycle=25 \
-     -f contribution_reports_per_cycle=8 \
+     -f outside_candidates_per_cycle=15 \
+     -f contribution_reports_per_cycle=6 \
      -f contribution_forms=house-senate,presidential,pac-party \
-     -f max_requests=850 \
+     -f max_requests=900 \
      -f skip_upload=false
    ```
 

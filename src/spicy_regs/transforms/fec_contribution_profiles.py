@@ -99,7 +99,13 @@ def _amendment_tail(report) -> list[str]:
     if not isinstance(chain, list) or not chain:
         return []
     last = chain[-1]
-    if isinstance(last, bool) or not isinstance(last, (str, int)):
+    if isinstance(last, bool):
+        return []
+    if isinstance(last, Decimal):
+        if not last.is_finite() or last != int(last):
+            return []
+        return [str(int(last))]
+    if not isinstance(last, (str, int)):
         return []
     return [str(last)]
 
@@ -119,12 +125,17 @@ def candidate_for_report(candidate_id, committee_history, candidates, report, *,
         if committee_history.get("candidate_ids"):
             raise ValueError("Form 3X committee history unexpectedly lists candidate IDs")
         return "not_applicable_form_3x_non_candidate_committee; no candidate authorization asserted"
-    if not isinstance(candidate_id, str) or candidate_id not in committee_history.get("candidate_ids", []):
+    linked_ids = committee_history.get("candidate_ids") or []
+    if not isinstance(linked_ids, list) or not isinstance(candidate_id, str) or candidate_id not in linked_ids:
         raise ValueError("Selected candidate lacks source committee linkage")
+    cov_start = report.get("coverage_start_date")
+    if not isinstance(cov_start, str) or len(cov_start) < 10:
+        raise ValueError("Selected contribution report lacks coverage_start_date")
     selected = [row for row in candidates if row.get("candidate_id") == candidate_id]
-    if len(selected) != 1 or (selected[0].get("first_file_date") or "9999") > report["coverage_start_date"][:10]:
+    if len(selected) != 1 or (selected[0].get("first_file_date") or "9999") > cov_start[:10]:
         raise ValueError("Current candidate observation does not establish the selected report-period association")
-    if report["cycle"] not in selected[0].get("cycles", []):
+    cycles = selected[0].get("cycles") or []
+    if not isinstance(cycles, list) or report["cycle"] not in cycles:
         raise ValueError("Candidate association is outside the selected cycle")
     return "native_committee_cycle_link_and_candidate_observed_before_report; daily authorization dates not asserted"
 
