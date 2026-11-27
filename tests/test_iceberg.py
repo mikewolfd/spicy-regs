@@ -222,10 +222,11 @@ def test_unlocked_catalog_write_warns_once(local_catalog, monkeypatch) -> None:
     assert "Catalog changed during export" in messages[0] and "comments-catalog-write" in messages[0]
 
 
-def _metadata(*commits: tuple[int, int | None, str], uuid: str = "t", schema: int = 0) -> dict:
+def _metadata(*commits: tuple[int, int | None, str | None], uuid: str = "t", schema: int = 0) -> dict:
     """Iceberg table metadata whose current snapshot is the last of ``(id, parent, operation)``."""
     return {"table-uuid": uuid, "current-schema-id": schema, "current-snapshot-id": commits[-1][0],
-            "snapshots": [{"snapshot-id": s, "parent-snapshot-id": p, "summary": {"operation": op}}
+            "snapshots": [{"snapshot-id": s, "parent-snapshot-id": p,
+                           "summary": None if op is None else {"operation": op}}
                           for s, p, op in commits]}
 
 
@@ -233,9 +234,14 @@ def _metadata(*commits: tuple[int, int | None, str], uuid: str = "t", schema: in
     ([(1, None, "append")], True),
     ([(1, None, "append"), (2, 1, "replace"), (3, 2, "replace")], True),
     ([(1, None, "append"), (2, 1, "replace"), (3, 2, "append")], False),
+    ([(1, None, "append"), (2, 1, "append"), (3, 2, "replace")], False),
     ([(1, None, "append"), (2, 1, "overwrite")], False),
+    ([(1, None, "append"), (2, 1, "delete")], False),
     ([(1, None, "append"), (2, None, "replace")], False),
-], ids=["unmoved", "compaction", "write-after-compaction", "overwrite", "not-a-descendant"])
+    ([(1, None, "append"), (3, 2, "replace")], False),
+    ([(1, None, "append"), (2, 1, None)], False),
+], ids=["unmoved", "compaction", "write-after-compaction", "compaction-after-write",
+        "overwrite", "delete", "not-a-descendant", "missing-intermediate", "null-summary"])
 def test_only_compaction_may_move_an_exported_snapshot(commits, unchanged) -> None:
     assert iceberg._compacted_only(_metadata(*commits), iceberg.CatalogSnapshot("t", 1, 0)) is unchanged
 
@@ -688,7 +694,7 @@ def test_merge_refuses_unclassified_or_lossy_source_before_casting(tmp_path, loc
     assert con.execute(f'SELECT count(*) FROM {iceberg._qualified(COMMENT)}').fetchone() == (0,)
 
 
-@pytest.mark.parametrize('operation', ['replace', 'append', 'overwrite'])
+@pytest.mark.parametrize('operation', ['replace', 'append', 'overwrite', 'delete'])
 def test_a_receipt_table_commit_leaves_the_published_comments_rows_unchanged(monkeypatch, operation):
     """The mirror publishes no receipts since ss-juz8; only a comments-table commit other than compaction counts."""
     snapshot = iceberg.CatalogPairSnapshot('subjects', 1, 0, iceberg.CatalogSnapshot('receipts', 2, 0))
@@ -700,6 +706,20 @@ def test_a_receipt_table_commit_leaves_the_published_comments_rows_unchanged(mon
     monkeypatch.setattr(iceberg, '_table_metadata', lambda *_, **__: _metadata(
         (1, None, 'append'), (4, 1, operation), uuid='subjects'))
     assert iceberg.rows_unchanged_since(COMMENT, snapshot) is (operation == 'replace')
+
+
+def test_rows_unchanged_since_enforces_declared_schema_when_requested(monkeypatch):
+    """Passing ``declared_schema=True`` refuses policy/catalog schema drift even on a compacted snapshot."""
+    snapshot = iceberg.CatalogPairSnapshot('subjects', 1, 0, iceberg.CatalogSnapshot('receipts', 2, 0))
+    monkeypatch.setattr(iceberg, '_connect', duckdb.connect)
+    monkeypatch.setattr(iceberg, '_table_metadata', lambda *_, **__: _metadata(
+        (1, None, 'append'), (2, 1, 'replace'), uuid='subjects'))
+    monkeypatch.setattr(iceberg, '_receipt_metadata', lambda *_, **__: _metadata((2, None, 'append'), uuid='receipts'))
+    monkeypatch.setattr(native, 'schema_difference', lambda con, rt: None)
+    assert iceberg.rows_unchanged_since(COMMENT, snapshot, declared_schema=True) is True
+    monkeypatch.setattr(native, 'schema_difference', lambda con, rt: "missing ['subtype']")
+    with pytest.raises(ValueError, match=r"Native catalog schema differs from declared policy: missing \['subtype'\]"):
+        iceberg.rows_unchanged_since(COMMENT, snapshot, declared_schema=True)
 
 
 # --- transient catalog errors (R2 5xx/429) are retried from a fresh connection ---

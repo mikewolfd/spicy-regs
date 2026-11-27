@@ -80,13 +80,29 @@ def mark_retired(monkeypatch, *datasets):
 @pytest.fixture
 def publication(tmp_path, monkeypatch):
     snapshot = iceberg.CatalogPairSnapshot("table-uuid", 41, 0, iceberg.CatalogSnapshot("receipts-uuid", 51, 0))
-    state: dict = {"snapshot": snapshot, "objects": {}, "index": {"format": "spicy-regs-publication", "version": 2, "families": {}}, "receipt": None, "builds": 0, "uploads": [], "fail": None, "agency": "EPA", "text": "first"}
+    state: dict = {"snapshot": snapshot, "commits": None, "objects": {}, "index": {"format": "spicy-regs-publication", "version": 2, "families": {}}, "receipt": None, "builds": 0, "uploads": [], "fail": None, "agency": "EPA", "text": "first"}
     monkeypatch.setenv("R2_ACCESS_KEY_ID", "test")
     monkeypatch.setattr(mirror, "resolve_r2_base_url", lambda: "https://public.example")
     monkeypatch.setattr(mirror, "MIN_EXPECTED_ROWS", 1)
     monkeypatch.setattr(iceberg, "catalog_snapshot", lambda _: state["snapshot"])
-    monkeypatch.setattr(iceberg, "rows_unchanged_since",
-                        lambda rt, pinned: iceberg.catalog_snapshot(rt).subject() == pinned.subject())
+
+    def unchanged(rt, pinned, *, declared_schema=False):
+        current = iceberg.catalog_snapshot(rt)
+        if state["commits"] is not None:
+            metadata = {
+                "table-uuid": current.table_uuid,
+                "current-schema-id": current.schema_id,
+                "current-snapshot-id": current.snapshot_id,
+                "snapshots": [
+                    {"snapshot-id": sid, "parent-snapshot-id": parent,
+                     "summary": None if op is None else {"operation": op}}
+                    for sid, parent, op in state["commits"]
+                ],
+            }
+            return iceberg._compacted_only(metadata, pinned)
+        return current.subject() == pinned.subject()
+
+    monkeypatch.setattr(iceberg, "rows_unchanged_since", unchanged)
     monkeypatch.setattr(mirror.r2, "read_json_object", lambda _: state["receipt"])
     monkeypatch.setattr(mirror.r2, "object_version", lambda key: state["objects"].get(key))
     monkeypatch.setattr(mirror.publication, "public_object_version", lambda url, **_: state["objects"].get(url.removeprefix("https://public.example/")))
@@ -246,6 +262,7 @@ def test_agency_move_clears_old_url_and_keeps_a_valid_receipt(publication):
 
 
 _EXPORT = iceberg.export_public_comments  # the publication fixture fakes it; the member tests below run the real one
+_REAL_ROWS_UNCHANGED_SINCE = iceberg.rows_unchanged_since
 _SUBMITTER = ("subtype", "duplicate_comments")
 
 
@@ -548,3 +565,163 @@ def test_the_mirror_workflow_refuses_the_retired_v1_promotion_before_checkout():
     assert set(dispatch[True]["workflow_dispatch"]["inputs"]) == {
         "skip_upload", "comments_only", "comments_runner", "diagnostic_native_snapshot",
         "debugger_mode", "expected_gdb_sha256"}
+
+
+def _iceberg_metadata(*commits: tuple[int, int | None, str | None], uuid: str = "table-uuid", schema: int = 0) -> dict:
+    return {
+        "table-uuid": uuid,
+        "current-schema-id": schema,
+        "current-snapshot-id": commits[-1][0],
+        "snapshots": [
+            {"snapshot-id": sid, "parent-snapshot-id": parent,
+             "summary": None if op is None else {"operation": op}}
+            for sid, parent, op in commits
+        ],
+    }
+
+
+def test_compaction_only_catalog_advance_is_noop_through_real_iceberg_binding(publication, monkeypatch):
+    """Hourly R2 ``replace`` compaction moves the catalog snapshot without changing rows -> publisher no-ops (ss-cpm8)."""
+    from spicy_regs.sources import regulatory_catalog
+
+    state, root = publication
+    assert mirror.publish_comments_mirror(root)
+    uploads = list(state["uploads"])
+    assert state["receipt"]["source"]["snapshot_id"] == 41
+
+    # Exercise the real iceberg.rows_unchanged_since -> compacted_since -> _compacted_only path.
+    compacted_subject = _iceberg_metadata((41, None, "append"), (42, 41, "replace"), (43, 42, "replace"))
+    moved_receipts = _iceberg_metadata((51, None, "append"), (55, 51, "append"), uuid="receipts-uuid")
+    schema_checks = []
+    monkeypatch.setattr(iceberg, "rows_unchanged_since", _REAL_ROWS_UNCHANGED_SINCE)
+    monkeypatch.setattr(iceberg, "_connect", duckdb.connect)
+    monkeypatch.setattr(iceberg, "_table_metadata", lambda *a, **kw: compacted_subject)
+    monkeypatch.setattr(iceberg, "_receipt_metadata", lambda *a, **kw: moved_receipts)
+    monkeypatch.setattr(regulatory_catalog, "schema_difference",
+                        lambda con, rt: schema_checks.append(rt.name) or None)
+    monkeypatch.setattr(iceberg, "export_public_comments", lambda *a, **kw: pytest.fail("exported on compaction no-op"))
+
+    assert not mirror.publish_comments_mirror(root)
+    assert schema_checks == ["comments"]
+    assert state["builds"] == 1 and state["uploads"] == uploads
+    assert state["receipt"]["source"]["snapshot_id"] == 41
+
+
+@pytest.mark.parametrize(("commits", "current_id"), [
+    ([(41, None, "append"), (42, 41, "append")], 42),
+    ([(41, None, "append"), (42, 41, "overwrite")], 42),
+    ([(41, None, "append"), (42, 41, "delete")], 42),
+    ([(41, None, "append"), (42, 41, "append"), (43, 42, "replace")], 43),
+    ([(41, None, "append"), (42, 41, "delete"), (43, 42, "replace")], 43),
+], ids=["append", "overwrite", "delete", "append-then-compaction", "delete-then-compaction"])
+def test_non_compaction_catalog_commits_republish(publication, commits, current_id):
+    """Any append, overwrite, or delete commit (even followed by compaction) refuses no-op and republishes."""
+    state, root = publication
+    assert mirror.publish_comments_mirror(root)
+    state["commits"] = commits
+    state["snapshot"] = replace(state["snapshot"], snapshot_id=current_id)
+    assert mirror.publish_comments_mirror(root)
+    assert state["builds"] == 2
+    assert state["receipt"]["source"]["snapshot_id"] == current_id
+
+
+@pytest.mark.parametrize(("commits", "current_id"), [
+    ([(41, None, "append"), (43, 42, "replace")], 43),
+    ([(43, 42, "replace")], 43),
+    ([(41, None, "append"), (42, None, "replace")], 42),
+    ([(41, None, "append"), (42, 41, None)], 42),
+    ([(42, 43, "replace"), (43, 42, "replace")], 43),
+], ids=["missing-intermediate", "truncated-history", "no-parent", "null-summary", "parent-cycle"])
+def test_unverifiable_compaction_lineage_refuses_noop_and_republishes(publication, commits, current_id):
+    """Missing/expired intermediate snapshots or malformed metadata cannot prove compaction-only movement."""
+    state, root = publication
+    assert mirror.publish_comments_mirror(root)
+    state["commits"] = commits
+    state["snapshot"] = replace(state["snapshot"], snapshot_id=current_id)
+    assert mirror.publish_comments_mirror(root)
+    assert state["builds"] == 2
+    assert state["receipt"]["source"]["snapshot_id"] == current_id
+
+
+def test_generation_digest_binding_and_mismatches_in_publisher(publication):
+    """Generation binds by artifactDigest (ignoring restated fields), and refuses missing/different generations."""
+    state, root = publication
+    assert mirror.publish_comments_mirror(root)
+    uploads = list(state["uploads"])
+
+    # Restating non-digest metadata (e.g. publishedAt) keeps the same generation digest -> no-op.
+    state["index"] = {
+        **state["index"],
+        "families": {"comments": {**state["index"]["families"]["comments"], "publishedAt": "2026-11-27T00:00:00Z"}},
+    }
+    state["commits"] = [(41, None, "append"), (42, 41, "replace")]
+    state["snapshot"] = replace(state["snapshot"], snapshot_id=42)
+    assert not mirror.publish_comments_mirror(root)
+    assert state["builds"] == 1 and state["uploads"] == uploads
+
+    # Different artifactDigest in publication.v2.json -> republishes.
+    state["index"] = {
+        **state["index"],
+        "families": {"comments": {**state["index"]["families"]["comments"], "artifactDigest": "sha256:" + "d" * 64}},
+    }
+    assert mirror.publish_comments_mirror(root)
+    assert state["builds"] == 2
+
+    # Absent comments family in publication.v2.json -> publisher must still publish (unlike freshness fallback).
+    state["index"] = {**state["index"], "families": {}}
+    assert mirror.publish_comments_mirror(root)
+    assert state["builds"] == 3
+
+    # Corrupt/missing generation in receipt -> republishes.
+    state["receipt"]["generation"] = {"artifactDigest": "not-a-digest"}
+    assert mirror.publish_comments_mirror(root)
+    assert state["builds"] == 4
+
+    # Legacy receipt predating pair snapshots (missing source.receipts) -> republishes.
+    del state["receipt"]["source"]["receipts"]
+    assert mirror.publish_comments_mirror(root)
+    assert state["builds"] == 5
+
+
+def test_storage_and_public_byte_drift_each_refuse_noop(publication, monkeypatch):
+    """Both R2 storage and public HTTPS byte identities must hold, even on a compaction-only catalog."""
+    state, root = publication
+    assert mirror.publish_comments_mirror(root)
+    state["commits"] = [(41, None, "append"), (42, 41, "replace")]
+    state["snapshot"] = replace(state["snapshot"], snapshot_id=42)
+    assert not mirror.publish_comments_mirror(root)
+
+    storage = dict(state["objects"])
+    public = dict(state["objects"])
+    monkeypatch.setattr(mirror.r2, "object_version", lambda key: storage.get(key))
+    monkeypatch.setattr(mirror.publication, "public_object_version",
+                        lambda url, **_: public.get(url.removeprefix("https://public.example/")))
+
+    # Public CDN drift while storage still matches receipt -> refuses no-op.
+    public["comments.parquet"] = {"etag": "stale-cdn", "bytes": public["comments.parquet"]["bytes"]}
+    assert not mirror._receipt_matches(state["receipt"], "https://public.example")
+
+    # Storage drift while public CDN still serves old cached bytes -> refuses no-op.
+    public["comments.parquet"] = storage["comments.parquet"]
+    storage["comments.parquet"] = {"etag": "replaced-in-r2", "bytes": storage["comments.parquet"]["bytes"]}
+    assert not mirror._receipt_matches(state["receipt"], "https://public.example")
+
+    # Restoring both lets compaction-only no-op pass again.
+    storage["comments.parquet"] = public["comments.parquet"]
+    assert mirror._receipt_matches(state["receipt"], "https://public.example")
+
+
+def test_declared_schema_drift_refuses_noop(publication, monkeypatch):
+    """Code/catalog schema drift raises ValueError instead of silently skipping publication."""
+    from spicy_regs.sources import regulatory_catalog
+
+    state, root = publication
+    assert mirror.publish_comments_mirror(root)
+
+    monkeypatch.setattr(iceberg, "rows_unchanged_since", _REAL_ROWS_UNCHANGED_SINCE)
+    monkeypatch.setattr(iceberg, "_connect", duckdb.connect)
+    monkeypatch.setattr(regulatory_catalog, "schema_difference", lambda con, rt: "missing ['subtype']")
+
+    with pytest.raises(ValueError, match=r"Native catalog schema differs from declared policy: missing \['subtype'\]"):
+        mirror.publish_comments_mirror(root)
+    assert state["builds"] == 1
