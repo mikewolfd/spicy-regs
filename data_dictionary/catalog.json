@@ -6906,6 +6906,34 @@
       ]
     },
     {
+      "table": "nppes_provider_observations",
+      "label": "CMS NPPES provider directory observations",
+      "summary": "Literal provider and reference sidecar observations from explicitly pinned CMS NPPES Version 2 monthly and weekly CSV members, preserving deactivation, reactivation, and exact source byte coordinates.",
+      "coverage": "Window. Explicitly pinned CMS NPPES Version 2 main and reference sidecar CSV members (or explicitly labeled excerpts). Sparse deactivated main rows disclose only NPI and deactivation date; reactivated rows retain historical deactivation date beside reactivation date; CMS continues emitting sidecar rows for deactivated NPIs so consumers must join main lifecycle state. NPI issuance does not establish licensure, credentials, Medicare participation, or affiliation, and NPI remains distinct from CMS Certification Number (CCN). See docs/nppes-providers.md.",
+      "kind": "window",
+      "measured_on": "2026-11-27",
+      "data_quality": null,
+      "columns": [
+        "npi",
+        "kind",
+        "scope",
+        "source_url",
+        "source_member",
+        "source_sha256",
+        "source_bytes",
+        "record_number",
+        "byte_offset",
+        "byte_length",
+        "entity_type_code",
+        "organization_name",
+        "last_name",
+        "first_name",
+        "deactivation_date",
+        "reactivation_date",
+        "fields_json"
+      ]
+    },
+    {
       "table": "hospital_cost_reports",
       "label": "Hospital cost reports",
       "summary": "Native CMS-2552-10 report identities, versions and fiscal periods.",

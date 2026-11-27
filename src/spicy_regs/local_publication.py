@@ -59,6 +59,7 @@ LOCAL_FAMILIES = frozenset({
     "fjc-judicial-careers",
     "irs-527",
     "irs-form990",
+    "nppes-providers",
     "sam-exclusions",
     "sam-opportunities",
     "sec-edgar",
@@ -149,6 +150,9 @@ def _family_schemas(family: str) -> dict | None:
     if family == "lobbying-quarterly-profiles":
         from spicy_regs.transforms.build_lobbying_quarterly_profiles import SCHEMA, TABLE
         return {TABLE: SCHEMA}
+    if family == "nppes-providers":
+        from spicy_regs.transforms.build_nppes_providers import SCHEMAS
+        return SCHEMAS
     if family == "sam-exclusions":
         from spicy_regs.transforms.build_sam_sources import SCHEMAS, SNAPSHOTS, TABLES
         return {key: SCHEMAS[key] for key in (TABLES["exclusions"], SNAPSHOTS["exclusions"])}

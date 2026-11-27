@@ -10657,6 +10657,32 @@ tables:
       medical_allowed_amount_usd: "Med_Mdcr_Alowd_Amt; Allowed USD including Medicare payment plus beneficiary deductible/coinsurance and third-party responsibility. Exact DECIMAL(38,12). Suppressed values remain null."
       medical_medicare_payment_usd: "Med_Mdcr_Pymt_Amt; Medicare-paid USD after deductibles and coinsurance; not the allowed amount or provider income. Exact DECIMAL(38,12). Suppressed values remain null."
       medical_standardized_payment_usd: "Med_Mdcr_Stdzd_Amt; Medicare-paid USD after geographic payment standardization; not risk adjustment or a quality score. Exact DECIMAL(38,12). Suppressed values remain null."
+  nppes_provider_observations:
+    label: CMS NPPES provider directory observations
+    subject: reference
+    identity_columns: [source_sha256, source_member, record_number]
+    summary: Literal provider and reference sidecar observations from explicitly pinned CMS NPPES Version 2 monthly and weekly CSV members, preserving deactivation, reactivation, and exact source byte coordinates.
+    coverage: Window. Explicitly pinned CMS NPPES Version 2 main and reference sidecar CSV members (or explicitly labeled excerpts). Sparse deactivated main rows disclose only NPI and deactivation date; reactivated rows retain historical deactivation date beside reactivation date; CMS continues emitting sidecar rows for deactivated NPIs so consumers must join main lifecycle state. NPI issuance does not establish licensure, credentials, Medicare participation, or affiliation, and NPI remains distinct from CMS Certification Number (CCN). See docs/nppes-providers.md.
+    measured_on: '2026-11-27'
+    grain: One literal CSV record occurrence in one digest-pinned CMS NPPES V2 member (main, othername, practice_location, or endpoint). Main rows have unique NPI per member; sidecar rows retain repeated and duplicate occurrences in source order. Always filter by kind and source_member (or join a unique main snapshot) before left-joining external tables by NPI so unmatched requests survive and sidecars never multiply payment measures.
+    columns:
+      npi: "Literal 10-digit ASCII National Provider Identifier validated under the 45 CFR 162.406 Luhn rule (RefSpec). Strictly distinct from CMS Certification Number (CCN)."
+      kind: "Pinned NPPES V2 file role: main (npidata_pfile), othername (othername_pfile), practice_location (pl_pfile), or endpoint (endpoint_pfile)."
+      scope: "Input completeness label: member for a complete CMS CSV member or excerpt for a bounded excerpt (an excerpt cannot establish absence from NPPES)."
+      source_url: "Exact CMS download.cms.gov archive URL supplying this member."
+      source_member: "Exact CSV member filename inside the CMS V2 ZIP bundle (encoding its publisher date span)."
+      source_sha256: "Exact SHA-256 content digest of the decoded CSV member bytes."
+      source_bytes: "Exact byte length of the decoded CSV member."
+      record_number: "1-based CSV record number in the original member (header is record 1; data rows start at 2)."
+      byte_offset: "0-based byte offset of this CSV record inside the decoded CSV member."
+      byte_length: "Exact byte length of this CSV record inside the decoded CSV member."
+      entity_type_code: "Literal Entity Type Code from main rows: 1 (Individual), 2 (Organization), empty string on sparse deactivated main rows, or null on sidecar rows."
+      organization_name: "Literal Provider Organization Name (Legal Business Name) from main rows; empty string when blank on main rows, null on sidecar rows."
+      last_name: "Literal Provider Last Name (Legal Name) from main rows; empty string when blank on main rows, null on sidecar rows."
+      first_name: "Literal Provider First Name from main rows; empty string when blank on main rows, null on sidecar rows."
+      deactivation_date: "Literal MM/DD/YYYY NPI Deactivation Date from main rows (retained on reactivated rows alongside reactivation_date); empty string when absent on main rows, null on sidecar rows."
+      reactivation_date: "Literal MM/DD/YYYY NPI Reactivation Date from main rows (populated together with historical deactivation_date on V2 reactivations); empty string when absent on main rows, null on sidecar rows."
+      fields_json: "Complete literal CSV row serialized as a JSON object keyed by exact V2 column headers, preserving all 330 main columns or full sidecar columns including blanks and masked SSN/ITIN/EIN sentinels."
   grants_opportunity_observations:
     label: Grants.gov opportunity and forecast observations
     subject: spending

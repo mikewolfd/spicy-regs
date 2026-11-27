@@ -1,6 +1,6 @@
 """Build an offline NPPES excerpt table and left join caller-supplied identifiers.
 
-Run with coordinated SpicyDocs and RefSpec on PYTHONPATH (see docs/tables/nppes_provider_observations.md).
+Run with coordinated SpicyDocs and RefSpec on PYTHONPATH (see docs/nppes-providers.md).
 The source pins and member identity are mandatory; this example never fetches.
 """
 
