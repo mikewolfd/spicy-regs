@@ -167,6 +167,39 @@ def financial_header_association_sql(table, source_generation_pin, *, legacy=Fal
     """
     policy_version = "fec-retained-filing-association/1" if legacy else POLICY_VERSION
     _pin(source_generation_pin)
+    key_pattern = "'urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*'"
+    if legacy:
+        basis_predicate = f"""association_basis = 'native-api-original-url'
+            AND association_status IN ('resolved_native_filing_key', 'unresolved_source_authority',
+                'unresolved_archive_member_identity', 'unresolved_redirect_identity',
+                'unresolved_no_native_url_witness', 'unresolved_target_observation_ambiguous',
+                'unresolved_target_identity_conflict')
+            AND CASE WHEN association_status = 'resolved_native_filing_key'
+                THEN source_authority = 'official-fec'
+                    AND regexp_full_match(filing_key, {key_pattern})
+                    AND referenced_filing_key = filing_key
+                ELSE filing_key IS NULL AND referenced_filing_key IS NULL END"""
+    else:
+        basis_predicate = f"""(
+                (association_basis = 'native-api-original-url'
+                    AND association_status IN ('resolved_native_filing_key', 'unresolved_source_authority',
+                        'unresolved_archive_member_identity', 'unresolved_redirect_identity',
+                        'unresolved_no_native_url_witness', 'unresolved_target_observation_ambiguous',
+                        'unresolved_target_identity_conflict')
+                    AND CASE WHEN association_status = 'resolved_native_filing_key'
+                        THEN source_authority = 'official-fec'
+                            AND regexp_full_match(filing_key, {key_pattern})
+                            AND referenced_filing_key = filing_key
+                        ELSE filing_key IS NULL AND referenced_filing_key IS NULL END)
+                OR (association_basis = 'official-archive-member-file-number'
+                    AND source_authority = 'official-fec'
+                    AND regexp_full_match(referenced_filing_key, {key_pattern})
+                    AND association_status IN ('resolved_native_filing_key', 'unresolved_target_not_retained',
+                        'unresolved_target_observation_ambiguous', 'unresolved_target_identity_conflict')
+                    AND CASE WHEN association_status = 'resolved_native_filing_key'
+                        THEN filing_key = referenced_filing_key
+                        ELSE filing_key IS NULL END)
+            )"""
     return f"""WITH h AS (
         SELECT collection_id, source_sha256, source_authority, header_record_id,
             min(header_locator_json) AS header_locator_json, count(*) AS n, min(record_id) AS association_record_id,
@@ -178,16 +211,7 @@ def financial_header_association_sql(table, source_generation_pin, *, legacy=Fal
         GROUP BY collection_id, source_sha256, source_authority, header_record_id
     ), checked AS (
         SELECT *, policy_version = {literal(policy_version)}
-            AND association_basis = 'native-api-original-url'
-            AND association_status IN ('resolved_native_filing_key', 'unresolved_source_authority',
-                'unresolved_archive_member_identity', 'unresolved_redirect_identity',
-                'unresolved_no_native_url_witness', 'unresolved_target_observation_ambiguous',
-                'unresolved_target_identity_conflict')
-            AND CASE WHEN association_status = 'resolved_native_filing_key'
-                THEN source_authority = 'official-fec'
-                    AND regexp_full_match(filing_key, 'urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*')
-                    AND referenced_filing_key = filing_key
-                ELSE filing_key IS NULL AND referenced_filing_key IS NULL END AS supported_association
+            AND {basis_predicate} AS supported_association
         FROM h
     ) SELECT t.record_id AS target_record_id, {literal(table)} AS target_table,
         t.collection_id, t.source_record_id, t.source_sha256, t.source_authority,
@@ -195,6 +219,8 @@ def financial_header_association_sql(table, source_generation_pin, *, legacy=Fal
         CASE WHEN h.n = 1 THEN h.association_record_id END AS association_record_id,
         CASE WHEN h.n = 1 THEN h.policy_version END AS header_association_policy_version,
         CASE WHEN h.n = 1 THEN h.association_status END AS header_association_status,
+        CASE WHEN h.n = 1 AND h.supported_association
+                  AND t.filing_header_locator_json = h.header_locator_json THEN h.referenced_filing_key END AS referenced_filing_key,
         CASE WHEN h.n = 1 AND h.supported_association
                   AND t.filing_header_locator_json = h.header_locator_json THEN h.filing_key END AS filing_key,
         CASE WHEN h.n IS NULL THEN 'unresolved_header_association_absent'
@@ -223,6 +249,7 @@ HEADER_ASSOCIATION_COLUMNS = {
     "association_record_id": "The single fec_filing_header_associations row applied; NULL when none or several.",
     "header_association_policy_version": "That row's own policy version; NULL when none or several.",
     "header_association_status": "That row's own association status; NULL when none or several.",
+    "referenced_filing_key": "The header row's referenced filing key (including official archive-member file numbers before retention matching), kept only when supported and locator-matched; NULL otherwise.",
     "filing_key": "The header row's resolved filing key, kept only when that single row is supported and its locator "
                   "matches the observation's; NULL otherwise.",
     "association_status": "resolved_native_filing_key, or the unresolved_* reason: header association absent or "

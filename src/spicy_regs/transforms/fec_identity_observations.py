@@ -5,6 +5,7 @@ mappings. Names stay literal; image numbers and source row IDs are never filing
 numbers. API filing references do not establish amendment replacement scope.
 """
 
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 import json
@@ -309,9 +310,18 @@ def map_registry(row, selection: CollectionSelection, mapping: RegistryMapping):
             problems["Is_Lobbyist"] = "unsupported_source_code"
         result["image_body_status"] = "deferred_pdf_link_not_opened"
     if mapping == QUALITY_NOTICE:
+        cid = result["committee_id"]
+        committee_status = _id_status(cid, "committee")
+        if committee_status == "source_id_shape":
+            id_status, scope = "source_id_shape", "source_listed_committee"
+        elif _id_status(cid, "candidate") == "source_id_shape":
+            id_status, scope = "candidate_id_shape", "source_listed_candidate"
+        else:
+            id_status, scope = committee_status, "source_listed_entity"
         result.update(
+            committee_id_status=id_status,
             notice_kind="publisher_false_fictitious_filings_list",
-            notice_scope="source_listed_committee",
+            notice_scope=scope,
             exclusion_status="no_automatic_exclusion",
         )
     if mapping.table == STATEMENTS:
@@ -460,3 +470,56 @@ def map_filing_metadata(row, selection: CollectionSelection):
         tables[LINKS].append(link)
         evidence.extend(links)
     return tables, evidence
+
+
+def resolve_filing_links(links, filings):
+    """Resolve ``fec_filing_links`` targets against retained ``fec_filings`` rows.
+
+    Matches the exact semantics of ``relationship_views.fec_typed.filing_reference_resolution``:
+    all distinct observations stay preserved (zero row multiplication), conflicting
+    or ambiguous targets refuse cleanly, and amendment direction/replacement scope
+    remains ``unknown``.
+    """
+    by_source_id: dict[str, list[dict]] = defaultdict(list)
+    by_target_key: dict[str, list[dict]] = defaultdict(list)
+    for row in filings:
+        rid = row.get("record_id")
+        if rid is not None:
+            by_source_id[rid].append(row)
+        key = row.get("filing_key")
+        if key is not None:
+            by_target_key[key].append(row)
+
+    target_status: dict[str, str] = {}
+    for key, targets in by_target_key.items():
+        if len({r.get("record_id") for r in targets}) != len(targets):
+            target_status[key] = "unresolved_target_observation_ambiguous"
+        elif (
+            len({r.get("source_authority") for r in targets if r.get("source_authority") is not None}) != 1
+            or len({r.get("source_namespace") for r in targets if r.get("source_namespace") is not None}) != 1
+            or len({r.get("report_number") for r in targets if r.get("report_number") is not None}) != 1
+            or len({r.get("native_filer_id") for r in targets if r.get("native_filer_id") is not None}) > 1
+            or len({r.get("form_type") for r in targets if r.get("form_type") is not None}) > 1
+        ):
+            target_status[key] = "unresolved_target_identity_conflict"
+        else:
+            target_status[key] = "resolved_native_filing_key"
+
+    resolved = []
+    for link in links:
+        sources = by_source_id.get(link.get("source_filing_record_id"), [])
+        target_key = link.get("target_filing_key")
+        if not sources:
+            status = "unresolved_source_observation_absent"
+        elif len(sources) != 1:
+            status = "unresolved_source_observation_ambiguous"
+        elif sources[0].get("filing_key") != link.get("filing_key"):
+            status = "unresolved_source_identity_mismatch"
+        elif target_key is None:
+            status = "unresolved_no_file_number"
+        elif target_key not in target_status:
+            status = "unresolved_target_not_retained"
+        else:
+            status = target_status[target_key]
+        resolved.append({**link, "target_resolution_status": status})
+    return resolved

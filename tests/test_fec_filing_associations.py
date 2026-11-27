@@ -374,3 +374,89 @@ def test_self_filing_target_scope_preserves_row_and_all_witnesses_without_self_d
     assert decision['filing_association_target_generation_pin'] is None
     assert decision['filing_key'] == filing_key('123')
     assert decision['filing_association_target_record_ids'] == ['metadata-1', 'second']
+
+
+@pytest.mark.parametrize(
+    ("archive_kind", "expected_url_prefix"),
+    [
+        ("electronic", "https://docquery.fec.gov/dcdev/posted/"),
+        ("paper", "https://docquery.fec.gov/paper/posted/"),
+    ],
+)
+def test_official_fec_bulk_archive_member_headers_resolve_and_propagate_to_schedules(archive_kind, expected_url_prefix):
+    from spicy_regs.transforms.fec_filing_associations import association_records
+
+    archive_url = (
+        f"https://cg-519a459a-0ea3-42c2-b7bc-fa1143481f74.s3-us-gov-west-1.amazonaws.com"
+        f"/bulk-downloads/{archive_kind}/20260609.zip"
+    )
+    member = dict(ordinal=0, name="1981955.fec")
+    loc = dict(collection_id="c", source_record_id="header", sha256=SHA, ordinal=0, member=member)
+    loc_json = json.dumps(loc, sort_keys=True, separators=(",", ":"))
+    hs = [
+        dict(
+            collection_id="c",
+            source_record_id="header",
+            source_sha256=SHA,
+            source_locator_json=loc_json,
+            metadata_json=json.dumps(dict(kind="header", format_version="8.5", fields=["HDR", "FEC", "8.5"])),
+        )
+    ]
+    scopes = {"c": dict(capture=dict(requestUrl=archive_url, responseSha256=SHA), member=member)}
+    target_filing = {**filing(number="1981955"), "fec_url": f"{expected_url_prefix}1981955.fec"}
+
+    # Resolved against retained fec_filings witness
+    resolved = headers(hs, scopes, filings=[target_filing])
+    assert resolved[0]["association_basis"] == "official-archive-member-file-number"
+    assert resolved[0]["association_status"] == "resolved_native_filing_key"
+    assert resolved[0]["filing_key"] == filing_key("1981955")
+    assert resolved[0]["referenced_filing_key"] == filing_key("1981955")
+    assert resolved[0]["report_number_raw"] == "1981955"
+    assert typed_batch(resolved, ASSOCIATION_SCHEMA).to_pylist() == resolved
+
+    # Propagates through financial_header_association_sql and association_records
+    sched_row = financial(
+        source_namespace=f"fec-{archive_kind}-filing-schedule",
+        filing_header_record_id="header",
+        filing_header_locator_json=loc_json,
+    )
+    with duckdb.connect() as db:
+        db.register("fec_receipts", pa.Table.from_pylist([sched_row]))
+        db.register("fec_filing_header_associations", pa.Table.from_pylist(resolved, schema=ASSOCIATION_SCHEMA))
+        (view_row,) = db.sql(financial_header_association_sql("fec_receipts", GEN)).to_arrow_table().to_pylist()
+    assert view_row["association_status"] == "resolved_native_filing_key"
+    assert view_row["filing_key"] == filing_key("1981955")
+    assert view_row["referenced_filing_key"] == filing_key("1981955")
+
+    ((out_row, decision),) = list(
+        association_records(
+            [sched_row],
+            table="fec_receipts",
+            schema=pa.Table.from_pylist([sched_row]).schema,
+            filings=[target_filing],
+            headers=resolved,
+            source_generation_pin=GEN,
+            target_generation_pin=None,
+            target_generation_scope="self",
+            namespace_evidence={},
+            check_resources=lambda: None,
+        )
+    )
+    assert out_row == sched_row
+    assert decision["filing_key"] == filing_key("1981955")
+    assert decision["filing_association_referenced_key"] == filing_key("1981955")
+    assert decision["filing_association_status"] == "resolved_native_filing_key"
+
+    # Unretained filing keeps referenced_filing_key with unresolved_target_not_retained
+    unretained = headers(hs, scopes, filings=[])
+    assert unretained[0]["association_basis"] == "official-archive-member-file-number"
+    assert unretained[0]["association_status"] == "unresolved_target_not_retained"
+    assert unretained[0]["filing_key"] is None
+    assert unretained[0]["referenced_filing_key"] == filing_key("1981955")
+
+    # Mismatched fec_url (e.g. electronic vs paper path conflict) refuses cleanly
+    conflict = headers(
+        hs, scopes, filings=[{**target_filing, "fec_url": "https://docquery.fec.gov/other/posted/1981955.fec"}]
+    )
+    assert conflict[0]["association_status"] == "unresolved_target_identity_conflict"
+    assert conflict[0]["filing_key"] is None

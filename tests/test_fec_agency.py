@@ -261,6 +261,32 @@ def test_oversight_recommendation_grain_money_and_pdf_metadata():
     assert result.tables["fec_agency_reports"][0]["publication_date"] == date(2026, 7, 27)
 
 
+def test_oversight_safelinks_unwraps_single_decoded_target_and_retains_wrapper_provenance():
+    rows = oversight_rows()
+    wrapper = (
+        "https://gcc02.safelinks.protection.outlook.com/?url="
+        "https%3A%2F%2Fwww.fec.gov%2Fabout%2Freports-about-fec%2Foig-reports%2Freport.pdf&data=05"
+    )
+    target = "https://www.fec.gov/about/reports-about-fec/oig-reports/report.pdf"
+    n = json.loads(rows[-1]["metadata_json"])
+    n["asset"]["url"] = wrapper
+    n["asset"]["decoded_wrapper_targets"] = [target]
+    n["asset"]["source_position"] = {"line": 42, "column": 8}
+    rows[-1]["metadata_json"] = json.dumps(n)
+    result = map_rows(rows)
+    doc = result.tables["fec_agency_report_documents"][0]
+    assert doc["url"] == target
+    assert doc["body_status"] == "deferred_pdf"
+    assert json.loads(doc["native_location_json"]) == {"line": 42, "column": 8, "wrapper_url": wrapper}
+
+    # Ambiguous multiple targets stay wrapped without guessing.
+    n["asset"]["decoded_wrapper_targets"] = [target, "https://www.fec.gov/other"]
+    rows[-1]["metadata_json"] = json.dumps(n)
+    ambiguous = map_rows(rows).tables["fec_agency_report_documents"][0]
+    assert ambiguous["url"] == wrapper
+    assert ambiguous["body_status"] == "linked_body_not_qualified"
+
+
 def test_recommendation_status_requires_matching_explicit_scope():
     result = map_rows(oversight_rows(heading="This report has 2 open recommendations. "))
     assert result.tables["fec_oversight_recommendations"][0]["reported_status"] is None
@@ -328,6 +354,64 @@ def test_word_runs_reconstruct_paragraphs_and_never_become_metrics():
         )["disposition"]
         == "structural_nondata"
     )
+
+
+def test_word_tables_preserve_row_and_cell_boundaries_without_fabricating_metrics():
+    elements = [
+        element(WORD + "document"),
+        element(WORD + "body", 0),
+        element(WORD + "p", 1),
+        element(WORD + "r", 2),
+        element(WORD + "t", 3, "Fiscal Year 2009"),
+        element(WORD + "tbl", 1),
+        element(WORD + "tr", 5),
+        element(WORD + "tc", 6),
+        element(WORD + "p", 7),
+        element(WORD + "r", 8),
+        element(WORD + "t", 9, "Component"),
+        element(WORD + "tc", 6),
+        element(WORD + "p", 11),
+        element(WORD + "r", 12),
+        element(WORD + "t", 13, "Received"),
+        element(WORD + "tr", 5),
+        element(WORD + "tc", 15),
+        element(WORD + "p", 16),
+        element(WORD + "r", 17),
+        element(WORD + "t", 18, "AGENCY OVERALL"),
+        element(WORD + "tc", 15),
+        element(WORD + "p", 20),
+        element(WORD + "r", 21),
+        element(WORD + "t", 22, "76"),
+    ]
+    native: list[dict[str, object]] = [
+        dict(kind="word-report", report=dict(metadata=dict(representation="word-flat-opc"), source=dict(sha256=DIGEST)))
+    ]
+    native += [dict(kind="word-element", ordinal_in_report=i, element=e) for i, e in enumerate(elements)]
+    native += [
+        dict(
+            kind="word-body",
+            ordinal_in_report=i,
+            body=dict(element=ix, text=elements[ix]["text"], tag=elements[ix]["tag"]),
+        )
+        for i, ix in enumerate([4, 10, 14, 19, 23])
+    ]
+    rows = [row(n, i) for i, n in enumerate(native)]
+    result = map_rows(rows)
+    assert map_rows(list(reversed(rows))) == result
+    texts = result.tables["fec_agency_report_text"]
+    assert [(r["text_kind"], r["text"]) for r in texts] == [
+        ("word_paragraph", "Fiscal Year 2009"),
+        ("word_table_row", "Component | Received"),
+        ("word_table_row", "AGENCY OVERALL | 76"),
+    ]
+    assert not result.tables["fec_report_metrics"]
+    assert result.tables["fec_agency_reports"][0]["body_status"] == (
+        "native_word_paragraphs_and_table_rows_metrics_unqualified"
+    )
+    dispositions = {d["source_record_id"]: d["disposition"] for d in result.tables["fec_agency_mapping_dispositions"]}
+    assert dispositions[rows[6]["source_record_id"]] == "table_context"  # <w:tbl>
+    assert dispositions[rows[7]["source_record_id"]] == "mapped"  # first <w:tr>
+    assert dispositions[rows[8]["source_record_id"]] == "table_context"  # first <w:tc>
 
 
 def test_evidence_resolves_source_records_and_is_deterministic():

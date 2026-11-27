@@ -243,6 +243,12 @@ def map_summary(row, selection: CollectionSelection, mapping: SummaryMapping):
     return result, record_evidence(table, result["record_id"], row, selection.source_generation_pin)
 
 
+ROLLUP_PSEUDO_CANDIDATES = {
+    "P00000001": "all_candidates",
+    "P00000002": "democrats",
+    "P00000003": "republicans",
+}
+
 AGGREGATE_SCHEMA = pa.schema(
     [
         (n, pa.string())
@@ -251,7 +257,7 @@ AGGREGATE_SCHEMA = pa.schema(
             "source_sha256 source_locator_json source_authority selection_evidence_sha256 source_representation_role "
             "correction_operation correction_applicability_status current_record_status filing_key filing_link_status "
             "aggregate_type candidate_native_id candidate_name entity_reference_status currency amount_raw amount_status "
-            "dimensions_json source_namespace reported_count_status period_basis"
+            "dimensions_json source_namespace reported_count_status period_basis observation_grain"
         ).split()
     ]
     + [("source_cycle", pa.int32()), ("amount", AMOUNT_TYPE), ("reported_count", pa.int64())]
@@ -271,11 +277,25 @@ def map_contribution_aggregate(row, selection: CollectionSelection, *, kind):
     if any(native[k] is not None and not isinstance(native[k], str) for k in expected):
         raise ValueError("Contribution aggregate fields must remain text or source null")
     amount, status = exact_amount(native["CONTRIB_RECEIPT_AMOUNT"])
+    raw_candidate_id = native["CANDIDATE_ID"]
+    rollup_group = ROLLUP_PSEUDO_CANDIDATES.get(raw_candidate_id)
+    reason: dict[str, object] = dict(uninterpreted_native_fields=sorted(native.keys() - expected))
+    if rollup_group is not None:
+        candidate_native_id = None
+        entity_reference_status = "rollup_pseudo_candidate"
+        observation_grain = "rollup-pseudo-candidate-aggregate"
+        reason["rollup_pseudo_candidate_id"] = raw_candidate_id
+        reason["rollup_group"] = rollup_group
+    else:
+        candidate_native_id = raw_candidate_id
+        entity_reference_status = "source_identifier_unresolved"
+        observation_grain = "candidate-aggregate"
     result.update(
         aggregate_type=kind,
-        candidate_native_id=native["CANDIDATE_ID"],
+        candidate_native_id=candidate_native_id,
         candidate_name=native["CANDIDATE_NAME"],
-        entity_reference_status="source_identifier_unresolved",
+        entity_reference_status=entity_reference_status,
+        observation_grain=observation_grain,
         currency="USD",
         amount=amount,
         amount_raw=native["CONTRIB_RECEIPT_AMOUNT"],
@@ -286,6 +306,6 @@ def map_contribution_aggregate(row, selection: CollectionSelection, *, kind):
         reported_count_status="not_reported",
         period_basis="selected-source-cycle",
         mapping_status="mapped" if status in {"exact", "source_null", "source_empty"} else "partial",
-        mapping_reason_json=_json(dict(uninterpreted_native_fields=sorted(native.keys() - expected))),
+        mapping_reason_json=_json(reason),
     )
     return result, record_evidence(table, result["record_id"], row, selection.source_generation_pin)

@@ -176,3 +176,188 @@ def test_inclusion_view_refuses_unknown_semantics_and_exposes_the_observed_versi
     assert row["policy_version"] == policies[0]["policy_version"]
     assert row["selected_collection_id"] is None
     assert row["current_record_status"] == "unqualified"
+
+
+def test_cross_source_deduplication_covers_api_cm24_weball_and_foia_without_dropping_occurrences():
+    import io
+    import zipfile
+    from spicy_regs.relationship_views.fec_typed import cross_source_collection_inclusion, deduplicated_subject_sql
+    from spicy_regs.transforms.fec_bulk_selection import (
+        API_DEDUP_PURPOSE,
+        ARCHIVE_INNER_DEDUP_PURPOSE,
+        FOIA_EDITION_DEDUP_PURPOSE,
+        WEBALL_WEBL_DEDUP_PURPOSE,
+        build_archive_inner_member_proof,
+        build_foia_dual_edition_proof,
+        build_weball_webl_subset_proof,
+        cross_source_collection_selection,
+    )
+
+    api_sha = "sha256:" + "1" * 64
+    weball_sha = "sha256:" + "2" * 64
+    webl_sha = "sha256:" + "3" * 64
+    foia_fec_sha = "sha256:" + "4" * 64
+    foia_gov_sha = "sha256:" + "5" * 64
+
+    def make_zip(content: bytes, comment: bytes) -> tuple[bytes, str]:
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.comment = comment
+            zf.writestr("cm.txt", content)
+        raw = buf.getvalue()
+        return raw, "sha256:" + hashlib.sha256(raw).hexdigest()
+
+    cm_payload = b"C00000001|FIRST COMMITTEE\nC00000002|SECOND COMMITTEE\n"
+    zip1, cm1_sha = make_zip(cm_payload, b"bulk-cm24")
+    zip2, cm2_sha = make_zip(cm_payload, b"retained-cm24")
+    assert cm1_sha != cm2_sha
+
+    collections = [
+        dict(
+            collection_id="filings-f13-selected",
+            profile="filing",
+            record_count=31,
+            scope=dict(captures=[dict(responseSha256=api_sha, requestUrl="https://api.open.fec.gov/v1/filings/")]),
+        ),
+        dict(
+            collection_id="retained-api-003bf112d9dfbfa667ff",
+            profile="document",
+            record_count=34,
+            scope=dict(capture=dict(responseSha256=api_sha, requestUrl="https://api.open.fec.gov/v1/filings/")),
+        ),
+        dict(
+            collection_id="bulk-cm24-zip",
+            profile="positional",
+            record_count=2,
+            scope=dict(
+                capture=dict(responseSha256=cm1_sha),
+                member=dict(ordinal=0, name="cm.txt"),
+                format="delimited",
+                delimiter="|",
+                quoting="literal",
+                encoding="utf-8",
+            ),
+        ),
+        dict(
+            collection_id="retained-committee-master-2024-0131eb48",
+            profile="positional",
+            record_count=2,
+            scope=dict(
+                capture=dict(responseSha256=cm2_sha),
+                member=dict(ordinal=0, name="cm.txt"),
+                format="delimited",
+                delimiter="|",
+                quoting="literal",
+                encoding="utf-8",
+            ),
+        ),
+        dict(
+            collection_id="bulk-weball24-zip",
+            profile="positional",
+            record_count=2,
+            scope=dict(capture=dict(responseSha256=weball_sha), member=dict(ordinal=0, name="weball24.txt")),
+        ),
+        dict(
+            collection_id="bulk-webl24-zip",
+            profile="positional",
+            record_count=1,
+            scope=dict(capture=dict(responseSha256=webl_sha), member=dict(ordinal=0, name="webl24.txt")),
+        ),
+        dict(
+            collection_id="agency-foia-92157276f61a251a",
+            profile="agency",
+            record_count=10,
+            scope=dict(capture=dict(responseSha256=foia_fec_sha)),
+        ),
+        dict(
+            collection_id="agency-foia-archive-971d4a41312c0718",
+            profile="agency",
+            record_count=10,
+            scope=dict(capture=dict(responseSha256=foia_gov_sha), member=dict(ordinal=0, name="fec-2025.xml")),
+        ),
+    ]
+    cm_proof = build_archive_inner_member_proof(
+        {"bulk-cm24-zip": (cm1_sha, zip1), "retained-committee-master-2024-0131eb48": (cm2_sha, zip2)},
+        member_name="cm.txt",
+        selected_collection_id="bulk-cm24-zip",
+        source_generation_pin=GEN,
+    )
+    shared_row = dict(
+        source_cycle=2024,
+        candidate_native_id="H4MI05180",
+        candidate_name="CAND A",
+        period_end=None,
+        measures=[dict(native_field="TTL_RECEIPTS", value="100", raw_value="100", value_status="exact", unit="USD")],
+        attributes_json="{}",
+    )
+    extra_row = {**shared_row, "candidate_native_id": "P80001571", "candidate_name": "PRES B"}
+    web_proof = build_weball_webl_subset_proof(
+        [
+            dict(
+                superset_collection_id="bulk-weball24-zip",
+                superset_sha256=weball_sha,
+                superset_rows=[shared_row, extra_row],
+                subset_collection_id="bulk-webl24-zip",
+                subset_sha256=webl_sha,
+                subset_rows=[shared_row],
+            )
+        ],
+        source_generation_pin=GEN,
+    )
+    metric = dict(
+        native_field="ProcessingStatisticsReceivedQuantity",
+        metric_definition_id="def-1",
+        fiscal_year=2025,
+        raw_value="306",
+        value="306",
+        value_status="exact",
+        value_operator="=",
+        bound_value=None,
+        unit="count",
+    )
+    foia_proof = build_foia_dual_edition_proof(
+        [
+            dict(collection_id="agency-foia-92157276f61a251a", source_sha256=foia_fec_sha, metrics=[metric]),
+            dict(collection_id="agency-foia-archive-971d4a41312c0718", source_sha256=foia_gov_sha, metrics=[metric]),
+        ],
+        selected_collection_id="agency-foia-92157276f61a251a",
+        source_generation_pin=GEN,
+    )
+
+    selection_rows = cross_source_collection_selection(
+        collections,
+        source_generation_pin=GEN,
+        archive_inner_proofs=[cm_proof],
+        weball_webl_proofs=[web_proof],
+        foia_edition_proofs=[foia_proof],
+    )
+    assert pa.Table.from_pylist(selection_rows, schema=SELECTION_SCHEMA).to_pylist() == selection_rows
+    by_cid = {r["collection_id"]: (r["purpose"], r["selection_status"], r["selected_collection_id"]) for r in selection_rows}
+    assert by_cid == {
+        "filings-f13-selected": (API_DEDUP_PURPOSE, "included", "filings-f13-selected"),
+        "retained-api-003bf112d9dfbfa667ff": (API_DEDUP_PURPOSE, "duplicate", "filings-f13-selected"),
+        "bulk-cm24-zip": (ARCHIVE_INNER_DEDUP_PURPOSE, "included", "bulk-cm24-zip"),
+        "retained-committee-master-2024-0131eb48": (ARCHIVE_INNER_DEDUP_PURPOSE, "duplicate", "bulk-cm24-zip"),
+        "bulk-weball24-zip": (WEBALL_WEBL_DEDUP_PURPOSE, "included", "bulk-weball24-zip"),
+        "bulk-webl24-zip": (WEBALL_WEBL_DEDUP_PURPOSE, "duplicate", "bulk-weball24-zip"),
+        "agency-foia-92157276f61a251a": (FOIA_EDITION_DEDUP_PURPOSE, "included", "agency-foia-92157276f61a251a"),
+        "agency-foia-archive-971d4a41312c0718": (FOIA_EDITION_DEDUP_PURPOSE, "duplicate", "agency-foia-92157276f61a251a"),
+    }
+
+    # Query consumer keeps every occurrence in base table and deduplicates cleanly in view
+    filings = [
+        dict(record_id="f-domain", collection_id="filings-f13-selected", source_sha256=api_sha, filing_key="k1"),
+        dict(record_id="f-dup", collection_id="retained-api-003bf112d9dfbfa667ff", source_sha256=api_sha, filing_key="k1"),
+        dict(record_id="f-unique", collection_id="other-filings", source_sha256=PIN, filing_key="k2"),
+    ]
+    with duckdb.connect() as db:
+        db.register("fec_filings", pa.Table.from_pylist(filings))
+        db.register("fec_collection_selection", pa.Table.from_pylist(selection_rows, schema=SELECTION_SCHEMA))
+        inc = db.sql(cross_source_collection_inclusion("fec_filings", GEN)).to_arrow_table().to_pylist()
+        assert {r["target_record_id"]: r["selection_status"] for r in inc} == {
+            "f-domain": "included",
+            "f-dup": "duplicate",
+            "f-unique": "single_representation",
+        }
+        dedup = db.sql(deduplicated_subject_sql("fec_filings", GEN)).to_arrow_table().to_pylist()
+        assert [r["record_id"] for r in dedup] == ["f-domain", "f-unique"]

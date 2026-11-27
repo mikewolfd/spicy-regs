@@ -580,7 +580,23 @@ def _oversight(mapper):
                 )
         elif kind == "oversight-asset":
             asset = native["asset"]
-            url = asset.get("url")
+            raw_url = asset.get("url")
+            targets = [
+                target
+                for target in (asset.get("decoded_wrapper_targets") or [])
+                if isinstance(target, str) and urlsplit(target).scheme in {"http", "https"} and urlsplit(target).netloc
+            ]
+            source_position = asset.get("source_position")
+            if len(targets) == 1 and raw_url and targets[0] != raw_url:
+                url = targets[0]
+                location: object = (
+                    {**source_position, "wrapper_url": raw_url}
+                    if isinstance(source_position, dict)
+                    else {"wrapper_url": raw_url}
+                )
+            else:
+                url = raw_url
+                location = source_position
             mapper.emit(
                 "fec_agency_report_documents",
                 row,
@@ -592,7 +608,7 @@ def _oversight(mapper):
                     body_status="deferred_pdf"
                     if url and urlsplit(url).path.lower().endswith(".pdf")
                     else "linked_body_not_qualified",
-                    native_location_json=_json(asset.get("source_position")),
+                    native_location_json=_json(location),
                 ),
             )
 
@@ -662,7 +678,11 @@ def _recommendations(mapper, row, body, report):
 
 def _word(mapper):
     nodes, children = _tree(mapper, "word-element")
-    paragraphs = defaultdict(list)
+    paragraphs: dict[int, list[tuple[int, str, dict]]] = defaultdict(list)
+    table_runs: dict[int, dict[int, dict[int, list[tuple[int, str, dict]]]]] = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(list))
+    )
+    row_tables: dict[int, int] = {}
     for row in mapper.rows:
         n = mapper.native[row["source_record_id"]]
         if n["kind"] in {"word-element", "word-part"}:
@@ -679,11 +699,67 @@ def _word(mapper):
         is_run = nodes[ix][0]["parent"] is not None and nodes[nodes[ix][0]["parent"]][0]["tag"] == WORD + "r"
         if paragraph is not None and is_run and body["tag"] in {WORD + "t", WORD + "tab", WORD + "br"}:
             text = body.get("text") if body["tag"] == WORD + "t" else "\t" if body["tag"] == WORD + "tab" else "\n"
-            paragraphs[paragraph].append((ix, text or "", row))
+            cell = next((i for i in reversed(path) if nodes[i][0]["tag"] == WORD + "tc"), None)
+            table_row = next((i for i in reversed(path) if nodes[i][0]["tag"] == WORD + "tr"), None)
+            table = next((i for i in reversed(path) if nodes[i][0]["tag"] == WORD + "tbl"), None)
+            if cell is not None and table_row is not None and table is not None:
+                table_runs[table_row][cell][paragraph].append((ix, text or "", row))
+                row_tables[table_row] = table
+            else:
+                paragraphs[paragraph].append((ix, text or "", row))
         else:
             mapper.dispose(row, "structural_nondata", "Formatting token is not report text or a metric")
-    ordered = [(i, sorted(runs)) for i, runs in sorted(paragraphs.items())]
-    text_values = ["".join(r[1] for r in runs) for _, runs in ordered]
+
+    def row_cells(tr_ix: int) -> list[int]:
+        """All cells belonging directly to this table row, in document order."""
+        cells: list[int] = []
+        stack = list(reversed(children.get(tr_ix, ())))
+        while stack:
+            cur = stack.pop()
+            tag = nodes[cur][0]["tag"]
+            if tag == WORD + "tc":
+                cells.append(cur)
+            elif tag != WORD + "tbl":
+                stack.extend(reversed(children.get(cur, ())))
+        return sorted(cells)
+
+    items: list[tuple[int, str, str, list[tuple[int, str, dict]], dict]] = []
+    for p_ix, runs in sorted(paragraphs.items()):
+        ordered_runs = sorted(runs, key=lambda r: (r[0], r[2]["source_record_id"]))
+        text = "".join(r[1] for r in ordered_runs)
+        items.append((p_ix, "word_paragraph", text, ordered_runs, dict(element=p_ix)))
+    for tr_ix, by_cell in sorted(table_runs.items()):
+        cells = row_cells(tr_ix)
+        cell_texts: list[str] = []
+        all_runs: list[tuple[int, str, dict]] = []
+        cell_paragraphs: list[int] = []
+        for tc_ix in cells:
+            by_para = by_cell.get(tc_ix, {})
+            parts = []
+            for p_ix in sorted(by_para):
+                ordered_runs = sorted(by_para[p_ix], key=lambda r: (r[0], r[2]["source_record_id"]))
+                parts.append("".join(r[1] for r in ordered_runs))
+                all_runs.extend(ordered_runs)
+                cell_paragraphs.append(p_ix)
+            cell_texts.append("\n".join(parts))
+        all_runs.sort(key=lambda r: (r[0], r[2]["source_record_id"]))
+        items.append(
+            (
+                tr_ix,
+                "word_table_row",
+                " | ".join(cell_texts),
+                all_runs,
+                dict(
+                    element=tr_ix,
+                    table_element=row_tables[tr_ix],
+                    cell_elements=cells,
+                    paragraph_elements=cell_paragraphs,
+                ),
+            )
+        )
+    items.sort(key=lambda item: item[0])
+
+    text_values = [item[2] for item in items]
     fiscal = [match[1] for text in text_values if (match := re.fullmatch(r"Fiscal Year ([12][0-9]{3})", text.strip()))]
     raw_year = fiscal[0] if len(set(fiscal)) == 1 else None
     year = _year(raw_year)
@@ -692,7 +768,7 @@ def _word(mapper):
     title = explicit_title or next((t for t in text_values if t.strip()), None)
     heading_rows = [
         r[2]
-        for (_, runs), text in zip(ordered, text_values, strict=True)
+        for _, _, text, runs, _ in items
         if text == title or re.fullmatch(r"Fiscal Year ([12][0-9]{3})", text.strip())
         for r in runs
     ]
@@ -706,28 +782,44 @@ def _word(mapper):
         period_start=start,
         period_end=end,
         period_basis="explicit_fiscal_year_paragraph" if year else "not_stated",
-        body_status="native_word_paragraphs_metrics_unqualified",
+        body_status=(
+            "native_word_paragraphs_and_table_rows_metrics_unqualified"
+            if table_runs
+            else "native_word_paragraphs_metrics_unqualified"
+        ),
     )
-    for (ix, runs), text in zip(ordered, text_values, strict=True):
-        paragraph, anchor = nodes[ix]
+    for ix, text_kind, text, runs, meta in items:
+        element, anchor = nodes[ix]
+        location = dict(element=ix, child_indices=element["child_indices"])
+        if text_kind == "word_table_row":
+            location["table_element"] = meta["table_element"]
+            location["cell_count"] = len(meta["cell_elements"])
         result = mapper.emit(
             "fec_agency_report_text",
             anchor,
             dict(
                 report_id=mapper.report_id,
-                text_kind="word_paragraph",
+                text_kind=text_kind,
                 text=text,
-                native_location_json=_json(dict(element=ix, child_indices=paragraph["child_indices"])),
+                native_location_json=_json(location),
             ),
             context=[r[2] for r in runs],
         )
+        run_reason = (
+            "Native run supplies report table row text; metric interpretation unqualified"
+            if text_kind == "word_table_row"
+            else "Native run supplies report paragraph text; metric interpretation unqualified"
+        )
         for _, _, witness in runs:
-            mapper.dispose(
-                witness,
-                "mapped",
-                "Native run supplies report paragraph text; metric interpretation unqualified",
-                result["record_id"],
-            )
+            mapper.dispose(witness, "mapped", run_reason, result["record_id"])
+        if text_kind == "word_table_row":
+            for ctx_ix in (meta["table_element"], *meta["cell_elements"], *meta["paragraph_elements"]):
+                mapper.dispose(
+                    nodes[ctx_ix][1],
+                    "table_context",
+                    "Word table structure provides tabular row/cell boundaries for report text",
+                    result["record_id"],
+                )
 
 
 def map_agency_collection(rows, selection: AgencySelection):

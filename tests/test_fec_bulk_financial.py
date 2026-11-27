@@ -238,10 +238,17 @@ def test_oppexp_labels_known_positions_and_retains_extra_empty_position():
     assert row["transaction_date"] == date(2025, 3, 28)
     assert row["back_reference_transaction_id"] == "" and row["source_record_identifier"] == "4042220251186031739"
     assert json.loads(row["mapping_reason_json"])["unlabelled_positions"] == {"25": ""}
-    assert row["mapping_status"] == "partial"
+    assert row["mapping_status"] == "mapped"
     assert evidence[1]["collection_id"] == "header" and evidence[1]["witness_sha256"] == header["source_sha256"]
     raw, header = oppexp_inputs([])
     assert operating_expense(raw, SELECTION, header)[0]["mapping_status"] == "mapped"
+    bad_raw, header = oppexp_inputs([""])
+    bad_native = json.loads(bad_raw["metadata_json"])
+    bad_native["fields"][13] = "not-a-number"
+    bad_raw["metadata_json"] = json.dumps(bad_native)
+    bad_row, _ = operating_expense(bad_raw, SELECTION, header)
+    assert bad_row["mapping_status"] == "partial"
+    assert json.loads(bad_row["mapping_reason_json"])["field_refusals"] == {"amount": "unsupported_spelling"}
 
 
 @pytest.mark.parametrize("tail", [["unexpected"], ["", ""]])

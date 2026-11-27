@@ -452,7 +452,17 @@ def map_legal(row, selection: CollectionSelection):
         ),
     )
 
-    def party(obj, pointer, role=None, name_key="name", id_key="entity_id", namespace=None, document=None):
+    def party(
+        obj,
+        pointer,
+        role=None,
+        name_key="name",
+        id_key="entity_id",
+        namespace=None,
+        document=None,
+        *,
+        entity_type=None,
+    ):
         add(
             PARTIES,
             pointer,
@@ -464,7 +474,7 @@ def map_legal(row, selection: CollectionSelection):
                 native_entity_id=_scalar(obj.get(id_key)),
                 native_entity_id_status=_state(obj, id_key),
                 entity_namespace=namespace,
-                entity_type=_scalar(obj.get("type")),
+                entity_type=_scalar(obj.get("type")) if entity_type is None else entity_type,
                 identity_resolution_status="native_id_unresolved" if obj.get(id_key) else "source_name_only",
                 document_record_id=document,
             ),
@@ -496,6 +506,7 @@ def map_legal(row, selection: CollectionSelection):
             "committee_name" if native_type == "audit" else "name",
             "committee_id",
             "fec-committee-id",
+            entity_type="committee",
         )
     if native_type == "audit" and native.get("candidate_id"):
         party(
@@ -505,6 +516,7 @@ def map_legal(row, selection: CollectionSelection):
             "candidate_name",
             "candidate_id",
             "fec-candidate-id",
+            entity_type="candidate",
         )
 
     def event(obj, pointer, event_type, date_key, description_key="description", amount_key="amount", document=None):
@@ -550,7 +562,7 @@ def map_legal(row, selection: CollectionSelection):
         "calculated_comment_close_date",
         "far_release_date",
     ):
-        if field in native:
+        if native.get(field) not in (None, ""):
             event(native, base_pointer + "/" + field, field.removesuffix("_date"), field)
     for field in ("fr_publication_dates", "hearing_dates", "vote_dates"):
         for i, value in enumerate(_list(native, field)):
@@ -668,6 +680,35 @@ def map_legal(row, selection: CollectionSelection):
                 ),
             )
     return tables, evidence
+
+
+def sanitize_redacted_mur_url(url: str) -> tuple[str, bool]:
+    """Strip ONLY exact literal ``api_key=<redacted>`` before official URL validation.
+
+    Keeps ``spicy_docs.sources.fec.catalog.official_url``'s credential refusal
+    strictly intact: any real or non-``<redacted>`` ``api_key`` value, or any
+    other credential parameter/userinfo/non-official host, still raises ``ValueError``.
+    Returns ``(sanitized_url, stripped)``.
+    """
+    from urllib.parse import parse_qsl, urlencode, urlunsplit
+    from spicy_docs.sources.fec.catalog import official_url
+
+    if not isinstance(url, str) or not url:
+        raise ValueError("Retained legal URL must be a nonempty string")
+    parsed = urlsplit(url)
+    pairs = parse_qsl(parsed.query, keep_blank_values=True)
+    kept = []
+    stripped = False
+    for key, value in pairs:
+        if key.lower() == "api_key":
+            if value != "<redacted>":
+                raise ValueError("Refusing credential-bearing URL; only literal api_key=<redacted> may be stripped")
+            stripped = True
+        else:
+            kept.append((key, value))
+    sanitized = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(kept, doseq=True), parsed.fragment))
+    official_url(sanitized)
+    return sanitized, stripped
 
 
 def legal_selection_digest(collection):

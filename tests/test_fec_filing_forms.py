@@ -343,10 +343,24 @@ def test_narrative_body_and_field_pointers_preserve_text_and_unresolved_identity
     assert fragment["field_position"] == position
     assert fragment["source_pointer"] == "/embedded_bodies/0"
     assert json.loads(fragment["body_reference_json"])["field_index"] == position
+    assert result["mapping_status"] == "mapped"
+    reasons = json.loads(result["mapping_reason_json"])
+    assert reasons["body_positions"] == [] and reasons["resolved_body_positions"] == [position]
     assert "native_fields" not in result
     assert result["filing_key"] is None and result["current_record_status"] == "unqualified"
     assert not {"currency", "amount_kind", "value_mapping_version", "correction_operation"} & result.keys()
     assert [e["role"] for e in evidence] == ["primary", "filing_header"]
+
+
+def test_narrative_with_extra_position_stays_partial_even_after_body_resolution():
+    native = text_record("8.5", body=True)
+    native["fields"]["6"] = "extra-column"
+    native["field_count"] = 7
+    result, _ = narrative(native, version="8.5")
+    assert result["mapping_status"] == "partial"
+    reasons = json.loads(result["mapping_reason_json"])
+    assert reasons["body_positions"] == [] and reasons["resolved_body_positions"] == [5]
+    assert reasons["extra_positions"] == {"6": "extra-column"}
 
 
 def test_standalone_narrative_has_no_invented_dictionary_or_financial_interpretation():
