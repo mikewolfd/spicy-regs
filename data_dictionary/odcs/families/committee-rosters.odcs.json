@@ -1215,12 +1215,12 @@
     {
       "vendor": "spicy-regs",
       "property": "tableMetadataSha256",
-      "value": "fec8c91d6d23614bb73b62edd28066d37c56d8ed860c2965e1398a1550f8a12d"
+      "value": "fcc4ca53889332fb8f93b427476162b00da95ba1b21cf114a3cdb46d11ec7a69"
     },
     {
       "vendor": "spicy-regs",
       "property": "tableJoinsSha256",
-      "value": "8ec6cda0366dbadfc80a6e3a9162162953d3a24d38a5a44f91eba7bbe6c24507"
+      "value": "95e668cfb9c0cc797c1f1090bb27417a171129a6abbebac00b211b7328e76297"
     }
   ]
 }
