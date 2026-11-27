@@ -162,7 +162,7 @@ def _unresolved_items(paths: dict[str, Path]) -> list[tuple]:
 # --------------------------------------------------------------------------- #
 def test_the_host_orders_a_dateless_enrolled_printing_as_the_provider_does():
     status = _status(HR983)
-    assert {version.type: version.date for version in status.text_versions}["Enrolled Bill"] == "", (
+    assert {version.type: version.date for version in status.text_versions}["Enrolled Bill"] is None, (
         "the fixture's own claim: BILLSTATUS states <date/> for the enrolled bill"
     )
     codes = [printing_version_code(version) for version in build._ordered_printings(status)]

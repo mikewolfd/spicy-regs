@@ -375,7 +375,8 @@ def test_literal_rin_and_placeholders_are_not_rewritten(tmp_path):
     assert pq.read_table(tmp_path / "dockets.parquet").to_pylist()[0]["rin"] == "0970-AC47"
     value["data"]["attributes"]["rin"] = "Not Assigned"
     repair_records([value], table="dockets", output_dir=tmp_path)
-    assert pq.read_table(tmp_path / "dockets.parquet").to_pylist()[0]["rin"] == "Not Assigned"
+    # spicy-docs 0.85.0+readers.20261127.2 (ss-eyhu) normalizes placeholder RINs to None in DOCKET.extract.
+    assert pq.read_table(tmp_path / "dockets.parquet").to_pylist()[0]["rin"] is None
 
 
 @pytest.mark.parametrize(
