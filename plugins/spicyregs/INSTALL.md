@@ -28,8 +28,8 @@ notes under `references/` into every Claude Code session.
 # Local stdio — no deploy needed:
 claude mcp add spicy-regs -- uvx --from "spicy-regs @ git+https://github.com/civictechdc/spicy-regs" spicy-regs-mcp
 
-# Or remote HTTP (after deploying mcp-server/ to Vercel):
-claude mcp add --transport http spicy-regs https://<your-vercel-deploy>.vercel.app/mcp
+# Or public remote HTTP (no deploy needed):
+claude mcp add --transport http spicygov https://mcp.spicygov.ai/mcp
 ```
 
 You get `list_sources`, `describe_table`, and `query_sql` either way. The
@@ -42,13 +42,13 @@ Requires Pro, Max, Team, or Enterprise (custom connectors aren't available on
 free plans).
 
 1. Open **Settings → Connectors → Add custom connector**.
-2. Name: `Spicy Regs`. URL: `https://mcp.spicy-regs.dev/mcp`.
+2. Name: `SpicyGov` (or `Spicy Regs`). URL: `https://mcp.spicygov.ai/mcp`.
    Authentication: None.
 3. Toggle the connector on in any conversation.
 
 The public server is already deployed — there's nothing to host yourself.
-[mcp.spicy-regs.dev](https://mcp.spicy-regs.dev/) has copy-paste config for
-every other client too.
+[spicygov.ai/mcp/](https://spicygov.ai/mcp/) has copy-paste setup instructions
+for connecting to the public endpoint.
 
 Claude.ai doesn't load repo skills directly, so paste the system prompt from
 [`provider-agnostic-prompt.md`](skills/spicyregs/references/provider-agnostic-prompt.md)
@@ -65,8 +65,8 @@ surfaces that load plugin directories, point the loader at
 
 For ChatGPT proper (no plugin loader):
 
-- If your workspace supports custom MCP connectors, point it at the deployed
-  `mcp-server/` URL the same way Claude.ai does.
+- If your workspace supports custom MCP connectors, point it at
+  `https://mcp.spicygov.ai/mcp` the same way Claude.ai does.
 - Otherwise, paste the system prompt from
   [`provider-agnostic-prompt.md`](skills/spicyregs/references/provider-agnostic-prompt.md)
   into a Custom GPT or system message and run the helper scripts yourself,
@@ -93,13 +93,13 @@ Any client that speaks MCP can use the server. Pick a transport:
 }
 ```
 
-**Remote HTTP (after deploying `mcp-server/` to Vercel):**
+**Remote HTTP (public server — replace with your own URL if self-hosting):**
 
 ```json
 {
   "mcpServers": {
-    "spicy-regs": {
-      "url": "https://<your-vercel-deploy>.vercel.app/mcp"
+    "spicygov": {
+      "url": "https://mcp.spicygov.ai/mcp"
     }
   }
 }
@@ -108,6 +108,22 @@ Any client that speaks MCP can use the server. Pick a transport:
 Drop that into the client's MCP config (`~/.cursor/mcp.json`,
 `~/.continue/config.json`, etc. — check the client's docs for the exact
 location and key name).
+
+## Public MCP clients and `User-Agent` policy
+
+The public Streamable HTTP endpoint (`https://mcp.spicygov.ai/mcp`, guide at
+[spicygov.ai/mcp/](https://spicygov.ai/mcp/)) requires no API key and works out
+of the box with tested clients including the official MCP SDK (`mcp`),
+Claude.ai, Claude Code, `curl`, Node `fetch`, and Python `httpx`, `requests`,
+`urllib3`, and `aiohttp`.
+
+Bare Python standard-library `urllib` requests using the default
+`Python-urllib/3.x` user agent are refused with `HTTP 403` (Cloudflare managed
+edge check Error 1010) and are **unsupported as-is**. Programmatic Python
+callers should use the official MCP SDK (`mcp`) or `httpx`/`requests`, or
+attach an explicit identifying `User-Agent` header (for example,
+`User-Agent: my-research-script/1.0`). Do not spoof browser `User-Agent`
+strings.
 
 ## Any other LLM (provider-agnostic fallback)
 
@@ -139,7 +155,8 @@ unavailable rather than substituting another source.
 
 ## Fork domains
 
-The hosted URLs above are upstream defaults. For Mike's fork, use
-`https://mcp.spicygov.ai/mcp`. Standalone query scripts accept
+The hosted MCP URLs above use this fork's canonical `spicygov.ai` domain
+(`https://mcp.spicygov.ai/mcp` and
+[spicygov.ai/mcp/](https://spicygov.ai/mcp/)). Standalone query scripts accept
 `SPICYREGS_DOMAIN=spicygov.ai`; an explicit `--r2-url`, `SPICY_REGS_R2_URL`,
 or `R2_PUBLIC_URL` takes precedence, in that order.
