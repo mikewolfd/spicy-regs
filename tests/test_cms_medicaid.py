@@ -78,6 +78,87 @@ def test_unknown_cells_and_brand_markers_survive_without_row_filtering(tmp_path)
     assert json.loads(row["raw_row_json"]) == raw
 
 
+def test_scientific_notation_medicaid_observations_and_sql_consumer(tmp_path, monkeypatch):
+    # Reproduces the two 2024 Medicaid scientific-notation publisher literals:
+    # 5.7405e-05 (scale 9, exact DECIMAL(38,12)) vs 8.2132926e-06 (scale 13, refused without rounding).
+    sodium_overall = part_d_raw(
+        Brnd_Name="Sodium Chloride*",
+        Gnrc_Name="0.9 % Sodium Chloride",
+        Mftr_Name="Overall",
+        Tot_Mftr="1",
+        Tot_Spndng_2024="7.74",
+        Tot_Dsg_Unts_2024="132388",
+        Tot_Clms_2024="330",
+        Avg_Spnd_Per_Dsg_Unt_Wghtd_2024="0.0001",
+        Avg_Spnd_Per_Clm_2024="0.0234545455",
+    )
+    sodium_hospira = part_d_raw(
+        Brnd_Name="Sodium Chloride*",
+        Gnrc_Name="0.9 % Sodium Chloride",
+        Mftr_Name="Hospira",
+        Tot_Mftr="1",
+        Tot_Spndng_2024="7.74",
+        Tot_Dsg_Unts_2024="132388",
+        Tot_Clms_2024="330",
+        Avg_Spnd_Per_Dsg_Unt_Wghtd_2024="5.7405e-05",
+        Avg_Spnd_Per_Clm_2024="0.0234545455",
+    )
+    paricalcitol_overall = part_d_raw(
+        Brnd_Name="Paricalcitol*",
+        Gnrc_Name="Paricalcitol",
+        Mftr_Name="Overall",
+        Tot_Mftr="1",
+        Tot_Spndng_2024="0.21",
+        Tot_Dsg_Unts_2024="13817",
+        Tot_Clms_2024="584",
+        Avg_Spnd_Per_Dsg_Unt_Wghtd_2024="0.0001",
+        Avg_Spnd_Per_Clm_2024="0.000359589",
+    )
+    paricalcitol_hospira = part_d_raw(
+        Brnd_Name="Paricalcitol*",
+        Gnrc_Name="Paricalcitol",
+        Mftr_Name="Hospira/Pfizer",
+        Tot_Mftr="1",
+        Tot_Spndng_2024="0.21",
+        Tot_Dsg_Unts_2024="13817",
+        Tot_Clms_2024="584",
+        Avg_Spnd_Per_Dsg_Unt_Wghtd_2024="8.2132926e-06",
+        Avg_Spnd_Per_Clm_2024="0.000359589",
+    )
+    reader = Reader([sodium_overall, sodium_hospira, paricalcitol_overall, paricalcitol_hospira])
+    artifact, evidence = pipeline.build(reader, tmp_path, year=2024)
+    assert artifact.pin.artifact_digest and evidence.exists()
+
+    rows = {
+        (row["brand_name"], row["manufacturer_name"]): row
+        for row in pq.read_table(tmp_path / "generation" / module.OUTPUT).to_pylist()
+    }
+    sodium = rows[("Sodium Chloride*", "Hospira")]
+    assert sodium["weighted_spending_per_unit_usd"] == Decimal("0.000057405")
+    assert json.loads(sodium["value_statuses_json"])["weighted_spending_per_unit_usd"] == "value"
+    assert json.loads(sodium["raw_row_json"])["Avg_Spnd_Per_Dsg_Unt_Wghtd_2024"] == "5.7405e-05"
+
+    paricalcitol = rows[("Paricalcitol*", "Hospira/Pfizer")]
+    assert paricalcitol["weighted_spending_per_unit_usd"] is None
+    assert json.loads(paricalcitol["value_statuses_json"])["weighted_spending_per_unit_usd"] == "unrepresentable"
+    assert json.loads(paricalcitol["raw_row_json"])["Avg_Spnd_Per_Dsg_Unt_Wghtd_2024"] == "8.2132926e-06"
+
+    monkeypatch.setattr(mcp_server, "DATA_DIR", tmp_path / "generation")
+    with mcp_server._build_connection() as connection:
+        observed = connection.execute(
+            f"""SELECT brand_name, manufacturer_name, weighted_spending_per_unit_usd,
+                       json_extract_string(value_statuses_json, '$.weighted_spending_per_unit_usd'),
+                       json_extract_string(raw_row_json, '$.Avg_Spnd_Per_Dsg_Unt_Wghtd_2024')
+                FROM {module.TABLE}
+                WHERE aggregation_level = 'manufacturer'
+                ORDER BY brand_name"""
+        ).fetchall()
+    assert observed == [
+        ("Paricalcitol*", "Hospira/Pfizer", None, "unrepresentable", "8.2132926e-06"),
+        ("Sodium Chloride*", "Hospira", Decimal("0.000057405000"), "value", "5.7405e-05"),
+    ]
+
+
 @pytest.mark.parametrize("reader,year", [(PartDReader(), 2024), (Reader(), 2023)])
 def test_wrong_program_or_year_refuses(tmp_path, reader, year):
     with pytest.raises(ValueError, match="Select the Medicaid release"):

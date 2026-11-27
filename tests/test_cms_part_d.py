@@ -140,15 +140,81 @@ def test_exact_values_and_alternative_aggregation_levels(tmp_path):
     [
         ("0", Decimal(0), "value"),
         ("-0.012", Decimal("-0.012"), "value"),
+        ("5.7405e-05", Decimal("0.000057405"), "value"),
+        ("5.7405E-05", Decimal("0.000057405"), "value"),
+        ("+5.7405e-05", Decimal("0.000057405"), "value"),
+        ("-5.7405e-05", Decimal("-0.000057405"), "value"),
+        ("1e-12", Decimal("0.000000000001"), "value"),
+        ("-6.227546e-06", Decimal("-0.000006227546"), "value"),
+        ("5.7405000000e-05", Decimal("0.000057405"), "value"),
+        ("1e5", Decimal("100000"), "value"),
+        ("1.23e+3", Decimal("1230"), "value"),
+        ("0e+99", Decimal(0), "value"),
+        ("-0e-15", Decimal(0), "value"),
+        ("9.9999999999999999999999999999999999999e25", Decimal("99999999999999999999999999.999999999999"), "value"),
         (None, None, "null"),
         ("", None, "blank"),
         ("*", None, "non_numeric"),
+        ("NaN", None, "non_numeric"),
+        ("Infinity", None, "non_numeric"),
+        ("-inf", None, "non_numeric"),
+        ("1e", None, "non_numeric"),
+        ("1e+", None, "non_numeric"),
+        ("e5", None, "non_numeric"),
+        (" 5.7405e-05", None, "non_numeric"),
+        ("5.7405e-05 ", None, "non_numeric"),
         ("0.0000000000001", None, "unrepresentable"),
+        ("1e-13", None, "unrepresentable"),
+        ("8.2132926e-06", None, "unrepresentable"),
+        ("1.0965515e-06", None, "unrepresentable"),
         ("1" + "0" * 26, None, "unrepresentable"),
+        ("1e26", None, "unrepresentable"),
+        ("-1e26", None, "unrepresentable"),
+        ("1e99999999999999999999", None, "unrepresentable"),
+        ("1e-99999999999999999999", None, "unrepresentable"),
+        ("1" + "0" * 60 + "1e-61", None, "unrepresentable"),
     ],
 )
 def test_missing_markers_and_exact_decimal_limits(raw_value, expected, status):
     assert module.measurement(raw_value) == (expected, status)
+
+
+def test_scientific_notation_roundtrips_through_parquet_without_rounding(tmp_path):
+    rows = [
+        raw(
+            Tot_Spndng_2024="0e+99",
+            Avg_Spnd_Per_Dsg_Unt_Wghtd_2024="5.7405e-05",
+            Avg_Spnd_Per_Clm_2024="8.2132926e-06",
+            Avg_Spnd_Per_Bene_2024="1.25E+2",
+        ),
+        raw(
+            "Fixture manufacturer",
+            Avg_Spnd_Per_Dsg_Unt_Wghtd_2024="-6.227546e-06",
+            Avg_Spnd_Per_Clm_2024="1e26",
+            Avg_Spnd_Per_Bene_2024="NaN",
+        ),
+    ]
+    path = module.build_cms_part_d(Reader(rows), tmp_path, year=2024)
+    overall, manufacturer = pq.read_table(path).to_pylist()
+    assert overall["total_spending_usd"] == Decimal(0)
+    assert overall["weighted_spending_per_unit_usd"] == Decimal("0.000057405")
+    assert overall["spending_per_claim_usd"] is None
+    assert overall["spending_per_beneficiary_usd"] == Decimal("125")
+    overall_statuses = json.loads(overall["value_statuses_json"])
+    assert overall_statuses["total_spending_usd"] == "value"
+    assert overall_statuses["weighted_spending_per_unit_usd"] == "value"
+    assert overall_statuses["spending_per_claim_usd"] == "unrepresentable"
+    assert overall_statuses["spending_per_beneficiary_usd"] == "value"
+    assert json.loads(overall["raw_row_json"])["Avg_Spnd_Per_Dsg_Unt_Wghtd_2024"] == "5.7405e-05"
+    assert json.loads(overall["raw_row_json"])["Avg_Spnd_Per_Clm_2024"] == "8.2132926e-06"
+
+    assert manufacturer["weighted_spending_per_unit_usd"] == Decimal("-0.000006227546")
+    assert manufacturer["spending_per_claim_usd"] is None
+    assert manufacturer["spending_per_beneficiary_usd"] is None
+    mfg_statuses = json.loads(manufacturer["value_statuses_json"])
+    assert mfg_statuses["weighted_spending_per_unit_usd"] == "value"
+    assert mfg_statuses["spending_per_claim_usd"] == "unrepresentable"
+    assert mfg_statuses["spending_per_beneficiary_usd"] == "non_numeric"
 
 
 @pytest.mark.parametrize(
