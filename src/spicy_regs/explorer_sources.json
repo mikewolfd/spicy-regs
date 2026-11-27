@@ -351,6 +351,13 @@
       "url": "https://github.com/US-CBO/cbo-data",
       "kind": "government",
       "note": "Commit-pinned US-CBO/cbo-data budget, economic, trust-fund, and demographic baseline CSVs and schemas."
+    },
+    "cbo-eval-projections": {
+      "id": "cbo-eval-projections",
+      "name": "Congressional Budget Office Projection Evaluation Data",
+      "url": "https://github.com/US-CBO/eval-projections",
+      "kind": "government",
+      "note": "Public-domain US-CBO/eval-projections replication data comparing CBO baseline projections against actual outlays, revenues, deficits, and debt from 1984 through FY2025 (revenues from 1982)."
     }
   },
   "families": {
@@ -826,6 +833,13 @@
       "sources": [
         "cbo-data"
       ]
+    },
+    "cbo-eval-projections": {
+      "sources": [
+        "cbo-eval-projections"
+      ],
+      "transformation": "Commit-pinned normalization and arithmetic reconciliation of US-CBO/eval-projections actuals, baselines, baseline changes, projection errors, and horizon summary statistics.",
+      "evidence": "src/spicy_regs/transforms/build_cbo_eval_projections.py"
     }
   },
   "tables": {
@@ -1536,6 +1550,31 @@
     "cbo_data_snapshots": {
       "sources": [
         "cbo-data"
+      ]
+    },
+    "cbo_projection_errors": {
+      "sources": [
+        "cbo-eval-projections"
+      ]
+    },
+    "cbo_projection_error_summary_stats": {
+      "sources": [
+        "cbo-eval-projections"
+      ]
+    },
+    "cbo_eval_actuals": {
+      "sources": [
+        "cbo-eval-projections"
+      ]
+    },
+    "cbo_eval_baselines": {
+      "sources": [
+        "cbo-eval-projections"
+      ]
+    },
+    "cbo_eval_baseline_changes": {
+      "sources": [
+        "cbo-eval-projections"
       ]
     }
   }

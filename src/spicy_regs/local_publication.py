@@ -39,6 +39,7 @@ LOCAL_FAMILIES = frozenset({
     "cbo-data",
     "census-acs",
     "census-geocoder",
+    "cbo-eval-projections",
     "cms-medicaid",
     "cms-open-payments",
     "cms-part-b",
@@ -78,6 +79,9 @@ def _family_schemas(family: str) -> dict | None:
     """Declared Arrow ``SCHEMAS`` for local families with explicit Arrow schema modules."""
     if family == "cbo-data":
         from spicy_regs.transforms.build_cbo_data import SCHEMAS
+        return SCHEMAS
+    if family == "cbo-eval-projections":
+        from spicy_regs.transforms.build_cbo_eval_projections import SCHEMAS
         return SCHEMAS
     if family == "census-acs":
         from spicy_regs.transforms.build_census_acs import SCHEMAS

@@ -1,0 +1,101 @@
+{
+  "repository": "US-CBO/eval-projections",
+  "commit": "682559ca5800ee7be57a398085fd023a050c7cb9",
+  "note": "Bounded real excerpts from US-CBO/eval-projections; full_files records exact upstream SHA-256 digests and byte sizes.",
+  "fixture_row_counts": {
+    "input_data/actual_GDP.csv": 8,
+    "input_data/actuals.csv": 21,
+    "input_data/baselines.csv": 30,
+    "input_data/baseline_changes.csv": 25,
+    "output_data/outlay_actuals_pct_GDP.csv": 7,
+    "output_data/outlay_projection_errors.csv": 2,
+    "output_data/outlay_projection_errors_summary_stats.csv": 2,
+    "output_data/revenue_actuals_pct_GDP.csv": 10,
+    "output_data/revenue_projection_errors.csv": 6,
+    "output_data/revenue_projection_errors_summary_stats.csv": 4,
+    "output_data/deficit_actuals_pct_GDP.csv": 5,
+    "output_data/deficit_projection_errors.csv": 2,
+    "output_data/deficit_projection_errors_summary_stats.csv": 2,
+    "output_data/debt_actuals_pct_GDP.csv": 5,
+    "output_data/debt_projection_errors.csv": 2,
+    "output_data/debt_projection_errors_summary_stats.csv": 2
+  },
+  "full_files": {
+    "CHANGE_LOG.md": {
+      "sha256": "sha256:2ceb481974b0ada2a2cf31fc0ffebd6b477ca89a2ce3473827dcf5e30d78d2c7",
+      "byte_size": 5338
+    },
+    "LICENSE.md": {
+      "sha256": "sha256:534ff862a5ca4781de3bc31f99065552a86182ab6126c9b6db0ad72c5ef917ad",
+      "byte_size": 1276
+    },
+    "README.md": {
+      "sha256": "sha256:25078872ee6e3ba76c8ad1f3b0f7849247498387fbd6bd412bbae45c80127499",
+      "byte_size": 11552
+    },
+    "input_data/actual_GDP.csv": {
+      "sha256": "sha256:eb90d2eb38d8f7d5f3af27c9600bf52d4dcc8903e8e196191ba562f5800c10b4",
+      "byte_size": 632
+    },
+    "input_data/actuals.csv": {
+      "sha256": "sha256:810e101e0691d9f1d734e8de2578bf69d6343396151ffa5eea7a4e4c3a2bf996",
+      "byte_size": 38624
+    },
+    "input_data/baseline_changes.csv": {
+      "sha256": "sha256:c4d7498c4d35d7fe568f148f0653dc0835f90a7b40ef7e6aa594622e943a1971",
+      "byte_size": 2451820
+    },
+    "input_data/baselines.csv": {
+      "sha256": "sha256:a2f0ef6890c53b57fe36fc6697de77d32e9a670ca604c6c3e17a6e44749be562",
+      "byte_size": 1503850
+    },
+    "output_data/debt_actuals_pct_GDP.csv": {
+      "sha256": "sha256:b21ef4456d15044268a0a95d4f6c36c1071b0a1b290a1ca30355121e43fb4de9",
+      "byte_size": 1839
+    },
+    "output_data/debt_projection_errors.csv": {
+      "sha256": "sha256:ce0ecdad706c0e8daed7a253bffadef59e891494280678a8dc275e2dcbb26b90",
+      "byte_size": 42623
+    },
+    "output_data/debt_projection_errors_summary_stats.csv": {
+      "sha256": "sha256:29f41ac8b7e0420d9de4a9db75bda58fbc321c1115b0626ae66266747e145cd9",
+      "byte_size": 701
+    },
+    "output_data/deficit_actuals_pct_GDP.csv": {
+      "sha256": "sha256:40926316f6b562e057cf13c5c26aff21874d8f760c044171518cbb2691976ee6",
+      "byte_size": 1953
+    },
+    "output_data/deficit_projection_errors.csv": {
+      "sha256": "sha256:787282f719b8ab89b48386a06463b8bbac19e398924b5ec00a2f5693fc50ede2",
+      "byte_size": 40480
+    },
+    "output_data/deficit_projection_errors_summary_stats.csv": {
+      "sha256": "sha256:8a88051846c69ef327ca134df3606caf8f1cbbdf0d0188bc6d7da026a16bf7a0",
+      "byte_size": 720
+    },
+    "output_data/outlay_actuals_pct_GDP.csv": {
+      "sha256": "sha256:e580f22aab69a467379fa4ab8d6c989363dfef73d75163bf9eaa88aea8164bf9",
+      "byte_size": 18962
+    },
+    "output_data/outlay_projection_errors.csv": {
+      "sha256": "sha256:58b37b1503c62b3e5d0942a75e8b2ef43e46ef679213b7ccfa6558c8e5f1dbf4",
+      "byte_size": 383306
+    },
+    "output_data/outlay_projection_errors_summary_stats.csv": {
+      "sha256": "sha256:42d1ed0ecaa113c12357489bc7e9d3482bc15695bd496137408214e155886dde",
+      "byte_size": 7375
+    },
+    "output_data/revenue_actuals_pct_GDP.csv": {
+      "sha256": "sha256:e8271a84571c6faae18281342cc280bb091cde46004d8f6166f3c50c6197de0c",
+      "byte_size": 23094
+    },
+    "output_data/revenue_projection_errors.csv": {
+      "sha256": "sha256:380f5074d7ac7cfb7500690dc93797b02728d4037cfe920d1c6ada9783e117cb",
+      "byte_size": 709567
+    },
+    "output_data/revenue_projection_errors_summary_stats.csv": {
+      "sha256": "sha256:3e94bdeeb2345f6b4b24daa23fd62cbab287da3f62b597f3814e3ce4a5866e8e",
+      "byte_size": 6952
+    }
+  }
+}

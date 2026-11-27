@@ -1,12 +1,12 @@
 {
   "filename": "spicy_docs-0.85.0+readers.20261127.2-py3-none-any.whl",
   "version": "0.85.0+readers.20261127.2",
-  "sha256": "dabb5e3d90c8040f6a39dffde6f310a8052546231a616945490f3cfa048902ef",
-  "byte_size": 3790622,
-  "source_commit": "e0825aee93f2192c98acc8818688565a56402002",
-  "source_tree": "226d8d9e4d1eaf11fe9e73efbc7d0bc76820e0ca",
-  "built_at_commit": "e0825aee93f2192c98acc8818688565a56402002",
-  "source_state": "feat/ss-fg4a-cbo-data (adds spicy_docs.sources.cbo_data for commit-pinned US-CBO/cbo-data acquisition).",
+  "sha256": "19e22b24c7e99d0447fff52070b30a4ea4ed496a5b30b37ee80d128b087d7c93",
+  "byte_size": 3797170,
+  "source_commit": "2391bfcc323be7e9d759362c48e6de0760d83477",
+  "source_tree": "08aba094ce9afe93c3d377898e0557f586c3c1dc",
+  "built_at_commit": "2391bfcc323be7e9d759362c48e6de0760d83477",
+  "source_state": "feat/cbo-swarm-20261127 (combines ss-ywvv, ss-902d, ss-fg4a spicy_docs.sources.cbo_data, and ss-d75m spicy_docs.sources.cbo_eval_projections).",
   "build": "uv build --wheel --offline; clean git HEAD build",
   "build_generator": "uv 0.6.10 (f2a2d982b 2025-03-25)",
   "uv_version": "uv 0.6.10 (f2a2d982b 2025-03-25)",
@@ -196,6 +196,7 @@
     "spicy_docs/sources/base.py": "3cefa3da5d9d3145b0eb5905e0f46de20962c17557c7c6827f550edc1ce16e12",
     "spicy_docs/sources/cbo.py": "b953abd2f8f17fe991a9a8ec45ddf2a499c7d01076d4274dfc5992b1ee87ac58",
     "spicy_docs/sources/cbo_data.py": "3564ff72db94cc9564ee9814cf12ec6f4d8d492c2b567394e28b8025fa21926a",
+    "spicy_docs/sources/cbo_eval_projections.py": "1dc9460051f06fdd88131bca9d5f463257afc85671c403bd27367f41daa62705",
     "spicy_docs/sources/cbo_pdf_cards.py": "bd300f76fff25982436c23b2bdcd30494f9c452aea7c3b3c87442c5c6a1421c1",
     "spicy_docs/sources/census_acs.py": "4d42563a019f95b414a199325bc2c727284e803b9c20bffb7e922227c54a01cb",
     "spicy_docs/sources/census_acs_profile.py": "85c4cd8437dfa6d0068f860b1d1e96e1d8d107549f6b89aed309da2c0270dd5c",
@@ -584,7 +585,7 @@
     "spicy_docs/transport/source_acquirer.py": "237e4ea811c37d330755652a06a6063db697c2146b99bea48be183de196ea9d9",
     "spicy_docs/transport/zyte.py": "6840c68d2576224bdffa98684a6b3ab23dc9ad55b55d58963c6874a407538ae5"
   },
-  "verified_record_members": 570,
+  "verified_record_members": 615,
   "previous_version": "0.85.0+readers.20261125.3",
-  "scope": "Adds commit-pinned US-CBO/cbo-data catalog, schema, and CSV baseline reader (spicy_docs.sources.cbo_data)."
+  "scope": "Combines US-CBO/cbo-data (spicy_docs.sources.cbo_data), US-CBO/eval-projections (spicy_docs.sources.cbo_eval_projections), and CBO/JCT route research docs."
 }

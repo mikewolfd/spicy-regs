@@ -1,0 +1,5 @@
+component,category,subcategory,projected_year_number,projection_year_range,number_of_projections,average_error,average_absolute_error,RMSE,two_thirds_spread
+revenue,Total,Total,1,1982-2025,44,-0.5,2.8,4.1,6.5
+revenue,Total,Total,2,1983-2025,43,0.1,5.7,7.9,12.2
+revenue,Customs Duties,Customs Duties,1,1982-2025,44,-0.6,6.3,11.2,12.0
+revenue,Customs Duties,Customs Duties,2,1983-2025,43,-0.7,9.6,14.8,17.2

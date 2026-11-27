@@ -36288,6 +36288,475 @@
       "file_type"
     ]
   },
+  "cbo_projection_errors": {
+    "table": "cbo_projection_errors",
+    "label": "CBO budget projection errors",
+    "summary": "Historical CBO baseline projections compared against actual federal outlays, revenues, deficits, and debt with legislative adjustments and forecast errors.",
+    "coverage": "Derived. Realized baseline evaluation observations from US-CBO/eval-projections covering FY1982-FY2025 for revenues (Winter and Spring baselines) and FY1984-FY2025 for outlays, deficits, and debt (Spring baselines), horizons 1-11. Excludes Fannie Mae and Freddie Mac outlays, 2022 student loan forgiveness outlays, and projected_year_number 0.",
+    "kind": "derived",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "component",
+        "column_type": "VARCHAR",
+        "description": "Budget component (outlay, revenue, deficit, or debt)."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "Major budget category or Total."
+      },
+      {
+        "column_name": "subcategory",
+        "column_type": "VARCHAR",
+        "description": "Budget subcategory or Total."
+      },
+      {
+        "column_name": "baseline_date",
+        "column_type": "DATE",
+        "description": "Year and month of the CBO baseline release (stored with day 01 per CBO convention)."
+      },
+      {
+        "column_name": "spring_flag",
+        "column_type": "BOOLEAN",
+        "description": "True when CBO designates the baseline as that year's Spring baseline."
+      },
+      {
+        "column_name": "winter_flag",
+        "column_type": "BOOLEAN",
+        "description": "True when CBO designates the baseline as that year's Winter baseline."
+      },
+      {
+        "column_name": "projected_fiscal_year",
+        "column_type": "BIGINT",
+        "description": "Target federal fiscal year being projected."
+      },
+      {
+        "column_name": "projected_year_number",
+        "column_type": "BIGINT",
+        "description": "Forecast horizon from 1 (budget year) through 11."
+      },
+      {
+        "column_name": "projected_value_billions",
+        "column_type": "DOUBLE",
+        "description": "Unadjusted baseline projection in billions of dollars."
+      },
+      {
+        "column_name": "actual_value_billions",
+        "column_type": "DOUBLE",
+        "description": "Realized historical actual amount in billions of dollars."
+      },
+      {
+        "column_name": "gdp_billions",
+        "column_type": "DOUBLE",
+        "description": "Nominal fiscal-year GDP in billions of dollars."
+      },
+      {
+        "column_name": "legislative_change_billions",
+        "column_type": "DOUBLE",
+        "description": "Subsequent legislative adjustment applied to the baseline projection in billions of dollars (cumulative negative deficit effects for debt)."
+      },
+      {
+        "column_name": "legislative_deficit_change_billions",
+        "column_type": "DOUBLE",
+        "description": "Subsequent legislative deficit adjustment in billions of dollars for deficit and debt rows (negated for debt per CBO merge convention); null for outlays and revenues."
+      },
+      {
+        "column_name": "adjusted_projection_billions",
+        "column_type": "DOUBLE",
+        "description": "Baseline projection plus legislative adjustment in billions of dollars."
+      },
+      {
+        "column_name": "projection_error_billions",
+        "column_type": "DOUBLE",
+        "description": "Forecast error in billions of dollars (adjusted_projection minus actual_value for outlays, revenues, and debt; negated for deficits so positive means overestimated deficit)."
+      },
+      {
+        "column_name": "projection_error_pct_actual",
+        "column_type": "DOUBLE",
+        "description": "Projection error as a percentage of actual_value for outlays and revenues; null for deficits and debt."
+      },
+      {
+        "column_name": "leg_change_pct_gdp",
+        "column_type": "DOUBLE",
+        "description": "Legislative change as a percentage of nominal GDP."
+      },
+      {
+        "column_name": "projection_error_pct_gdp",
+        "column_type": "DOUBLE",
+        "description": "Projection error as a percentage of nominal GDP."
+      },
+      {
+        "column_name": "source_commit",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA of US-CBO/eval-projections."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Immutable raw GitHub URL for the source projection-errors CSV at source_commit."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the source projection-errors CSV bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC capture timestamp with timezone."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One component, category, subcategory, baseline date, and projected fiscal year evaluation observation.",
+    "identity_columns": [
+      "component",
+      "category",
+      "subcategory",
+      "baseline_date",
+      "projected_fiscal_year"
+    ]
+  },
+  "cbo_projection_error_summary_stats": {
+    "table": "cbo_projection_error_summary_stats",
+    "label": "CBO projection error summary statistics",
+    "summary": "Horizon-by-category summary accuracy statistics (mean error, MAE, RMSE, central two-thirds spread) across CBO historical evaluations.",
+    "coverage": "Derived. Summary error statistics across horizons 1-11 for FY1982-FY2025 revenues (Winter baselines only) and FY1984-FY2025 outlays, deficits, and debt (Spring baselines only), excluding Fannie Mae, Freddie Mac, and 2022 student loan forgiveness.",
+    "kind": "derived",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "component",
+        "column_type": "VARCHAR",
+        "description": "Budget component (outlay, revenue, deficit, or debt)."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "Major budget category or Total."
+      },
+      {
+        "column_name": "subcategory",
+        "column_type": "VARCHAR",
+        "description": "Budget subcategory or Total."
+      },
+      {
+        "column_name": "projected_year_number",
+        "column_type": "BIGINT",
+        "description": "Forecast horizon from 1 through 11."
+      },
+      {
+        "column_name": "projection_year_range",
+        "column_type": "VARCHAR",
+        "description": "Inclusive first and last projected fiscal years in the summary sample."
+      },
+      {
+        "column_name": "number_of_projections",
+        "column_type": "BIGINT",
+        "description": "Count of evaluated baseline projections included in this horizon summary."
+      },
+      {
+        "column_name": "error_basis",
+        "column_type": "VARCHAR",
+        "description": "Percentage denominator used by the summary metrics (pct_actual for outlays and revenues; pct_gdp for deficits and debt)."
+      },
+      {
+        "column_name": "average_error_pct",
+        "column_type": "DOUBLE",
+        "description": "Mean projection error in percentage points on error_basis."
+      },
+      {
+        "column_name": "average_absolute_error_pct",
+        "column_type": "DOUBLE",
+        "description": "Mean absolute projection error in percentage points on error_basis."
+      },
+      {
+        "column_name": "rmse_pct",
+        "column_type": "DOUBLE",
+        "description": "Root mean squared error in percentage points on error_basis."
+      },
+      {
+        "column_name": "two_thirds_spread_pct",
+        "column_type": "DOUBLE",
+        "description": "Difference between the 5/6 and 1/6 quantiles of errors in percentage points on error_basis."
+      },
+      {
+        "column_name": "source_commit",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA of US-CBO/eval-projections."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Immutable raw GitHub URL for the source summary-stats CSV at source_commit."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the source summary-stats CSV bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC capture timestamp with timezone."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One component, category, subcategory, and forecast horizon summary record.",
+    "identity_columns": [
+      "component",
+      "category",
+      "subcategory",
+      "projected_year_number"
+    ]
+  },
+  "cbo_eval_actuals": {
+    "table": "cbo_eval_actuals",
+    "label": "CBO historical budget actuals and GDP",
+    "summary": "Historical realized federal outlays, revenues, deficits, debt, and nominal GDP used in CBO projection evaluations.",
+    "coverage": "True range. Complete US-CBO/eval-projections input actuals from FY1982 through FY2025 (revenues from FY1982; Total outlays, deficits, and debt from FY1984; detailed outlay categories from FY1989), joined with nominal fiscal-year GDP.",
+    "kind": "true_range",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "component",
+        "column_type": "VARCHAR",
+        "description": "Budget component (outlay, revenue, deficit, or debt)."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "Major budget category or Total."
+      },
+      {
+        "column_name": "subcategory",
+        "column_type": "VARCHAR",
+        "description": "Budget subcategory or Total (preserves Fannie Freddie and literal CBO spelling Student Loan Foregiveness)."
+      },
+      {
+        "column_name": "fiscal_year",
+        "column_type": "BIGINT",
+        "description": "Federal fiscal year."
+      },
+      {
+        "column_name": "actual_value_billions",
+        "column_type": "DOUBLE",
+        "description": "Realized historical amount in billions of dollars."
+      },
+      {
+        "column_name": "gdp_billions",
+        "column_type": "DOUBLE",
+        "description": "Nominal fiscal-year GDP in billions of dollars from actual_GDP.csv."
+      },
+      {
+        "column_name": "actuals_pct_gdp",
+        "column_type": "DOUBLE",
+        "description": "Realized amount as a percentage of nominal GDP (full-precision ratio)."
+      },
+      {
+        "column_name": "excluded_from_error_analysis",
+        "column_type": "BOOLEAN",
+        "description": "True for Fannie Freddie and Student Loan Foregiveness rows excluded from CBO projection-error tables."
+      },
+      {
+        "column_name": "source_commit",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA of US-CBO/eval-projections."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Immutable raw GitHub URL for input_data/actuals.csv at source_commit."
+      },
+      {
+        "column_name": "actual_gdp_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of input_data/actual_GDP.csv bytes."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of input_data/actuals.csv bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC capture timestamp with timezone."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One component, category, subcategory, and fiscal year actual observation.",
+    "identity_columns": [
+      "component",
+      "category",
+      "subcategory",
+      "fiscal_year"
+    ]
+  },
+  "cbo_eval_baselines": {
+    "table": "cbo_eval_baselines",
+    "label": "CBO historical baseline projections",
+    "summary": "All CBO historical baseline budget projections across 1982-2026 vintages used as inputs to forecast evaluation.",
+    "coverage": "True range. Complete US-CBO/eval-projections input_data/baselines.csv spanning February 1982 through February 2026 baselines and projected fiscal years 1982-2036, including non-Spring/non-Winter baselines and unrealized future years.",
+    "kind": "true_range",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "component",
+        "column_type": "VARCHAR",
+        "description": "Budget component (outlay, revenue, deficit, or debt)."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "Major budget category or Total."
+      },
+      {
+        "column_name": "subcategory",
+        "column_type": "VARCHAR",
+        "description": "Budget subcategory or Total."
+      },
+      {
+        "column_name": "baseline_date",
+        "column_type": "DATE",
+        "description": "Year and month of the CBO baseline release (day fixed to 01 per CBO convention)."
+      },
+      {
+        "column_name": "spring_flag",
+        "column_type": "BOOLEAN",
+        "description": "True when CBO designates the baseline as that year's Spring baseline."
+      },
+      {
+        "column_name": "winter_flag",
+        "column_type": "BOOLEAN",
+        "description": "True when CBO designates the baseline as that year's Winter baseline."
+      },
+      {
+        "column_name": "projected_fiscal_year",
+        "column_type": "BIGINT",
+        "description": "Target federal fiscal year projected by the baseline."
+      },
+      {
+        "column_name": "projected_year_number",
+        "column_type": "BIGINT",
+        "description": "Forecast horizon relative to the baseline release (-1 through 11)."
+      },
+      {
+        "column_name": "projected_value_billions",
+        "column_type": "DOUBLE",
+        "description": "Unadjusted CBO baseline projection in billions of dollars."
+      },
+      {
+        "column_name": "source_commit",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA of US-CBO/eval-projections."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Immutable raw GitHub URL for input_data/baselines.csv at source_commit."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of input_data/baselines.csv bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC capture timestamp with timezone."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One component, category, subcategory, baseline date, and projected fiscal year baseline projection.",
+    "identity_columns": [
+      "component",
+      "category",
+      "subcategory",
+      "baseline_date",
+      "projected_fiscal_year"
+    ]
+  },
+  "cbo_eval_baseline_changes": {
+    "table": "cbo_eval_baseline_changes",
+    "label": "CBO baseline revision changes",
+    "summary": "Legislative, economic, and technical revisions recorded between CBO baseline releases.",
+    "coverage": "True range. Complete US-CBO/eval-projections input_data/baseline_changes.csv spanning 1983-2026 revision dates across Legislative, Economic, and Technical categories for outlays, deficits, and revenues (only Legislative changes are published for revenues).",
+    "kind": "true_range",
+    "measured_on": "2026-11-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "component",
+        "column_type": "VARCHAR",
+        "description": "Budget component (outlay, revenue, or deficit)."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "Major budget category or Total."
+      },
+      {
+        "column_name": "subcategory",
+        "column_type": "VARCHAR",
+        "description": "Budget subcategory or Total."
+      },
+      {
+        "column_name": "changes_baseline_date",
+        "column_type": "DATE",
+        "description": "Year and month of the baseline revision report (day fixed to 01 per CBO convention)."
+      },
+      {
+        "column_name": "change_category",
+        "column_type": "VARCHAR",
+        "description": "Revision classification (Legislative, Economic, or Technical)."
+      },
+      {
+        "column_name": "projected_fiscal_year",
+        "column_type": "BIGINT",
+        "description": "Target federal fiscal year affected by the revision."
+      },
+      {
+        "column_name": "change_value_billions",
+        "column_type": "DOUBLE",
+        "description": "Dollar revision in billions of dollars; null when blank in the source CSV."
+      },
+      {
+        "column_name": "source_commit",
+        "column_type": "VARCHAR",
+        "description": "Pinned 40-character Git commit SHA of US-CBO/eval-projections."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Immutable raw GitHub URL for input_data/baseline_changes.csv at source_commit."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of input_data/baseline_changes.csv bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC capture timestamp with timezone."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One component, category, subcategory, revision baseline date, change category, and projected fiscal year revision.",
+    "identity_columns": [
+      "component",
+      "category",
+      "subcategory",
+      "changes_baseline_date",
+      "change_category",
+      "projected_fiscal_year"
+    ]
+  },
   "census_acs_county_observations": {
     "table": "census_acs_county_observations",
     "label": "ACS county population and household income",

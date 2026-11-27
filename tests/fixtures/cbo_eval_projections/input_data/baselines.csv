@@ -1,0 +1,31 @@
+component,category,subcategory,baseline_date,Spring_flag,Winter_flag,projected_fiscal_year,projected_year_number,value
+debt,Total,Total,1984-02-01,True,False,1984,1,1330.0
+debt,Total,Total,2024-02-01,False,False,2025,2,29749.266
+debt,Total,Total,2024-02-01,False,False,2026,3,31514.781
+debt,Total,Total,2024-06-01,True,False,2025,2,30187.839
+debt,Total,Total,2024-06-01,True,False,2026,3,32117.707
+debt,Total,Total,2026-02-01,False,False,2026,1,32095.165
+deficit,Total,Total,1984-02-01,True,False,1984,1,-204.6
+deficit,Total,Total,2024-02-01,False,False,2025,2,-1769.109
+deficit,Total,Total,2024-02-01,False,False,2026,3,-1687.385
+deficit,Total,Total,2024-06-01,True,False,2025,2,-1937.791
+deficit,Total,Total,2024-06-01,True,False,2026,3,-1848.83
+deficit,Total,Total,2026-02-01,False,False,2026,1,-1859.16
+outlay,Total,Total,1984-02-01,True,False,1984,1,867.6
+outlay,Total,Total,2024-02-01,False,False,2025,2,6765.24
+outlay,Total,Total,2024-02-01,False,False,2026,3,7037.959
+outlay,Total,Total,2024-06-01,True,False,2025,2,6975.419
+outlay,Total,Total,2024-06-01,True,False,2026,3,7242.43
+outlay,Total,Total,2026-02-01,False,False,2026,1,7455.076
+revenue,Customs Duties,Customs Duties,1984-02-01,True,True,1984,1,10.2
+revenue,Customs Duties,Customs Duties,2024-02-01,False,True,2025,2,82.943
+revenue,Customs Duties,Customs Duties,2024-02-01,False,True,2026,3,87.138
+revenue,Customs Duties,Customs Duties,2024-06-01,True,False,2025,2,76.187
+revenue,Customs Duties,Customs Duties,2024-06-01,True,False,2026,3,79.779
+revenue,Customs Duties,Customs Duties,2026-02-01,False,True,2026,1,418.388
+revenue,Total,Total,1984-02-01,True,True,1984,1,663.0
+revenue,Total,Total,2024-02-01,False,True,2025,2,4996.131
+revenue,Total,Total,2024-02-01,False,True,2026,3,5350.574
+revenue,Total,Total,2024-06-01,True,False,2025,2,5037.628
+revenue,Total,Total,2024-06-01,True,False,2026,3,5393.6
+revenue,Total,Total,2026-02-01,False,True,2026,1,5595.916

@@ -680,6 +680,11 @@ TABLES: tuple[str, ...] = (
     "cbo_potential_gdp",
     "cbo_demographic",
     "cbo_data_snapshots",
+    "cbo_projection_errors",
+    "cbo_projection_error_summary_stats",
+    "cbo_eval_actuals",
+    "cbo_eval_baselines",
+    "cbo_eval_baseline_changes",
     "census_acs_county_observations",
     "census_acs_congressional_district_observations",
     "congress_sessions",
@@ -843,6 +848,11 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "cbo_potential_gdp",
         "cbo_demographic",
         "cbo_data_snapshots",
+        "cbo_projection_errors",
+        "cbo_projection_error_summary_stats",
+        "cbo_eval_actuals",
+        "cbo_eval_baselines",
+        "cbo_eval_baseline_changes",
         "census_acs_county_observations",
         "census_acs_congressional_district_observations",
         "congress_sessions",
@@ -1085,6 +1095,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.build_hospital_cost_reports import SCHEMAS as HOSPITAL_SCHEMAS
     from spicy_regs.transforms.build_treasury_fiscal import SCHEMAS as TREASURY_SCHEMAS
     from spicy_regs.transforms.build_cbo_data import SCHEMAS as CBO_DATA_SCHEMAS
+    from spicy_regs.transforms.build_cbo_eval_projections import SCHEMAS as CBO_EVAL_SCHEMAS
     from spicy_regs.transforms.build_usaspending_awards import SCHEMAS as USASPENDING_AWARD_SCHEMAS
     from spicy_regs.transforms.build_grants_opportunities import SCHEMA as GRANTS_SCHEMA
     from spicy_regs.transforms.build_grants_status import SCHEMAS as GRANTS_STATUS_SCHEMAS
@@ -1223,6 +1234,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         **HOSPITAL_SCHEMAS,
         **TREASURY_SCHEMAS,
         **CBO_DATA_SCHEMAS,
+        **CBO_EVAL_SCHEMAS,
         **USASPENDING_AWARD_SCHEMAS,
         "grants_opportunity_observations": GRANTS_SCHEMA,
         **GRANTS_STATUS_SCHEMAS,

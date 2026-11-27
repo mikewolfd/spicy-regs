@@ -1,0 +1,36 @@
+component,category,subcategory,fiscal_year,actual_value
+debt,Total,Total,1984,1306.975
+debt,Total,Total,2022,24253.445
+debt,Total,Total,2023,26235.592
+debt,Total,Total,2024,28195.575
+debt,Total,Total,2025,30172.402
+deficit,Total,Total,1984,-185.367
+deficit,Total,Total,2022,-1003.097
+deficit,Total,Total,2023,-2032.974
+deficit,Total,Total,2024,-1837.301
+deficit,Total,Total,2025,-1781.77
+outlay,Mandatory,Fannie Freddie,2022,-5.836
+outlay,Mandatory,Fannie Freddie,2023,-6.234
+outlay,Mandatory,Fannie Freddie,2024,-6.328
+outlay,Mandatory,Fannie Freddie,2025,-6.4
+outlay,Mandatory,Student Loan Foregiveness,2022,378.661
+outlay,Mandatory,Student Loan Foregiveness,2023,-333.015
+outlay,Net Interest,Net Interest,2022,475.887
+outlay,Net Interest,Net Interest,2023,658.267
+outlay,Net Interest,Net Interest,2024,879.879
+outlay,Net Interest,Net Interest,2025,969.938
+outlay,Total,Total,1984,851.805
+outlay,Total,Total,2022,5900.436
+outlay,Total,Total,2023,6473.922
+outlay,Total,Total,2024,6757.184
+outlay,Total,Total,2025,7016.386
+revenue,Customs Duties,Customs Duties,1984,11.37
+revenue,Customs Duties,Customs Duties,2022,99.908
+revenue,Customs Duties,Customs Duties,2023,80.338
+revenue,Customs Duties,Customs Duties,2024,77.036
+revenue,Customs Duties,Customs Duties,2025,194.866
+revenue,Total,Total,1984,666.438
+revenue,Total,Total,2022,4897.339
+revenue,Total,Total,2023,4440.948
+revenue,Total,Total,2024,4919.883
+revenue,Total,Total,2025,5234.616

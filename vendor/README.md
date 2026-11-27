@@ -38,10 +38,12 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
-- **Selected CBO Open Data reader provider** `spicy_docs-0.85.0+readers.20261127.2` is built from
-  `e0825aee93f2192c98acc8818688565a56402002` (tree `226d8d9e4d1eaf11fe9e73efbc7d0bc76820e0ca`,
-  branch `feat/ss-fg4a-cbo-data`). It adds `spicy_docs.sources.cbo_data` for commit-pinned
-  `US-CBO/cbo-data` catalog, schema, and CSV baseline acquisition on top of `.20261127.1`.
+- **Selected combined CBO reader provider** `spicy_docs-0.85.0+readers.20261127.2` is built from
+  `2391bfcc323be7e9d759362c48e6de0760d83477` (tree `08aba094ce9afe93c3d377898e0557f586c3c1dc`,
+  branch `feat/cbo-swarm-20261127`). It combines `spicy_docs.sources.cbo_data` (`US-CBO/cbo-data`
+  catalog, schema, and CSV baseline acquisition), `spicy_docs.sources.cbo_eval_projections`
+  (`US-CBO/eval-projections` 1984–FY2025 acquisition and strict CSV validation), and the
+  `cbo.md` / `jct.gov` documentation updates on top of `.20261127.1`.
   See [the receipt](spicy_docs-0.85.0+readers.20261127.2.json) for source, wheel and RECORD identity.
   The superseded `.20261125.3` wheel is recoverable from this adoption commit's parent;
   its receipt remains.

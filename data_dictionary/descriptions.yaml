@@ -15354,3 +15354,127 @@ tables:
       schema_sha256: SHA-256 digest of the dataset `schema.json` bytes.
       catalog_sha256: SHA-256 digest of `catalog.json`.
       observed_at: UTC capture timestamp of the CSV acquisition.
+
+  cbo_projection_errors:
+    label: CBO budget projection errors
+    subject: spending
+    identity_columns: [component, category, subcategory, baseline_date, projected_fiscal_year]
+    summary: Historical CBO baseline projections compared against actual federal outlays, revenues, deficits, and debt with legislative adjustments and forecast errors.
+    coverage: 'Derived. Realized baseline evaluation observations from US-CBO/eval-projections covering FY1982-FY2025 for revenues (Winter and Spring baselines) and FY1984-FY2025 for outlays, deficits, and debt (Spring baselines), horizons 1-11. Excludes Fannie Mae and Freddie Mac outlays, 2022 student loan forgiveness outlays, and projected_year_number 0.'
+    measured_on: '2026-11-27'
+    grain: One component, category, subcategory, baseline date, and projected fiscal year evaluation observation.
+    columns:
+      component: Budget component (outlay, revenue, deficit, or debt).
+      category: Major budget category or Total.
+      subcategory: Budget subcategory or Total.
+      baseline_date: Year and month of the CBO baseline release (stored with day 01 per CBO convention).
+      spring_flag: True when CBO designates the baseline as that year's Spring baseline.
+      winter_flag: True when CBO designates the baseline as that year's Winter baseline.
+      projected_fiscal_year: Target federal fiscal year being projected.
+      projected_year_number: Forecast horizon from 1 (budget year) through 11.
+      projected_value_billions: Unadjusted baseline projection in billions of dollars.
+      actual_value_billions: Realized historical actual amount in billions of dollars.
+      gdp_billions: Nominal fiscal-year GDP in billions of dollars.
+      legislative_change_billions: Subsequent legislative adjustment applied to the baseline projection in billions of dollars (cumulative negative deficit effects for debt).
+      legislative_deficit_change_billions: Subsequent legislative deficit adjustment in billions of dollars for deficit and debt rows (negated for debt per CBO merge convention); null for outlays and revenues.
+      adjusted_projection_billions: Baseline projection plus legislative adjustment in billions of dollars.
+      projection_error_billions: Forecast error in billions of dollars (adjusted_projection minus actual_value for outlays, revenues, and debt; negated for deficits so positive means overestimated deficit).
+      projection_error_pct_actual: Projection error as a percentage of actual_value for outlays and revenues; null for deficits and debt.
+      leg_change_pct_gdp: Legislative change as a percentage of nominal GDP.
+      projection_error_pct_gdp: Projection error as a percentage of nominal GDP.
+      source_commit: Pinned 40-character Git commit SHA of US-CBO/eval-projections.
+      source_url: Immutable raw GitHub URL for the source projection-errors CSV at source_commit.
+      source_sha256: SHA-256 digest of the source projection-errors CSV bytes.
+      observed_at: UTC capture timestamp with timezone.
+
+  cbo_projection_error_summary_stats:
+    label: CBO projection error summary statistics
+    subject: spending
+    identity_columns: [component, category, subcategory, projected_year_number]
+    summary: Horizon-by-category summary accuracy statistics (mean error, MAE, RMSE, central two-thirds spread) across CBO historical evaluations.
+    coverage: 'Derived. Summary error statistics across horizons 1-11 for FY1982-FY2025 revenues (Winter baselines only) and FY1984-FY2025 outlays, deficits, and debt (Spring baselines only), excluding Fannie Mae, Freddie Mac, and 2022 student loan forgiveness.'
+    measured_on: '2026-11-27'
+    grain: One component, category, subcategory, and forecast horizon summary record.
+    columns:
+      component: Budget component (outlay, revenue, deficit, or debt).
+      category: Major budget category or Total.
+      subcategory: Budget subcategory or Total.
+      projected_year_number: Forecast horizon from 1 through 11.
+      projection_year_range: Inclusive first and last projected fiscal years in the summary sample.
+      number_of_projections: Count of evaluated baseline projections included in this horizon summary.
+      error_basis: Percentage denominator used by the summary metrics (pct_actual for outlays and revenues; pct_gdp for deficits and debt).
+      average_error_pct: Mean projection error in percentage points on error_basis.
+      average_absolute_error_pct: Mean absolute projection error in percentage points on error_basis.
+      rmse_pct: Root mean squared error in percentage points on error_basis.
+      two_thirds_spread_pct: Difference between the 5/6 and 1/6 quantiles of errors in percentage points on error_basis.
+      source_commit: Pinned 40-character Git commit SHA of US-CBO/eval-projections.
+      source_url: Immutable raw GitHub URL for the source summary-stats CSV at source_commit.
+      source_sha256: SHA-256 digest of the source summary-stats CSV bytes.
+      observed_at: UTC capture timestamp with timezone.
+
+  cbo_eval_actuals:
+    label: CBO historical budget actuals and GDP
+    subject: spending
+    identity_columns: [component, category, subcategory, fiscal_year]
+    summary: Historical realized federal outlays, revenues, deficits, debt, and nominal GDP used in CBO projection evaluations.
+    coverage: 'True range. Complete US-CBO/eval-projections input actuals from FY1982 through FY2025 (revenues from FY1982; Total outlays, deficits, and debt from FY1984; detailed outlay categories from FY1989), joined with nominal fiscal-year GDP.'
+    measured_on: '2026-11-27'
+    grain: One component, category, subcategory, and fiscal year actual observation.
+    columns:
+      component: Budget component (outlay, revenue, deficit, or debt).
+      category: Major budget category or Total.
+      subcategory: Budget subcategory or Total (preserves Fannie Freddie and literal CBO spelling Student Loan Foregiveness).
+      fiscal_year: Federal fiscal year.
+      actual_value_billions: Realized historical amount in billions of dollars.
+      gdp_billions: Nominal fiscal-year GDP in billions of dollars from actual_GDP.csv.
+      actuals_pct_gdp: Realized amount as a percentage of nominal GDP (full-precision ratio).
+      excluded_from_error_analysis: True for Fannie Freddie and Student Loan Foregiveness rows excluded from CBO projection-error tables.
+      source_commit: Pinned 40-character Git commit SHA of US-CBO/eval-projections.
+      source_url: Immutable raw GitHub URL for input_data/actuals.csv at source_commit.
+      actual_gdp_sha256: SHA-256 digest of input_data/actual_GDP.csv bytes.
+      source_sha256: SHA-256 digest of input_data/actuals.csv bytes.
+      observed_at: UTC capture timestamp with timezone.
+
+  cbo_eval_baselines:
+    label: CBO historical baseline projections
+    subject: spending
+    identity_columns: [component, category, subcategory, baseline_date, projected_fiscal_year]
+    summary: All CBO historical baseline budget projections across 1982-2026 vintages used as inputs to forecast evaluation.
+    coverage: 'True range. Complete US-CBO/eval-projections input_data/baselines.csv spanning February 1982 through February 2026 baselines and projected fiscal years 1982-2036, including non-Spring/non-Winter baselines and unrealized future years.'
+    measured_on: '2026-11-27'
+    grain: One component, category, subcategory, baseline date, and projected fiscal year baseline projection.
+    columns:
+      component: Budget component (outlay, revenue, deficit, or debt).
+      category: Major budget category or Total.
+      subcategory: Budget subcategory or Total.
+      baseline_date: Year and month of the CBO baseline release (day fixed to 01 per CBO convention).
+      spring_flag: True when CBO designates the baseline as that year's Spring baseline.
+      winter_flag: True when CBO designates the baseline as that year's Winter baseline.
+      projected_fiscal_year: Target federal fiscal year projected by the baseline.
+      projected_year_number: Forecast horizon relative to the baseline release (-1 through 11).
+      projected_value_billions: Unadjusted CBO baseline projection in billions of dollars.
+      source_commit: Pinned 40-character Git commit SHA of US-CBO/eval-projections.
+      source_url: Immutable raw GitHub URL for input_data/baselines.csv at source_commit.
+      source_sha256: SHA-256 digest of input_data/baselines.csv bytes.
+      observed_at: UTC capture timestamp with timezone.
+
+  cbo_eval_baseline_changes:
+    label: CBO baseline revision changes
+    subject: spending
+    identity_columns: [component, category, subcategory, changes_baseline_date, change_category, projected_fiscal_year]
+    summary: Legislative, economic, and technical revisions recorded between CBO baseline releases.
+    coverage: 'True range. Complete US-CBO/eval-projections input_data/baseline_changes.csv spanning 1983-2026 revision dates across Legislative, Economic, and Technical categories for outlays, deficits, and revenues (only Legislative changes are published for revenues).'
+    measured_on: '2026-11-27'
+    grain: One component, category, subcategory, revision baseline date, change category, and projected fiscal year revision.
+    columns:
+      component: Budget component (outlay, revenue, or deficit).
+      category: Major budget category or Total.
+      subcategory: Budget subcategory or Total.
+      changes_baseline_date: Year and month of the baseline revision report (day fixed to 01 per CBO convention).
+      change_category: Revision classification (Legislative, Economic, or Technical).
+      projected_fiscal_year: Target federal fiscal year affected by the revision.
+      change_value_billions: Dollar revision in billions of dollars; null when blank in the source CSV.
+      source_commit: Pinned 40-character Git commit SHA of US-CBO/eval-projections.
+      source_url: Immutable raw GitHub URL for input_data/baseline_changes.csv at source_commit.
+      source_sha256: SHA-256 digest of input_data/baseline_changes.csv bytes.
+      observed_at: UTC capture timestamp with timezone.

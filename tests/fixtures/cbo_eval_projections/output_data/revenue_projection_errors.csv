@@ -1,0 +1,7 @@
+component,category,subcategory,baseline_date,Spring_flag,Winter_flag,projected_fiscal_year,projected_year_number,value,actual_value,GDP,legislative_revenue_change,adjusted_projection,projection_error,projection_error_pct_actual,leg_change_pct_GDP,projection_error_pct_GDP
+revenue,Total,Total,1984-02-01,True,True,1984,1,663.000,666.438,3949.175,0.900,663.900,-2.538,-0.381,0.023,-0.064
+revenue,Total,Total,2024-02-01,False,True,2025,2,4996.131,5234.616,30362.025,-134.991,4861.140,-373.476,-7.135,-0.445,-1.230
+revenue,Total,Total,2024-06-01,True,False,2025,2,5037.628,5234.616,30362.025,-137.315,4900.313,-334.303,-6.386,-0.452,-1.101
+revenue,Customs Duties,Customs Duties,1984-02-01,True,True,1984,1,10.200,11.370,3949.175,0.000,10.200,-1.170,-10.290,0.000,-0.030
+revenue,Customs Duties,Customs Duties,2024-02-01,False,True,2025,2,82.943,194.866,30362.025,0.000,82.943,-111.923,-57.436,0.000,-0.369
+revenue,Customs Duties,Customs Duties,2024-06-01,True,False,2025,2,76.187,194.866,30362.025,0.000,76.187,-118.679,-60.903,0.000,-0.391
