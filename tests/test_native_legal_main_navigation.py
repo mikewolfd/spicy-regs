@@ -310,21 +310,27 @@ def test_v2_rule1_prior_restores_and_coexists_with_v4_rule2_and_explorer_navigat
     ) == ["117", "2", "1"]
 
 
-def test_legislative_documents_v2_xpath_only_bundle_restores_and_upgrades_to_v3(tmp_path, monkeypatch):
+@pytest.mark.parametrize("prior_ref_version", ["legislative-documents/2", "legislative-documents/3"])
+def test_legislative_documents_v2_and_v3_xpath_only_bundles_restore_and_upgrade_to_v4(
+    tmp_path, monkeypatch, prior_ref_version
+):
+    """Genuine 20-col / 13-col XPath-only /003 bundles under BOTH /2 and /3 restore cleanly and upgrade to /4."""
     import pyarrow as pa
 
     from spicy_regs import legislative_receipts as receipts
     from spicy_regs.policy_migrations import earlier_policy
 
     files, _ = run(FIXTURES / "manifest.json", tmp_path / "source")
-    span_cols = ("text_rendition", "text_offset_unit", "text_rendition_sha256",
-                 "text_span_start", "text_span_end", "span_text")
+    span_cols = (
+        "text_rendition", "text_offset_unit", "text_rendition_sha256",
+        "text_span_start", "text_span_end", "span_text",
+    )
     read_span_cols = ("text_rendition", "text_offset_unit", "text_rendition_sha256")
 
-    # Materialize genuine XPath-only 20-col / 13-col /003 raw tables before sealing v2-bundle.
-    v2_raw_dir = tmp_path / "v2-raw"
-    v2_raw_dir.mkdir()
-    v2_files = []
+    # Materialize genuine XPath-only 20-col / 13-col /003 raw tables before sealing prior bundle.
+    prior_raw_dir = tmp_path / "prior-raw"
+    prior_raw_dir.mkdir()
+    prior_files = []
     for path in files:
         rows = pq.read_table(path).to_pylist()
         if path.name == "native_legal_references.parquet":
@@ -334,48 +340,67 @@ def test_legislative_documents_v2_xpath_only_bundle_restores_and_upgrades_to_v3(
                 for cand in cands:
                     cand.pop("rendition_span_start", None)
                     cand.pop("rendition_span_end", None)
+                    if prior_ref_version == "legislative-documents/2":
+                        cand["resolution_rule"] = "selected-target-lookup/1"
+                        if cand.get("target_table_selected") == "usc_release_point_sections":
+                            cand["target_table_selected"] = "law_code_sections"
+                        for key in cand.get("candidate_keys") or []:
+                            key.pop("usc_title", None)
+                            key.pop("usc_section_key", None)
+                    elif cand.get("cite_kind") == "usc_section" and not cand.get("candidate_keys"):
+                        # Exercise usc_title/usc_section_key keys inside /3 bundle restore.
+                        parts = str(cand.get("normalized_key") or "5-401").split("-", 1)
+                        cand["candidate_keys"] = [{"usc_title": parts[0], "usc_section_key": parts[1]}]
+                        cand["target_table_selected"] = "usc_release_point_sections"
+                        cand["target_status"] = "found"
+                        cand["match_count"] = 1
                 stripped.append({
                     **{k: v for k, v in item.items() if k not in span_cols},
                     "rule_version": "native-legal-reference/003",
                     "target_candidates_json": json.dumps(cands),
                 })
-            out = v2_raw_dir / path.name
+            out = prior_raw_dir / path.name
             pq.write_table(pa.Table.from_pylist(stripped), out)
             assert len(pq.read_schema(out).names) == 20
-            v2_files.append(out)
+            prior_files.append(out)
         elif path.name == "native_legal_reference_reads.parquet":
             stripped = [
                 {**{k: v for k, v in item.items() if k not in read_span_cols},
                  "rule_version": "native-legal-reference/003"}
                 for item in rows
             ]
-            out = v2_raw_dir / path.name
+            out = prior_raw_dir / path.name
             pq.write_table(pa.Table.from_pylist(stripped), out)
             assert len(pq.read_schema(out).names) == 13
-            v2_files.append(out)
+            prior_files.append(out)
         else:
-            v2_files.append(path)
+            prior_files.append(path)
 
-    old_v2 = {name: earlier_policy(name, "legislative-documents/2")
-              for name in ("native_legal_references", "native_legal_reference_reads")}
+    old_policies = {
+        "native_legal_references": earlier_policy("native_legal_references", prior_ref_version),
+        "native_legal_reference_reads": earlier_policy("native_legal_reference_reads", "legislative-documents/2"),
+    }
     current_policy, current_map = receipts.policy, receipts.map_subject
 
-    def v2_map(dataset, raw):
-        if dataset not in old_v2:
+    def prior_map(dataset, raw):
+        if dataset not in old_policies:
             return current_map(dataset, raw)
+        pol = old_policies[dataset]
         return recorded_subject(
-            dataset, raw, dict.fromkeys(old_v2[dataset].subject_schema.names), policy_version="legislative-documents/2"
+            dataset, raw, dict.fromkeys(pol.subject_schema.names), policy_version=pol.policy_version
         )
 
     with monkeypatch.context() as patch:
-        patch.setattr(receipts, "policy", lambda name: old_v2.get(name) or current_policy(name))
-        patch.setattr(receipts, "map_subject", v2_map)
-        v2_manifest = write_legislative_outputs(v2_files, tmp_path / "v2-bundle", generation_id="v2-generation")
-    assert not any(v2_manifest["refused_rows"].values())
-    assert "text_span_start" not in pq.read_schema(tmp_path / "v2-bundle/native_legal_references.parquet").names
-    assert "text_rendition" not in pq.read_schema(tmp_path / "v2-bundle/native_legal_reference_reads.parquet").names
+        patch.setattr(receipts, "policy", lambda name: old_policies.get(name) or current_policy(name))
+        patch.setattr(receipts, "map_subject", prior_map)
+        prior_manifest = write_legislative_outputs(
+            prior_files, tmp_path / "prior-bundle", generation_id="prior-generation"
+        )
+    assert not any(prior_manifest["refused_rows"].values())
+    assert "text_span_start" not in pq.read_schema(tmp_path / "prior-bundle/native_legal_references.parquet").names
+    assert "text_rendition" not in pq.read_schema(tmp_path / "prior-bundle/native_legal_reference_reads.parquet").names
 
-    restored = restore_prior(tmp_path / "v2-bundle", tmp_path / "restored")
+    restored = restore_prior(tmp_path / "prior-bundle", tmp_path / "restored")
     restored_ref_cols = pq.read_schema(restored["native_legal_references"]).names
     restored_read_cols = pq.read_schema(restored["native_legal_reference_reads"]).names
     assert len(restored_ref_cols) == 20 and not (set(span_cols) & set(restored_ref_cols))
@@ -383,12 +408,12 @@ def test_legislative_documents_v2_xpath_only_bundle_restores_and_upgrades_to_v3(
 
     upgraded = write_legislative_outputs(
         [restored["native_legal_references"], restored["native_legal_reference_reads"]],
-        tmp_path / "v3-bundle",
-        generation_id="v3-generation",
+        tmp_path / "v4-bundle",
+        generation_id="v4-generation",
     )
     assert not any(upgraded["refused_rows"].values())
-    upgraded_refs = pq.read_table(tmp_path / "v3-bundle/native_legal_references.parquet")
-    upgraded_reads = pq.read_table(tmp_path / "v3-bundle/native_legal_reference_reads.parquet")
+    upgraded_refs = pq.read_table(tmp_path / "v4-bundle/native_legal_references.parquet")
+    upgraded_reads = pq.read_table(tmp_path / "v4-bundle/native_legal_reference_reads.parquet")
     assert set(span_cols) <= set(upgraded_refs.schema.names)
     assert set(read_span_cols) <= set(upgraded_reads.schema.names)
     for item in upgraded_refs.to_pylist():

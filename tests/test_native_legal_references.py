@@ -539,11 +539,14 @@ def test_statute_replay_emits_verified_spans_and_merges_over_legacy_xpath_only_p
     assert int(repeated[0]["text_span_end"]) < int(repeated[1]["text_span_start"])
     assert int(repeated[1]["text_span_end"]) < int(repeated[2]["text_span_start"])
 
-    # Resolved USC section check on 50 U.S.C. 1622.
+    # Resolved USC section check on 50 U.S.C. 1622 under selected-target-lookup/2.
     s1622 = next(r for r in statute_rows if r["href"] == "/us/usc/t50/s1622")
     assert s1622["span_text"] == "50 U.S.C. 1622"
     [cand1622] = json.loads(s1622["target_candidates_json"])
     assert cand1622["target_status"] == "found" and cand1622["normalized_key"] == "50-1622"
+    assert cand1622["resolution_rule"] == "selected-target-lookup/2"
+    assert cand1622["target_table_selected"] == "usc_release_point_sections"
+    assert cand1622["candidate_keys"] == [{"usc_title": "50", "usc_section_key": "1622"}]
 
     # Seal under legislative-documents/4 (refs) and /3 (reads) and verify native Arrow span columns and integrity.
     bundle = tmp_path / "sealed-bundle"
