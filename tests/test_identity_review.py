@@ -395,3 +395,87 @@ def test_person_batch_sheet_render_check_and_stale_marker(tmp_path):
     env = {**os.environ, "PYTHONPATH": "src"}
     subprocess.run(base, env=env, check=True, capture_output=True)
     subprocess.run([*base, "--check"], env=env, check=True, capture_output=True)
+
+
+def test_person_cli_stale_candidate_revoke_and_replace_no_deadlock(tmp_path):
+    """Finding 2 regression: stale accepted decision can be revoked & replaced via CLI without deadlock."""
+    c1 = person_candidate(stated_name="Jane Q. Example")
+    c2 = person_candidate(stated_name="Jane Q. Example-Updated")
+    d1 = person_candidate_digest(c1)
+    d2 = person_candidate_digest(c2)
+    assert d1 != d2
+
+    candidates_path = tmp_path / "candidates.json"
+    history_path = tmp_path / "history.jsonl"
+    review_path = tmp_path / "review.json"
+    base = [sys.executable, "-m", "spicy_regs.identity_review"]
+    env = {**os.environ, "PYTHONPATH": "src"}
+
+    # Step 1: accept c1 via CLI.
+    candidates_path.write_text(json.dumps([c1]))
+    review_path.write_text(json.dumps(person_claim(c1, decision="accepted", prior=None)))
+    r1 = subprocess.run(
+        [*base, "decide", "--candidates", str(candidates_path), "--history", str(history_path),
+         "--candidate-id", c1["candidate_id"], "--review", str(review_path)],
+        env=env, check=True, capture_output=True, text=True,
+    )
+    out1 = json.loads(r1.stdout)[0]
+    assert out1["status"] == "accepted" and out1["effective"] is True
+    e1_id = out1["latest_event"]["event_id"]
+
+    # Step 2: content changes -> candidates.json now carries c2 under the same candidate_id.
+    candidates_path.write_text(json.dumps([c2]))
+    r_stale = subprocess.run(
+        [*base, "replay", "--candidates", str(candidates_path), "--history", str(history_path)],
+        env=env, check=True, capture_output=True, text=True,
+    )
+    stale_out = json.loads(r_stale.stdout)[0]
+    assert stale_out["status"] == "stale_candidate"
+    assert stale_out["effective"] is False
+    assert stale_out["in_review_queue"] is True
+
+    # Direct accept of c2 without revoking e1 must still fail (revoke-before-replace).
+    review_path.write_text(json.dumps(person_claim(c2, decision="accepted", prior=e1_id)))
+    direct = subprocess.run(
+        [*base, "decide", "--candidates", str(candidates_path), "--history", str(history_path),
+         "--candidate-id", c2["candidate_id"], "--review", str(review_path)],
+        env=env, capture_output=True, text=True,
+    )
+    assert direct.returncode != 0
+
+    # Step 3: revoke stale e1 via CLI while candidates.json holds c2 (must NOT deadlock!).
+    review_path.write_text(json.dumps(person_claim(c1, decision="revoked", prior=e1_id)))
+    r_rev = subprocess.run(
+        [*base, "decide", "--candidates", str(candidates_path), "--history", str(history_path),
+         "--candidate-id", c2["candidate_id"], "--review", str(review_path)],
+        env=env, check=True, capture_output=True, text=True,
+    )
+    rev_out = json.loads(r_rev.stdout)[0]
+    assert rev_out["latest_event"]["decision"] == "revoked"
+    assert rev_out["in_review_queue"] is True
+    e2_id = rev_out["latest_event"]["event_id"]
+
+    # Step 4: accept c2 cleanly on top of the revocation.
+    review_path.write_text(json.dumps(person_claim(c2, decision="accepted", prior=e2_id)))
+    r_acc2 = subprocess.run(
+        [*base, "decide", "--candidates", str(candidates_path), "--history", str(history_path),
+         "--candidate-id", c2["candidate_id"], "--review", str(review_path)],
+        env=env, check=True, capture_output=True, text=True,
+    )
+    acc2_out = json.loads(r_acc2.stdout)[0]
+    assert acc2_out["status"] == "accepted"
+    assert acc2_out["effective"] is True
+    assert acc2_out["candidate_digest"] == d2
+    e3_id = acc2_out["latest_event"]["event_id"]
+
+    # Step 5: revoking via CLI also works when the candidate has vanished completely from candidates.json.
+    candidates_path.write_text(json.dumps([]))
+    review_path.write_text(json.dumps(person_claim(c2, decision="revoked", prior=e3_id)))
+    r_rev_empty = subprocess.run(
+        [*base, "decide", "--candidates", str(candidates_path), "--history", str(history_path),
+         "--candidate-id", c2["candidate_id"], "--review", str(review_path)],
+        env=env, check=True, capture_output=True, text=True,
+    )
+    rev_empty_out = json.loads(r_rev_empty.stdout)[0]
+    assert rev_empty_out["latest_event"]["decision"] == "revoked"
+    assert len(verify_person_history([json.loads(line) for line in history_path.read_text().splitlines()])) == 4

@@ -4,7 +4,9 @@ from __future__ import annotations
 import json
 from datetime import date
 from pathlib import Path
+from typing import Any
 
+import duckdb
 import pyarrow.parquet as pq
 import pytest
 
@@ -15,6 +17,7 @@ from spicy_regs.identity_review import (
     make_decision,
     person_candidate_digest,
     render_person_batch_sheet,
+    replay,
 )
 from spicy_regs.local_publication import LOCAL_FAMILIES
 from spicy_regs.pipelines.rollups.base import RollupPipeline
@@ -33,6 +36,7 @@ from spicy_regs.transforms.person_identity_candidates import (
     normalize_lda_lobbyist_name,
     normalize_organization,
     normalize_person_name,
+    query_prefiltered_lda_rows,
 )
 
 
@@ -127,10 +131,13 @@ def test_suffix_and_middle_initial_guards_block_conflicts_and_allow_single_state
 
 
 def test_organization_normalization_never_cuts_at_first_comma_and_strips_only_trailing_places():
-    # Crucial invariant: OIG, DoD != OIG, HHS (never cut at first comma!).
+    # Crucial invariant: OIG, DoD != OIG, HHS != OIG, VA (never cut at first comma or strip bare acronyms!).
     assert normalize_organization("OIG, DoD") != normalize_organization("OIG, HHS")
     assert normalize_organization("OIG, DoD") == "oig dod"
     assert normalize_organization("OIG, HHS") == "oig hhs"
+    assert normalize_organization("OIG, VA") == "oig va"
+    assert normalize_organization("OIG, VA") != normalize_organization("OIG, DoD")
+    assert normalize_organization("OIG, VA") != normalize_organization("OIG, HHS")
     assert (
         normalize_organization("Office of Inspector General, Department of Defense")
         != normalize_organization("Office of Inspector General, Department of Health and Human Services")
@@ -140,9 +147,17 @@ def test_organization_normalization_never_cuts_at_first_comma_and_strips_only_tr
         != normalize_organization("University of California, Los Angeles")
     )
 
+    # Finding 5 regression: legal/entity abbreviations matching 2-letter US state codes MUST NOT be stripped!
+    assert normalize_organization("Smith Law, P.A.") == "smith law p a"
+    assert normalize_organization("Smith Law, PA") == "smith law pa"
+    assert normalize_organization("Acme, Co.") == "acme co"
+    assert normalize_organization("Clinic, M.D.") == "clinic m d"
+
     # Trailing place names stripped cleanly while preserving comma-separated sub-units.
     assert normalize_organization("American Enterprise Institute, Washington, DC") == "american enterprise institute"
     assert normalize_organization("Department of Justice, Washington, D.C") == "department of justice"
+    assert normalize_organization("Department of Defense, D.C.") == "department of defense"
+    assert normalize_organization("Acme Corp, VA 22201") == "acme corp"
     assert normalize_organization("Harvard Law School, Cambridge, Massachusetts") == "harvard law school"
     assert (
         normalize_organization("Criminal Division, U.S. Department of Justice, Washington, DC")
@@ -152,7 +167,10 @@ def test_organization_normalization_never_cuts_at_first_comma_and_strips_only_tr
     assert normalize_organization("Café Policy Institute, Austin, TX") == "cafe policy institute"
 
     # Bare place names, empty orgs, bare titles, and private-citizen markers never merge.
-    for unmergeable in ("", "   ", "Washington, DC", "New York, NY", "Private Citizen", "Self", "Director"):
+    for unmergeable in (
+        "", "   ", "Washington, DC", "Washington, D.C", "New York, NY",
+        "Philadelphia, Pennsylvania", "Private Citizen", "Self", "Director",
+    ):
         assert normalize_organization(unmergeable) == ""
 
 
@@ -554,3 +572,272 @@ def test_person_identity_decisions_rollup_builds_verified_generation_and_enforce
     # Direct builder round-trip also verifies cleanly.
     direct = build_person_identity_decisions(tmp_path / "direct", history_path=log_path)
     assert len(verify_decisions_parquet(direct)) == 3
+
+
+# ---------------------------------------------------------------------------
+# Independent review regression tests (Findings 1, 3, 4)
+# ---------------------------------------------------------------------------
+
+
+def test_candidate_digest_is_invariant_across_new_quarterly_lda_filings():
+    """Finding 1 regression: appending a new quarterly LDA filing must NOT mutate quoted_span or candidate_digest."""
+    witnesses = [{
+        "witness_key": "w_quarterly",
+        "source": "congress_gov",
+        "record_sha": bytes.fromhex("ab" * 32),
+        "source_locator": "congress_gov:witness[1]",
+        "name": "Jordan Example",
+        "organization": "American Widget Council, Washington, DC",
+        "witness_type": "Non-Governmental",
+        "bioguide_id": None,
+        "matched_bioguide_id": None,
+        "superseded_by": None,
+        "hearing_date": date(2024, 5, 10),
+    }]
+    q2_2024 = [{
+        "filing_uuid": "uuid-2024-q2",
+        "lobbyist_id": "88001",
+        "prefix": None,
+        "first_name": "JORDAN",
+        "middle_name": None,
+        "last_name": "EXAMPLE",
+        "suffix": None,
+        "covered_position": None,
+        "filing_year": 2024,
+        "filing_period": "second_quarter",
+        "registrant_name": "American Widget Council",
+        "client_name": "American Widget Council",
+    }]
+    later_filings = [
+        *q2_2024,
+        {
+            **q2_2024[0],
+            "filing_uuid": "uuid-2024-q3",
+            "prefix": "Mr.",
+            "filing_period": "third_quarter",
+            "registrant_name": "AMERICAN WIDGET COUNCIL",
+            "client_name": "AMERICAN WIDGET COUNCIL",
+        },
+        {
+            **q2_2024[0],
+            "filing_uuid": "uuid-2025-q1",
+            "prefix": "Mr.",
+            "filing_year": 2025,
+            "filing_period": "first_quarter",
+            "registrant_name": "Outside Firm LLC",
+            "client_name": "AMERICAN WIDGET COUNCIL",
+        },
+    ]
+
+    before_cands, _ = match_lda_witness_candidates(
+        witnesses, q2_2024, ct_release_id="453351a3" + "0" * 56, lobbying_generation_digest="sha256:" + "1" * 64,
+    )
+    after_cands, _ = match_lda_witness_candidates(
+        witnesses, later_filings, ct_release_id="453351a3" + "0" * 56, lobbying_generation_digest="sha256:" + "2" * 64,
+    )
+    assert len(before_cands) == 1 and len(after_cands) == 1
+    before, after = before_cands[0], after_cands[0]
+
+    # Diagnostic fields update cleanly as new quarterly filings arrive:
+    assert before["lda_filing_count"] == 1 and after["lda_filing_count"] == 3
+    assert before["lda_filing_years"] == [2024] and after["lda_filing_years"] == [2024, 2025]
+    # Immutable quoted_span and content_digest remain BYTE-IDENTICAL:
+    assert before["quoted_span"] == after["quoted_span"]
+    assert before["content_digest"] == after["content_digest"]
+
+    # An accepted decision made before the new filings stays active (NOT stale) afterward!
+    accepted = make_decision(
+        before,
+        [],
+        expected_candidate_digest=before["content_digest"],
+        expected_event_id=None,
+        decision="accepted",
+        reviewer="owner-fixture",
+        decided_at="2026-11-27T16:00:00Z",
+        reason="Quarterly invariance check",
+        evidence=[{
+            "kind": "hearing_record",
+            "stance": "supporting",
+            "locator": "ct:witness:w_quarterly#congress_gov:witness[1]",
+            "sha256": before["body_sha256"],
+            "claim": "Hearing witness record matches LDA lobbyist",
+        }],
+        scope={
+            "role": "witness_appearance_lobbyist",
+            "relationship": "same_person",
+            "valid_from": "2024-01-01",
+            "valid_to": "2025-01-01",
+            "validity_basis": "2024 Q2 filing overlaps hearing date",
+        },
+    )
+    replayed = replay([accepted], [after])[0]
+    assert replayed["status"] == "accepted" and replayed["effective"] is True
+
+
+def test_multi_value_lda_middle_initials_and_suffixes_are_blocked_not_collapsed():
+    """Finding 3 regression: competing multi-value LDA initials/suffixes must block instead of collapsing to ''."""
+    assert check_middle_initial_guard("b", {"a", "c"})[0] is False
+    assert check_middle_initial_guard("", {"a", "c"})[0] is False
+    assert check_suffix_guard("sr", {"jr", "ii"})[0] is False
+    assert check_suffix_guard("", {"jr", "ii"})[0] is False
+
+    witnesses = [
+        {
+            "witness_key": "w_mid_b",
+            "source": "mods",
+            "record_sha": bytes.fromhex("10" * 32),
+            "source_locator": "mods:witness[1]",
+            "name": "Jane B. Doe",
+            "organization": "Widget Policy Group",
+            "witness_type": "Non-Governmental",
+            "bioguide_id": None,
+            "matched_bioguide_id": None,
+            "superseded_by": None,
+            "hearing_date": date(2024, 2, 1),
+        },
+        {
+            "witness_key": "w_mid_none",
+            "source": "mods",
+            "record_sha": bytes.fromhex("11" * 32),
+            "source_locator": "mods:witness[2]",
+            "name": "Jane Doe",
+            "organization": "Widget Policy Group",
+            "witness_type": "Non-Governmental",
+            "bioguide_id": None,
+            "matched_bioguide_id": None,
+            "superseded_by": None,
+            "hearing_date": date(2024, 2, 1),
+        },
+        {
+            "witness_key": "w_suf_sr",
+            "source": "mods",
+            "record_sha": bytes.fromhex("12" * 32),
+            "source_locator": "mods:witness[3]",
+            "name": "Robert Roe Sr.",
+            "organization": "Widget Policy Group",
+            "witness_type": "Non-Governmental",
+            "bioguide_id": None,
+            "matched_bioguide_id": None,
+            "superseded_by": None,
+            "hearing_date": date(2024, 2, 1),
+        },
+        {
+            "witness_key": "w_suf_none",
+            "source": "mods",
+            "record_sha": bytes.fromhex("13" * 32),
+            "source_locator": "mods:witness[4]",
+            "name": "Robert Roe",
+            "organization": "Widget Policy Group",
+            "witness_type": "Non-Governmental",
+            "bioguide_id": None,
+            "matched_bioguide_id": None,
+            "superseded_by": None,
+            "hearing_date": date(2024, 2, 1),
+        },
+    ]
+    lda_rows = [
+        # Two competing middle initials ('a' and 'c') on the same lobbyist_id:
+        {
+            "filing_uuid": "f1", "lobbyist_id": "7001", "prefix": None,
+            "first_name": "JANE", "middle_name": "ALLEN", "last_name": "DOE", "suffix": None,
+            "covered_position": None, "filing_year": 2024, "filing_period": "first_quarter",
+            "registrant_name": "Widget Policy Group", "client_name": "Widget Policy Group",
+        },
+        {
+            "filing_uuid": "f2", "lobbyist_id": "7001", "prefix": None,
+            "first_name": "JANE", "middle_name": "CHARLES", "last_name": "DOE", "suffix": None,
+            "covered_position": None, "filing_year": 2024, "filing_period": "second_quarter",
+            "registrant_name": "Widget Policy Group", "client_name": "Widget Policy Group",
+        },
+        # Two competing suffixes ('jr' and 'ii') on the same lobbyist_id:
+        {
+            "filing_uuid": "f3", "lobbyist_id": "7002", "prefix": None,
+            "first_name": "ROBERT", "middle_name": None, "last_name": "ROE", "suffix": "JR.",
+            "covered_position": None, "filing_year": 2024, "filing_period": "first_quarter",
+            "registrant_name": "Widget Policy Group", "client_name": "Widget Policy Group",
+        },
+        {
+            "filing_uuid": "f4", "lobbyist_id": "7002", "prefix": None,
+            "first_name": "ROBERT", "middle_name": None, "last_name": "ROE", "suffix": "II",
+            "covered_position": None, "filing_year": 2024, "filing_period": "second_quarter",
+            "registrant_name": "Widget Policy Group", "client_name": "Widget Policy Group",
+        },
+    ]
+    cands, stats = match_lda_witness_candidates(witnesses, lda_rows)
+    assert cands == []
+    assert stats["blocked_middle_initial"] == 2
+    assert stats["blocked_suffix"] == 2
+
+
+def test_duckdb_sql_prefilter_handles_honorifics_parentheticals_credentials_and_transliterations(tmp_path):
+    """Finding 4 regression: SQL pre-filter aligns with Python normalization across edge cases."""
+    lob_parquet = tmp_path / "lobbying_activity_lobbyists.parquet"
+    fil_parquet = tmp_path / "lobbying_filings.parquet"
+    with duckdb.connect() as con:
+        con.execute(f"""
+            COPY (
+                SELECT * FROM (VALUES
+                    ('u1', '101', NULL::VARCHAR, 'Dr. Søren', NULL::VARCHAR, 'Kierkegaard, Ph.D.', NULL::VARCHAR, NULL::VARCHAR),
+                    ('u2', '102', NULL::VARCHAR, '(Hon.) José', NULL::VARCHAR, 'García-López (Ret.), Jr.', NULL::VARCHAR, NULL::VARCHAR),
+                    ('u3', '103', NULL::VARCHAR, 'Lt. Gen. Patrick', NULL::VARCHAR, 'O''Connor, Esq.', NULL::VARCHAR, NULL::VARCHAR),
+                    ('u4', '104', NULL::VARCHAR, 'John', NULL::VARCHAR, 'Major', NULL::VARCHAR, NULL::VARCHAR),
+                    ('u5', '999', NULL::VARCHAR, 'Unrelated', NULL::VARCHAR, 'NoisePerson', NULL::VARCHAR, NULL::VARCHAR)
+                ) t(filing_uuid, lobbyist_id, prefix, first_name, middle_name, last_name, suffix, covered_position)
+            ) TO '{lob_parquet}' (FORMAT PARQUET)
+        """)
+        con.execute(f"""
+            COPY (
+                SELECT * FROM (VALUES
+                    ('u1', 2024::BIGINT, 'first_quarter', 'Nordic Policy Forum', 'Nordic Policy Forum'),
+                    ('u2', 2024::BIGINT, 'second_quarter', 'Solar Alliance', 'Solar Alliance'),
+                    ('u3', 2024::BIGINT, 'third_quarter', 'Maritime Council', 'Maritime Council'),
+                    ('u4', 2024::BIGINT, 'fourth_quarter', 'Civic Standards Institute', 'Civic Standards Institute'),
+                    ('u5', 2024::BIGINT, 'fourth_quarter', 'Noise Org', 'Noise Org')
+                ) t(filing_uuid, filing_year, filing_period, registrant_name, client_name)
+            ) TO '{fil_parquet}' (FORMAT PARQUET)
+        """)
+
+        witnesses: list[dict[str, Any]] = [
+            {
+                "witness_key": "w_soren", "source": "mods", "record_sha": bytes.fromhex("21" * 32),
+                "source_locator": "mods:witness[1]", "name": "Soren Kierkegaard",
+                "organization": "Nordic Policy Forum", "witness_type": "Non-Governmental",
+                "bioguide_id": None, "matched_bioguide_id": None, "superseded_by": None,
+                "hearing_date": date(2024, 2, 1),
+            },
+            {
+                "witness_key": "w_jose", "source": "mods", "record_sha": bytes.fromhex("22" * 32),
+                "source_locator": "mods:witness[2]", "name": "Jose Garcia Lopez Jr.",
+                "organization": "Solar Alliance", "witness_type": "Non-Governmental",
+                "bioguide_id": None, "matched_bioguide_id": None, "superseded_by": None,
+                "hearing_date": date(2024, 5, 1),
+            },
+            {
+                "witness_key": "w_pat", "source": "mods", "record_sha": bytes.fromhex("23" * 32),
+                "source_locator": "mods:witness[3]", "name": "Patrick O'Connor",
+                "organization": "Maritime Council", "witness_type": "Non-Governmental",
+                "bioguide_id": None, "matched_bioguide_id": None, "superseded_by": None,
+                "hearing_date": date(2024, 8, 1),
+            },
+            {
+                "witness_key": "w_major", "source": "mods", "record_sha": bytes.fromhex("24" * 32),
+                "source_locator": "mods:witness[4]", "name": "John Major",
+                "organization": "Civic Standards Institute", "witness_type": "Non-Governmental",
+                "bioguide_id": None, "matched_bioguide_id": None, "superseded_by": None,
+                "hearing_date": date(2024, 11, 1),
+            },
+        ]
+        pairs = [
+            (norm.tokens[0], norm.tokens[-1])
+            for w in witnesses
+            if (norm := normalize_person_name(w["name"])).name_key
+        ]
+        filtered = query_prefiltered_lda_rows(
+            con,
+            lobbyists_source=f"read_parquet('{lob_parquet}')",
+            filings_source=f"read_parquet('{fil_parquet}')",
+            witness_name_pairs=pairs,
+        )
+    assert {r["lobbyist_id"] for r in filtered} == {"101", "102", "103", "104"}
+    cands, _ = match_lda_witness_candidates(witnesses, filtered)
+    assert {c["witness_key"] for c in cands} == {"w_soren", "w_jose", "w_pat", "w_major"}

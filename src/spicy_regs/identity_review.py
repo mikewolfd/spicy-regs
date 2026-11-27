@@ -572,6 +572,30 @@ def replay(history: Sequence[Mapping[str, Any]], candidates: Sequence[Mapping[st
     return result
 
 
+def _find_prior_accepted_person_candidate(
+    history: Sequence[Mapping[str, Any]],
+    *,
+    candidate_id: str,
+    expected_candidate_digest: str,
+) -> Mapping[str, Any] | None:
+    """Locate the latest accepted person candidate in ``history`` for revoking a stale decision."""
+    latest_for_id: Mapping[str, Any] | None = None
+    for raw in history:
+        cand = raw.get("candidate")
+        if isinstance(cand, Mapping) and cand.get("candidate_id") == candidate_id:
+            latest_for_id = raw
+    if (
+        latest_for_id is not None
+        and latest_for_id.get("rule") == PERSON_RULE
+        and latest_for_id.get("decision") == "accepted"
+        and latest_for_id.get("candidate_digest") == expected_candidate_digest
+    ):
+        prior_cand = latest_for_id.get("candidate")
+        if isinstance(prior_cand, Mapping):
+            return prior_cand
+    return None
+
+
 def make_decision(
     candidate: Mapping[str, Any],
     history: Sequence[Mapping[str, Any]],
@@ -585,21 +609,39 @@ def make_decision(
     evidence: list[dict[str, Any]],
     scope: dict[str, Any],
 ) -> dict[str, Any]:
-    """Construct a decision only for the exact reviewed candidate and history tip."""
-    fingerprint = candidate_digest(candidate)
+    """Construct a decision only for the exact reviewed candidate and history tip.
+
+    For ``person-identity-review/1``, revoking a stale accepted decision is supported even when
+    the caller passes the updated candidate bytes under the same ``candidate_id``: if
+    ``decision == "revoked"`` and ``expected_candidate_digest`` matches the prior accepted
+    event in ``history``, the revocation binds cleanly to that accepted candidate's content
+    so the reviewer can then record a new decision on the updated candidate without deadlock.
+    """
+    target_candidate: Mapping[str, Any] = candidate
+    fingerprint = candidate_digest(target_candidate)
     if fingerprint != expected_candidate_digest:
-        raise ValueError("Stale candidate: reviewed digest differs from current candidate")
+        if decision == "revoked" and is_person_candidate(candidate):
+            prior_accepted = _find_prior_accepted_person_candidate(
+                history,
+                candidate_id=str(candidate.get("candidate_id") or ""),
+                expected_candidate_digest=expected_candidate_digest,
+            )
+            if prior_accepted is not None:
+                target_candidate = prior_accepted
+                fingerprint = candidate_digest(target_candidate)
+        if fingerprint != expected_candidate_digest:
+            raise ValueError("Stale candidate: reviewed digest differs from current candidate")
     last = history[-1]["event_id"] if history else None
     if expected_event_id != last:
         raise ValueError("Stale history: review the latest decision before appending")
 
-    if is_person_candidate(candidate):
+    if is_person_candidate(target_candidate):
         event: dict[str, Any] = {
             "rule": PERSON_RULE,
             "policy_version": PERSON_RULE,
-            "witness_key": candidate["witness_key"],
-            "external_native_id": candidate["external_native_id"],
-            "candidate": dict(candidate),
+            "witness_key": target_candidate["witness_key"],
+            "external_native_id": target_candidate["external_native_id"],
+            "candidate": dict(target_candidate),
             "candidate_digest": fingerprint,
             "previous_event_id": last,
             "decision": decision,
@@ -612,7 +654,7 @@ def make_decision(
     else:
         event = {
             "rule": RULE,
-            "candidate": dict(candidate),
+            "candidate": dict(target_candidate),
             "candidate_digest": fingerprint,
             "previous_event_id": last,
             "decision": decision,
@@ -623,7 +665,7 @@ def make_decision(
             "scope": scope,
         }
     event["event_id"] = _digest(event)
-    replay([*history, event], [candidate])
+    replay([*history, event], [target_candidate])
     return event
 
 
@@ -819,8 +861,22 @@ def main() -> None:
         if args.command == "decide":
             if args.review is None or args.candidate_id is None:
                 parser.error("--review and --candidate-id are required for a decision")
-            (candidate,) = [c for c in candidates if c["candidate_id"] == args.candidate_id]
-            event = make_decision(candidate, history, **_read_json(args.review))
+            review_kwargs = _read_json(args.review)
+            matches = [c for c in candidates if c["candidate_id"] == args.candidate_id]
+            if len(matches) == 1:
+                candidate = matches[0]
+            elif not matches and review_kwargs.get("decision") == "revoked":
+                prior_accepted = _find_prior_accepted_person_candidate(
+                    history,
+                    candidate_id=args.candidate_id,
+                    expected_candidate_digest=str(review_kwargs.get("expected_candidate_digest") or ""),
+                )
+                if prior_accepted is None:
+                    raise ValueError(f"Unknown candidate_id {args.candidate_id!r} for revocation")
+                candidate = dict(prior_accepted)
+            else:
+                raise ValueError(f"Expected exactly one candidate with candidate_id={args.candidate_id!r}")
+            event = make_decision(candidate, history, **review_kwargs)
             stream.seek(0, os.SEEK_END)
             stream.write(_canonical(event).decode() + "\n")
             stream.flush()

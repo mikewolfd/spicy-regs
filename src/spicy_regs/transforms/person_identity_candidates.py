@@ -134,14 +134,10 @@ _NON_CITY_WORDS = frozenset({
     "sec", "fcc", "fda", "cdc", "irs", "gao", "crs", "cbo",
 })
 
-#: Trailing tokens on the remaining org prefix that indicate a trailing state is part of the
-#: organization's own name (e.g. "University of Virginia", "State of Texas") rather than an address.
-_ORG_FRAGMENT_TAILS = frozenset({
-    "of", "for", "in", "at", "state", "university", "department", "office", "bureau",
-    "agency", "commission", "board", "committee", "district", "county", "city", "town",
-    "village", "commonwealth", "port", "authority", "chapter", "branch", "section",
-    "division", "council", "association", "federation", "bar", "chamber",
-})
+#: Trailing prepositions/articles that cannot grammatically end a standalone organization name
+#: (never institutional nouns like ``council``, ``association``, ``agency``, or ``commission``,
+#: which routinely precede ``, Washington, DC``).
+_ORG_FRAGMENT_TAILS = frozenset({"of", "for", "in", "at", "the"})
 
 _EXTRA_TRANSLIT = str.maketrans({
     "ø": "o",
@@ -161,7 +157,20 @@ _DOTTED_CRED_RE = re.compile(
     r"u\.s\.a\.f|u\.s\.m\.c|u\.s\.c\.g|u\.s\.s\.f|u\.s\.a|u\.s\.n)\.?",
     re.IGNORECASE,
 )
-_ZIP_TAIL_RE = re.compile(r"(?:\s+\d{5}(?:-\d{4})?)?\s*$")
+_ZIP_TAIL_RE = re.compile(r"\s+\d{5}(?:-\d{4})?\s*$")
+
+#: Major US city names recognized when an organization field is literally a bare ``City, ST`` place.
+_KNOWN_BARE_CITIES = frozenset({
+    "washington", "new york", "los angeles", "chicago", "houston", "phoenix", "philadelphia",
+    "san antonio", "san diego", "dallas", "san jose", "austin", "jacksonville", "fort worth",
+    "columbus", "charlotte", "san francisco", "indianapolis", "seattle", "denver", "boston",
+    "nashville", "detroit", "portland", "las vegas", "memphis", "louisville", "baltimore",
+    "milwaukee", "albuquerque", "tucson", "fresno", "sacramento", "atlanta", "miami",
+    "oakland", "minneapolis", "cleveland", "new orleans", "tampa", "orlando", "pittsburgh",
+    "cincinnati", "st louis", "saint louis", "kansas city", "raleigh", "richmond",
+    "salt lake city", "alexandria", "arlington", "bethesda", "silver spring", "mclean",
+    "reston", "fairfax", "cambridge", "new haven", "princeton", "palo alto", "berkeley",
+})
 
 #: Exact calendar bounds for Senate LDA filing periods.
 LDA_FILING_PERIOD_BOUNDS: dict[str, tuple[tuple[int, int], tuple[int, int]]] = {
@@ -227,9 +236,9 @@ def _collapse_dotted_credentials(text: str) -> str:
     return _DOTTED_CRED_RE.sub(lambda m: m.group(0).replace(".", ""), text)
 
 
-def _tokenize_with_explicit_hyphens(text: str) -> list[str]:
+def _tokenize_with_explicit_hyphens(text: str, *, collapse_credentials: bool = True) -> list[str]:
     """Elide apostrophes, convert hyphens to spaces BEFORE punctuation-to-space, and tokenize."""
-    cleaned = _collapse_dotted_credentials(text)
+    cleaned = _collapse_dotted_credentials(text) if collapse_credentials else text
     cleaned = _APOSTROPHE_RE.sub("", cleaned)
     # Explicit hyphen handling BEFORE general punctuation-to-space (contract-review.md:23,118).
     cleaned = _HYPHEN_RE.sub(" ", cleaned)
@@ -394,21 +403,34 @@ def normalize_lda_lobbyist_name(
     )
 
 
-def _is_us_state_token(segment: str) -> tuple[bool, bool]:
-    """Return ``(is_state, is_abbrev_or_dc)`` for a comma-delimited trailing place segment."""
-    cleaned = _ZIP_TAIL_RE.sub("", segment).strip().rstrip(".").strip()
+def _is_us_state_token(segment: str) -> tuple[bool, bool, bool, bool]:
+    """Return ``(is_state, is_dc, is_full_name, has_zip)`` for a comma-delimited trailing segment.
+
+    Deliberately rejects dotted legal/professional abbreviations such as ``P.A.``, ``Co.``,
+    and ``M.D.`` so only ``D.C.``/``D.C`` is accepted with dots as a 2-letter place code.
+    """
+    has_zip = bool(_ZIP_TAIL_RE.search(segment))
+    cleaned = _ZIP_TAIL_RE.sub("", segment).strip()
     if not cleaned:
-        return False, False
-    # Handle "d.c." / "d.c" / "n.y." style dotted two-letter abbreviations.
-    compact = re.sub(r"[\s.]+", "", cleaned)
-    if compact in US_STATE_ABBREVS and len(cleaned) <= 5:
-        return True, True
+        return False, False, False, has_zip
+
+    # Explicit D.C. / D.C / DC / District of Columbia check (safe even with dots).
+    dc_compact = re.sub(r"[\s.]+", "", cleaned)
+    if dc_compact == "dc" and len(cleaned) <= 5:
+        return True, True, False, has_zip
+
+    # Reject any other dotted abbreviation (e.g. "P.A.", "Co.", "M.D.", "N.A.") as a state code.
+    if "." in cleaned:
+        return False, False, False, has_zip
+
     spaced = re.sub(r"\s+", " ", re.sub(r"[^\w\s]+", " ", cleaned)).strip()
     if spaced == "district of columbia":
-        return True, True
+        return True, True, True, has_zip
     if spaced in US_STATE_NAMES:
-        return True, False
-    return False, False
+        return True, False, True, has_zip
+    if spaced in US_STATE_ABBREVS:
+        return True, False, False, has_zip
+    return False, False, False, has_zip
 
 
 def _looks_like_city(segment: str) -> bool:
@@ -423,11 +445,15 @@ def _looks_like_city(segment: str) -> bool:
 
 
 def _strip_trailing_place_name(folded_org: str) -> str:
-    """Strip ONLY trailing US place names (``, City, State`` or ``, ST``), never cutting at first comma.
+    """Strip ONLY trailing US place names, never cutting at the first comma or stripping org acronyms.
 
-    Preserves comma-separated institutional sub-units such as
-    ``Office of Inspector General, Department of Defense`` and
-    ``University of California, Berkeley``.
+    * Strips 2-part ``, <City>, <State/DC>[ <ZIP>]`` suffixes cleanly (e.g.
+      ``American Enterprise Institute, Washington, DC``, ``Harvard Law School, Cambridge, Massachusetts``).
+    * Strips unambiguous bare DC or ZIP-qualified trailing places (``, D.C.``, ``, District of Columbia``,
+      ``, VA 22201``), while NEVER stripping bare 2-letter acronyms after a single comma such as
+      ``OIG, VA``, ``OIG, DoD``, ``Smith Law, P.A.``, ``Smith Law, PA``, or ``Acme, Co.``.
+    * Treats bare place-only strings (``Washington, DC``, ``New York, NY``, ``Philadelphia, Pennsylvania``)
+      as empty/unmergeable.
     """
     text = folded_org.strip().rstrip(":;").strip()
     if "," not in text:
@@ -437,23 +463,28 @@ def _strip_trailing_place_name(folded_org: str) -> str:
     if len(parts) < 2:
         return text
 
-    is_state, is_abbrev_or_dc = _is_us_state_token(parts[-1])
+    is_state, is_dc, is_full_name, has_zip = _is_us_state_token(parts[-1])
     if not is_state:
         return text
 
-    # Case 1: "... , <City>, <State/DC>" or bare "<City>, <State/DC>".
-    if len(parts) >= 2 and _looks_like_city(parts[-2]):
-        if len(parts) == 2:
-            # Bare place name only (e.g. "Washington, DC", "New York, NY") -> empty/unmergeable.
-            return ""
+    # Case 1: "<Org>, ..., <City>, <State/DC>" (3+ comma segments) or bare "<City>, <State/DC>".
+    if len(parts) >= 3 and _looks_like_city(parts[-2]):
         prefix = ", ".join(parts[:-2]).strip()
         prefix_toks = _tokenize_with_explicit_hyphens(prefix)
         if prefix_toks and prefix_toks[-1] not in _ORG_FRAGMENT_TAILS:
             return prefix
         return text
 
-    # Case 2: "<Organization>, <ST>" (2-letter postal code or District of Columbia).
-    if is_abbrev_or_dc:
+    if len(parts) == 2 and _looks_like_city(parts[0]):
+        city_norm = " ".join(_tokenize_with_explicit_hyphens(parts[0]))
+        if is_full_name or is_dc or has_zip or city_norm in _KNOWN_BARE_CITIES:
+            # Bare place name only (e.g. "Washington, DC", "New York, NY", "Philadelphia, Pennsylvania").
+            return ""
+        return text
+
+    # Case 2 (guarded): single trailing comma followed by unambiguous DC/District of Columbia
+    # or a ZIP-qualified state address (NEVER bare 2-letter acronyms like "OIG, VA" or "Smith Law, PA").
+    if is_dc or has_zip:
         prefix = ", ".join(parts[:-1]).strip()
         prefix_toks = _tokenize_with_explicit_hyphens(prefix)
         if prefix_toks and prefix_toks[-1] not in _ORG_FRAGMENT_TAILS:
@@ -475,7 +506,7 @@ def normalize_organization(raw: str | None) -> str:
     stripped = _strip_trailing_place_name(folded)
     if not stripped:
         return ""
-    tokens = _tokenize_with_explicit_hyphens(stripped)
+    tokens = _tokenize_with_explicit_hyphens(stripped, collapse_credentials=False)
     norm = " ".join(tokens)
     if norm.startswith("the "):
         norm = norm[4:].strip()
@@ -484,26 +515,44 @@ def normalize_organization(raw: str | None) -> str:
     return norm
 
 
-def check_middle_initial_guard(left_mid: str, right_mid: str) -> tuple[bool, str]:
-    """Block matches where both sides state differing middle initials; allow one/both unstated."""
-    if not left_mid and not right_mid:
+def check_middle_initial_guard(left_mid: str, right_mid: str | Sequence[str] | set[str]) -> tuple[bool, str]:
+    """Block matches where stated middle initials conflict or compete across observed values."""
+    right_set = (
+        {right_mid[0]} if isinstance(right_mid, str) and right_mid else
+        set() if isinstance(right_mid, str) else
+        {m[0] for m in right_mid if m}
+    )
+    if not left_mid and not right_set:
         return True, "both_unstated"
-    if not left_mid or not right_mid:
+    if len(right_set) > 1:
+        # Competing stated middle initials on the external record never merge blindly
+        # (even if the witness omits or shares only one of the competing initials).
+        return False, f"blocked_competing_right:{','.join(sorted(right_set))}"
+    single_right = next(iter(right_set), "")
+    if not left_mid or not single_right:
         return True, "one_side_unstated"
-    if left_mid[0] == right_mid[0]:
+    if left_mid[0] == single_right:
         return True, "both_match"
-    return False, f"blocked_mismatch:{left_mid}!={right_mid}"
+    return False, f"blocked_mismatch:{left_mid}!={single_right}"
 
 
-def check_suffix_guard(left_suf: str, right_suf: str) -> tuple[bool, str]:
-    """Block matches where both sides state differing generational suffixes (Jr/Sr/II/III/IV)."""
-    if not left_suf and not right_suf:
+def check_suffix_guard(left_suf: str, right_suf: str | Sequence[str] | set[str]) -> tuple[bool, str]:
+    """Block matches where stated generational suffixes conflict or compete across observed values."""
+    right_set = (
+        {right_suf} if isinstance(right_suf, str) and right_suf else
+        set() if isinstance(right_suf, str) else
+        {s for s in right_suf if s}
+    )
+    if not left_suf and not right_set:
         return True, "both_unstated"
-    if not left_suf or not right_suf:
+    if len(right_set) > 1:
+        return False, f"blocked_competing_right:{','.join(sorted(right_set))}"
+    single_right = next(iter(right_set), "")
+    if not left_suf or not single_right:
         return True, "one_side_unstated"
-    if left_suf == right_suf:
+    if left_suf == single_right:
         return True, "both_match"
-    return False, f"blocked_mismatch:{left_suf}!={right_suf}"
+    return False, f"blocked_mismatch:{left_suf}!={single_right}"
 
 
 def lda_period_interval(filing_year: int, filing_period: str | None) -> tuple[date, date]:
@@ -737,20 +786,22 @@ def match_lda_witness_candidates(
 
         for lobbyist_id in sorted(matches_by_lobbyist):
             lob = matches_by_lobbyist[lobbyist_id]
-            # Collapse single unambiguous stated middle/suffix on the LDA lobbyist side.
+            # Compare against the full observed sets of middle initials and suffixes
+            # (never collapsing multi-value conflicts into "").
             l_mids = sorted(lob.middle_initials)
             l_sufs = sorted(lob.suffixes)
-            l_mid = l_mids[0] if len(l_mids) == 1 else ""
-            l_suf = l_sufs[0] if len(l_sufs) == 1 else ""
 
-            mid_ok, mid_guard = check_middle_initial_guard(w_name.middle_initial, l_mid)
+            mid_ok, mid_guard = check_middle_initial_guard(w_name.middle_initial, l_mids)
             if not mid_ok:
                 stats["blocked_middle_initial"] += 1
                 continue
-            suf_ok, suf_guard = check_suffix_guard(w_name.suffix, l_suf)
+            suf_ok, suf_guard = check_suffix_guard(w_name.suffix, l_sufs)
             if not suf_ok:
                 stats["blocked_suffix"] += 1
                 continue
+
+            l_mid = ",".join(l_mids)
+            l_suf = ",".join(l_sufs)
 
             external_native_id = f"lda_lobbyist:{lobbyist_id}"
             candidate_id = f"lda_witness:{witness_key}:{external_native_id}"
@@ -768,12 +819,10 @@ def match_lda_witness_candidates(
             covered_pos = lob.covered_positions.most_common(1)[0][0] if lob.covered_positions else None
 
             overlap = compute_date_overlap(hearing_date, filing_periods)
-            year_span = f"{filing_years[0]}-{filing_years[-1]}" if filing_years else "undated"
-            quoted_span = (
-                f"CT witness '{stated_name}' ({stated_org}) at {page_or_offset}"
-                f" <-> LDA {external_native_id} '{lda_stated_name}' "
-                f"({lda_matched_role}: '{lda_matched_org}', filings: {filing_count}, years: {year_span})"
-            )
+            # Restrict quoted_span strictly to the immutable hearing-side quote anchored to
+            # (body_sha256, page_or_offset); mutable LDA aggregates (filing_count, year_span,
+            # most-common strings) stay strictly outside candidate_digest as diagnostics.
+            quoted_span = f"CT witness '{stated_name}' ({stated_org}) at {page_or_offset}"
 
             candidate: dict[str, Any] = {
                 "rule_version": PERSON_RULE,
@@ -861,9 +910,8 @@ def build_planted_wrong_controls(
 
         control_id = f"planted_control_{idx + 1}:{w_src['witness_key']}:{l_src['external_native_id']}"
         quoted_span = (
-            f"[PLANTED NEGATIVE CONTROL #{idx + 1}] CT witness '{w_src['stated_name']}' ({w_src['stated_org']}) "
-            f"at {w_src['page_or_offset']} paired intentionally with unrelated LDA {l_src['external_native_id']} "
-            f"'{l_src['lda_stated_name']}' ({l_src['lda_matched_role']}: '{l_src['lda_matched_org']}')"
+            f"[PLANTED NEGATIVE CONTROL #{idx + 1}] "
+            f"CT witness '{w_src['stated_name']}' ({w_src['stated_org']}) at {w_src['page_or_offset']}"
         )
         control: dict[str, Any] = {
             "rule_version": PERSON_RULE,
@@ -1002,6 +1050,133 @@ def build_precision_read_batch(
     }
 
 
+_SQL_SKIP_FIRST_TOKENS = ", ".join(
+    f"'{tok}'" for tok in sorted(HONORIFICS_AND_CREDENTIALS | LEADING_TITLES | SUFFIXES)
+)
+_SQL_SKIP_LAST_TOKENS = ", ".join(
+    f"'{tok}'" for tok in sorted(HONORIFICS_AND_CREDENTIALS | SUFFIXES)
+)
+
+
+def _sql_fold_name_expr(column: str) -> str:
+    """SQL expression matching ``fold_text`` + parenthetical/dotted-credential/apostrophe handling."""
+    return (
+        f"regexp_replace("
+        f"replace(replace(replace(replace(replace(replace(replace(replace("
+        f"replace(replace(replace("
+        f"strip_accents(lower(regexp_replace(coalesce({column}, ''), '\\([^)]*\\)', ' ', 'g'))),"
+        f"'ß', 'ss'), 'æ', 'ae'), 'œ', 'oe'), 'þ', 'th'), 'ø', 'o'), 'ł', 'l'), 'đ', 'd'), 'ð', 'd'),"
+        f"'''', ''), '’', ''), '`', ''),"
+        f"'[^a-z0-9]+', ' ', 'g')"
+    )
+
+
+def _sql_collapse_dotted_creds(column: str) -> str:
+    """Strip dots inside known credentials (``Ph.D.``, ``M.D.``, ``J.D.``, etc.) before tokenization."""
+    return (
+        f"regexp_replace(coalesce({column}, ''), "
+        f"'(?i)\\b(ph\\.d|m\\.d|j\\.d|m\\.p\\.h|m\\.b\\.a|d\\.v\\.m|c\\.p\\.a|ed\\.d|d\\.d\\.s|"
+        f"m\\.p\\.a|m\\.p\\.p|m\\.s\\.w|r\\.n|u\\.s\\.a\\.f|u\\.s\\.m\\.c|u\\.s\\.c\\.g|u\\.s\\.s\\.f|u\\.s\\.a|u\\.s\\.n)\\.?', "
+        f"' ', 'g')"
+    )
+
+
+def query_prefiltered_lda_rows(
+    con: duckdb.DuckDBPyConnection,
+    *,
+    lobbyists_source: str,
+    filings_source: str,
+    witness_name_pairs: Sequence[tuple[str, str]],
+) -> list[dict[str, Any]]:
+    """Pre-filter LDA lobbyist filings in DuckDB aligned with ``normalize_lda_lobbyist_name``.
+
+    Handles parentheticals, honorifics/leading titles, dotted credentials, post-comma
+    clauses in ``last_name``, apostrophes, hyphens, accents, and non-decomposing Latin
+    transliterations (``ß``, ``ø``, ``ł``, ``æ``, ``œ``) so the SQL pre-filter never drops
+    rows that Python normalization accepts.
+    """
+    con.execute("CREATE OR REPLACE TEMP TABLE witness_name_pairs(first_tok VARCHAR, last_tok VARCHAR)")
+    if witness_name_pairs:
+        con.executemany(
+            "INSERT INTO witness_name_pairs VALUES (?, ?)",
+            sorted(set(witness_name_pairs)),
+        )
+
+    first_folded = _sql_fold_name_expr(_sql_collapse_dotted_creds("l.first_name"))
+    last_before_comma = f"split_part({_sql_collapse_dotted_creds('l.last_name')}, ',', 1)"
+    last_folded = _sql_fold_name_expr(last_before_comma)
+
+    rows = con.execute(
+        f"""
+        WITH filtered_lobbyists AS (
+            SELECT
+                l.filing_uuid,
+                l.lobbyist_id,
+                l.prefix,
+                l.first_name,
+                l.middle_name,
+                l.last_name,
+                l.suffix,
+                l.covered_position
+            FROM {lobbyists_source} l
+            JOIN witness_name_pairs wp
+              ON wp.first_tok = list_extract(
+                  list_filter(
+                      string_split(trim({first_folded}), ' '),
+                      x -> x <> '' AND NOT regexp_full_match(x, '^[0-9]+$') AND x NOT IN ({_SQL_SKIP_FIRST_TOKENS})
+                  ),
+                  1
+              )
+             AND wp.last_tok = list_extract(
+                  list_filter(
+                      string_split(trim({last_folded}), ' '),
+                      x -> x <> '' AND NOT regexp_full_match(x, '^[0-9]+$') AND x NOT IN ({_SQL_SKIP_LAST_TOKENS})
+                  ),
+                  -1
+              )
+            WHERE l.lobbyist_id IS NOT NULL
+              AND l.first_name IS NOT NULL
+              AND l.last_name IS NOT NULL
+        )
+        SELECT
+            fl.lobbyist_id,
+            fl.prefix,
+            fl.first_name,
+            fl.middle_name,
+            fl.last_name,
+            fl.suffix,
+            any_value(fl.covered_position) AS covered_position,
+            f.filing_year,
+            f.filing_period,
+            f.registrant_name,
+            f.client_name,
+            count(DISTINCT fl.filing_uuid) AS filing_count,
+            list_slice(list(DISTINCT fl.filing_uuid ORDER BY fl.filing_uuid), 1, 5) AS sample_filing_uuids
+        FROM filtered_lobbyists fl
+        JOIN {filings_source} f
+          ON f.filing_uuid = fl.filing_uuid
+        GROUP BY
+            fl.lobbyist_id,
+            fl.prefix,
+            fl.first_name,
+            fl.middle_name,
+            fl.last_name,
+            fl.suffix,
+            f.filing_year,
+            f.filing_period,
+            f.registrant_name,
+            f.client_name
+        """
+    ).fetchall()
+
+    lda_cols = (
+        "lobbyist_id", "prefix", "first_name", "middle_name", "last_name",
+        "suffix", "covered_position", "filing_year", "filing_period", "registrant_name",
+        "client_name", "filing_count", "sample_filing_uuids",
+    )
+    return [dict(zip(lda_cols, row, strict=True)) for row in rows]
+
+
 def load_live_lda_witness_candidates(
     *,
     r2_base_url: str | None = None,
@@ -1013,8 +1188,8 @@ def load_live_lda_witness_candidates(
 
     Performs zero full-file downloads: DuckDB reads only the required columns over HTTPS with
     an explicit ``User-Agent`` header. First extracts normalized witness names, then pushes a
-    SQL surname/first-name pre-filter into the 10.4M-row LDA lobbyist Parquet so only matching
-    lobbyist filings transfer over the wire.
+    SQL pre-filter aligned with ``normalize_lda_lobbyist_name`` into the 10.4M-row LDA lobbyist
+    Parquet so only matching lobbyist filings transfer over the wire.
     """
     base_url = resolve_r2_base_url(r2_base_url or "https://data.spicygov.ai")
     release_id = ct_release_id or archive_release.load_pins()["bound"]
@@ -1090,95 +1265,12 @@ def load_live_lda_witness_candidates(
             if norm_w.name_key and norm_o and len(norm_w.tokens) >= 2:
                 witness_name_pairs.add((norm_w.tokens[0], norm_w.tokens[-1]))
 
-        con.execute("CREATE TEMP TABLE witness_name_pairs(first_tok VARCHAR, last_tok VARCHAR)")
-        con.executemany(
-            "INSERT INTO witness_name_pairs VALUES (?, ?)",
-            sorted(witness_name_pairs),
+        lda_dicts = query_prefiltered_lda_rows(
+            con,
+            lobbyists_source=f"read_parquet('{lda_base}/lobbying_activity_lobbyists.parquet')",
+            filings_source=f"read_parquet('{lda_base}/lobbying_filings.parquet')",
+            witness_name_pairs=sorted(witness_name_pairs),
         )
-
-        # Push exact (first_tok, last_tok) join + GROUP BY inside DuckDB so only matched
-        # lobbyist-filing-org summaries cross into Python (runs in seconds over 10.4M rows).
-        lda_rows = con.execute(
-            f"""
-            WITH filtered_lobbyists AS (
-                SELECT
-                    l.filing_uuid,
-                    l.lobbyist_id,
-                    l.prefix,
-                    l.first_name,
-                    l.middle_name,
-                    l.last_name,
-                    l.suffix,
-                    l.covered_position
-                FROM read_parquet('{lda_base}/lobbying_activity_lobbyists.parquet') l
-                JOIN witness_name_pairs wp
-                  ON wp.first_tok = list_extract(
-                      list_filter(
-                          string_split(
-                              trim(regexp_replace(
-                                  lower(replace(replace(strip_accents(l.first_name), '''', ''), '’', '')),
-                                  '[^a-z0-9]+', ' ', 'g'
-                              )),
-                              ' '
-                          ),
-                          x -> x <> ''
-                      ),
-                      1
-                  )
-                 AND wp.last_tok = list_extract(
-                      list_filter(
-                          string_split(
-                              trim(regexp_replace(
-                                  lower(replace(replace(strip_accents(l.last_name), '''', ''), '’', '')),
-                                  '[^a-z0-9]+', ' ', 'g'
-                              )),
-                              ' '
-                          ),
-                          x -> x <> '' AND x NOT IN ('jr', 'sr', 'ii', 'iii', 'iv')
-                      ),
-                      -1
-                  )
-                WHERE l.lobbyist_id IS NOT NULL
-                  AND l.first_name IS NOT NULL
-                  AND l.last_name IS NOT NULL
-            )
-            SELECT
-                fl.lobbyist_id,
-                fl.prefix,
-                fl.first_name,
-                fl.middle_name,
-                fl.last_name,
-                fl.suffix,
-                any_value(fl.covered_position) AS covered_position,
-                f.filing_year,
-                f.filing_period,
-                f.registrant_name,
-                f.client_name,
-                count(DISTINCT fl.filing_uuid) AS filing_count,
-                list_slice(list(DISTINCT fl.filing_uuid ORDER BY fl.filing_uuid), 1, 5) AS sample_filing_uuids
-            FROM filtered_lobbyists fl
-            JOIN read_parquet('{lda_base}/lobbying_filings.parquet') f
-              ON f.filing_uuid = fl.filing_uuid
-            GROUP BY
-                fl.lobbyist_id,
-                fl.prefix,
-                fl.first_name,
-                fl.middle_name,
-                fl.last_name,
-                fl.suffix,
-                f.filing_year,
-                f.filing_period,
-                f.registrant_name,
-                f.client_name
-            """
-        ).fetchall()
-
-        lda_cols = (
-            "lobbyist_id", "prefix", "first_name", "middle_name", "last_name",
-            "suffix", "covered_position", "filing_year", "filing_period", "registrant_name",
-            "client_name", "filing_count", "sample_filing_uuids",
-        )
-        lda_dicts = [dict(zip(lda_cols, row, strict=True)) for row in lda_rows]
     finally:
         con.close()
 
