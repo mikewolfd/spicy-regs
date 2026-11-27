@@ -1,13 +1,15 @@
 """Publish the compatible comments mirror once per verified catalog snapshot."""
 
+from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import asdict, dataclass
 import json
 from os import environ, getenv
 from pathlib import Path
 import re
 from tempfile import TemporaryDirectory
+from typing import Any
 
 import duckdb
 import pyarrow as pa
@@ -17,6 +19,7 @@ from loguru import logger
 from spicy_regs.comments_health import check_comments, check_retained_ids
 from spicy_regs.duckdb_settings import ExportResources
 from spicy_regs.public_url import resolve_r2_base_url
+from spicy_regs.schemas import RecordType
 from spicy_regs.schemas.regulations import RECORD_TYPES
 from spicy_regs.sources import iceberg, r2, publication
 from spicy_regs.pipelines.comments_generation import TABLES, build_comments_generation
@@ -26,6 +29,7 @@ FORMAT_VERSION = 1
 RECEIPT_KEY = "comments-publication.json"
 MIN_EXPECTED_ROWS = 1_000_000
 _AGENCY_KEY = re.compile(r"comments/agency/agency_code=[A-Za-z0-9_-]+/part-0\.parquet\Z")
+_GENERATION_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 
 
 # The next two check the one-shot v1 promotion's prepared pair (scripts/prepare_comments_selected_export.py and the
@@ -193,13 +197,13 @@ def check_receipt_rows(output_dir: Path, files: dict[str, dict], exported_rows: 
         raise RuntimeError("Refusing the comments receipt: " + "; ".join(errors))
 
 
-def receipt_files(receipt: dict | None) -> dict[str, dict] | None:
+def receipt_files(receipt: Mapping | None) -> dict[str, dict] | None:
     """The receipt's file descriptors when they meet the published-receipt rules, else ``None``.
 
     Each names a fixed mirror key with a stored version and the digest the publisher read back; the agency files
     hold the monolith's rows. A receipt failing these rules binds nothing.
     """
-    files = receipt.get("files") if isinstance(receipt, dict) else None
+    files = receipt.get("files") if isinstance(receipt, Mapping) else None
     if not isinstance(files, dict) or not {"comments.parquet", "comments_index.parquet"} < files.keys():
         return None
     for key, item in files.items():
@@ -214,10 +218,10 @@ def receipt_files(receipt: dict | None) -> dict[str, dict] | None:
     return files
 
 
-def receipt_source(receipt: dict | None) -> iceberg.CatalogPairSnapshot | None:
+def receipt_source(receipt: Mapping | None) -> iceberg.CatalogPairSnapshot | None:
     """The catalog pair a receipt was exported from; ``None`` for a receipt that predates pair snapshots."""
-    source = receipt.get("source") if isinstance(receipt, dict) else None
-    if not isinstance(source, dict):
+    source = receipt.get("source") if isinstance(receipt, Mapping) else None
+    if not isinstance(source, Mapping):
         return None
     try:
         receipts = iceberg.CatalogSnapshot(**source["receipts"])
@@ -227,34 +231,153 @@ def receipt_source(receipt: dict | None) -> iceberg.CatalogPairSnapshot | None:
         return None
 
 
-def _receipt_matches(receipt: dict | None, snapshot: iceberg.CatalogPairSnapshot, base_url: str) -> bool:
-    """A successful receipt plus unchanged public/storage versions permits a no-op.
+def _generation_digest(entry: Any) -> str | None:
+    """Verified ``artifactDigest`` of a publication family or receipt generation entry, else ``None``."""
+    digest = entry.get("artifactDigest") if isinstance(entry, Mapping) else None
+    return digest if isinstance(digest, str) and _GENERATION_DIGEST.fullmatch(digest) else None
 
-    The comments table's identity is compared, not the shared receipt table's: nothing of that table is published
-    (ss-juz8), so a receipt-only commit leaves the publication current.
-    """
-    if not isinstance(receipt, dict) or receipt.get("format_version") != FORMAT_VERSION:
-        return False
-    source = receipt_source(receipt)
-    if source is None or source.subject() != snapshot.subject():
-        return False
-    generation = receipt.get("generation")
-    if not isinstance(generation, dict):
-        return False
-    if publication.current_index(base_url)["families"].get("comments") != generation:
-        return False
-    files = receipt_files(receipt)
-    if files is None:
-        return False
 
-    def stored(entry: tuple[str, dict]) -> bool:
+def public_receipt_drift(files: Mapping[str, Mapping], base_url: str, *, attempts: int = 1) -> list[str]:
+    """Public ETag/size mismatches for every file descriptor in a validated receipt."""
+    base = base_url.rstrip("/")
+    return publication.public_version_drift({f"{base}/{key}": item for key, item in files.items()}, attempts=attempts)
+
+
+def _storage_version_drift(files: Mapping[str, Mapping]) -> list[str]:
+    """``key: expected, stored`` for each receipt file whose R2 stored version differs."""
+    def drift(entry: tuple[str, Mapping]) -> str | None:
         key, item = entry
-        return r2.object_version(key) == {name: item[name] for name in ("etag", "bytes")}
+        wanted = {"etag": item["etag"], "bytes": item["bytes"]}
+        actual = r2.object_version(key)
+        return None if actual == wanted else f"{key}: expected {wanted}, stored {actual}"
 
     with ThreadPoolExecutor(max_workers=8) as pool:
-        if not all(list(pool.map(stored, files.items()))):
-            return False
-    return not publication.public_version_drift({f"{base_url}/{key}": item for key, item in files.items()})
+        return [error for error in pool.map(drift, sorted(files.items())) if error]
+
+
+@dataclass(frozen=True)
+class CommentsReceiptBinding:
+    """Shared binding of a comments publication receipt to files, selected generation, catalog, and objects."""
+
+    files: dict[str, dict] | None
+    source: iceberg.CatalogPairSnapshot | None
+    index: dict | None
+    family: Mapping | None
+    generation_bound: bool
+    subject_bound: bool | None
+    storage_errors: tuple[str, ...] = ()
+    public_errors: tuple[str, ...] = ()
+
+    @property
+    def is_bound(self) -> bool:
+        return (
+            self.files is not None
+            and self.source is not None
+            and self.generation_bound
+            and self.subject_bound is True
+            and not self.storage_errors
+            and not self.public_errors
+        )
+
+
+def bind_comments_receipt(
+    receipt: Mapping | None,
+    base_url: str,
+    *,
+    record_type: RecordType | None = None,
+    require_generation: bool = True,
+    check_storage: bool = False,
+    check_public: bool = True,
+    public_attempts: int = 1,
+    short_circuit: bool = True,
+    stage: Callable[[str], AbstractContextManager[object]] = nullcontext,
+) -> CommentsReceiptBinding:
+    """Bind ``receipt`` to its files, selected generation digest, compaction-only catalog, and object versions.
+
+    Shared by :func:`_receipt_matches` (publisher no-op) and ``scripts/check_comments_freshness.py``
+    (nightly freshness) so both enforce one rule:
+
+    * valid format-version-1 receipt with complete, consistent file descriptors (:func:`receipt_files`);
+    * selected ``comments`` generation in ``publication.v2.json`` matching the receipt's ``artifactDigest``
+      (when ``require_generation`` is false, a bucket with no ``comments`` family falls back to the bound
+      fixed files);
+    * comments catalog table reachable from :func:`receipt_source` through compaction alone under the
+      declared schema (:func:`iceberg.rows_unchanged_since`);
+    * matching R2 storage (when ``check_storage``) and public HTTPS (when ``check_public``) ETags and byte sizes.
+    """
+    base = base_url.rstrip("/")
+    rt = RECORD_TYPES["comments"] if record_type is None else record_type
+    valid = isinstance(receipt, Mapping) and receipt.get("format_version") == FORMAT_VERSION
+    files = receipt_files(receipt) if valid else None
+    source = receipt_source(receipt) if valid else None
+    if not valid or receipt is None or files is None:
+        return CommentsReceiptBinding(
+            files=None, source=source, index=None, family=None,
+            generation_bound=False, subject_bound=None,
+        )
+    if short_circuit and source is None:
+        return CommentsReceiptBinding(
+            files=files, source=None, index=None, family=None,
+            generation_bound=False, subject_bound=None,
+        )
+
+    with stage("generation: published family against the receipt"):
+        index = publication.current_index(base)
+        family = index["families"].get("comments")
+        if family is None:
+            generation_bound = not require_generation
+        else:
+            family_digest = _generation_digest(family)
+            receipt_digest = _generation_digest(receipt.get("generation"))
+            generation_bound = family_digest is not None and receipt_digest == family_digest
+
+    if short_circuit and not generation_bound:
+        return CommentsReceiptBinding(
+            files=files, source=source, index=index, family=family,
+            generation_bound=False, subject_bound=None,
+        )
+
+    with stage("catalog: snapshot against the published source"):
+        subject_bound = source is not None and iceberg.rows_unchanged_since(rt, source, declared_schema=True)
+
+    if short_circuit and not subject_bound:
+        return CommentsReceiptBinding(
+            files=files, source=source, index=index, family=family,
+            generation_bound=generation_bound, subject_bound=False,
+        )
+
+    storage_errors = tuple(_storage_version_drift(files)) if check_storage else ()
+    if short_circuit and storage_errors:
+        return CommentsReceiptBinding(
+            files=files, source=source, index=index, family=family,
+            generation_bound=generation_bound, subject_bound=subject_bound,
+            storage_errors=storage_errors,
+        )
+
+    public_errors = tuple(public_receipt_drift(files, base, attempts=public_attempts)) if check_public else ()
+    return CommentsReceiptBinding(
+        files=files, source=source, index=index, family=family,
+        generation_bound=generation_bound, subject_bound=subject_bound,
+        storage_errors=storage_errors, public_errors=public_errors,
+    )
+
+
+def _receipt_matches(receipt: Mapping | None, base_url: str, *, record_type: RecordType | None = None) -> bool:
+    """A successful receipt plus compaction-only catalog and unchanged storage/public versions permits a no-op.
+
+    Uses :func:`bind_comments_receipt` so the publisher and nightly freshness check share one binding rule:
+    receipt files, selected generation ``artifactDigest``, and compaction-only comments-table movement under
+    the declared schema (ignoring receipt-table-only commits, ss-juz8), plus storage and public byte identities.
+    """
+    return bind_comments_receipt(
+        receipt,
+        base_url,
+        record_type=record_type,
+        require_generation=True,
+        check_storage=True,
+        check_public=True,
+        short_circuit=True,
+    ).is_bound
 
 
 def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | None = None,
@@ -280,14 +403,18 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
                            "before publishing receipts-free comments (ss-juz8)") from error
     if not skip_upload and not getenv("R2_ACCESS_KEY_ID"):
         raise RuntimeError("R2 upload credentials are required to publish the comments mirror")
-    snapshot = iceberg.catalog_snapshot(rt)
     base_url = resolve_r2_base_url().rstrip("/")
     receipt = None
-    if not skip_upload:
-        receipt = None if force else r2.read_json_object(RECEIPT_KEY)
-        if not force and _receipt_matches(receipt, snapshot, base_url):
-            logger.info("Comments snapshot {} already published; verified object versions, skipping build", snapshot.snapshot_id)
+    if not skip_upload and not force:
+        receipt = r2.read_json_object(RECEIPT_KEY)
+        if _receipt_matches(receipt, base_url, record_type=rt):
+            source = receipt_source(receipt)
+            logger.info(
+                "Comments snapshot {} already published (compaction only); verified object versions, skipping build",
+                source.snapshot_id if source is not None else "unknown",
+            )
             return False
+    snapshot = iceberg.catalog_snapshot(rt)
 
     prior_index = publication.current_index(base_url) if not skip_upload else publication.empty_index()
     result = iceberg.export_public_comments(output_dir, rt, resources=resources, snapshot=snapshot)

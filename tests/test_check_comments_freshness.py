@@ -18,6 +18,7 @@ freshness = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(freshness)
 
 BASE = "https://data.example"
+_REAL_COMPACTED_SINCE = iceberg.compacted_since
 SHA = "a" * 64
 SOURCE = {"table_uuid": "t", "snapshot_id": 7, "schema_id": 0,
           "receipts": {"table_uuid": "r", "snapshot_id": 9, "schema_id": 0}}
@@ -201,10 +202,73 @@ assert publication.mutable_versions_match({"comments": {**pin, "etag": '"x"'}}) 
 
 
 def test_receipt_helpers_bind_only_complete_receipts():
+    from spicy_regs.pipelines.comments_mirror import bind_comments_receipt
+
     assert receipt_files(_receipt()) is not None
+    assert bind_comments_receipt(_receipt(format_version=0), BASE).is_bound is False
+    assert bind_comments_receipt(_receipt(format_version=2), BASE).is_bound is False
     assert receipt_source(_receipt()) == iceberg.CatalogPairSnapshot("t", 7, 0, iceberg.CatalogSnapshot("r", 9, 0))
     assert receipt_source({"source": {"table_uuid": "t", "snapshot_id": 7, "schema_id": 0}}) is None
     assert receipt_files(_receipt(files={"comments.parquet": _receipt()["files"]["comments.parquet"]})) is None
+
+
+def test_publisher_and_freshness_share_one_binding_helper(published, monkeypatch, capsys):
+    """Publisher no-op and nightly freshness invoke the exact same shared binding helper (ss-cpm8)."""
+    from spicy_regs.pipelines import comments_mirror as mirror
+    from spicy_regs.sources import r2, regulatory_catalog
+
+    assert freshness.bind_comments_receipt is mirror.bind_comments_receipt
+    assert freshness.public_receipt_drift is mirror.public_receipt_drift
+
+    receipt = published["receipt"]
+    storage = {key: {"etag": item["etag"], "bytes": item["bytes"]} for key, item in receipt["files"].items()}
+    monkeypatch.setattr(r2, "object_version", lambda key: storage.get(key))
+    monkeypatch.setattr(iceberg, "compacted_since", _REAL_COMPACTED_SINCE)
+    monkeypatch.setattr(iceberg, "_connect", duckdb.connect)
+    monkeypatch.setattr(regulatory_catalog, "schema_difference", lambda con, rt: None)
+
+    def metadata(*commits, uuid="t", schema=0):
+        return {
+            "table-uuid": uuid,
+            "current-schema-id": schema,
+            "current-snapshot-id": commits[-1][0],
+            "snapshots": [
+                {"snapshot-id": sid, "parent-snapshot-id": parent,
+                 "summary": None if op is None else {"operation": op}}
+                for sid, parent, op in commits
+            ],
+        }
+
+    monkeypatch.setattr(iceberg, "_receipt_metadata", lambda *a, **kw: metadata((9, None, "append"), (10, 9, "append"), uuid="r"))
+
+    # 1. Compaction-only advance: BOTH publisher and freshness bind without reading rows.
+    monkeypatch.setattr(iceberg, "_table_metadata", lambda *a, **kw: metadata((7, None, "append"), (8, 7, "replace"), (9, 8, "replace")))
+    assert mirror._receipt_matches(receipt, BASE) is True
+    assert freshness.main() == 0
+    assert published["verified"] == []
+    capsys.readouterr()
+
+    # 2. Data change (append / overwrite / delete): BOTH refuse binding.
+    for op in ("append", "overwrite", "delete"):
+        monkeypatch.setattr(iceberg, "_table_metadata", lambda *a, _op=op, **kw: metadata((7, None, "append"), (8, 7, _op)))
+        assert mirror._receipt_matches(receipt, BASE) is False
+        assert freshness.main() == 1
+        assert "unpublished catalog commits" in capsys.readouterr().out
+
+    # 3. Missing intermediate snapshot lineage: BOTH refuse binding.
+    monkeypatch.setattr(iceberg, "_table_metadata", lambda *a, **kw: metadata((7, None, "append"), (9, 8, "replace")))
+    assert mirror._receipt_matches(receipt, BASE) is False
+    assert freshness.main() == 1
+    assert "unpublished catalog commits" in capsys.readouterr().out
+
+    # 4. Mismatched generation artifactDigest: BOTH detect unbound generation.
+    monkeypatch.setattr(iceberg, "_table_metadata", lambda *a, **kw: metadata((7, None, "append"), (8, 7, "replace")))
+    published["family"] = {**FAMILY, "artifactDigest": "sha256:" + "c" * 64}
+    assert mirror._receipt_matches(receipt, BASE) is False
+    published["verified"].clear()
+    assert freshness.main() == 0
+    assert published["verified"] == [(None, ["fixed", "generation"])]
+    assert "generation differs from receipt" in capsys.readouterr().out
 
 
 def test_one_schema_rule_names_the_missing_column(monkeypatch):

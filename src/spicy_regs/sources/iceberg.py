@@ -639,7 +639,7 @@ def _compacted_only(metadata: dict, snapshot: CatalogSnapshot) -> bool:
         if step == snapshot.snapshot_id:
             return True
         commit = parents.get(step)
-        if commit is None or commit.get("summary", {}).get("operation") != "replace" \
+        if commit is None or (commit.get("summary") or {}).get("operation") != "replace" \
                 or commit.get("parent-snapshot-id") is None:
             return False
         step = int(commit["parent-snapshot-id"])
@@ -669,13 +669,15 @@ def compacted_since(record_type: RecordType, snapshot: CatalogPairSnapshot, *,
         con.close()
 
 
-def rows_unchanged_since(record_type: RecordType, snapshot: CatalogPairSnapshot) -> bool:
+def rows_unchanged_since(record_type: RecordType, snapshot: CatalogPairSnapshot, *,
+                         declared_schema: bool = False) -> bool:
     """Require unchanged subject rows, allowing compaction.
 
     The receipt table is no publication input since the comments mirror stopped exporting receipts (ss-juz8), so a
-    receipt-only commit (a rejected attempt, a retained refusal) leaves the published table current.
+    receipt-only commit (a rejected attempt, a retained refusal) leaves the published table current. Pass
+    ``declared_schema=True`` to also refuse when the live table schema differs from the declared policy.
     """
-    return compacted_since(record_type, snapshot)[0]
+    return compacted_since(record_type, snapshot, declared_schema=declared_schema)[0]
 
 
 def _snapshot_query(record_type: RecordType, snapshot: CatalogSnapshot, *, namespace: str | None = None) -> str:

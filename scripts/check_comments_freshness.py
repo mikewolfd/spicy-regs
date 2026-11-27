@@ -34,7 +34,7 @@ from time import monotonic
 import duckdb
 import httpx
 
-from spicy_regs.pipelines.comments_mirror import receipt_files, receipt_source
+from spicy_regs.pipelines.comments_mirror import FORMAT_VERSION, bind_comments_receipt, public_receipt_drift, receipt_files
 from spicy_regs.public_url import resolve_r2_base_url
 from spicy_regs.schemas.regulations import RECORD_TYPES
 from spicy_regs.sources import iceberg, publication
@@ -69,47 +69,55 @@ def main() -> int:
     try:
         with _stage("public: files match the publication receipt"):
             loaded = publication.load_comments_publication(base)
-            files = receipt_files(loaded["receipt"]) if loaded else None
-            if loaded is None or files is None:
+            receipt = loaded["receipt"] if loaded else None
+            files = (
+                receipt_files(receipt)
+                if isinstance(receipt, dict) and receipt.get("format_version") == FORMAT_VERSION
+                else None
+            )
+            if loaded is None or receipt is None or files is None:
                 print("FAIL public: comments-publication.json does not state a complete comments publication",
                       flush=True)
                 return 1
-            errors = publication.public_version_drift({f"{base}/{key}": item for key, item in files.items()},
-                                             attempts=PUBLIC_ATTEMPTS)
+            errors = public_receipt_drift(files, base, attempts=PUBLIC_ATTEMPTS)
         for error in errors[:args.limit]:
             print(f"FAIL public: differs from the publication receipt: {error}", flush=True)
         if errors:
             return 1
-        receipt = loaded["receipt"]
         print(f"OK public: {len(files)} files match {loaded['receipt_sha256'][:19]} "
               f"({files['comments.parquet']['rows']:,} rows)", flush=True)
         if args.surface == "public":
             return 0
 
-        with _stage("generation: published family against the receipt"):
-            index = publication.load_index(base)
-            family = index["families"].get("comments")
-            # Without a comments family, readers fall back to the fixed files bound above.
-            generation_bound = family is None or (isinstance(receipt.get("generation"), dict) and
-                                                  receipt["generation"].get("artifactDigest") == family["artifactDigest"])
-        source = receipt_source(receipt)
-        with _stage("catalog: snapshot against the published source"):
-            subject_bound = source is not None and iceberg.compacted_since(rt, source, declared_schema=True)[0]
-        if source is not None and generation_bound and subject_bound and not (args.agency or args.verify_content):
+        binding = bind_comments_receipt(
+            receipt,
+            base,
+            record_type=rt,
+            require_generation=False,
+            check_storage=False,
+            check_public=False,
+            short_circuit=False,
+            stage=_stage,
+        )
+        if binding.is_bound and not (args.agency or args.verify_content):
+            family = binding.family
+            assert binding.source is not None
             print(f"OK: generation {family['artifactDigest'][:19] if family else 'none'} and catalog snapshot "
-                  f"{source.snapshot_id} (compaction only) are the receipt's", flush=True)
+                  f"{binding.source.snapshot_id} (compaction only) are the receipt's", flush=True)
             return 0
 
         # A text-only writer keeps every ID and count, so counts cannot clear a comments-table commit (below).
-        unpublished = source is not None and not subject_bound
+        source = binding.source
+        unpublished = source is not None and not binding.subject_bound
         reasons = [reason for reason, applies in (
             ("requested", args.agency or args.verify_content),
             ("receipt names no generation" if "generation" not in receipt else "generation differs from receipt",
-             not generation_bound),
+             not binding.generation_bound),
             ("receipt predates pair snapshots", source is None),
             ("comments table has unpublished catalog commits", unpublished)) if applies]
         indexes = {"fixed": [f"{base}/{INDEX_KEY}"]}
-        generation = [f"{base}/{member.path}" for member in publication.table_members(index, INDEX_KEY)]
+        assert binding.index is not None
+        generation = [f"{base}/{member.path}" for member in publication.table_members(binding.index, INDEX_KEY)]
         if generation != indexes["fixed"]:
             indexes["generation"] = generation
         with _stage(f"catalog: IDs and coverage of {', '.join(indexes)} index ({'; '.join(reasons)})"):
