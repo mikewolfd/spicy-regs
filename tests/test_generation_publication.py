@@ -860,3 +860,152 @@ def test_zero_row_discovery_signals_publishes_over_populated_prior_while_other_s
     other_prior = publish(other_store, other_prior_dir)
     with pytest.raises(RuntimeError, match="shrink"):
         publish(other_store, other_empty_dir, other_prior)
+
+
+def test_declared_policy_column_retirement_publishes_while_keeping_rows_and_refuses_row_loss(tmp_path):
+    """ss-ewbj: retiring bulky JSON columns under a recorded policy migration permits <0.2x bytes iff rows stay intact."""
+    from spicy_regs.etl_policy_registry import installed_policies
+    from spicy_regs.etl_receipts import ReceiptContext, write_dataset
+    from spicy_regs.generations import _table_info
+    from spicy_regs.policy_migrations import _recorded
+
+    def build_prior_index(dataset: str, prior_policy, rows: list[dict]) -> tuple[dict, int]:
+        prior_path = tmp_path / f"prior-{dataset}.parquet"
+        cols = {f.name: pa.array([r[f.name] for r in rows], type=f.type) for f in prior_policy.subject_schema}
+        pq.write_table(pa.table(cols, schema=prior_policy.subject_schema), prior_path, store_schema=False)
+        info = _table_info(prior_path)
+        size = prior_path.stat().st_size
+        index = {
+            "format": "spicy-regs-publication",
+            "version": 1,
+            "families": {
+                "scorecard-analysis": {
+                    "prefix": "generations/scorecard-analysis/" + "0" * 64,
+                    "logicalId": "urn:spicy-regs:scorecard-analysis:prior",
+                    "artifactDigest": "sha256:" + "0" * 64,
+                    "tables": {
+                        f"{dataset}.parquet": {
+                            "sha256": "sha256:" + "1" * 64,
+                            "byteSize": size,
+                            "rows": info["rows"],
+                            "columns": info["columns"],
+                        },
+                    },
+                    "etlReceipts": {
+                        "key": "etl_receipts.parquet",
+                        "sha256": "sha256:" + "2" * 64,
+                        "byteSize": 100,
+                        "rows": info["rows"],
+                        "columns": [["dataset", "VARCHAR"]],
+                        "generationId": "prior-gen",
+                        "datasets": [dataset],
+                    },
+                },
+            },
+        }
+        return index, size
+
+    def build_candidate(name: str, policy, rows: list[dict]):
+        context = ReceiptContext(f"gen-{name}", f"attempt-{name}", "test-processor", [{
+            "source_id": "test-source", "sha256": "sha256:" + "a" * 64,
+        }])
+        src = tmp_path / f"{name}-src"
+        records = [({**row, **{field: {} for field in policy.receipt_fields}}, context) for row in rows]
+        subject, receipts = write_dataset(records, src, policy)
+        assert subject is not None
+        target = tmp_path / name
+        build_generation(
+            target, family="scorecard-analysis", files=[subject], expected_keys=[subject.name],
+            receipt_path=receipts, receipt_policies=[policy], receipt_generation_id=context.generation_id,
+        )
+        return target, (target / subject.name).stat().st_size
+
+    import hashlib
+
+    def blob(tag: str, i: int, blocks: int = 4) -> str:
+        return "".join(hashlib.sha256(f"{tag}-{i}-{k}".encode()).hexdigest() for k in range(blocks))
+
+    n_rows = 400
+
+    # 1. Pure column retirement (scorecard_item_links drops input_pins_json & source_context_json).
+    item_curr = installed_policies()["scorecard_item_links"]
+    item_prior = _recorded("scorecard_item_links")[1][-1].policy
+    assert set(item_prior.subject_schema.names) > set(item_curr.subject_schema.names)
+
+    def item_rows(schema: pa.Schema, count: int) -> list[dict]:
+        rows = []
+        for i in range(count):
+            full = {
+                "scorecard_id": f"sc:{i}", "item_id": f"item:{i}", "reference_id": f"ref:{i}",
+                "source_reference_id": f"sref:{i}", "congress": 119, "chamber": "house", "session": 1,
+                "roll_number": i + 1, "vote_id": f"h119-1-{i}", "bill_id": None, "amendment_id": None,
+                "source_snapshot_id": "snap-1", "capture_id": "cap-1",
+                "source_url": "https://example.org/item", "source_path": "/item",
+                "resolution_status": "resolved", "resolution_rule": "exact", "rule_version": "v1",
+                "candidate_count": 1, "candidates_json": f'["{blob("cand", i, 1)}"]', "reason": None,
+                "source_context_json": f'{{"context":"{blob("ctx", i)}"}}',
+                "input_pins_json": f'{{"pins":"{blob("pin", i)}"}}',
+            }
+            rows.append({f.name: full[f.name] for f in schema})
+        return rows
+
+    prior_idx, prior_size = build_prior_index("scorecard_item_links", item_prior, item_rows(item_prior.subject_schema, n_rows))
+    retired_dir, retired_size = build_candidate("retired-item", item_curr, item_rows(item_curr.subject_schema, n_rows))
+    lost_row_dir, _ = build_candidate("lost-row-item", item_curr, item_rows(item_curr.subject_schema, n_rows - 1))
+    assert 0.05 < retired_size / prior_size < 0.2
+
+    store = Store()
+    store.objects[pub.INDEX_V2_KEY] = canonical_json_bytes(prior_idx)
+
+    # Dropping even 1 row during a column retirement still refuses under the ordinary 0.5 threshold.
+    with pytest.raises(RuntimeError, match=r"< threshold 0\.5\)\."):
+        publish(store, lost_row_dir, prior_idx)
+
+    # Keeping all rows under the recorded column retirement publishes cleanly.
+    published = publish(store, retired_dir, prior_idx)
+    desc = pub.table_descriptor(published, "scorecard_item_links.parquet")
+    assert desc is not None and desc["rows"] == n_rows
+    assert {c[0] for c in desc["columns"]} == set(item_curr.subject_schema.names)
+
+    # Subsequent publish under the already-retired schema falls back to the ordinary 0.5 guard.
+    tiny_dir, _ = build_candidate("tiny-item", item_curr, item_rows(item_curr.subject_schema, 10))
+    with pytest.raises(RuntimeError, match=r"< threshold 0\.5\)\."):
+        publish(store, tiny_dir, published)
+
+    # 2. Mixed column retirement + addition (scorecard_member_links drops 4 JSON cols and adds normalized_party/party_status).
+    member_curr = installed_policies()["scorecard_member_links"]
+    member_prior = _recorded("scorecard_member_links")[1][-1].policy
+    assert set(member_prior.subject_schema.names) - set(member_curr.subject_schema.names)
+    assert set(member_curr.subject_schema.names) - set(member_prior.subject_schema.names)
+
+    def member_rows(schema: pa.Schema, count: int) -> list[dict]:
+        rows = []
+        for i in range(count):
+            full = {
+                "scorecard_id": f"sc:{i}", "publisher_member_key": f"m:{i}", "bioguide_id": f"A{i:06d}",
+                "source_snapshot_id": "snap-1", "capture_id": "cap-1",
+                "source_url": "https://example.org/member", "source_path": "/member",
+                "normalized_state": "VA", "state_status": "valid",
+                "normalized_district": "01", "district_status": "valid",
+                "normalized_party": "R", "party_status": "valid",
+                "correction_evidence_json": None, "override_version": None,
+                "resolution_status": "resolved", "resolution_rule": "exact", "rule_version": "v1",
+                "candidate_count": 1, "candidates_json": f'["{blob("mcand", i, 1)}"]', "reason": None,
+                "term_candidates_json": f'{{"terms":"{blob("trm", i, 2)}"}}',
+                "geography_evidence_json": f'{{"geo":"{blob("geo", i, 2)}"}}',
+                "source_context_json": f'{{"context":"{blob("mctx", i, 2)}"}}',
+                "input_pins_json": f'{{"pins":"{blob("mpin", i, 2)}"}}',
+            }
+            rows.append({f.name: full[f.name] for f in schema})
+        return rows
+
+    m_prior_idx, m_prior_size = build_prior_index("scorecard_member_links", member_prior, member_rows(member_prior.subject_schema, n_rows))
+    m_retired_dir, m_retired_size = build_candidate("retired-member", member_curr, member_rows(member_curr.subject_schema, n_rows))
+    assert 0.05 < m_retired_size / m_prior_size < 0.2
+
+    m_store = Store()
+    m_store.objects[pub.INDEX_V2_KEY] = canonical_json_bytes(m_prior_idx)
+    m_published = publish(m_store, m_retired_dir, m_prior_idx)
+    m_desc = pub.table_descriptor(m_published, "scorecard_member_links.parquet")
+    assert m_desc is not None and m_desc["rows"] == n_rows
+    assert {c[0] for c in m_desc["columns"]} == set(member_curr.subject_schema.names)
