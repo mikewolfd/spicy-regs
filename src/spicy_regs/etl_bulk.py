@@ -14,8 +14,12 @@ a row it cannot prove is read again by the row reader and decided by the row fun
 
 from __future__ import annotations
 
+import atexit
 import io
 import json
+import os
+import shutil
+import signal
 import sqlite3
 from dataclasses import dataclass
 from contextvars import ContextVar
@@ -26,6 +30,9 @@ from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import ExitStack, closing, contextmanager, nullcontext
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import Lock, current_thread, main_thread
+from types import FrameType
+from typing import Any
 
 import duckdb
 import pyarrow as pa
@@ -271,25 +278,234 @@ def insert_sql_sha256(policy):
     return sha256(json.dumps(expressions, ensure_ascii=False).encode()).hexdigest()
 
 
+class _BulkSigterm(BaseException):
+    """Internal unwind used by :func:`bulk_connection` to remove owned work files on SIGTERM."""
+
+
+class _BulkCleanupGuard:
+    """Tracks one ``bulk_connection``'s owned temporary directory and active DuckDB connection."""
+
+    def __init__(self, *, is_main: bool) -> None:
+        self.is_main = is_main
+        self.pid = os.getpid()
+        self._temp: TemporaryDirectory[str] | None = None
+        self._connection: duckdb.DuckDBPyConnection | None = None
+
+    def own(self, temp: TemporaryDirectory[str]) -> None:
+        self._temp = temp
+
+    def attach(self, con: duckdb.DuckDBPyConnection) -> None:
+        self._connection = con
+
+    def detach(self) -> None:
+        self._connection = None
+
+    def interrupt(self) -> None:
+        con = self._connection
+        if con is not None:
+            try:
+                con.interrupt()
+            except Exception:
+                pass
+
+    def cleanup_owned(self, *, close_connection: bool) -> None:
+        """Best-effort removal of ONLY the TemporaryDirectory created by this guard."""
+        if os.getpid() != self.pid:
+            return
+        temp = self._temp
+        if temp is None:
+            return
+        self._temp = None
+        con = self._connection
+        if con is not None:
+            self._connection = None
+            try:
+                con.interrupt()
+            except Exception:
+                pass
+            if close_connection:
+                try:
+                    con.close()
+                except Exception:
+                    pass
+        try:
+            temp.cleanup()
+        except Exception:
+            shutil.rmtree(temp.name, ignore_errors=True)
+        if os.path.exists(temp.name):
+            shutil.rmtree(temp.name, ignore_errors=True)
+
+
+_BULK_SIGTERM_LOCK = Lock()
+_ACTIVE_BULK_GUARDS: tuple[_BulkCleanupGuard, ...] = ()
+_MAIN_BULK_DEPTH = 0
+_SIGTERM_INSTALLED = False
+_PREV_SIGTERM_HANDLER: Callable[[int, FrameType | None], Any] | int | None = None
+_SIGTERM_PENDING = False
+
+
+def _redeliver_default_sigterm() -> None:
+    try:
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    except (OSError, ValueError):
+        pass
+    signal.raise_signal(signal.SIGTERM)
+
+
+def _handle_sigterm(signum: int, frame: FrameType | None) -> None:
+    global _SIGTERM_PENDING
+    # Lock-free read of the immutable tuple snapshot: never acquire _BULK_SIGTERM_LOCK
+    # inside a signal handler, because the main thread may have been interrupted while holding it.
+    guards = _ACTIVE_BULK_GUARDS
+    prev = _PREV_SIGTERM_HANDLER
+    if prev is None or isinstance(prev, int):
+        if prev != signal.SIG_DFL:
+            return
+    else:
+        prev(signum, frame)
+        return
+    # Default SIGTERM behavior (SIG_DFL): ignore repeat SIGTERMs during unwind so DuckDB
+    # close and owned TemporaryDirectory removal finish before re-delivering SIGTERM.
+    _SIGTERM_PENDING = True
+    try:
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    except (OSError, ValueError):
+        pass
+    for guard in guards:
+        guard.interrupt()
+    raise _BulkSigterm(signum)
+
+
+def _register_bulk_guard(guard: _BulkCleanupGuard) -> None:
+    global _ACTIVE_BULK_GUARDS, _MAIN_BULK_DEPTH, _PREV_SIGTERM_HANDLER, _SIGTERM_INSTALLED
+    with _BULK_SIGTERM_LOCK:
+        _ACTIVE_BULK_GUARDS = (*_ACTIVE_BULK_GUARDS, guard)
+        if guard.is_main:
+            _MAIN_BULK_DEPTH += 1
+            if _MAIN_BULK_DEPTH == 1 and not _SIGTERM_INSTALLED:
+                try:
+                    prev = signal.getsignal(signal.SIGTERM)
+                    if prev not in (signal.SIG_IGN, None):
+                        _PREV_SIGTERM_HANDLER = prev
+                        _SIGTERM_INSTALLED = True
+                        signal.signal(signal.SIGTERM, _handle_sigterm)
+                except (OSError, ValueError):
+                    _PREV_SIGTERM_HANDLER = None
+                    _SIGTERM_INSTALLED = False
+                    guard.is_main = False
+                    _MAIN_BULK_DEPTH -= 1
+
+
+def _unregister_bulk_guard(guard: _BulkCleanupGuard, *, exc_type: type[BaseException] | None) -> None:
+    global _ACTIVE_BULK_GUARDS, _MAIN_BULK_DEPTH, _PREV_SIGTERM_HANDLER, _SIGTERM_INSTALLED, _SIGTERM_PENDING
+    remaining_to_cleanup: tuple[_BulkCleanupGuard, ...] = ()
+    redeliver_sigterm = False
+    propagate_sigterm = False
+    restore_handler: Callable[[int, FrameType | None], Any] | int | None = None
+    should_restore = False
+
+    with _BULK_SIGTERM_LOCK:
+        if guard not in _ACTIVE_BULK_GUARDS:
+            return
+        _ACTIVE_BULK_GUARDS = tuple(item for item in _ACTIVE_BULK_GUARDS if item is not guard)
+        if guard.is_main:
+            _MAIN_BULK_DEPTH -= 1
+            if _MAIN_BULK_DEPTH == 0:
+                if _SIGTERM_PENDING:
+                    _SIGTERM_PENDING = False
+                    _SIGTERM_INSTALLED = False
+                    _PREV_SIGTERM_HANDLER = None
+                    remaining_to_cleanup = _ACTIVE_BULK_GUARDS
+                    redeliver_sigterm = True
+                elif _SIGTERM_INSTALLED:
+                    restore_handler = _PREV_SIGTERM_HANDLER
+                    _SIGTERM_INSTALLED = False
+                    should_restore = True
+            elif _SIGTERM_PENDING and exc_type is not _BulkSigterm:
+                propagate_sigterm = True
+
+    if should_restore and restore_handler is not None:
+        try:
+            if signal.getsignal(signal.SIGTERM) is _handle_sigterm:
+                signal.signal(signal.SIGTERM, restore_handler)
+        except (OSError, ValueError):
+            pass
+        finally:
+            with _BULK_SIGTERM_LOCK:
+                if _MAIN_BULK_DEPTH == 0 and not _SIGTERM_INSTALLED:
+                    _PREV_SIGTERM_HANDLER = None
+    elif redeliver_sigterm:
+        for other in remaining_to_cleanup:
+            other.cleanup_owned(close_connection=False)
+        _redeliver_default_sigterm()
+    elif propagate_sigterm:
+        raise _BulkSigterm(signal.SIGTERM)
+
+
+def _atexit_sigterm_cleanup() -> None:
+    global _ACTIVE_BULK_GUARDS, _MAIN_BULK_DEPTH, _PREV_SIGTERM_HANDLER, _SIGTERM_INSTALLED, _SIGTERM_PENDING
+    with _BULK_SIGTERM_LOCK:
+        if not _SIGTERM_PENDING:
+            return
+        guards = _ACTIVE_BULK_GUARDS
+        _ACTIVE_BULK_GUARDS = ()
+        _MAIN_BULK_DEPTH = 0
+        _SIGTERM_PENDING = False
+        _SIGTERM_INSTALLED = False
+        _PREV_SIGTERM_HANDLER = None
+    for guard in guards:
+        guard.cleanup_owned(close_connection=guard.is_main)
+    _redeliver_default_sigterm()
+
+
+atexit.register(_atexit_sigterm_cleanup)
+
+
+@contextmanager
+def _bulk_sigterm_guard() -> Iterator[_BulkCleanupGuard]:
+    guard = _BulkCleanupGuard(is_main=current_thread() is main_thread())
+    exc_type: type[BaseException] | None = None
+    try:
+        _register_bulk_guard(guard)
+        yield guard
+    except BaseException as error:
+        exc_type = type(error)
+        raise
+    finally:
+        _unregister_bulk_guard(guard, exc_type=exc_type)
+
+
 @contextmanager
 def bulk_connection(directory: Path | None = None, *, threads: int = 4, memory_limit: str = "4GB"):
     """A private disk-backed DuckDB with bounded CPU, RAM and spill.
 
-    Each operation owns its files. A second statement must never run while a
-    result from this connection is still being consumed.
+    Each operation owns its files and removes its owned temporary directory on
+    SIGTERM without touching sibling or preserved failure/recovery directories.
+    A second statement must never run while a result from this connection is
+    still being consumed.
     """
     limits = _limits.get()
     if limits is not None:
         threads, memory_limit = limits.threads, limits.memory_limit
-    with TemporaryDirectory(prefix="etl-bulk-", dir=directory) as temp:
-        root = Path(temp)
-        with closing(duckdb.connect(str(root / "work.duckdb"), config={
-            "threads": threads, "memory_limit": memory_limit, "max_temp_directory_size": "32GB",
-            "temp_directory": str(root / "spill"),
-        })) as con, bounded_connection(con):
-            # Timestamp spellings and parses must not depend on the host's zone.
-            con.execute("SET TimeZone = 'UTC'")
-            yield con, root
+    with _bulk_sigterm_guard() as guard:
+        temp = TemporaryDirectory(prefix="etl-bulk-", dir=directory)
+        guard.own(temp)
+        try:
+            with temp:
+                root = Path(temp.name)
+                with closing(duckdb.connect(str(root / "work.duckdb"), config={
+                    "threads": threads, "memory_limit": memory_limit, "max_temp_directory_size": "32GB",
+                    "temp_directory": str(root / "spill"),
+                })) as con, bounded_connection(con):
+                    guard.attach(con)
+                    try:
+                        # Timestamp spellings and parses must not depend on the host's zone.
+                        con.execute("SET TimeZone = 'UTC'")
+                        yield con, root
+                    finally:
+                        guard.detach()
+        finally:
+            guard.cleanup_owned(close_connection=False)
 
 
 _GROUP = RECEIPT_ROW_GROUP

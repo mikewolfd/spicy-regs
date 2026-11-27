@@ -1,9 +1,15 @@
 """The SQL encodings equal the receipt writer's, or mark the text for the row writer."""
 
 import json
+import os
 import random
+import signal
+import subprocess
 import sys
+import threading
+import time
 from decimal import Decimal, localcontext
+from pathlib import Path
 
 import duckdb
 import pyarrow as pa
@@ -170,3 +176,326 @@ def test_identities_and_receipt_ids_of_a_written_bundle(tmp_path) -> None:
     recomputed = con.execute(f"SELECT count(*), count(*) FILTER ({etl_bulk.digest_sql(etl_bulk.receipt_json_sql())} = receipt_id) "
                              f"FROM read_parquet('{receipts}')").fetchone()
     assert recomputed == (len(rows), len(rows))
+
+
+def _wait_for_file(path: Path, proc: subprocess.Popen[str], timeout: float = 15.0) -> str:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.exists():
+            text = path.read_text().strip()
+            if text:
+                return text
+        if proc.poll() is not None:
+            out, err = proc.communicate(timeout=5)
+            raise AssertionError(f"Subprocess exited early with rc={proc.returncode}: out={out!r}, err={err!r}")
+        time.sleep(0.02)
+    proc.kill()
+    out, err = proc.communicate(timeout=5)
+    raise AssertionError(f"Timed out waiting for {path}: out={out!r}, err={err!r}")
+
+
+def test_bulk_connection_sigterm_cleans_owned_spill_and_preserves_evidence(tmp_path: Path) -> None:
+    work_dir = tmp_path / "work"
+    work_dir.mkdir()
+    sibling_file = work_dir / "preserved.json"
+    sibling_file.write_text('{"keep": true}')
+    recovery_dir = work_dir / "recovery"
+    recovery_dir.mkdir()
+    recovery_checkpoint = recovery_dir / "checkpoint.json"
+    recovery_checkpoint.write_text('{"phase": "admitted"}')
+
+    evidence_dir = tmp_path / "retained-evidence"
+    evidence_dir.mkdir()
+    evidence_file = evidence_dir / "failure.json"
+    evidence_file.write_text('{"status": "retained"}')
+
+    ready = tmp_path / "ready.txt"
+    script = """
+import os
+from pathlib import Path
+from spicy_regs.etl_bulk import bulk_connection
+
+work_dir = Path(os.environ["WORK_DIR"])
+ready = Path(os.environ["READY_FILE"])
+with bulk_connection(work_dir, threads=4, memory_limit="32MB") as (con, root):
+    con.execute("SET preserve_insertion_order = false")
+    con.execute("CREATE TABLE t AS SELECT i, repeat('x', 500) AS s FROM range(100000) t(i)")
+    ready.write_text(str(root))
+    # Force active multi-threaded spill into root / "spill" while awaiting SIGTERM.
+    while True:
+        con.execute("SELECT count(*) FROM (SELECT * FROM t ORDER BY md5(CAST(i AS VARCHAR)), s)").fetchall()
+"""
+    proc = subprocess.Popen(
+        [sys.executable, "-c", script],
+        env={**os.environ, "WORK_DIR": str(work_dir), "READY_FILE": str(ready)},
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        root = Path(_wait_for_file(ready, proc))
+        assert root.parent == work_dir and root.name.startswith("etl-bulk-")
+        assert (root / "work.duckdb").exists()
+        spill_dir = root / "spill"
+        deadline = time.monotonic() + 15.0
+        while time.monotonic() < deadline:
+            if spill_dir.exists() and any(spill_dir.iterdir()):
+                break
+            assert proc.poll() is None, f"Subprocess exited before spilling: rc={proc.returncode}"
+            time.sleep(0.02)
+        assert spill_dir.exists() and any(spill_dir.iterdir()), "Expected real DuckDB spill files before SIGTERM"
+
+        proc.send_signal(signal.SIGTERM)
+        # Send a second immediate SIGTERM to verify cleanup is not aborted mid-removal.
+        time.sleep(0.002)
+        if proc.poll() is None:
+            try:
+                proc.send_signal(signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        out, err = proc.communicate(timeout=10)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=5)
+
+    assert proc.returncode == -signal.SIGTERM, f"Expected SIGTERM exit, got {proc.returncode}: out={out!r}, err={err!r}"
+    assert not root.exists()
+    assert not list(work_dir.glob("etl-bulk-*"))
+    assert sibling_file.read_text() == '{"keep": true}'
+    assert recovery_checkpoint.read_text() == '{"phase": "admitted"}'
+    assert evidence_file.read_text() == '{"status": "retained"}'
+
+
+def test_bulk_connection_sigterm_default_tmpdir_and_nested_connections(tmp_path: Path) -> None:
+    custom_tmpdir = tmp_path / "tmpdir"
+    custom_tmpdir.mkdir()
+    unrelated_dir = custom_tmpdir / "unrelated-evidence"
+    unrelated_dir.mkdir()
+    unrelated_file = unrelated_dir / "keep.txt"
+    unrelated_file.write_text("do not delete")
+
+    inner_parent = tmp_path / "inner-parent"
+    inner_parent.mkdir()
+    inner_sibling = inner_parent / "manifest.json"
+    inner_sibling.write_text('{"intact": true}')
+
+    ready = tmp_path / "ready-nested.txt"
+    script = """
+import json
+import os
+import time
+from pathlib import Path
+from spicy_regs.etl_bulk import bulk_connection
+
+inner_parent = Path(os.environ["INNER_PARENT"])
+ready = Path(os.environ["READY_FILE"])
+with bulk_connection(threads=1, memory_limit="32MB") as (outer_con, outer_root):
+    outer_con.execute("CREATE TABLE outer_t AS SELECT i FROM range(1000) t(i)")
+    (outer_root / "spill").mkdir(exist_ok=True)
+    (outer_root / "spill" / "outer.tmp").write_bytes(b"outer-spill")
+    try:
+        with bulk_connection(inner_parent, threads=1, memory_limit="32MB") as (inner_con, inner_root):
+            inner_con.execute("CREATE TABLE inner_t AS SELECT i FROM range(1000) t(i)")
+            (inner_root / "spill").mkdir(exist_ok=True)
+            (inner_root / "spill" / "inner.tmp").write_bytes(b"inner-spill")
+            ready.write_text(json.dumps({"outer": str(outer_root), "inner": str(inner_root)}))
+            try:
+                inner_con.execute("SELECT sum(hash(i)) FROM range(10000000000) AS t(i)").fetchall()
+            except Exception:
+                # Even if caller code catches DuckDB's Query interrupted RuntimeError,
+                # bulk_connection must still unwind and re-deliver SIGTERM rather than exiting 0.
+                pass
+    except Exception:
+        pass
+    time.sleep(5)
+"""
+    proc = subprocess.Popen(
+        [sys.executable, "-c", script],
+        env={**os.environ, "TMPDIR": str(custom_tmpdir), "INNER_PARENT": str(inner_parent), "READY_FILE": str(ready)},
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        roots = json.loads(_wait_for_file(ready, proc))
+        outer_root = Path(roots["outer"])
+        inner_root = Path(roots["inner"])
+        assert outer_root.parent == custom_tmpdir
+        assert inner_root.parent == inner_parent
+        assert (outer_root / "work.duckdb").exists() and (outer_root / "spill" / "outer.tmp").exists()
+        assert (inner_root / "work.duckdb").exists() and (inner_root / "spill" / "inner.tmp").exists()
+        time.sleep(0.1)
+        proc.send_signal(signal.SIGTERM)
+        out, err = proc.communicate(timeout=10)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=5)
+
+    assert proc.returncode == -signal.SIGTERM, f"Expected SIGTERM exit, got {proc.returncode}: out={out!r}, err={err!r}"
+    assert not outer_root.exists()
+    assert not inner_root.exists()
+    assert not list(custom_tmpdir.glob("etl-bulk-*"))
+    assert not list(inner_parent.glob("etl-bulk-*"))
+    assert unrelated_file.read_text() == "do not delete"
+    assert inner_sibling.read_text() == '{"intact": true}'
+
+
+def test_bulk_connection_sigterm_suspended_generator_cleans_owned_dir(tmp_path: Path) -> None:
+    work_dir = tmp_path / "gen-work"
+    work_dir.mkdir()
+    evidence = work_dir / "evidence.json"
+    evidence.write_text('{"retained": true}')
+    ready = tmp_path / "ready-gen.txt"
+    script = """
+import os
+import time
+from pathlib import Path
+from spicy_regs.etl_bulk import bulk_connection
+
+work_dir = Path(os.environ["WORK_DIR"])
+ready = Path(os.environ["READY_FILE"])
+
+def stream():
+    with bulk_connection(work_dir, threads=1, memory_limit="32MB") as (con, root):
+        con.execute("CREATE TABLE t AS SELECT 1 AS v")
+        (root / "spill").mkdir(exist_ok=True)
+        (root / "spill" / "gen.tmp").write_bytes(b"spill")
+        yield root
+
+rows = stream()
+root = next(rows)
+ready.write_text(str(root))
+time.sleep(30)
+"""
+    proc = subprocess.Popen(
+        [sys.executable, "-c", script],
+        env={**os.environ, "WORK_DIR": str(work_dir), "READY_FILE": str(ready)},
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        root = Path(_wait_for_file(ready, proc))
+        assert (root / "work.duckdb").exists() and (root / "spill" / "gen.tmp").exists()
+        proc.send_signal(signal.SIGTERM)
+        out, err = proc.communicate(timeout=10)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=5)
+
+    assert proc.returncode == -signal.SIGTERM, f"Expected SIGTERM exit, got {proc.returncode}: out={out!r}, err={err!r}"
+    assert not root.exists()
+    assert evidence.read_text() == '{"retained": true}'
+
+
+def test_bulk_connection_preserves_and_chains_custom_sigterm_handler(tmp_path: Path) -> None:
+    original = signal.getsignal(signal.SIGTERM)
+    try:
+        # 1. Non-raising custom handler: chained during nested calls and restored only after outer exits.
+        seen: list[int] = []
+
+        def custom_flag(signum: int, _frame) -> None:
+            seen.append(signum)
+
+        signal.signal(signal.SIGTERM, custom_flag)
+        with etl_bulk.bulk_connection(tmp_path, threads=1, memory_limit="32MB") as (outer_con, outer_root):
+            with etl_bulk.bulk_connection(tmp_path, threads=1, memory_limit="32MB") as (inner_con, inner_root):
+                assert outer_con.execute("SELECT 1").fetchone() == (1,)
+                assert inner_con.execute("SELECT 2").fetchone() == (2,)
+                signal.raise_signal(signal.SIGTERM)
+            assert not inner_root.exists()
+            assert outer_root.exists()
+            # Outer is still active, so bulk_connection's wrapper remains installed until outer exits.
+            assert signal.getsignal(signal.SIGTERM) is etl_bulk._handle_sigterm
+            signal.raise_signal(signal.SIGTERM)
+        assert not outer_root.exists()
+        assert seen == [signal.SIGTERM, signal.SIGTERM]
+        assert signal.getsignal(signal.SIGTERM) is custom_flag
+
+        # 2. Raising custom handler that switches SIGTERM to SIG_IGN (as operational_runner does):
+        #    unwinds cleanly, removes owned temp dir, propagates exception, and does not clobber SIG_IGN.
+        def ignore_and_raise(_signum: int, _frame) -> None:
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            raise InterruptedError("caller interrupted")
+
+        signal.signal(signal.SIGTERM, ignore_and_raise)
+        leaked_root: Path | None = None
+        with pytest.raises(InterruptedError, match="caller interrupted"):
+            with etl_bulk.bulk_connection(tmp_path, threads=1, memory_limit="32MB") as (_con, root):
+                leaked_root = root
+                signal.raise_signal(signal.SIGTERM)
+        assert leaked_root is not None and not leaked_root.exists()
+        assert signal.getsignal(signal.SIGTERM) == signal.SIG_IGN
+
+        # 3. Pre-existing SIG_IGN stays untouched during and after bulk_connection.
+        with etl_bulk.bulk_connection(tmp_path, threads=1, memory_limit="32MB") as (con, _root):
+            assert con.execute("SELECT 3").fetchone() == (3,)
+            assert signal.getsignal(signal.SIGTERM) == signal.SIG_IGN
+        assert signal.getsignal(signal.SIGTERM) == signal.SIG_IGN
+    finally:
+        signal.signal(signal.SIGTERM, original)
+
+
+def test_bulk_connection_works_in_non_main_thread_without_clobbering_sigterm(tmp_path: Path) -> None:
+    original = signal.getsignal(signal.SIGTERM)
+
+    def sentinel(_signum: int, _frame) -> None:
+        pass
+
+    signal.signal(signal.SIGTERM, sentinel)
+    try:
+        # Standalone worker thread: never calls signal.signal, never crashes, never touches main SIGTERM.
+        errors: list[BaseException] = []
+        roots: list[Path] = []
+
+        def worker(sub: Path) -> None:
+            try:
+                with etl_bulk.bulk_connection(sub, threads=1, memory_limit="32MB") as (con, root):
+                    roots.append(root)
+                    assert con.execute("SELECT 42").fetchone() == (42,)
+                    assert (root / "work.duckdb").exists()
+            except BaseException as exc:
+                errors.append(exc)
+
+        t1 = threading.Thread(target=worker, args=(tmp_path,))
+        t1.start()
+        t1.join(timeout=10)
+        assert not t1.is_alive()
+        assert not errors
+        assert len(roots) == 1 and not roots[0].exists()
+        assert signal.getsignal(signal.SIGTERM) is sentinel
+
+        # Worker thread running concurrently with main-thread bulk_connection.
+        worker_entered = threading.Event()
+        main_exited = threading.Event()
+        concurrent_roots: list[Path] = []
+
+        def overlapping_worker() -> None:
+            try:
+                with etl_bulk.bulk_connection(tmp_path, threads=1, memory_limit="32MB") as (con, root):
+                    concurrent_roots.append(root)
+                    worker_entered.set()
+                    assert main_exited.wait(timeout=10)
+                    assert con.execute("SELECT 99").fetchone() == (99,)
+            except BaseException as exc:
+                errors.append(exc)
+
+        t2 = threading.Thread(target=overlapping_worker)
+        with etl_bulk.bulk_connection(tmp_path, threads=1, memory_limit="32MB") as (main_con, main_root):
+            t2.start()
+            assert worker_entered.wait(timeout=10)
+            assert main_con.execute("SELECT 7").fetchone() == (7,)
+        assert not main_root.exists()
+        # Main thread restored sentinel cleanly even while the worker thread is still active.
+        assert signal.getsignal(signal.SIGTERM) is sentinel
+        main_exited.set()
+        t2.join(timeout=10)
+        assert not t2.is_alive()
+        assert not errors
+        assert len(concurrent_roots) == 1 and not concurrent_roots[0].exists()
+        assert signal.getsignal(signal.SIGTERM) is sentinel
+    finally:
+        signal.signal(signal.SIGTERM, original)
