@@ -205,7 +205,7 @@ def import_publications(db, inputs: Inputs, selection_path: Path) -> dict:
         local_matches[key] = held, reasons
         return held, reasons
 
-    def add_table(family, version, table, descriptor, *, scope="current", snapshot=None):
+    def add_table(family, version, table, descriptor, *, scope="current", snapshot=None, published_at=None):
         version = sha(version)
         cid = bindings.get(family) or "publication:" + family
         db.execute("INSERT OR IGNORE INTO collections VALUES(?,?,?)", (
@@ -219,7 +219,8 @@ def import_publications(db, inputs: Inputs, selection_path: Path) -> dict:
         def output_key(row):
             return row.get("object_key") or row["table"].removesuffix(".parquet") + ".parquet"
 
-        output = [row for row in generations.get((family, version), {}).get("outputs", [])
+        generation = generations.get((family, version))
+        output = [row for row in (generation or {}).get("outputs", [])
                   if output_key(row) in member_keys]
         actual = {(output_key(row), sha(row["sha256"]), row["bytes"]) for row in output}
         if not output:
@@ -248,6 +249,15 @@ def import_publications(db, inputs: Inputs, selection_path: Path) -> dict:
                   "evidenceLinks": [], "localFileIds": sorted(file_ids), "evidenceIds": []}
         value = {"id": table.removesuffix(".parquet"), "family": family, "artifact_digest": version,
                  "status": "publication-pinned", "publication": result, "publication_descriptor": descriptor}
+        if published_at is not None:
+            value["published_at"] = published_at
+        if generation is not None:
+            value["family_parent_tables"] = sorted({
+                row["table"].removesuffix(".parquet")
+                for row in generation["parents"]
+                if not str(row.get("object_key", "")).endswith("/etl_receipts.parquet")
+                and row["table"].removesuffix(".parquet") != "etl_receipts"
+            })
         if snapshot:
             value["snapshot_id"] = snapshot
         ident = "publication-lineage:" + stable(scope, family, version, table)
@@ -263,12 +273,13 @@ def import_publications(db, inputs: Inputs, selection_path: Path) -> dict:
 
     for family, entry in publication["families"].items():
         for table, descriptor in entry["tables"].items():
-            add_table(family, entry["artifactDigest"], table, descriptor)
+            add_table(family, entry["artifactDigest"], table, descriptor, published_at=entry.get("publishedAt"))
     for reference in selection.get("historical_publications", []):
         historical = parse_index(read_pin(reference, base).read_bytes())
         for family, entry in historical["families"].items():
             for table, descriptor in entry["tables"].items():
-                add_table(family, entry["artifactDigest"], table, descriptor, scope="historical")
+                add_table(family, entry["artifactDigest"], table, descriptor, scope="historical",
+                          published_at=entry.get("publishedAt"))
     if "rulemaking" in selection:
         refs = selection["rulemaking"]
         pointer = inputs.json(read_pin(refs["pointer"], base))

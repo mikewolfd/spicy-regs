@@ -139,6 +139,23 @@ def public_members(root, generation, *, decode=True):
             key: value for key, value in detail["collection"].items() if key != "periods"
         }
         require(detail_summary == summary, "Public collection differs from manifest")
+        for table in detail.get("tables", []):
+            match = table.get("coverageNoteMatch")
+            reviewed_version = table.get("coverageNoteReviewedVersion")
+            if match is not None:
+                require(match in ("exact", "carried"), "Invalid coverage note match status")
+                require(isinstance(table.get("coverageNote"), str) and bool(table["coverageNote"].strip()),
+                        "Coverage note match status requires a coverage note")
+            if match == "carried":
+                require(isinstance(reviewed_version, str) and bool(re.fullmatch(r"sha256:[a-f0-9]{64}", reviewed_version)),
+                        "Carried coverage note requires a reviewed version digest")
+                require(reviewed_version != table.get("artifactDigest"),
+                        "Carried coverage note must reference a different reviewed version")
+            elif reviewed_version is not None:
+                require(isinstance(reviewed_version, str) and bool(re.fullmatch(r"sha256:[a-f0-9]{64}", reviewed_version)),
+                        "Invalid coverage note reviewed version digest")
+                require(match == "exact" and reviewed_version == table.get("artifactDigest"),
+                        "Reviewed version without carried match must match artifactDigest")
         def file_inventory(inventory, inventory_kind):
             rows = 0
             require(type(inventory["total"]) is int and inventory["total"] >= 0, "Invalid public file total")
