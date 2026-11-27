@@ -8,13 +8,8 @@ from spicy_regs.transforms.government_receipts import POLICIES
 from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS
 
 
-class GovernmentTableRollup(RollupPipeline):
-    """A government-source family's tables, admitted under their declared public schemas (``SUBJECT_SCHEMAS``).
-
-    A family whose receipts are retired (ss-vse3) subclasses this directly. Its run refuses at its start, in seconds,
-    while docs/pins/receipt-archive.json does not pin the live generation that still lists those receipts
-    (``publication.require_live_receipt_pins``), which its first receipts-free publish would refuse at the end.
-    """
+class _GovernmentRollup(RollupPipeline):
+    """Shared public-schema declarations for government-source rollups (``SUBJECT_SCHEMAS``)."""
 
     def generation_schemas(self):
         schemas = super().generation_schemas()
@@ -24,7 +19,27 @@ class GovernmentTableRollup(RollupPipeline):
         return schemas
 
 
-class GovernmentReceiptRollup(GovernmentTableRollup):
+class GovernmentTableRollup(_GovernmentRollup):
+    """A government-source family whose tables publish no per-row receipts (ss-vse3; policies ``receipts_retired``).
+
+    A family whose receipts are retired subclasses this directly. Its run refuses at its start, in seconds, while
+    docs/pins/receipt-archive.json does not pin the live generation that still lists those receipts
+    (``publication.require_live_receipt_pins``), which its first receipts-free publish would refuse at the end.
+    """
+
+    def __init_subclass__(cls, **kwargs):
+        from spicy_regs.subject_catalog import retired_receipt_datasets
+
+        super().__init_subclass__(**kwargs)
+        keys = cls.outputs or (cls.output,)
+        if not all(isinstance(key, str) for key in keys):
+            raise TypeError("Government rollups must declare their output table names")
+        names = {key.removesuffix(".parquet") for key in keys if isinstance(key, str)}
+        if unretired := sorted(names - retired_receipt_datasets()):
+            raise ValueError(f"{cls.__name__}: {unretired} still publish receipts; use GovernmentReceiptRollup")
+
+
+class GovernmentReceiptRollup(_GovernmentRollup):
     def run(self, *, read_operation=None):
         try:
             return super().run(read_operation=read_operation)
