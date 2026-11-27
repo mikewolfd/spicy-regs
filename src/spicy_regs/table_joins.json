@@ -12240,18 +12240,17 @@
           ]
         },
         {
-          "table": "law_code_sections",
+          "table": "usc_release_point_sections",
           "columns": [
-            "congress",
-            "session",
-            "seq"
+            "usc_title",
+            "usc_section_key"
           ],
           "keys": [
             {
               "parts": [
                 {
                   "path": [
-                    "congress"
+                    "usc_title"
                   ],
                   "from": "element"
                 }
@@ -12263,19 +12262,7 @@
               "parts": [
                 {
                   "path": [
-                    "session"
-                  ],
-                  "from": "element"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "seq"
+                    "usc_section_key"
                   ],
                   "from": "element"
                 }
@@ -12291,7 +12278,7 @@
               ],
               "from": "element",
               "values": [
-                "law_code_sections"
+                "usc_release_point_sections"
               ]
             },
             {
@@ -12659,6 +12646,73 @@
               "from": "element",
               "values": [
                 "court_citations"
+              ]
+            },
+            {
+              "path": [
+                "target_status"
+              ],
+              "from": "element",
+              "values": [
+                "found",
+                "ambiguous"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "law_code_sections",
+          "columns": [
+            "congress",
+            "session",
+            "seq"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "congress"
+                  ],
+                  "from": "element"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "session"
+                  ],
+                  "from": "element"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "seq"
+                  ],
+                  "from": "element"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "target_table_selected"
+              ],
+              "from": "element",
+              "values": [
+                "law_code_sections"
               ]
             },
             {

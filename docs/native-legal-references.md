@@ -44,12 +44,17 @@ manifest directory. The manifest, exact XML bytes and optional target bytes
 enter the existing `CaptureEvidence` blob store and journal. Events say
 `retained-input`, not a fabricated new HTTP capture.
 
-Optional `targets` map an existing resolver table name to a local Parquet
-`path` and exact `sha256:` digest. Reads use a verified copy of those bytes.
-Result candidates name the target file pin and the existing resolver's grain.
-For example, `law_code_sections` matches classification rows, not hosted U.S.
-Code text or proof of current applicability. An unknown source edition stays
-unknown even when a target lookup finds a classification row.
+Optional `targets` map an existing resolver table name (or `uscode_edition_sections`,
+which installs `usc_release_point_sections`) to a local Parquet `path` and exact
+`sha256:` digest. Reads use a verified copy of those bytes. Result candidates name
+the target file pin and the existing resolver's grain under `selected-target-lookup/2`
+(policy `legislative-documents/3`). For example, `usc_release_point_sections` matches
+sections or range stubs printed at the held OLRC release point, not Code text or proof
+of current applicability (consult `usc_citation_verdicts` for OLRC legal status and
+1994–2024 annual-edition presence). Prior `/1` generations (`legislative-documents/1`
+and `legislative-documents/2`, recorded against `law_code_sections`) remain readable
+and their carried candidate keys stay linkable. An unknown source edition stays
+unknown even when a target lookup finds a release-point section.
 
 Bounds are explicit: at most 100 source inputs, 16 MiB per XML and 64 MiB total
 XML, 10,000 selected observations per run, and 64 MiB per optional target
@@ -272,7 +277,7 @@ attribute extraction and `usc_place` separation against retained originals:
 
 ## Relationship-view integration and Wave 4 seam
 
-- **`usc_citation_verdicts` (`usc-release-point-verdict-v2`):** Keyed by
+- **`usc_citation_verdicts` (`usc-release-point-verdict-v3`):** Keyed by
   `(usc_title, usc_section_key, usc_place)` across `document_citations`,
   `law_code_sections`, `table3_records`, and sealed `native_legal_references`
   (unnesting native Arrow `LIST<STRUCT<...>>` column `target_candidates` via
@@ -282,17 +287,25 @@ attribute extraction and `usc_place` separation against retained originals:
   `document_citations`) attribute to `usc_place = 'unstated'`; classification
   and Table III places (`section`, `note`, `preceding`, `note_preceding`) carry
   verbatim (NULL/blank coalesced to `unstated`). Only `section` and `unstated`
-  rows join `usc_release_point_sections`; `note`, `preceding`, and
-  `note_preceding` rows emit `not_checked_non_section_place`
-  (`reason = 'non_section_place'`, `release_point_rows = 0`).
-- **Wave 1 boundary & Wave 4 handoff:**
-  - Wave 1 (`ss-qggu`) intentionally holds `NATIVE_LEGAL_REFERENCE_RULE` at
-    `native-legal-reference/003` and `NATIVE_RESOLUTION_RULE` at
-    `selected-target-lookup/1`.
-  - **`ss-xpyk` (Wave 4):** Migrates `native_legal_references` target lookup to
-    `selected-target-lookup/2` and adds `usc_oracle_*` legal-status and
-    annual-presence enrichment, building directly on `usc-release-point-verdict-v2`'s
-    `(usc_title, usc_section_key, usc_place)` key and `nt new` negative controls.
+  rows join `usc_release_point_sections` and the SHA-256-pinned vendored OLRC
+  oracle tables (`usc_oracle_sections`, `usc_oracle_ranges`,
+  `usc_oracle_annual_sections`, `usc_oracle_annual_ranges`) to surface legal
+  status (`oracle_status`, `oracle_statuses`, `oracle_status_source`) and
+  1994–2024 annual-edition presence (`annual_presence`, `annual_only`,
+  `annual_first_year`, `annual_last_year`, `annual_edition_count`, and
+  `reason = 'annual_only'`). `note`, `preceding`, and `note_preceding` rows
+  emit `not_checked_non_section_place` (`reason = 'non_section_place'`,
+  `release_point_rows = 0`, NULL oracle/annual columns).
+- **Wave boundaries & handoffs:**
+  - **`ss-xpyk` (delivered):** Migrated `native_legal_references` target lookup
+    to `selected-target-lookup/2` (`usc_release_point_sections`, policy
+    `legislative-documents/3`, `list<native-legal-target/3>`, preserving
+    `/1` and `/2` prior-generation readback and carried `law_code_sections`
+    navigation) and extended `usc_citation_verdicts` to
+    `usc-release-point-verdict-v3` with `usc_oracle_*` legal-status and
+    1994–2024 annual-presence enrichment, cross-title and `nt new` negative
+    controls, and explicit non-support for automatic letter-suffix repair.
+    `NATIVE_LEGAL_REFERENCE_RULE` remains `native-legal-reference/003`.
   - **`ss-tdf4` (Wave 4):** Adds character-offset spans and surrounding text
     context beside XPath `source_path`, extends native scanning to Statutes at
     Large (`STATUTE-*.xml`), and bumps past `native-legal-reference/003`.

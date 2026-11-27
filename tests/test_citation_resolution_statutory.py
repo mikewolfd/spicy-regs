@@ -6,9 +6,11 @@ import duckdb
 
 from spicy_regs.citation_resolution import (
     ACT_SECTION_ROUTE,
+    LEGACY_USC_SECTION_ROUTE,
     NATIVE_RESOLUTION_RULE,
     NATIVE_ROUTES,
     RESOLUTION_RULE,
+    ROUTES,
     STATUTORY_ROUTES,
     USC_DISPOSITION_ROUTE,
     resolve_act_citation,
@@ -125,6 +127,16 @@ def test_resolve_citations_enriches_missing_usc_sections_and_keeps_native_rule_u
         assert r10["disposition"]["successors"][0]["target_key"] == "10-12203"
         assert r42["disposition"]["successors"][0]["target_key"] == "34-10101"
 
-        native = resolve_citations(con, items, pins, routes=NATIVE_ROUTES, rule=NATIVE_RESOLUTION_RULE)
-        assert native["resolution_rule"] == "selected-target-lookup/1"
+        native = resolve_citations(
+            con, items, pins, routes=NATIVE_ROUTES, rule=NATIVE_RESOLUTION_RULE, enrich_dispositions=False,
+        )
+        assert native["resolution_rule"] == "selected-target-lookup/2"
+        assert native["occurrences"][0]["target_status"] == "found"
+        assert native["occurrences"][0]["candidate_keys"] == [{"usc_title": "5", "usc_section_key": "553"}]
         assert all("disposition" not in row for row in native["occurrences"])
+
+        legacy = resolve_citations(
+            con, items, pins, routes={**ROUTES, "usc_section": LEGACY_USC_SECTION_ROUTE}, rule="selected-target-lookup/1",
+        )
+        assert legacy["resolution_rule"] == "selected-target-lookup/1"
+        assert all("disposition" not in row for row in legacy["occurrences"])

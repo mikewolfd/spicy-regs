@@ -64,8 +64,10 @@ def policy(dataset: str) -> DatasetPolicy:
         # the legacy summary clock, so only a replay of retained originals can qualify it.
         # GovInfo /3 defines dated keys for fresh builds; no implicit prior-key migration.
         # Senate /2 preserves funding designations as source strings, including X and 0509.
-        policy_version="legislative-documents/4" if dataset == "hearing_transcripts" else "legislative-documents/3" if dataset in DATED_TABLES or dataset == "bill_publisher_summaries" else "legislative-documents/2" if dataset in {
-            "native_legal_references", "native_legal_reference_reads", "document_citations",
+        # native_legal_references/3 adds release-point usc_title/usc_section_key
+        # candidate keys for selected-target-lookup/2 while keeping /1 and /2 priors readable (ss-xpyk).
+        policy_version="legislative-documents/4" if dataset == "hearing_transcripts" else "legislative-documents/3" if dataset in DATED_TABLES or dataset in {"bill_publisher_summaries", "native_legal_references"} else "legislative-documents/2" if dataset in {
+            "native_legal_reference_reads", "document_citations",
             "bill_versions", "senate_expenditures",
         } else "legislative-documents/1",
         receipt_only=spec["processing_only"],
@@ -85,9 +87,9 @@ def input_policy(dataset: str, subjects: Sequence[Path]) -> DatasetPolicy:
 
 
 def _processor(dataset: str) -> str:
-    if dataset == "hearing_transcripts":
+    if dataset in {"hearing_transcripts", "native_legal_references"}:
         return "legislative-documents/4"
-    if dataset in {"native_legal_references", "native_legal_reference_reads", "bill_publisher_summaries"}:
+    if dataset in {"native_legal_reference_reads", "bill_publisher_summaries"}:
         return "legislative-documents/3"
     if dataset == "senate_expenditures":
         return "legislative-documents/2"

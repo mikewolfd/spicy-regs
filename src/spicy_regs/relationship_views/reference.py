@@ -88,6 +88,19 @@ def reference_paths() -> tuple[str, ...]:
     return tuple(paths)
 
 
+def reference_table_sql(name: str) -> str:
+    """Verified ``read_parquet(...)`` expression for one SHA-256-pinned vendored RefSpec table."""
+    relative, _sha256, _columns = REFERENCE_TABLES[name]
+    reference_paths()
+    escaped = _path(relative).replace("'", "''")
+    return f"read_parquet('{escaped}')"
+
+
+def reference_table_pins(names: tuple[str, ...]) -> dict[str, str]:
+    """Pinned SHA-256 digests for the named vendored RefSpec tables."""
+    return {name: REFERENCE_TABLES[name][1] for name in names}
+
+
 def _query(relative: str):
     def query(_publication) -> str:
         reference_paths()

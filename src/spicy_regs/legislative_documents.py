@@ -69,13 +69,15 @@ _struct_list(
 TYPES["list<list<struct<amount:decimal128(38,2),text:string>>>"] = pa.list_(
     pa.list_(pa.struct([("amount", MONEY), ("text", S)]))
 )
-# Recorded target identity components follow the maintained resolver's routes.
+# Recorded target identity components follow the maintained resolver's routes
+# (including usc_title/usc_section_key under selected-target-lookup/2 while
+# retaining session/seq for carried /1 law_code_sections candidates).
 # Values remain literal strings; complete identities and unresolved results both
 # remain visible. The ordinals name positions in the retained ordered arrays.
 NATIVE_TARGET_KEY_FIELDS = (
-    "bill_id", "congress", "law_type", "number", "session", "seq", "package_id", "granule_id",
-    "document_number", "publication_date", "rin", "agenda_edition", "report_id", "docket_id",
-    "system_code", "cluster_id",
+    "bill_id", "congress", "law_type", "number", "session", "seq", "usc_title", "usc_section_key",
+    "package_id", "granule_id", "document_number", "publication_date", "rin", "agenda_edition",
+    "report_id", "docket_id", "system_code", "cluster_id",
 )
 NATIVE_TARGET_KEYS = pa.list_(pa.struct(
     [("target_key_ordinal", INT), *((name, S) for name in NATIVE_TARGET_KEY_FIELDS)]
@@ -97,7 +99,7 @@ NATIVE_CANDIDATE_FIELDS = [
     )
 ]
 # The registry uses this reviewed type name; Arrow carries the complete nested schema.
-NATIVE_CANDIDATE_TYPE = "list<native-legal-target/2>"
+NATIVE_CANDIDATE_TYPE = "list<native-legal-target/3>"
 _struct_list(NATIVE_CANDIDATE_TYPE, NATIVE_CANDIDATE_FIELDS)
 
 
@@ -385,10 +387,10 @@ def _earlier_legislative_schema(dataset: str) -> pa.Schema | None:
 
 
 @cache
-def _earlier_native_schema() -> pa.Schema:
+def _earlier_native_schema(policy_version: str = "legislative-documents/1") -> pa.Schema:
     from spicy_regs.policy_migrations import earlier_policy
 
-    return earlier_policy("native_legal_references", "legislative-documents/1").subject_schema
+    return earlier_policy("native_legal_references", policy_version).subject_schema
 
 
 def recorded_subject(dataset: str, raw: Mapping[str, Any], subject: Mapping[str, Any], *,
@@ -429,11 +431,27 @@ def recorded_subject(dataset: str, raw: Mapping[str, Any], subject: Mapping[str,
         except (pa.ArrowException, OverflowError) as error:
             raise LegislativeShapeError(f"{dataset}: historical subject cannot be represented exactly") from error
     if mapped is not None and dataset == "native_legal_references":
-        # Earlier native observations omitted these recorded main fields and
-        # nested diagnostics. Verify against that exact reviewed shape, while
-        # preserving the original receipt and selected public values unchanged.
-        earlier = _earlier_native_schema()
-        if set(subject) - {"raw_source_row"} == set(earlier.names):
+        # Earlier native observations (/1 omitted recorded main fields and nested
+        # diagnostics; /2 predated release-point usc_title/usc_section_key candidate
+        # keys). Verify against that exact reviewed shape, while preserving the
+        # original receipt and selected public values unchanged.
+        earlier: pa.Schema | None = None
+        if policy_version in {"legislative-documents/1", "legislative-documents/2"}:
+            earlier = _earlier_native_schema(policy_version)
+        elif policy_version is None:
+            v1 = _earlier_native_schema("legislative-documents/1")
+            if set(subject) - {"raw_source_row"} == set(v1.names):
+                earlier = v1
+            else:
+                v2 = _earlier_native_schema("legislative-documents/2")
+                candidates = subject.get("target_candidates") or ()
+                sample_keys = [
+                    k for cand in candidates if isinstance(cand, Mapping)
+                    for k in (cand.get("candidate_keys") or ()) if isinstance(k, Mapping)
+                ]
+                if sample_keys and not ({"usc_title", "usc_section_key"} & set(sample_keys[0])):
+                    earlier = v2
+        if earlier is not None:
             def historical(value, dtype):
                 if value is None:
                     return None

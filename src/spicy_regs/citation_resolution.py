@@ -22,8 +22,9 @@ from spicy_regs.gao_citation_keys import CITATION_PRODUCT_SQL
 #: /2: a usc_section citation is looked up in the published U.S. Code (release point sections) rather than in
 #: the current Congress's OLRC classification rows, so ``found`` means the release point prints the section.
 RESOLUTION_RULE = "selected-target-lookup/2"
-#: The rule native_legal_references records: its routes (:data:`NATIVE_ROUTES`) are /1's, unchanged.
-NATIVE_RESOLUTION_RULE = "selected-target-lookup/1"
+#: The rule native_legal_references records: migrated to /2 (:data:`NATIVE_ROUTES`) so printed release-point
+#: sections and range stubs resolve identically to ``resolve_document_citations``.
+NATIVE_RESOLUTION_RULE = RESOLUTION_RULE
 #: Each ``document_citations.document_kind`` a writer emits, to the table holding its documents: the print-citations
 #: rollup's two GovInfo families (spicy-docs ``GOVINFO_PACKAGE``, ``BUDGET_VOLUME``; literal here because the server
 #: does not require spicy-docs) and every held-field kind. Its keys are the kinds the citation tool accepts.
@@ -107,14 +108,14 @@ ROUTES = {
     "us_reports_cite": Route("court_citations", "volume || '-' || page", ("cluster_id",),
                         predicate="reporter = 'U.S.'", grain="CourtListener clusters named by U.S. reporter citations"),
 }
-#: Before /2, a usc_section citation named the OLRC classification rows. native_legal_references still resolves
-#: with these routes (its recorded candidate keys have no release-point identity), and explorer navigation keeps
-#: linking candidates recorded against law_code_sections.
+#: Before /2, a usc_section citation named the OLRC classification rows. Kept so carried /1 rows in
+#: native_legal_references retain their typed candidate keys (congress, session, seq) and explorer navigation
+#: keeps linking legacy candidates recorded against law_code_sections.
 LEGACY_USC_SECTION_ROUTE = Route(
     "law_code_sections", "usc_title || '-' || usc_section_key", ("congress", "session", "seq"), "many",
     grain="OLRC classification rows naming this section; not hosted Code text. A section no row classifies may "
           "still be in the Code: usc_citation_verdicts says whether the held release point prints it")
-NATIVE_ROUTES = {**ROUTES, "usc_section": LEGACY_USC_SECTION_ROUTE}
+NATIVE_ROUTES = dict(ROUTES)
 
 #: Statutory lookup routes backed by RefSpec's SHA-256-pinned vendored Parquet tables. Kept separate from
 #: :data:`ROUTES` / :data:`CITE_KINDS` so document_citations writer-parity contracts stay invariant.
@@ -503,7 +504,7 @@ def resolve_citations(cursor: Any, occurrences: Sequence[Mapping[str, Any]],
     """
     if not 1 <= max_target_keys <= 10_000 or not 1 <= max_candidates <= 1_000:
         raise ValueError("Resolution bounds must be positive and within the supported limits")
-    should_enrich_dispositions = (rule != NATIVE_RESOLUTION_RULE) if enrich_dispositions is None else enrich_dispositions
+    should_enrich_dispositions = (rule == RESOLUTION_RULE) if enrich_dispositions is None else enrich_dispositions
     outputs = []
     batches: dict[Route, dict[str, list[int]]] = defaultdict(dict)
     admitted: set[tuple[Route, str]] = set()

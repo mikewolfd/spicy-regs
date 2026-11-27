@@ -4150,7 +4150,7 @@
         "meaning": "The typed targets the reading found, as a JSON array in reading order, each with the outcome of the host's lookup in the target tables it selected; several targets in one note stay one row, and an unsupported href has none.",
         "decision": "native-list",
         "target": "target_candidates",
-        "target_type": "list<native-legal-target/2>",
+        "target_type": "list<native-legal-target/3>",
         "reason": "Keep every retained candidate key, rule, recorded lookup outcome and target pin in source order; derive only zero-based array positions."
       },
       {

@@ -47198,7 +47198,7 @@
   "native_legal_references": {
     "table": "native_legal_references",
     "label": "Native legal-reference observations",
-    "summary": "Original legal references and source passages with recorded target matches. Inspect every candidate's complete keys, target pin, match count and reason. Found, missing, ambiguous, unsupported and not-checked remain separate. Source paths and interpretation rules stay visible. A complete read replaces its selected source/edition scope, including a successful empty correction. U.S. Code section matches identify held classification rows, not Code text.",
+    "summary": "Original legal references and source passages with recorded target matches. Inspect every candidate's complete keys, target pin, match count and reason. Found, missing, ambiguous, unsupported and not-checked remain separate. Source paths and interpretation rules stay visible. A complete read replaces its selected source/edition scope, including a successful empty correction. U.S. Code section matches identify held OLRC release-point sections or range stubs under selected-target-lookup/2 (or legacy classification rows on carried /1 scopes), not Code text or current legal applicability.",
     "coverage": "Sampled. Selected retained U.S. Code and eCFR XML inputs only. Read scopes state the edition, input digest and forms checked; they do not establish source-wide completeness.",
     "kind": "sampled",
     "measured_on": "2026-09-27",
@@ -47286,7 +47286,7 @@
       },
       {
         "column_name": "target_candidates",
-        "column_type": "STRUCT(candidate_ordinal BIGINT, cite_kind VARCHAR, normalized_key VARCHAR, matched_text VARCHAR, span_start BIGINT, span_end BIGINT, target_kind VARCHAR, target_key VARCHAR, target_grain VARCHAR, candidate_keys STRUCT(target_key_ordinal BIGINT, bill_id VARCHAR, congress VARCHAR, law_type VARCHAR, number VARCHAR, \"session\" VARCHAR, seq VARCHAR, package_id VARCHAR, granule_id VARCHAR, document_number VARCHAR, publication_date VARCHAR, rin VARCHAR, agenda_edition VARCHAR, report_id VARCHAR, docket_id VARCHAR, system_code VARCHAR, cluster_id VARCHAR)[], derivation_rule VARCHAR, derivation_version VARCHAR, document_key VARCHAR, document_kind VARCHAR, expected_cardinality VARCHAR, match_count BIGINT, occurrence_key VARCHAR, reason VARCHAR, resolution_rule VARCHAR, source_record_key VARCHAR, source_status VARCHAR, target_resolved BOOLEAN, target_snapshot STRUCT(status VARCHAR, sha256 VARCHAR, \"family\" VARCHAR, artifact_digest VARCHAR, generation_id VARCHAR, receipt_sha256 VARCHAR), target_status VARCHAR, target_table_selected VARCHAR, text_sha256 VARCHAR, match_basis VARCHAR, error_type VARCHAR)[]",
+        "column_type": "STRUCT(candidate_ordinal BIGINT, cite_kind VARCHAR, normalized_key VARCHAR, matched_text VARCHAR, span_start BIGINT, span_end BIGINT, target_kind VARCHAR, target_key VARCHAR, target_grain VARCHAR, candidate_keys STRUCT(target_key_ordinal BIGINT, bill_id VARCHAR, congress VARCHAR, law_type VARCHAR, number VARCHAR, \"session\" VARCHAR, seq VARCHAR, usc_title VARCHAR, usc_section_key VARCHAR, package_id VARCHAR, granule_id VARCHAR, document_number VARCHAR, publication_date VARCHAR, rin VARCHAR, agenda_edition VARCHAR, report_id VARCHAR, docket_id VARCHAR, system_code VARCHAR, cluster_id VARCHAR)[], derivation_rule VARCHAR, derivation_version VARCHAR, document_key VARCHAR, document_kind VARCHAR, expected_cardinality VARCHAR, match_count BIGINT, occurrence_key VARCHAR, reason VARCHAR, resolution_rule VARCHAR, source_record_key VARCHAR, source_status VARCHAR, target_resolved BOOLEAN, target_snapshot STRUCT(status VARCHAR, sha256 VARCHAR, \"family\" VARCHAR, artifact_digest VARCHAR, generation_id VARCHAR, receipt_sha256 VARCHAR), target_status VARCHAR, target_table_selected VARCHAR, text_sha256 VARCHAR, match_basis VARCHAR, error_type VARCHAR)[]",
         "description": "The typed targets the reading found, as a Native list in reading order, each with the outcome of the host's lookup in the target tables it selected; several targets in one note stay one row, and an unsupported href has none. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
@@ -51305,7 +51305,7 @@
       {
         "dataset": "native_legal_references",
         "receipt_only": false,
-        "policy_version": "legislative-documents/2",
+        "policy_version": "legislative-documents/3",
         "identity_columns": [
           "scope_id",
           "body_version_id",
