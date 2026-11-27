@@ -114,11 +114,14 @@ def normalize_retained_edition(
     and trailing whitespace is stripped; internal whitespace is preserved
     verbatim). Historical repair is shared with acquisition, qualified by the
     full original digest, and receipted.
-    ``related_rins`` is None when the record states no ``RELATED_RIN_LIST``;
-    each entry's RIN and relation are edge-stripped only and never
-    shape-checked, so self-references, repeats, malformed values, cut-off
-    values ("Related t"), and any internal whitespace stay verbatim for
-    ``agenda_related_rins`` and the domain-drift gate (owner Q15, ss-cdaa).
+    ``related_rins``, ``legal_deadlines`` and ``child_rins`` are None when the
+    record states no container element (``RELATED_RIN_LIST``,
+    ``LEGAL_DLINE_LIST``, ``CHILD_RIN_LIST``) and ``[]`` when it states an
+    empty one. Values are edge-stripped only and never shape-checked, so
+    self-references, repeats, malformed values, cut-off values ("Related t"),
+    literal deadline date markers ("nulldate"), and any internal whitespace
+    stay verbatim for ``agenda_related_rins`` and the domain-drift gate
+    (owner Q15, ss-cdaa, ss-zas1).
     SpicyDocs' ``project_unified_agenda_edition`` intentionally collapses
     internal whitespace runs instead (RefSpec citation-box normalization);
     the two agree on all 28,720 related RINs of the 60 retained editions
@@ -220,5 +223,24 @@ def _normalize(record: UnifiedAgendaRecordObservation, edition: str) -> dict:
             for entry in _items(fields, "RELATED_RIN_LIST", "RELATED_RIN")
         ]
         if _find(fields, "RELATED_RIN_LIST") is not None
+        else None,
+        "legal_deadlines": [
+            {
+                "dline_type": _text(entry.children, "DLINE_TYPE"),
+                "dline_action_stage": _text(entry.children, "DLINE_ACTION_STAGE"),
+                "dline_date": _text(entry.children, "DLINE_DATE"),
+                "dline_desc": _text(entry.children, "DLINE_DESC"),
+            }
+            for entry in _items(fields, "LEGAL_DLINE_LIST", "LEGAL_DLINE_INFO")
+        ]
+        if _find(fields, "LEGAL_DLINE_LIST") is not None
+        else None,
+        "parent_rin": _text(fields, "PARENT_RIN"),
+        "child_rins": [
+            child_rin
+            for entry in _items(fields, "CHILD_RIN_LIST", "CHILD_RIN")
+            if (child_rin := _text(entry.children, "RIN"))
+        ]
+        if _find(fields, "CHILD_RIN_LIST") is not None
         else None,
     }
