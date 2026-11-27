@@ -97,6 +97,22 @@ def test_null_blank_unknown_outlier_and_revision_remain_explicit(tmp_path):
     assert module.observation(revised.records[0], revised.pin, year=2024)["observation_id"] != first["observation_id"]
 
 
+def test_scientific_notation_respects_exact_decimal_scale(tmp_path):
+    raw = deepcopy(EXCERPTS["rows"][0])
+    raw.update(
+        Avg_Spndng_Per_Dsg_Unt_2024="5.7405e-05",
+        Avg_DY24_ASP_Price="8.2132926e-06",
+    )
+    row = pq.read_table(module.build_cms_part_b(Reader([raw]), tmp_path, year=2024)).to_pylist()[0]
+    statuses = json.loads(row["value_statuses_json"])
+    assert row["spending_per_dosage_unit_usd"] == Decimal("0.000057405")
+    assert statuses["spending_per_dosage_unit_usd"] == "value"
+    assert row["average_sales_price_payment_usd"] is None
+    assert statuses["average_sales_price_payment_usd"] == "unrepresentable"
+    assert json.loads(row["raw_row_json"])["Avg_Spndng_Per_Dsg_Unt_2024"] == "5.7405e-05"
+    assert json.loads(row["raw_row_json"])["Avg_DY24_ASP_Price"] == "8.2132926e-06"
+
+
 @pytest.mark.parametrize("change", ["duplicate", "short", "year", "program", "missing-column", "selection", "failed"])
 def test_changed_or_incomplete_inputs_preserve_previous_output(tmp_path, change):
     reader = Reader()

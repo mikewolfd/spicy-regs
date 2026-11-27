@@ -37,7 +37,9 @@ def spending_schema(measures):
     )
 
 
-_DECIMAL = re.compile(r"[+-]?[0-9]+(?:\.[0-9]+)?\Z")
+_DECIMAL = re.compile(r"[+-]?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?\Z")
+_DECIMAL_QUANTUM = Decimal("1e-12")
+_DECIMAL_LIMIT = Decimal("1e26")
 
 
 def json_value(value):
@@ -54,15 +56,19 @@ def measurement(raw):
         raise ValueError("CMS source measurements must remain literal strings or null")
     if not _DECIMAL.fullmatch(raw):
         return None, "non_numeric"
-    value = Decimal(raw)
     with localcontext() as context:
         context.prec = 50
         try:
-            if abs(value) >= Decimal("1e26") or value != value.quantize(Decimal("1e-12")):
+            value = Decimal(raw)
+            if value.copy_abs() >= _DECIMAL_LIMIT:
                 return None, "unrepresentable"
+            quantized = value.quantize(_DECIMAL_QUANTUM)
+            if value != quantized:
+                return None, "unrepresentable"
+            normalized = quantized.normalize()
         except InvalidOperation:
             return None, "unrepresentable"
-    return value, "value"
+    return normalized, "value"
 
 
 def observation(item, pin, *, year, measures, label):
