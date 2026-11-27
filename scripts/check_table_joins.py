@@ -109,6 +109,10 @@ def _quote(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
+def _literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
 def _unpublished(con: duckdb.DuckDBPyConnection, urls: list[str]) -> bool:
     """Whether the publisher serves no file for a table (HTTP 404), as distinct from one it fails to serve."""
     try:
@@ -145,8 +149,13 @@ def measure(con: duckdb.DuckDBPyConnection, join: table_joins.Join, url_of: Call
         return result
     keys_sql = ", ".join(f"c{i}" for i in range(len(child)))
     on = " AND ".join(f"c.c{i} = p.p{i}" for i in range(len(child)))
+    child_where = (
+        " WHERE " + " AND ".join(f"{_quote(col)} = {_literal(val)}" for col, val in join.child_filter)
+        if join.child_filter
+        else ""
+    )
     sql = f"""
-        WITH child_input AS (SELECT {', '.join(child)} FROM {publication.parquet_scan(child_urls)}),
+        WITH child_input AS (SELECT {', '.join(child)} FROM {publication.parquet_scan(child_urls)}{child_where}),
              parent_input AS (SELECT {', '.join(parent)} FROM {publication.parquet_scan(parent_urls)}),
              c AS (SELECT {', '.join(f'{col} AS c{i}' for i, col in enumerate(child))}, count(*) AS child_rows
                    FROM child_input WHERE {' AND '.join(f'{col} IS NOT NULL' for col in child)}
@@ -177,6 +186,8 @@ def measure(con: duckdb.DuckDBPyConnection, join: table_joins.Join, url_of: Call
     result.update(zip(names, row[3:]))
     result.update({"scope": "full_selected_inputs", "child_urls": child_urls, "parent_urls": parent_urls,
                    "sql": sql, "expected_cardinality": join.expected_cardinality})
+    if join.child_filter:
+        result["child_filter"] = {col: val for col, val in join.child_filter}
     if join.expected_cardinality == "one" and result["max_parent_multiplicity"] > 1:
         result["status"] = "MULTIPLICITY"
     return result

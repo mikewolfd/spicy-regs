@@ -591,10 +591,14 @@ class MeasurementCache:
 def scalar_navigation(join):
     """Compile a canonical scalar declaration into the existing recipe format."""
     name = f"{join['child']}.{'+'.join(join['child_columns'])} -> {join['parent']}.{'+'.join(join['parent_columns'])}"
+    guards = tuple(
+        navigation.guard(column, row=True, values=(value,))
+        for column, value in sorted((join.get('child_filter') or {}).items())
+    )
     spec = navigation.array(name, join['child'], (), (
         navigation.route(join['parent'], tuple(join['parent_columns']), tuple(
             navigation.key(navigation.part(c, row=True), pattern=r'[\s\S]*')
-            for c in join['child_columns'])),), meaning=join.get('reason', ''), mode='row')
+            for c in join['child_columns']), *guards),), meaning=join.get('reason', ''), mode='row')
     spec['equality'] = 'native_scalar'
     return spec
 

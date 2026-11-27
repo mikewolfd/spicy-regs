@@ -561,7 +561,7 @@
   },
   "fcc_filings": {
     "status": "special-handling",
-    "reason": "Each filing can name several proceedings in proceeding_names_json. Connecting it requires explicit JSON-array expansion; a scalar or title match would drop or invent relationships.",
+    "reason": "Each filing can name several proceedings in the native proceedings array (formerly proceeding_names_json). Connecting it requires explicit array expansion on both name and id_proceeding; a scalar or title match would drop or invent relationships.",
     "evidence": [
       "src/spicy_regs/relationship_views/fcc_native.py"
     ],
@@ -569,7 +569,7 @@
   },
   "fcc_proceedings": {
     "status": "special-handling",
-    "reason": "Filing memberships are held in the filings proceeding_names_json array. Array expansion and source-stated names are required before reverse navigation can be complete.",
+    "reason": "Filing memberships are held in the filings proceedings array (formerly proceeding_names_json). Array expansion on source-stated name and id_proceeding is required before reverse navigation can be complete.",
     "evidence": [
       "src/spicy_regs/relationship_views/fcc_native.py"
     ],

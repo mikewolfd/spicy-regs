@@ -353,3 +353,56 @@ def test_cbo_estimate_cards_joins_target_feed_items_and_cost_estimates():
     assert cost_join.kind == "empty"
     assert cost_join.expected_cardinality == "many"
 
+
+@pytest.mark.parametrize("child", ["committee_reports", "hearing_transcripts"])
+def test_committee_report_and_hearing_joins_target_published_read_outcomes(child):
+    active = [j for j in table_joins.JOINS if j.child == child and j.parent == "committee_report_read_outcomes"]
+    assert len(active) == 1
+    join = active[0]
+    assert join.child_columns == ("package_id",) and join.parent_columns == ("package_id",)
+    assert join.kind == "complete" and join.expected_cardinality == "one"
+    assert join.measurement is not None and join.measurement["parent_duplicate_keys"] == 0
+    assert not any(j.parent == "committee_report_reads" for j in table_joins.JOINS)
+
+
+def test_fec_financial_profile_joins_scope_entity_kind_and_cycle():
+    outgoing = {j.parent: j for j in table_joins.JOINS if j.child == "fec_financial_profiles"}
+    assert set(outgoing) == {"fec_committees", "fec_candidate_history", "fec_committee_history"}
+    assert outgoing["fec_committees"].child_columns == ("entity_id",)
+    assert outgoing["fec_committees"].parent_columns == ("committee_id",)
+    assert outgoing["fec_committees"].child_filter == (("entity_kind", "committee"),)
+    assert outgoing["fec_candidate_history"].child_columns == ("entity_id", "source_cycle")
+    assert outgoing["fec_candidate_history"].parent_columns == ("candidate_id", "cycle")
+    assert outgoing["fec_candidate_history"].child_filter == (("entity_kind", "candidate"),)
+    assert outgoing["fec_committee_history"].child_columns == ("entity_id", "source_cycle")
+    assert outgoing["fec_committee_history"].parent_columns == ("committee_id", "cycle")
+    assert outgoing["fec_committee_history"].child_filter == (("entity_kind", "committee"),)
+    for join in outgoing.values():
+        assert join.kind == "complete" and join.expected_cardinality == "one"
+        assert join.measurement is not None and join.measurement["parent_duplicate_keys"] == 0
+
+
+def test_child_filter_scopes_live_join_measurement_and_validates_columns(tmp_path, monkeypatch):
+    child = tmp_path / "profiles.parquet"
+    parent = tmp_path / "committees.parquet"
+    pq.write_table(pa.table({
+        "entity_kind": ["committee", "committee", "candidate"],
+        "entity_id": ["C00000001", "C00000002", "H0AL01055"],
+    }), child)
+    pq.write_table(pa.table({"committee_id": ["C00000001", "C00000002"]}), parent)
+    join = table_joins.Join(
+        "fec_financial_profiles", ("entity_id",), "fec_committees", ("committee_id",),
+        2, 0, "complete", expected_cardinality="one", child_filter=(("entity_kind", "committee"),),
+    )
+    paths = {"fec_financial_profiles": [str(child)], "fec_committees": [str(parent)]}
+    with duckdb.connect() as con:
+        result = live.measure(con, join, paths.__getitem__)
+    assert (result["status"], result["keys"], result["missing"], result["child_input_rows"]) == ("OK", 2, 0, 2)
+    assert result["inner_join_rows"] == 2 and result["child_filter"] == {"entity_kind": "committee"}
+
+    bad = (table_joins._join("fec_financial_profiles", "entity_id", "fec_committees", "committee_id",
+                             1, 0, child_filter=(("no_such_filter_col", "committee"),)),)
+    monkeypatch.setattr(table_joins, "JOINS", bad)
+    errors = table_joins.declaration_errors(dd.expected_schemas())
+    assert any("child_filter fec_financial_profiles.no_such_filter_col is not a declared column" in e for e in errors)
+

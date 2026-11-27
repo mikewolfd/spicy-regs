@@ -90,6 +90,7 @@ class Join:
     measured_via: str | None = None
     expected_cardinality: str = "unspecified"
     measurement: dict | None = None
+    child_filter: tuple[tuple[str, str], ...] = ()
 
     @property
     def name(self) -> str:
@@ -128,10 +129,11 @@ class Join:
 
 def _join(child: str, child_columns: str | tuple[str, ...], parent: str, parent_columns: str | tuple[str, ...],
           keys: int, missing: int, kind: str = "complete", reason: str = "", measured_via: str | None = None,
-          expected_cardinality: str = "unspecified", measurement: dict | None = None) -> Join:
+          expected_cardinality: str = "unspecified", measurement: dict | None = None,
+          child_filter: tuple[tuple[str, str], ...] = ()) -> Join:
     as_tuple = lambda columns: (columns,) if isinstance(columns, str) else columns  # noqa: E731
     return Join(child, as_tuple(child_columns), parent, as_tuple(parent_columns), keys, missing, kind, reason,
-                measured_via, expected_cardinality, measurement)
+                measured_via, expected_cardinality, measurement, child_filter)
 
 
 #: Why the model-written bill tables publish no rows: an owner decision, not a missing key. The financial pairing has
@@ -443,6 +445,30 @@ JOINS: tuple[Join, ...] = (
           expected_cardinality="one"),
     _join("fec_legal_documents", "matter_record_id", "fec_legal_matters", "record_id", 184, 0,
           expected_cardinality="one"),
+    # FEC financial profiles (ss-5ss1): polymorphic entity_id scoped by entity_kind; cycle-keyed history joins use
+    # (entity_id, source_cycle) so each profile matches its own cycle 1:1 instead of amplifying across cycles.
+    _join("fec_financial_profiles", "entity_id", "fec_committees", "committee_id", 14_739, 0, "complete",
+          "Committee profiles (entity_kind='committee') join OpenFEC's committee registry on committee_id. Candidate "
+          "profiles use candidate identifiers and are excluded by child_filter. Full selected inputs checked on "
+          "2026-11-26: every committee profile matched one fec_committees row (0 duplicates); CI enforces that "
+          "cardinality.",
+          expected_cardinality="one", child_filter=(("entity_kind", "committee"),)),
+    _join("fec_financial_profiles", ("entity_id", "source_cycle"), "fec_candidate_history", ("candidate_id", "cycle"),
+          4_545, 0, "complete",
+          "Candidate profiles (entity_kind='candidate') join fec_candidate_history on both candidate_id and cycle so "
+          "each profile matches its own election cycle rather than fanning out across historical cycles (joining on "
+          "entity_id alone amplifies 4,545 profiles to 8,415 rows, up to 24 cycles per candidate). Committee rows are "
+          "excluded by child_filter. Full selected inputs checked on 2026-11-26: every candidate profile matched one "
+          "fec_candidate_history row (0 duplicates); CI enforces that cardinality.",
+          expected_cardinality="one", child_filter=(("entity_kind", "candidate"),)),
+    _join("fec_financial_profiles", ("entity_id", "source_cycle"), "fec_committee_history", ("committee_id", "cycle"),
+          14_739, 0, "complete",
+          "Committee profiles (entity_kind='committee') join fec_committee_history on both committee_id and cycle so "
+          "each profile matches its own election cycle rather than fanning out across historical cycles (joining on "
+          "entity_id alone amplifies 14,739 profiles to 82,401 rows, up to 24 cycles per committee). Candidate rows are "
+          "excluded by child_filter. Full selected inputs checked on 2026-11-26: every committee profile matched one "
+          "fec_committee_history row (0 duplicates); CI enforces that cardinality.",
+          expected_cardinality="one", child_filter=(("entity_kind", "committee"),)),
     # GAO.
     _join("gao_recommendations", "report_id", "gao_reports", "report_id", 1_811, 0,
           reason="First public generation 14761739, measured 2026-09-30: every distinct report key resolves "
@@ -836,6 +862,9 @@ JOINS: tuple[Join, ...] = (
           'established by this join check. Parent keys were unique in the complete selected inputs checked on '
           '2026-10-03; CI enforces that cardinality.',
           expected_cardinality="one"),
+    # Historical 2026-10-03 receipt-era lineage retained for docs/evidence/explorer-joins-2026-10-03.json;
+    # committee_report_reads is receipt_only and lands in processing_joins, while the active joins below
+    # target the published committee_report_read_outcomes checkpoint table.
     _join('committee_reports', 'package_id',
           'committee_report_reads', 'package_id',
           160, 0, 'complete',
@@ -849,6 +878,24 @@ JOINS: tuple[Join, ...] = (
           'Each report or hearing belongs to its GovInfo package read checkpoint. The checkpoint describes a read, '
           'not a positive bill relationship. Parent keys were unique in the complete selected inputs checked on '
           '2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('committee_reports', 'package_id',
+          'committee_report_read_outcomes', 'package_id',
+          244, 0, 'complete',
+          'Each report part belongs to its GovInfo package read checkpoint in committee_report_read_outcomes '
+          '(the published replacement for the receipt-only committee_report_reads table). The checkpoint records a '
+          'package read outcome, not a positive bill relationship; dated report revisions share one current package '
+          'checkpoint. Parent package_id keys were unique in the full selected inputs checked on 2026-11-26; CI '
+          'enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('hearing_transcripts', 'package_id',
+          'committee_report_read_outcomes', 'package_id',
+          1_126, 0, 'complete',
+          'Each hearing transcript revision belongs to its GovInfo package read checkpoint in '
+          'committee_report_read_outcomes (the published replacement for the receipt-only committee_report_reads '
+          'table). The checkpoint records a package read outcome, not a positive bill relationship; dated hearing '
+          'revisions share one current package checkpoint. Parent package_id keys were unique in the full selected '
+          'inputs checked on 2026-11-26; CI enforces that cardinality.',
           expected_cardinality="one"),
     _join('court_docket_groups', 'cl_docket_id',
           'court_dockets', 'cl_docket_id',
@@ -1186,7 +1233,7 @@ def joins_for(table: str) -> dict[str, list[dict]]:
 
 def record(join: Join) -> dict:
     """One join as the bundled record states it."""
-    return {
+    payload = {
         "child": join.child,
         "child_columns": list(join.child_columns),
         "parent": join.parent,
@@ -1200,6 +1247,9 @@ def record(join: Join) -> dict:
         "expected_cardinality": join.expected_cardinality,
         "measurement": join.measurement,
     }
+    if join.child_filter:
+        payload["child_filter"] = {column: value for column, value in join.child_filter}
+    return payload
 
 
 def references() -> dict[str, list[dict]]:
@@ -1265,6 +1315,13 @@ def declaration_errors(schemas: dict[str, list[tuple[str, str]]]) -> list[str]:
                 errors.append(f"{join.name}: {table} is not a dictionary table")
             errors.extend(f"{join.name}: {table}.{column} is not a declared column"
                           for column in columns if known and column not in known)
+        if join.child_filter:
+            child_known = {name for name, _ in schemas.get(join.child, [])}
+            for column, value in join.child_filter:
+                if child_known and column not in child_known:
+                    errors.append(f"{join.name}: child_filter {join.child}.{column} is not a declared column")
+                if not isinstance(value, str) or not value:
+                    errors.append(f"{join.name}: child_filter {join.child}.{column} must specify a non-empty value")
         if join.measured_via and join.measured_via not in schemas:
             errors.append(f"{join.name}: measured_via {join.measured_via} is not a dictionary table")
     return errors
