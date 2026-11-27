@@ -380,7 +380,7 @@ def test_related_rins_are_stripped_but_never_shape_checked_or_deduplicated():
 
 
 def test_related_rins_strip_agrees_with_the_spicy_docs_projection_collapse():
-    """The table strips; SpicyDocs' projection collapses. They agree only while no value holds an internal run."""
+    """On inputs without internal whitespace runs (matching all 28,720 retained values), both paths agree."""
     from spicy_docs.sources.unified_agenda import UnifiedAgendaEdition
     from spicy_docs.sources.unified_agenda.projection import project_unified_agenda_edition
 
@@ -391,6 +391,44 @@ def test_related_rins_strip_agrees_with_the_spicy_docs_projection_collapse():
     table = normalize_retained_edition(_RELATED_EDITION, edition="202004")
     assert [[(item.rin, item.rin_relation) for item in row.related_rins] for row in projected] == [
         [(item["rin"], item["rin_relation"]) for item in row["related_rins"] or ()] for row in table
+    ]
+
+
+def test_related_rins_whitespace_rule_strips_edges_and_preserves_internal_runs():
+    """Settled rule (ss-cdaa): spicy-regs strips edges only (preserving internal whitespace verbatim);
+    SpicyDocs' citation projection collapses internal whitespace runs to single ASCII spaces.
+    """
+    from spicy_docs.sources.unified_agenda import UnifiedAgendaEdition
+    from spicy_docs.sources.unified_agenda.projection import project_unified_agenda_edition
+
+    from spicy_regs.sources.unified_agenda import normalize_retained_edition
+
+    xml = _agenda(
+        (
+            "2060-AV12",
+            _related(
+                ("0938-  AV01", "Related  to"),
+                (" 1234-AB56\t\n", "\n  Previously\t\nreported as  "),
+                ("\t 2060-AV12 ", "  Related to\n"),
+            ),
+        ),
+    )
+
+    [table_row] = normalize_retained_edition(xml, edition="202004")
+    expected_table = [
+        {"rin": "0938-  AV01", "rin_relation": "Related  to"},
+        {"rin": "1234-AB56", "rin_relation": "Previously\t\nreported as"},
+        {"rin": "2060-AV12", "rin_relation": "Related to"},
+    ]
+    assert table_row["related_rins"] == expected_table
+    assert json.loads(_shape(table_row)["related_rins_json"]) == expected_table
+
+    projected: list = []
+    project_unified_agenda_edition(xml, edition=UnifiedAgendaEdition("202004"), on_record=projected.append)
+    assert [(item.rin, item.rin_relation) for item in projected[0].related_rins] == [
+        ("0938- AV01", "Related to"),
+        ("1234-AB56", "Previously reported as"),
+        ("2060-AV12", "Related to"),
     ]
 
 

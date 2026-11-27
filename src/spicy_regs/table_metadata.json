@@ -1314,9 +1314,9 @@
     "table": "unified_agenda",
     "label": "Planned agency actions",
     "summary": "One row per Regulation Identifier Number (RIN) per agenda edition, ingested from the OIRA/OMB Unified Agenda published at reginfo.gov by `build_unified_agenda`. A Tier-1 rulemaking-lifecycle source: the upstream, forward-looking catalog of rulemakings agencies *plan* to pursue, keyed by the same `rin` that appears in `federal_register` (`regulation_id_numbers`). Primary / dedup key is (`rin`, `agenda_edition`). An entry's reginfo.gov page is `https://www.reginfo.gov/public/do/eAgendaViewRule?pubId={agenda_edition}&RIN={rin}`, composed from the key and not stored (until 2026-11 only the per-row receipts held it).",
-    "coverage": "True range: the retained published baseline starts at 199510 and excludes the 2004 editions and spring 2012; agenda_edition names each included edition. A local source-only replay now recovers the two 2004 editions through narrowly qualified repairs; that candidate has not been published. See docs/unified-agenda-retained-rebuild.md for the qualification boundary. A rule has one row per edition that lists it, so count distinct rin, not rows, for a number of rules.",
+    "coverage": "True range: the published series starts at 199510 and excludes only the unpublished spring 1995 and spring 2012 editions; the two 2004 editions are included through narrowly qualified repairs (see docs/unified-agenda-retained-rebuild.md), and agenda_edition names each included edition. A rule has one row per edition that lists it, so count distinct rin, not rows, for a number of rules.",
     "kind": "true_range",
-    "measured_on": "2026-10-10",
+    "measured_on": "2026-11-27",
     "data_quality": null,
     "columns": [
       {
@@ -1402,7 +1402,7 @@
       {
         "column_name": "related_rins",
         "column_type": "STRUCT(rin VARCHAR, rin_relation VARCHAR)[]",
-        "description": "Native list of the RINs the publisher lists as related to this entry, each a (`rin`, `rin_relation`) pair in source order; a RIN listed twice keeps both positions. Values are stripped of leading and trailing whitespace and otherwise kept as written: no RIN shape is checked, so self-references, malformed values such as `d as AF61` and the cut-off relations `Related t` and `Previously report` remain. The publisher documents `Merge with` but writes `Merged with`. NULL means the row states no related-RIN list only in a generation replayed from every retained edition; a row restored from a regulations-native-v1 generation, which predates this column, is also NULL because it was never read. Incremental builds re-read such editions through the bounded backfill (20 per run), so that ambiguity lasts only until every held edition has been read once, except for a restored row the re-read no longer lists, which stays NULL. `agenda_related_rins` resolves each pair against held agenda rows. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        "description": "Native list of the RINs the publisher lists as related to this entry, each a (`rin`, `rin_relation`) pair in source order; a RIN listed twice keeps both positions. Values are stripped of leading and trailing whitespace while internal whitespace is preserved verbatim, and otherwise kept as written: no RIN shape is checked, so self-references, malformed values such as `d as AF61` and the cut-off relations `Related t` and `Previously report` remain. The publisher documents `Merge with` but writes `Merged with`. NULL means the row states no related-RIN list only in a generation replayed from every retained edition; a row restored from a regulations-native-v1 generation, which predates this column, is also NULL because it was never read. Incremental builds re-read such editions through the bounded backfill (60 per run, covering the full series in a single run), so that ambiguity lasts only until every held edition has been read once, except for a restored row the re-read no longer lists, which stays NULL. `agenda_related_rins` resolves each pair against held agenda rows. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       }
     ],
     "subject": "rulemaking",
@@ -1440,7 +1440,7 @@
             "value": "No Stage"
           }
         ],
-        "observed_at": "2026-10-31T01:30:00Z",
+        "observed_at": "2026-11-27T08:46:36Z",
         "observed_off_list": [],
         "unobserved": [
           "No Stage"
@@ -1471,7 +1471,7 @@
             "value": "Not Major"
           }
         ],
-        "observed_at": "2026-10-31T01:30:00Z",
+        "observed_at": "2026-11-27T08:46:36Z",
         "observed_off_list": [
           {
             "value": "Section 3(f)(1) Significant",
@@ -1495,7 +1495,7 @@
             "value": "Previously published in the Unified Agenda"
           }
         ],
-        "observed_at": "2026-10-31T01:30:00Z",
+        "observed_at": "2026-11-27T08:46:36Z",
         "observed_off_list": [
           {
             "value": "First Time Published in The Unified Agenda",
@@ -1527,7 +1527,7 @@
             "value": "Undetermined"
           }
         ],
-        "observed_at": "2026-10-31T01:30:00Z",
+        "observed_at": "2026-11-27T08:46:36Z",
         "observed_off_list": [],
         "unobserved": []
       },
@@ -1553,7 +1553,7 @@
             "value": "Related to"
           }
         ],
-        "observed_at": "2026-10-31T01:30:00Z",
+        "observed_at": "2026-11-27T08:46:36Z",
         "observed_off_list": [
           {
             "value": "Merged with",
