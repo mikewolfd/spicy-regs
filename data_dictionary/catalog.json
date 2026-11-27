@@ -1161,45 +1161,6 @@
         ]
       },
       {
-        "dataset": "docket_attributes",
-        "receipt_only": false,
-        "policy_version": "regulations-native-v1",
-        "identity_columns": [
-          "docket_id"
-        ],
-        "processing_fields": [
-          "raw_conversion_inputs",
-          "input_metadata",
-          "raw_source_record"
-        ]
-      },
-      {
-        "dataset": "dockets",
-        "receipt_only": false,
-        "policy_version": "regulations-native-v1",
-        "identity_columns": [
-          "docket_id"
-        ],
-        "processing_fields": [
-          "raw_conversion_inputs",
-          "input_metadata",
-          "raw_source_record"
-        ]
-      },
-      {
-        "dataset": "document_attributes",
-        "receipt_only": false,
-        "policy_version": "regulations-native-v1",
-        "identity_columns": [
-          "document_id"
-        ],
-        "processing_fields": [
-          "raw_conversion_inputs",
-          "input_metadata",
-          "raw_source_record"
-        ]
-      },
-      {
         "dataset": "document_citation_read_outcomes",
         "receipt_only": false,
         "policy_version": "navigation-read-outcomes/1",

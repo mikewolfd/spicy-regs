@@ -48,7 +48,9 @@ def test_checkpoint_family_preserves_other_retry_set_and_retires_empty(tmp_path)
     assert not (tmp_path / "pending_comment_text.parquet").exists()
 
 
-def test_native_dataset_roundtrip_and_missing_receipt_refusal(tmp_path):
+def test_native_dataset_roundtrip_and_missing_receipt_refusal(tmp_path, monkeypatch):
+    from spicy_regs import subject_catalog
+
     work = tmp_path / ".processing"
     work.mkdir()
     source = work / "dockets.parquet"
@@ -64,10 +66,19 @@ def test_native_dataset_roundtrip_and_missing_receipt_refusal(tmp_path):
     assert native.schema.equals(policy("dockets").subject_schema)
     assert restore_dataset(tmp_path, "dockets", work / "restored.parquet")
     assert pq.read_table(work / "restored.parquet").to_pylist() == [row]
-    selected = json.loads((tmp_path / ".native-state/selection.json").read_text())["dockets"]
-    Path(selected["receipts"]["path"]).unlink()
+    from spicy_regs.selected_generations import SelectedInputs
+
+    retired_selected = SelectedInputs(tmp_path, work / "sel", public_url="").select("dockets")
+    assert retired_selected is not None and retired_selected.receipts is None
+    # Non-retired datasets still refuse missing receipts on restore.
+    retired = subject_catalog.retired_receipt_datasets() - {"dockets"}
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
+    receipted_root = tmp_path / "receipted"
+    finish_dataset(receipted_root, "dockets", source, publish=False)
+    receipted_selected = json.loads((receipted_root / ".native-state/selection.json").read_text())["dockets"]
+    Path(receipted_selected["receipts"]["path"]).unlink()
     with pytest.raises((ValueError, OSError)):
-        restore_dataset(tmp_path, "dockets", work / "restored.parquet")
+        restore_dataset(receipted_root, "dockets", work / "restored-receipted.parquet")
 
 
 def _source(path, identities):
@@ -123,10 +134,14 @@ def test_checkpoint_read_uses_captured_remote_selection_over_local(tmp_path, mon
     assert restore_checkpoint(root, 'failed_keys', inputs=selected) == [failed]
 
 
-def test_file_generation_retains_resolvable_inputs_after_source_removal(tmp_path):
+def test_file_generation_retains_resolvable_inputs_after_source_removal(tmp_path, monkeypatch):
     from hashlib import sha256
+    from spicy_regs import subject_catalog
     from spicy_regs.etl_receipts import resolve_receipt_witness
     from spicy_regs.selected_generations import SelectedInputs
+
+    retired = subject_catalog.retired_receipt_datasets() - {'dockets'}
+    monkeypatch.setattr(subject_catalog, 'retired_receipt_datasets', lambda: retired)
 
     source = _source(tmp_path / 'processing' / 'dockets.parquet', ['D'])
     finish_dataset(tmp_path, 'dockets', source, publish=False)
@@ -141,11 +156,15 @@ def test_file_generation_retains_resolvable_inputs_after_source_removal(tmp_path
     assert pq.read_table(restored)['docket_id'].to_pylist() == ['D']
 
 
-def test_file_rewrites_reference_immutable_original_api_evidence(tmp_path):
+def test_file_rewrites_reference_immutable_original_api_evidence(tmp_path, monkeypatch):
     from hashlib import sha256
+    from spicy_regs import subject_catalog
     from spicy_regs.etl_receipts import ReceiptContext, decode_exact_json, exact_json, resolve_receipt_witness
     from spicy_regs.selected_generations import SelectedDataset, SelectedInputs, remember_selection
     from spicy_regs.transforms.regulations_receipts import write_records
+
+    retired = subject_catalog.retired_receipt_datasets() - {'dockets'}
+    monkeypatch.setattr(subject_catalog, 'retired_receipt_datasets', lambda: retired)
 
     original = {'source_api': {'id': 'D', 'unmapped': 'evidence'}}
     witness = {'source_id': 'api', 'source_uri': None,

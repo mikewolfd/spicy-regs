@@ -226,11 +226,14 @@ def test_without_publish_nothing_leaves_the_work_directory(tmp_path, monkeypatch
 
 
 def test_document_attributes_cli_converts_typed_rows_without_publication(tmp_path, monkeypatch, bucket):
-    """An attribute family's typed rows through the converter (comment-attributes ran here until its receipts were
-    retired, ss-vse3: a retired table never converts back into receipts, as the next test shows)."""
-    from spicy_regs import regulations_bulk
+    """An attribute family's typed rows through the converter (retired tables never convert back into receipts,
+    as the next test shows)."""
+    from spicy_regs import regulations_bulk, subject_catalog
     from spicy_regs.schemas.regulations_subjects import SOURCE_COLUMNS
     from spicy_regs.transforms.regulations_shape import TYPES
+
+    retired = subject_catalog.retired_receipt_datasets() - {"document_attributes"}
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
 
     schema = pa.schema([(name, TYPES[kind]) for name, kind in SOURCE_COLUMNS["document_attributes"]])
     table = pa.Table.from_pylist([

@@ -136,8 +136,8 @@ def test_the_refresh_republishes_nothing_for_a_retired_attribute_table(tmp_path,
     monkeypatch.setattr(regulatory_base, "SelectedPriors", lambda *a, **k: pytest.fail("nothing is selected"))
     with pytest.raises(Unchanged, match="publishes without receipts"):
         regulatory_base.CommentAttributesFamily(output_dir=tmp_path).build(tmp_path)
-    # The other attribute tables still publish with receipts.
-    assert {"docket_attributes", "document_attributes"}.isdisjoint(retired_receipt_datasets())
+    # Every attribute table now publishes without receipts.
+    assert {"comment_attributes", "docket_attributes", "document_attributes"} <= retired_receipt_datasets()
 
 
 def test_a_retired_table_whose_live_generation_still_lists_receipts_is_selected_without_them(tmp_path, monkeypatch):

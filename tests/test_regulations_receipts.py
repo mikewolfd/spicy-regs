@@ -118,8 +118,8 @@ def test_aggregate_null_coordinates_do_not_merge_with_literal_strings(tmp_path):
 
 def test_local_generation_admits_receipts_separately_from_domain_tables(tmp_path):
     source = tmp_path / "held.parquet"
-    pq.write_table(pa.table({"docket_id": ["D"], "modify_date": ["2026-01-01"]}), source)
-    artifact = build_local_generation({"dockets": source}, tmp_path / "generation", generation_id="g")
+    pq.write_table(pa.table({"document_id": ["D"], "modify_date": ["2026-01-01"]}), source)
+    artifact = build_local_generation({"documents": source}, tmp_path / "generation", generation_id="g")
     assert "etl_receipts.parquet" not in artifact.root["spec"]["tables"]
     assert (tmp_path / "generation/etl_receipts.parquet").is_file()
     assert source.is_file()
@@ -680,12 +680,16 @@ def test_retry_checkpoint_receipts_preserve_empty_retirement_and_wrong_generatio
     assert pq.read_table(cleared)["outcome"].to_pylist() == ["observed"]
 
 
-def test_attribute_selection_keeps_every_copy_and_same_volatile_tie_choice(tmp_path):
+def test_attribute_selection_keeps_every_copy_and_same_volatile_tie_choice(tmp_path, monkeypatch):
     from datetime import UTC, datetime
     from spicy_docs.sources.mirrulations import KeyedPayload
+    from spicy_regs import subject_catalog
     from spicy_regs.etl_receipts import read_attempts
     from spicy_regs.transforms.regulations_attributes import TeeAttributes, merge_attribute_parts
     from spicy_regs.transforms.regulations_attribute_receipts import build_attribute_generation
+
+    retired = subject_catalog.retired_receipt_datasets() - {"document_attributes"}
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
 
     copies = [
         {
@@ -732,8 +736,12 @@ def test_attribute_selection_keeps_every_copy_and_same_volatile_tie_choice(tmp_p
     assert not any(c.startswith("_") for c in pq.read_schema(selected.subjects[0]).names)
 
 
-def test_attribute_successful_empty_scan_has_receipt_without_a_subject(tmp_path):
+def test_attribute_successful_empty_scan_has_receipt_without_a_subject(tmp_path, monkeypatch):
+    from spicy_regs import subject_catalog
     from spicy_regs.transforms.regulations_attribute_receipts import build_attribute_generation
+
+    retired = subject_catalog.retired_receipt_datasets() - {"docket_attributes"}
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
 
     target = tmp_path / "generation"
     build_attribute_generation("docket_attributes", [], target, scan_context=context("g2", "empty"))

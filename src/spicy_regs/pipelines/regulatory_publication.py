@@ -24,12 +24,18 @@ from spicy_regs.transforms.regulations_receipts import ReceiptInput, build_local
 
 def restore_dataset(root: Path, dataset: str, destination: Path, *, index=None, inputs=None) -> bool:
     """Restore only an explicitly selected native generation, never a loose file."""
+    from spicy_regs.subject_catalog import retired_receipt_datasets
+    from spicy_regs.transforms.regulations_shape import published_as_source
+
     root.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(dir=root, prefix='.selected-') as temporary:
         inputs = inputs or SelectedInputs(root, temporary, index=index, public_url=None if index is not None else '')
         selected = inputs.select(dataset)
         if selected is None:
             return False
+        if dataset in retired_receipt_datasets() and dataset != 'documents':
+            published_as_source(dataset, selected.subjects, destination)
+            return True
         receipts = selected.required_receipts("the regulatory restore")
         materialize_internal(ReceiptInput(dataset, selected.subjects, receipts, selected.generation_id),
                              destination, bulk=True)
@@ -79,12 +85,16 @@ def finish_dataset(
     inputs=None,
     witnesses: Sequence[Mapping] = (),
 ):
+    from spicy_regs.subject_catalog import retired_receipt_datasets
+
     if publish and (inputs is None or inputs.index is None):
         raise ValueError('Publication requires the captured native input selection used by this build')
     index = inputs.index if inputs is not None and inputs.index is not None else publication.empty_index()
     owner = publication.table_owner(index, dataset + ".parquet")
     family = owner[0] if owner else dataset.replace("_", "-")
     directory = root / "generations" / uuid4().hex
+    if dataset in retired_receipt_datasets():
+        return _finish_retired_dataset(root, dataset, source, directory, family=family, publish=publish, inputs=inputs)
     selected_inputs = inputs or SelectedInputs(root, root / '.selected-write' / uuid4().hex, public_url='')
     prior = selected_inputs.select(dataset)
     if prior is not None:
@@ -108,6 +118,43 @@ def finish_dataset(
             raise ValueError(f'{dataset}: native conversion refused; checkpoint remains unadvanced')
     return _seal(root, dataset, directory, artifact, publish=publish, inputs=inputs,
                  check_refusals=dataset not in CARRY_DATASETS)
+
+
+def _finish_retired_dataset(root: Path, dataset: str, source: Path, directory: Path, *, family: str, publish: bool,
+                            inputs):
+    """Build and optionally publish a table whose receipts are retired (ss-vse3) without emitting receipts."""
+    from spicy_regs import etl_bulk
+    from spicy_regs.native_types import described_schema
+    from spicy_regs.transforms.regulations_receipts import CARRY_DATASETS, policy, write_held_dataset
+
+    declared = policy(dataset)
+    root.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(dir=root, prefix='.retired-write-') as temporary:
+        work = Path(temporary)
+        subjects, receipts = write_held_dataset(dataset, source, work / 'check', generation_id=uuid4().hex,
+                                                bulk=True, validate=False)
+        if dataset not in CARRY_DATASETS:
+            _refuse_refusals(dataset, receipts)
+        rows = pq.ParquetFile(subjects).metadata.num_rows
+        if pq.ParquetFile(source).metadata.num_rows != rows:
+            raise ValueError(f'{dataset}: native conversion refused; checkpoint remains unadvanced')
+        if declared.identity_fields:
+            quoted = [f'"{field}"' for field in declared.identity_fields]
+            not_null = " AND ".join(f"{col} IS NOT NULL" for col in quoted)
+            key = quoted[0] if len(quoted) == 1 else f"({', '.join(quoted)})"
+            with etl_bulk.bulk_connection() as (con, _):
+                non_null, distinct = con.execute(
+                    f"SELECT COUNT(*), COUNT(DISTINCT {key}) FROM read_parquet({etl_bulk._literal(str(subjects))}) WHERE {not_null}"
+                ).fetchone()
+            if non_null != rows or distinct != rows:
+                raise ValueError(
+                    f'{dataset}: identity constraint violated ({rows} rows, {non_null} non-null, {distinct} distinct)'
+                )
+        artifact = build_generation(
+            directory, family=family, files=[subjects], expected_keys=[dataset + ".parquet"],
+            schemas={dataset: described_schema(declared.subject_schema)}, publication_status="complete-family",
+        )
+    return _seal(root, dataset, directory, artifact, publish=publish, inputs=inputs, check_refusals=False)
 
 
 def _refuse_refusals(dataset: str, receipts: Path) -> None:
