@@ -68,6 +68,11 @@ on:
         required: false
         default: false
         type: boolean
+      administration_policy_force_publish:
+        description: 'administration_policy: publish a new generation even when archive files are unchanged'
+        required: false
+        default: false
+        type: boolean
       lda_since:
         description: 'Optional LDA catch-up start date (YYYY-MM-DD)'
         required: false
@@ -321,6 +326,7 @@ jobs:
           # rollup is fully functional keyless, so an unset secret is fine.
           LDA_API_KEY: ${{ secrets.LDA_API_KEY }}
           CFR_REPLACE_ALL: ${{ inputs.cfr_replace_all }}
+          ADMINISTRATION_POLICY_FORCE_PUBLISH: ${{ inputs.administration_policy_force_publish }}
           LDA_SINCE: ${{ inputs.lda_since }}
           LDA_UNTIL: ${{ inputs.lda_until }}
           BILL_FAMILY_CONGRESSES: ${{ inputs.bill_family_congresses || inputs.spicy_regs_congresses }}

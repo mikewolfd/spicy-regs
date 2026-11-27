@@ -301,6 +301,143 @@ def test_administration_policy_rebuilds_at_the_head_commit_and_skips_an_unchange
         rollups.AdministrationPolicyRollup(output_dir=tmp_path / "refused-rollup").run()
 
 
+def test_administration_policy_republishes_unchanged_archive_for_receiptless_migration_or_force_publish(
+    tmp_path, monkeypatch
+):
+    from spicy_regs import generation_retention
+    from spicy_regs.source_evidence import ArtifactInput, PRIOR_ROLE
+
+    workflow = yaml.safe_load((WORKFLOWS / "rollup-administration-policy.yml").read_text())
+    force_input = workflow[True]["workflow_dispatch"]["inputs"]["force_publish"]
+    assert force_input["default"] is False and force_input["required"] is False and force_input["type"] == "boolean"
+    assert workflow["jobs"]["run"]["with"]["administration_policy_force_publish"] == (
+        "${{ github.event_name == 'workflow_dispatch' && inputs.force_publish || false }}"
+    )
+    reusable = yaml.safe_load((WORKFLOWS / "_rollup.yml").read_text())
+    step = next(s for s in reusable["jobs"]["rollup"]["steps"] if s.get("name") == "Run rollup")
+    assert step["env"]["ADMINISTRATION_POLICY_FORCE_PUBLISH"] == "${{ inputs.administration_policy_force_publish }}"
+
+    requests = []
+    transport = policy_fixture.archive(requests)
+    october = administration_policy.acquire(
+        policy_fixture.OCTOBER, ["46-Biden", "47-Trump"], tmp_path / "acquire", transport=transport
+    )
+    october_artifact, _, _ = administration_policy.build_from_captures(october, tmp_path / "october")
+    october_dir = tmp_path / "october" / "generation"
+
+    def held(self, directory):
+        shutil.copytree(october_dir, directory)
+        return sorted(directory.glob("administration_policy_*.parquet"))
+
+    monkeypatch.setattr(rollups.AdministrationPolicyRollup, "published_tables", held)
+    monkeypatch.setattr(rollups.AdministrationPolicyRollup, "transport", transport)
+    unchanged_commit = "c" * 40
+    policy_fixture.FILES.update(
+        {(unchanged_commit, name): policy_fixture.FILES[policy_fixture.OCTOBER, name] for name in ("46-Biden", "47-Trump")}
+    )
+    monkeypatch.setattr(administration_policy, "head_commit", lambda: unchanged_commit)
+
+    pinned_digest = generation_retention.receipt_archive_pins()["administration_policy_statements"]["artifactDigest"]
+    pinned_hex = pinned_digest.removeprefix("sha256:")
+    october_tables = json.loads((october_dir / "artifact.json").read_text())["spec"]["tables"]
+    live_tables = {}
+    for table_key, declared in october_tables.items():
+        data = (october_dir / table_key).read_bytes()
+        live_tables[table_key] = {
+            "sha256": "sha256:" + hashlib.sha256(data).hexdigest(),
+            "byteSize": len(data),
+            **declared,
+        }
+    live_with_receipts = {
+        "format": "spicy-regs-publication",
+        "version": 2,
+        "families": {
+            "administration-policy": {
+                "logicalId": october_artifact.pin.logical_id,
+                "artifactDigest": pinned_digest,
+                "prefix": f"generations/administration-policy/{pinned_hex}",
+                "tables": live_tables,
+                "etlReceipts": {
+                    "key": "etl_receipts.parquet",
+                    "sha256": "sha256:" + "e" * 64,
+                    "byteSize": 100,
+                    "rows": 2,
+                    "columns": [["dataset", "VARCHAR"]],
+                    "generationId": "sha256:" + "f" * 64,
+                    "datasets": ["administration_policy_statements", "administration_policy_bill_links"],
+                },
+            }
+        },
+    }
+    live_receiptless = json.loads(json.dumps(live_with_receipts))
+    live_receiptless["families"]["administration-policy"].pop("etlReceipts")
+    live_receiptless["families"]["administration-policy"]["artifactDigest"] = october_artifact.pin.artifact_digest
+    live_receiptless["families"]["administration-policy"]["prefix"] = (
+        f"generations/administration-policy/{october_artifact.pin.artifact_digest.removeprefix('sha256:')}"
+    )
+
+    active_index = live_with_receipts
+
+    @contextlib.contextmanager
+    def snapshot(_url):
+        yield active_index
+
+    def fake_inherit(self, prior_index, *, public_url=None):
+        self.read_snapshot = prior_index
+        prior = prior_index["families"].get(self.family)
+        if prior is not None:
+            self.prior_input = ArtifactInput(PRIOR_ROLE, prior["logicalId"], prior["artifactDigest"])
+
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://data.example.test")
+    monkeypatch.setattr(publication, "snapshot", snapshot)
+    monkeypatch.setattr(CaptureEvidence, "inherit", fake_inherit)
+
+    # 1. Live family still has etlReceipts -> unchanged archive still builds a receiptless generation.
+    monkeypatch.delenv("ADMINISTRATION_POLICY_FORCE_PUBLISH", raising=False)
+    rollups.AdministrationPolicyRollup(output_dir=tmp_path / "migrate").run()
+    (migrated_gen,) = generations(tmp_path / "migrate")
+    assert "etlReceipts" not in json.loads((migrated_gen / "artifact.json").read_text())["spec"]
+    (migrated_evidence,) = (tmp_path / "migrate").glob("source-evidence/*/artifact")
+    store = Store()
+    store.put_object(
+        Bucket="fixture",
+        Key=publication.INDEX_V2_KEY,
+        Body=json.dumps(live_with_receipts).encode(),
+    )
+    for table_key, table_desc in live_tables.items():
+        store.put_object(
+            Bucket="fixture",
+            Key=f"generations/administration-policy/{pinned_hex}/{table_key}",
+            Body=(october_dir / table_key).read_bytes(),
+        )
+    published_index = publication.publish_generation(
+        migrated_gen,
+        client=store,
+        bucket="fixture",
+        prior_index=live_with_receipts,
+        evidence_directories=(migrated_evidence,),
+    )
+    assert "etlReceipts" not in published_index["families"]["administration-policy"]
+
+    # 2. Live family is already receiptless -> unchanged archive skips normally.
+    active_index = live_receiptless
+    rollups.AdministrationPolicyRollup(output_dir=tmp_path / "receiptless-unchanged").run()
+    assert generations(tmp_path / "receiptless-unchanged") == []
+
+    # 3. Explicit force_publish env flag republishes even when already receiptless; invalid flag fails fast.
+    monkeypatch.setenv("ADMINISTRATION_POLICY_FORCE_PUBLISH", "false")
+    rollups.AdministrationPolicyRollup(output_dir=tmp_path / "force-false").run()
+    assert generations(tmp_path / "force-false") == []
+
+    monkeypatch.setenv("ADMINISTRATION_POLICY_FORCE_PUBLISH", "true")
+    rollups.AdministrationPolicyRollup(output_dir=tmp_path / "force-true").run()
+    assert len(generations(tmp_path / "force-true")) == 1
+
+    monkeypatch.setenv("ADMINISTRATION_POLICY_FORCE_PUBLISH", "yes")
+    with pytest.raises(ValueError, match="ADMINISTRATION_POLICY_FORCE_PUBLISH"):
+        rollups.AdministrationPolicyRollup(output_dir=tmp_path / "force-invalid").run()
+
+
 def test_treasury_adds_listed_debt_days_to_the_published_generation(tmp_path, monkeypatch):
     report = b"%PDF-1.7 retained statement"
     later = (TREASURY / "debt_to_penny-2026-10-16.json").read_bytes().replace(b"2026-10-16", b"2026-10-19")

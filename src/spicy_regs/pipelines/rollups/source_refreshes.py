@@ -13,6 +13,9 @@ import hashlib
 from os import getenv
 from pathlib import Path
 
+from loguru import logger
+
+from spicy_regs.env_values import flag_env
 from spicy_regs.pipelines import (
     administration_policy, congress_sessions, executive_orders, fec_financial_profiles, fec_research_profiles,
     grants_opportunities, house_disbursements, ofac, sector_comparisons, treasury_fiscal,
@@ -109,9 +112,18 @@ class AdministrationPolicyRollup(SourceRefreshRollup):
 
     name = "administration-policy"
     outputs = tuple(f"{table}.parquet" for table in retained_collections.SCHEMAS)
+    force_publish: bool = False
+    _live_has_etl_receipts: bool = False
+
+    def _prime(self, output_dir: Path, snapshot: Mapping | None = None) -> dict[str, dict]:
+        parents = super()._prime(output_dir, snapshot)
+        family = (snapshot or {}).get("families", {}).get(self.name, {})
+        self._live_has_etl_receipts = "etlReceipts" in family
+        return parents
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         evidence = self.evidence
+        force_publish = self.force_publish or flag_env("ADMINISTRATION_POLICY_FORCE_PUBLISH")
         statements = next(path for path in self.published_tables(output_dir / "published")
                           if path.stem == administration_policy.STATEMENTS)
         published = administration_policy.published_sources(statements)
@@ -120,7 +132,10 @@ class AdministrationPolicyRollup(SourceRefreshRollup):
         selection = administration_policy.capture(evidence, commit, (), published=published,
                                                   transport=self.transport)
         if all(source["commit"] == published[source["administration"]]["commit"] for source in selection["sources"]):
-            raise Unchanged(f"no archive file differs at {commit[:12]}")
+            if not force_publish and not self._live_has_etl_receipts:
+                raise Unchanged(f"no archive file differs at {commit[:12]}")
+            reason = "force_publish was requested" if force_publish else "the live family still carries etlReceipts"
+            logger.info("Rollup {}: bypassing unchanged check at {} because {}", self.name, commit[:12], reason)
         built = administration_policy.candidate(selection, output_dir, evidence, store=evidence.store, retain=False)
         return tuple(output_dir / "candidate" / built["outputs"][table]["path"]
                      for table in retained_collections.SCHEMAS)
