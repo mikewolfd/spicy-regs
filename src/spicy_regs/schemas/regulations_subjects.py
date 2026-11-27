@@ -457,6 +457,11 @@ SOURCE_COLUMNS = {
         ("url", "VARCHAR"),
         # SpicyDocs 0.67.0 reads RELATED_RIN_LIST; the column moved unified_agenda to regulations-native-v2.
         ("related_rins_json", "VARCHAR"),
+        # SpicyDocs 0.85.0+readers.20261127.2 reads LEGAL_DLINE_LIST, PARENT_RIN and CHILD_RIN_LIST (ss-zas1);
+        # these columns moved unified_agenda to regulations-native-v3.
+        ("legal_deadlines_json", "VARCHAR"),
+        ("parent_rin", "VARCHAR"),
+        ("child_rins_json", "VARCHAR"),
     ],
 }
 

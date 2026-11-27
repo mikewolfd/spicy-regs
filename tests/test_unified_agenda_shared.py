@@ -38,9 +38,20 @@ def old_records(body: bytes, edition: str = "202510") -> list[dict]:
         return list(reader._fetch_edition(edition))
 
 
+_POST_ORACLE_FIELDS = frozenset({
+    "related_rins",
+    "related_rins_json",
+    "legal_deadlines",
+    "legal_deadlines_json",
+    "parent_rin",
+    "child_rins",
+    "child_rins_json",
+})
+
+
 def frozen_fields(row: dict) -> dict:
-    """The fields the frozen walker knew; ``related_rins`` (SpicyDocs 0.67.0) postdates it and has its own tests."""
-    return {key: value for key, value in row.items() if key not in ("related_rins", "related_rins_json")}
+    """The fields the frozen walker knew; later fields (ss-cdaa, ss-zas1) postdate it and have their own tests."""
+    return {key: value for key, value in row.items() if key not in _POST_ORACLE_FIELDS}
 
 
 def shared_records(body: bytes, edition: str = "202510") -> list[dict]:

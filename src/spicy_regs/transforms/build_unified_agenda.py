@@ -1,6 +1,6 @@
 """Transform: build ``unified_agenda.parquet`` from the reginfo.gov export.
 
-Produces the pinned 18 all-VARCHAR columns keyed by (``rin``, ``agenda_edition``).
+Produces the pinned 21 all-VARCHAR columns keyed by (``rin``, ``agenda_edition``).
 The Unified Agenda is a Tier-1 rulemaking-lifecycle source: keyed by RIN, it is
 the upstream, forward-looking companion to ``federal_register`` (also RIN-keyed)
 and the regulations.gov ``dockets``/``documents`` view — it lists actions
@@ -30,7 +30,7 @@ from 11.5% and 5.7% with the Fall 2025 edition alone.
 
 The reginfo.gov XML export the reader parses is documented in
 :mod:`spicy_regs.sources.unified_agenda`; :func:`_shape` maps the reader's
-normalized per-RIN dict onto the pinned 18 columns.
+normalized per-RIN dict onto the pinned 21 columns.
 """
 
 from __future__ import annotations
@@ -62,9 +62,11 @@ UNREADABLE_EDITIONS = frozenset({"199504", "201204"})
 #: 121 s for 21 editions, so 60 take about 6 minutes of the job's 60-minute timeout.
 BACKFILL_EDITIONS_PER_RUN = 60
 
-# The raw input schema: 18 columns, all VARCHAR; array-valued fields serialized
-# as JSON strings. Primary / dedup key is (rin, agenda_edition). related_rins_json
-# (SpicyDocs 0.67.0) is appended last so the earlier columns keep their positions.
+# The raw input schema: 21 columns, all VARCHAR; array-valued fields serialized
+# as JSON strings. Primary / dedup key is (rin, agenda_edition). New columns
+# are appended last so the earlier columns keep their positions:
+# related_rins_json (SpicyDocs 0.67.0, v2), then legal_deadlines_json,
+# parent_rin, child_rins_json (SpicyDocs 0.85.0+readers.20261127.2, v3).
 COLUMNS = (
     "rin",
     "agency_code",
@@ -84,6 +86,9 @@ COLUMNS = (
     "next_action_date",
     "url",
     "related_rins_json",
+    "legal_deadlines_json",
+    "parent_rin",
+    "child_rins_json",
 )
 _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 
@@ -94,23 +99,44 @@ _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 # month-only dates in the published table.
 _MDY = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})$")
 
+# Valid year range for derived Unified Agenda timetable dates (ss-eyhu).
+# Verified across all 60 retained editions (199510..202510, 241,726 records):
+# earliest legitimate date is 07/10/1965 (199510, 2577-AB49) and latest is
+# 03/07/2033 (202510, 0910-AI52); years outside 1900..2100 are publisher
+# sentinel/typo values (0000, 0003-0012, 0219, 1016, 1199-1201, 2920, 3000,
+# 3002, 9998, 9999). Verbatim publisher strings stay in ``timetable_json``.
+MIN_TIMETABLE_YEAR = 1900
+MAX_TIMETABLE_YEAR = 2100
+
 
 def timetable_date(raw: object) -> date | None:
     """One timetable action's date, or ``None``.
 
-    A date the calendar rejects (``02/30/2024``) is dropped, never clamped into a
-    *different* real date; ``00`` stays reginfo's month-only marker for the 1st.
+    A date the calendar rejects (``02/30/2024``) or whose year falls outside
+    ``MIN_TIMETABLE_YEAR``..``MAX_TIMETABLE_YEAR`` (``1900``..``2100``) is
+    dropped, never clamped into a *different* real date; ``00`` stays reginfo's
+    month-only marker for the 1st. Verbatim publisher strings stay in
+    ``timetable_json``.
     """
     if not isinstance(raw, str) or not (m := _MDY.match(raw.strip())):
         return None
     month, day, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
     try:
-        return date(year, month, day or 1)
+        parsed = date(year, month, day or 1)
     except ValueError:
         # Warn only here. The regex miss above fires 538 times per edition on
         # reginfo's own "To Be Determined" and would bury this.
         logger.warning("Unified Agenda: dropped impossible timetable date {!r}", raw.strip())
         return None
+    if not (MIN_TIMETABLE_YEAR <= parsed.year <= MAX_TIMETABLE_YEAR):
+        logger.warning(
+            "Unified Agenda: dropped out-of-range timetable date {!r} (valid years {}-{})",
+            raw.strip(),
+            MIN_TIMETABLE_YEAR,
+            MAX_TIMETABLE_YEAR,
+        )
+        return None
+    return parsed
 
 
 def _iso_dates(timetable: list) -> list[str]:
@@ -158,8 +184,11 @@ def _shape(doc: dict) -> dict:
         "first_action_date": first_action,
         "next_action_date": next_action,
         "url": url,
-        # NULL, not [], when the edition states no RELATED_RIN_LIST (owner rule: absent lists are NULL).
+        # NULL, not [], when the edition states no list (owner rule: absent lists are NULL).
         "related_rins_json": json.dumps(doc.get("related_rins")),
+        "legal_deadlines_json": json.dumps(doc.get("legal_deadlines")),
+        "parent_rin": str_or_none(doc.get("parent_rin")),
+        "child_rins_json": json.dumps(doc.get("child_rins")),
     }
 
 
@@ -227,18 +256,23 @@ def build_unified_agenda(
     # 2. Fetch + shape the requested edition(s) into a "new rows" parquet: the
     # current edition plus a bounded backfill of editions the prior table lacks.
     if editions is None:
-        # An edition is held once any of its rows was read for related_rins (SpicyDocs 0.67.0). Rows restored
-        # from a regulations-native-v1 generation carry SQL NULL there (a read edition that states no list
-        # carries the JSON text "null"), so the bounded backfill re-reads editions that are entirely v1 instead
-        # of republishing them with the column empty. One read row suffices: a v2 re-read that no longer lists
-        # a v1 row leaves that row NULL, and requiring every row would re-fetch the edition every day (ss-cdaa).
+        # An edition is held once any of its rows was read under regulations-native-v3
+        # (related_rins + legal_deadlines/parent_rin/child_rins + 1900..2100 timetable-date
+        # normalization). Prior v1/v2 generations either lack legal_deadlines_json or carry
+        # SQL NULL there for every row in unread editions (a read edition carries "[]"/"[...]"
+        # on rows with LEGAL_DLINE_LIST, or JSON text "null" on raw text rows). Every one of
+        # the 60 retained editions (199510..202510) holds non-empty LEGAL_DLINE_LIST entries,
+        # so requiring count(legal_deadlines_json) > 0 triggers one clean 60-edition reread
+        # from a v2 prior and holds every edition thereafter. One read row suffices: a re-read
+        # that drops a prior row leaves that row NULL, and requiring every row would re-fetch
+        # the edition every day (ss-cdaa, ss-eyhu, ss-zas1).
         held = set()
-        if have_prior and "related_rins_json" in pq.read_schema(prior_file).names:
+        if have_prior and {"related_rins_json", "legal_deadlines_json"} <= set(pq.read_schema(prior_file).names):
             held = {
                 row[0]
                 for row in duckdb.sql(
                     f"SELECT agenda_edition FROM read_parquet('{prior_file}') "
-                    "GROUP BY 1 HAVING count(related_rins_json) > 0"
+                    "GROUP BY 1 HAVING count(related_rins_json) > 0 AND count(legal_deadlines_json) > 0"
                 ).fetchall()
             }
         editions = editions_to_fetch(held, newest_edition())
@@ -316,14 +350,14 @@ def build_unified_agenda(
     )
     unread = con.execute(
         f"SELECT count(*) FROM read_parquet('{out_file}') "
-        "WHERE related_rins_json IS NULL AND agenda_edition IN "
+        "WHERE (related_rins_json IS NULL OR legal_deadlines_json IS NULL) AND agenda_edition IN "
         f"(SELECT DISTINCT agenda_edition FROM read_parquet('{new_file}'))"
     ).fetchone()
     con.close()
     if unread and unread[0]:
         logger.warning(
             "Unified Agenda: {:,} restored rows in editions read this run were not in the re-read; "
-            "their related_rins stay unread (NULL)", unread[0])
+            "their related_rins or legal_deadlines stay unread (NULL)", unread[0])
 
     if evidence is not None:
         evidence.event("unified-agenda-editions", editions=source_receipts)
