@@ -526,6 +526,7 @@ def _sample_person_history(tmp_path: Path) -> Path:
 def test_person_identity_decisions_rollup_is_rollup_pipeline_not_local_family():
     assert issubclass(PersonIdentityDecisionsRollup, RollupPipeline)
     assert PersonIdentityDecisionsRollup.name not in LOCAL_FAMILIES
+    assert PersonIdentityDecisionsRollup.retain_source_evidence is True
 
 
 def test_person_identity_decisions_rollup_builds_verified_generation_and_enforces_owner_gate(tmp_path, monkeypatch):
@@ -564,10 +565,17 @@ def test_person_identity_decisions_rollup_builds_verified_generation_and_enforce
     assert verified[1]["previous_event_id"] == verified[0]["event_id"]
     assert verified[2]["previous_event_id"] == verified[1]["event_id"]
 
-    # Local rulespec_artifacts generation directory was emitted cleanly.
+    # Local rulespec_artifacts generation directory and source evidence artifact were emitted cleanly.
     gen_dirs = [p for p in (out_dir / "generations").iterdir() if p.is_dir()]
     assert len(gen_dirs) == 1
     assert (gen_dirs[0] / "person_identity_decisions.parquet").exists()
+    evidence_journals = list((out_dir / "source-evidence").rglob("journal.jsonl"))
+    assert len(evidence_journals) == 1
+    journal_events = [json.loads(line) for line in evidence_journals[0].read_text(encoding="utf-8").splitlines()]
+    retained = [e for e in journal_events if e.get("event") == "retained-file"]
+    assert len(retained) == 1
+    assert retained[0]["stage"] == "person-identity-decisions-log"
+    assert retained[0]["event_count"] == 3
 
     # Direct builder round-trip also verifies cleanly.
     direct = build_person_identity_decisions(tmp_path / "direct", history_path=log_path)

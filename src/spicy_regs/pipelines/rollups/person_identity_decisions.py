@@ -17,7 +17,7 @@ import json
 import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Annotated, Any, ClassVar
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -31,6 +31,9 @@ from spicy_regs.identity_review import (
 )
 from spicy_regs.native_types import described_schema
 from spicy_regs.pipelines.rollups.base import RollupPipeline
+
+if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
 
 FAMILY = "person-identity-decisions"
 TABLE = "person_identity_decisions"
@@ -127,10 +130,12 @@ def build_person_identity_decisions(
     *,
     history: Sequence[Mapping[str, Any]] | None = None,
     history_path: Path | None = None,
+    evidence: CaptureEvidence | None = None,
 ) -> Path:
     """Verify the complete hash-chained person decision log and materialize ``person_identity_decisions.parquet``."""
     if history is not None and history_path is not None:
         raise ValueError("Specify either history or history_path, not both")
+    resolved_path: Path | None = None
     if history is None:
         if history_path is None:
             env_path = os.environ.get(DECISIONS_LOG_ENV)
@@ -138,12 +143,33 @@ def build_person_identity_decisions(
                 raise ValueError(
                     f"A person identity decisions log is required (pass history_path or set {DECISIONS_LOG_ENV})"
                 )
-            history_path = Path(env_path)
-        events = read_decisions_jsonl(history_path)
+            resolved_path = Path(env_path)
+        else:
+            resolved_path = history_path
+        events = read_decisions_jsonl(resolved_path)
     else:
         events = [dict(e) for e in history]
 
     verified = verify_person_history(events)
+    if evidence is not None:
+        if resolved_path is not None:
+            evidence.retain_file(
+                resolved_path,
+                stage="person-identity-decisions-log",
+                raw_source=False,
+                policy_version=POLICY_VERSION,
+                event_count=len(verified),
+            )
+        else:
+            canonical_log = b"".join(_canonical(event) + b"\n" for event in verified)
+            evidence.retain_bytes(
+                canonical_log,
+                stage="person-identity-decisions-log",
+                raw_source=False,
+                policy_version=POLICY_VERSION,
+                event_count=len(verified),
+            )
+
     rows = [event_to_row(event, ordinal=idx) for idx, event in enumerate(verified)]
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -176,6 +202,7 @@ class PersonIdentityDecisionsRollup(RollupPipeline):
     """Reviewed cross-source person identity decisions (CT witness_key <-> external native ID)."""
 
     name: ClassVar[str] = FAMILY
+    retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
     output: ClassVar[str] = OUTPUT
 
@@ -212,6 +239,7 @@ class PersonIdentityDecisionsRollup(RollupPipeline):
             output_dir,
             history=self.history,
             history_path=self.history_path,
+            evidence=self.source_evidence,
         )
         verified = verify_decisions_parquet(out_path)
         if not self.skip_upload and not verified:
