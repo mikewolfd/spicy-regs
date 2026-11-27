@@ -41,7 +41,11 @@ def _published_ids(store: Store) -> list[str]:
 
 
 def test_each_sweep_republishes_selected_native_rows_and_receipts(tmp_path, monkeypatch):
+    from spicy_regs import subject_catalog
     from tests.regulatory_publication_fakes import install
+
+    retired = subject_catalog.retired_receipt_datasets() - {"dockets"}
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
 
     remote = install(monkeypatch)
     _publish_source(tmp_path, ["EPA-1", "EPA-2"])
@@ -65,8 +69,12 @@ def test_a_repeated_or_missing_native_id_is_not_published(tmp_path, monkeypatch,
 
 
 def test_a_row_group_over_the_admission_bound_is_not_republished(tmp_path, monkeypatch):
+    from spicy_regs import subject_catalog
     from tests.regulatory_publication_fakes import install
     from spicy_regs.pipelines.rollups import regulatory_base
+
+    retired = subject_catalog.retired_receipt_datasets() - {"dockets"}
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
 
     remote = install(monkeypatch)
     _publish_source(tmp_path, ["EPA-1", "EPA-2"])

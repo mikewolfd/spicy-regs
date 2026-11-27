@@ -111,10 +111,10 @@ def test_actual_complete_fixture_pipeline(tmp_path, dataset, installed_httpfs):
 
 
 def test_separate_closed_candidate_audit_keeps_full_oracles_without_candidate_build(tmp_path, installed_httpfs):
-    """Constructed dockets fixture; real audit/restore/private-serving checks run."""
+    """Constructed documents fixture; real audit/restore/private-serving checks run."""
     from spicy_regs.operational_runner import census
 
-    path, _, _ = selected_plan(tmp_path, 'dockets')
+    path, _, _ = selected_plan(tmp_path, 'documents')
     candidate = tmp_path / 'closed-build'
     command = [sys.executable, '-B', '-m', 'scripts.qualify_retained_population', str(path),
                str(candidate), '--fixture', '--stage', 'build']
@@ -191,7 +191,7 @@ def test_wrong_pin_and_empty_selection_refuse_before_production(tmp_path):
 
 
 def test_source_changed_after_capture_refuses_final_claim(tmp_path, installed_httpfs):
-    path, _, source = selected_plan(tmp_path, 'dockets')
+    path, _, source = selected_plan(tmp_path, 'documents')
     output = tmp_path / 'changed'
     code = '''
 import sys

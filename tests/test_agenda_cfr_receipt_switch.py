@@ -177,9 +177,11 @@ def test_the_page_urls_are_their_identities(tmp_path):
 def test_a_table_whose_receipts_are_not_retired_cannot_take_the_plain_route():
     from spicy_regs.pipelines.rollups.regulations_tables import RegulationsTableRollup
 
-    docket = type("DocketsTable", (RegulationsTableRollup,), {"name": "x", "output": "dockets.parquet", "build": None})
-    with pytest.raises(ValueError, match="dockets still publishes receipts"):
-        docket().build_table(Path("unused"), lambda *_, **__: Path("unused"))
+    documents = type(
+        "DocumentsTable", (RegulationsTableRollup,), {"name": "x", "output": "documents.parquet", "build": None}
+    )
+    with pytest.raises(ValueError, match="documents still publishes receipts"):
+        documents().build_table(Path("unused"), lambda *_, **__: Path("unused"))
 
 
 def test_the_edition_file_is_retained_as_read(tmp_path, monkeypatch):

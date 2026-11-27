@@ -30,6 +30,10 @@ def rows(dataset):
 @pytest.mark.parametrize("dataset", ["dockets", "documents"])
 @pytest.mark.parametrize("source_shape", ["current", "retained", "reordered"])
 def test_regulatory_preparation_batches_and_publishes_exact_artifact_once(tmp_path, monkeypatch, bucket, dataset, source_shape):
+    from spicy_regs import subject_catalog
+
+    retired = subject_catalog.retired_receipt_datasets() - {dataset}
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
     original_rows = rows(dataset)
     if source_shape == "retained" and dataset == "documents":
         original_rows = [{key: value for key, value in row.items()
@@ -90,8 +94,12 @@ def test_regulatory_converter_refuses_duplicate_base_identity_without_publicatio
 
 @pytest.mark.parametrize("change", ["order", "value", "metadata"])
 def test_regulatory_row_comparison_refuses_processing_changes_before_publication(tmp_path, monkeypatch, bucket, change):
+    from spicy_regs import subject_catalog
     from spicy_regs.transforms import regulations_receipts
     from spicy_regs.conversion_reads import _FamilyReader
+
+    retired = subject_catalog.retired_receipt_datasets() - {"dockets"}
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
 
     # This oracle mutates the maintained Python decoder. SQL equality and actual retained-data mutations are
     # exercised separately; select the row route here so these injected decoder faults reach the comparison.
@@ -167,9 +175,12 @@ def test_attribute_families_convert_from_their_typed_published_shape(tmp_path, m
     import pyarrow as pa
     import pyarrow.parquet as pq
 
-    from spicy_regs import etl_policy_registry
+    from spicy_regs import etl_policy_registry, subject_catalog
     from spicy_regs.generations import build_generation
     from spicy_regs.transforms.regulations_receipts import TYPES
+
+    retired = subject_catalog.retired_receipt_datasets() - {dataset}
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
 
     family = dataset.replace("_", "-")
     schema = pa.schema([(name, TYPES[kind]) for name, kind in SOURCE_COLUMNS[dataset]])

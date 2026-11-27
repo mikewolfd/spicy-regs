@@ -69,6 +69,24 @@
    "publishedAt": "2026-10-20T00:50:52Z",
    "receipts": "generations/court-citations/7c2fc74c1b8096801f0f779baceb77e538e34047f234afbd9e56aa6515261d9d/etl_receipts.parquet"
   },
+  "docket_attributes": {
+   "family": "docket-attributes",
+   "artifactDigest": "sha256:2ea07256f0257b910d4854d0967e1397f3ca125f67556cdf397fa015df6f440b",
+   "publishedAt": "2026-11-26T09:33:31Z",
+   "receipts": "generations/docket-attributes/2ea07256f0257b910d4854d0967e1397f3ca125f67556cdf397fa015df6f440b/etl_receipts.parquet"
+  },
+  "dockets": {
+   "family": "dockets",
+   "artifactDigest": "sha256:3b48c02f9f62fa29e71264ac9de3db0d7e3fddb6f6960b55478cfde50cd767f2",
+   "publishedAt": "2026-11-26T09:34:47Z",
+   "receipts": "generations/dockets/3b48c02f9f62fa29e71264ac9de3db0d7e3fddb6f6960b55478cfde50cd767f2/etl_receipts.parquet"
+  },
+  "document_attributes": {
+   "family": "document-attributes",
+   "artifactDigest": "sha256:d9604244b01eac6e99da933ce954efb72edaf59619f18d9af400685bf1554173",
+   "publishedAt": "2026-11-26T10:47:26Z",
+   "receipts": "generations/document-attributes/d9604244b01eac6e99da933ce954efb72edaf59619f18d9af400685bf1554173/etl_receipts.parquet"
+  },
   "fcc_proceedings": {
    "family": "fcc-proceedings",
    "artifactDigest": "sha256:e9fe4002523a19eefc60cdb4348bff6f75c4143d2d87af58cab69678e98a02ba",

@@ -53,10 +53,13 @@ def test_both_writer_routes_carry_exact_receipts_and_resolve_only_matching_refus
     assert pq.read_table(restored).equals(pq.read_table(source), check_metadata=True)
 
 
-def test_attribute_nightly_keeps_historical_refusals_and_refuses_only_new_failures(tmp_path):
+def test_attribute_nightly_keeps_historical_refusals_and_refuses_only_new_failures(tmp_path, monkeypatch):
+    from spicy_regs import subject_catalog
     from spicy_regs.pipelines.regulatory_publication import finish_attribute_dataset
     from spicy_regs.selected_generations import SelectedDataset, SelectedInputs, remember_selection
-    dataset = 'document_attributes'  # comment_attributes publishes without receipts (ss-vse3)
+    dataset = 'document_attributes'  # retired on live (ss-vse3); exercise receipt-carry route here
+    retired = subject_catalog.retired_receipt_datasets() - {dataset}
+    monkeypatch.setattr(subject_catalog, 'retired_receipt_datasets', lambda: retired)
     key, _, _, prior = _seed(tmp_path, dataset)
     root = tmp_path / 'root'
     remember_selection(root, [SelectedDataset(dataset, (prior[0],), prior[1], 'old')])
@@ -73,10 +76,13 @@ def test_attribute_nightly_keeps_historical_refusals_and_refuses_only_new_failur
     assert inputs.select(dataset) == selected
 
 
-def test_empty_attribute_prior_preserves_metadata_and_replaces_fresh_file_metadata(tmp_path):
+def test_empty_attribute_prior_preserves_metadata_and_replaces_fresh_file_metadata(tmp_path, monkeypatch):
+    from spicy_regs import subject_catalog
     from spicy_regs.pipelines.regulatory_publication import finish_attribute_dataset, finish_dataset
     from spicy_regs.selected_generations import SelectedInputs
     dataset = 'docket_attributes'
+    retired = subject_catalog.retired_receipt_datasets() - {dataset}
+    monkeypatch.setattr(subject_catalog, 'retired_receipt_datasets', lambda: retired)
     root = tmp_path / 'root'
     source = tmp_path / 'seed.parquet'
     pq.write_table(_table(dataset, []).replace_schema_metadata({'placement': 'original'}), source)
@@ -91,10 +97,12 @@ def test_empty_attribute_prior_preserves_metadata_and_replaces_fresh_file_metada
 
 def test_attribute_nightly_admits_the_prior_before_copy_or_carry(tmp_path, monkeypatch):
     from types import SimpleNamespace
-    from spicy_regs import native_merge
+    from spicy_regs import native_merge, subject_catalog
     from spicy_regs.pipelines.regulatory_publication import finish_attribute_dataset
     from spicy_regs.selected_generations import SelectedDataset
-    dataset = 'document_attributes'  # comment_attributes publishes without receipts (ss-vse3)
+    dataset = 'document_attributes'  # retired on live (ss-vse3); exercise receipt-carry route here
+    retired = subject_catalog.retired_receipt_datasets() - {dataset}
+    monkeypatch.setattr(subject_catalog, 'retired_receipt_datasets', lambda: retired)
     key, _, _, prior = _seed(tmp_path, dataset)
     rows = pq.read_table(prior[1]).to_pylist()
     rows[0]['processor'] = 'changed without a new receipt digest'
