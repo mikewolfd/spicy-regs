@@ -982,3 +982,71 @@ def test_bill_family_quality_repair_rollup_repairs_native_generation_and_preserv
     assert again_dry["section_diffs"]["rows_moved"] == 0
     assert again_dry["bill_cosponsors"]["rows_moved"] == 0
     assert again_dry["public_activity_events"]["stage_changed_null_from_dropped"] == 0
+
+
+def test_repair_bill_family_quality_workflow_guards_permissions_concurrency_and_shell_safety(tmp_path):
+    """Verify repair-bill-family-quality.yml shares bill-family concurrency and guards shrink/shell/secrets."""
+    import os
+    import subprocess
+    import yaml
+
+    repo_root = Path(__file__).resolve().parents[1]
+    workflow_path = repo_root / ".github/workflows/repair-bill-family-quality.yml"
+    rollup_path = repo_root / ".github/workflows/rollup-bill-family.yml"
+
+    raw_text = workflow_path.read_text(encoding="utf-8")
+    doc = yaml.safe_load(raw_text)
+    rollup_doc = yaml.safe_load(rollup_path.read_text(encoding="utf-8"))
+
+    triggers = doc.get("on", doc.get(True, {}))
+    assert set(triggers) == {"workflow_dispatch"}
+    inputs = triggers["workflow_dispatch"]["inputs"]
+    assert inputs["skip_upload"]["type"] == "boolean"
+    assert inputs["skip_upload"]["default"] is True
+    assert inputs["allow_shrink_public_activity_events"]["type"] == "boolean"
+    assert inputs["allow_shrink_public_activity_events"]["default"] is False
+
+    assert doc["permissions"] == {"contents": "read"}
+    assert doc["concurrency"]["group"] == rollup_doc["concurrency"]["group"]
+    assert doc["concurrency"]["cancel-in-progress"] is False
+    assert not workflow_path.name.startswith("rollup-")
+    assert "run-rollup-" not in raw_text
+    assert "_rollup.yml" not in raw_text
+    assert "secrets.ZYTE_TOKEN" not in raw_text
+    assert "secrets.FIRECRAWL_API_KEY" not in raw_text
+
+    steps = {step["name"]: step for step in doc["jobs"]["repair"]["steps"] if "name" in step}
+    for name, step in steps.items():
+        if "run" in step:
+            assert "${{ inputs." not in step["run"], f"{name} interpolates raw inputs.* in run:"
+            subprocess.run(["bash", "-n"], input=step["run"], text=True, check=True)
+            if name not in {"Install pinned dependencies", "Free runner disk"}:
+                assert 'TMPDIR="$RUNNER_TEMP"' in step["run"]
+                assert "unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO" in step["run"]
+
+    dry_step = steps["Repair bill-family quality (dry run)"]
+    publish_step = steps["Repair and publish bill-family quality"]
+    assert dry_step["if"] == "inputs.skip_upload != false"
+    assert publish_step["if"] == "inputs.skip_upload == false"
+    assert "R2_ACCESS_KEY_ID" not in dry_step.get("env", {})
+    assert "R2_SECRET_ACCESS_KEY" not in dry_step.get("env", {})
+    assert "R2_ALLOW_SHRINK" not in dry_step["run"] or "unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK" in dry_step["run"]
+    assert "export R2_ALLOW_SHRINK=1" not in dry_step["run"]
+    assert "R2_ACCESS_KEY_ID" in publish_step["env"]
+    assert "R2_SECRET_ACCESS_KEY" in publish_step["env"]
+    assert 'if [ "$ALLOW_SHRINK_PUBLIC_ACTIVITY_EVENTS" = "true" ]; then' in publish_step["run"]
+    assert '-H "User-Agent: $WORKFLOW_USER_AGENT"' in dry_step["run"]
+    assert '-H "User-Agent: $WORKFLOW_USER_AGENT"' in publish_step["run"]
+    assert "repair-bill-family-quality" in dry_step["run"] and "--dry-run" in dry_step["run"]
+    assert "repair-bill-family-quality" in publish_step["run"] and "--no-skip-upload" in publish_step["run"]
+
+    validate = steps["Validate inputs"]
+    env = {k: v for k, v in os.environ.items() if k not in {"PYTEST_CURRENT_TEST", "SPICYGOV_RAW_ROOT"}}
+    env.update({
+        "RUNNER_TEMP": str(tmp_path.resolve()),
+        "SKIP_UPLOAD": "maybe",
+        "ALLOW_SHRINK_PUBLIC_ACTIVITY_EVENTS": "false",
+    })
+    bad = subprocess.run(["bash", "-c", validate["run"]], cwd=repo_root, env=env, capture_output=True, text=True, timeout=30)
+    assert bad.returncode != 0
+    assert "SKIP_UPLOAD" in (bad.stderr + bad.stdout)

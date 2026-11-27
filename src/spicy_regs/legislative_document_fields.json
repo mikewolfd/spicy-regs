@@ -755,7 +755,7 @@
       {
         "name": "version_date",
         "source_type": "VARCHAR",
-        "meaning": "Congress textVersions action-associated date for this printing, not its online publication time; the merge prefers the larger value. An enrolled printing's date is empty at the publisher (BILLSTATUS `<date/>` and the printing's own dc:date), so version_date is '' (not NULL) on enrolled rows, which sorts before every date: order printings with printing_order or NULLIF(version_date, '').",
+        "meaning": "Congress textVersions action-associated date for this printing, not its online publication time; the merge prefers the larger value. NULL when absent or when the publisher states an empty `<date/>` (as on enrolled printings, whose dc:date is also empty): order printings with printing_order.",
         "decision": "keep",
         "target": "version_date",
         "target_type": "string",
@@ -980,7 +980,7 @@
       {
         "name": "kind",
         "source_type": "VARCHAR",
-        "meaning": "Interpreted document kind: `full_text`, `kind_uncertain` (a full-text slug whose document is too thin to be sure), `procedural_amendments`, `procedural_summary`, or `unknown`.",
+        "meaning": "Interpreted document kind: `full_text`, `kind_uncertain` (a full-text slug whose measured body yielded zero sections or zero bytes), `procedural_amendments`, `procedural_summary`, or `unknown`.",
         "decision": "keep",
         "target": "kind",
         "target_type": "string",
@@ -989,7 +989,7 @@
       {
         "name": "kind_rule",
         "source_type": "VARCHAR",
-        "meaning": "Which version-kind rule fired, as the classifier names them: `procedural_amendments_slug`, `procedural_summary_slug`, `full_text_slug`, `full_text_slug_thin` (a full-text slug the size heuristic demoted to kind_uncertain), `amendment_substring` (an unlisted slug this repository's own heuristic caught), `size_heuristic` (an unlisted slug a large body promoted to full_text), or `unknown` when nothing claimed it.",
+        "meaning": "Which version-kind rule fired, as the classifier names them: `procedural_amendments_slug`, `procedural_summary_slug`, `full_text_slug`, `full_text_slug_empty_body` (a full-text slug whose measured body yielded zero sections or zero bytes, demoted to kind_uncertain), `amendment_substring` (an unlisted slug this repository's own heuristic caught), `size_heuristic` (an unlisted slug a large body promoted to full_text), or `unknown` when nothing claimed it.",
         "decision": "move-to-receipt",
         "target": null,
         "target_type": "receipt exact typed value",

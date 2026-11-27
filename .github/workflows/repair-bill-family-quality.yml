@@ -1,0 +1,135 @@
+name: Repair bill-family data quality (one-off)
+
+# Deterministic held-row repair for bill-family (ss-kj95): reclassifies held
+# bill_versions kinds without refetching bodies, normalizes empty-string dates
+# and districts on bill_versions / section_diffs / bill_cosponsors while
+# preserving XML provenance in receipts, and removes historical stage_changed
+# events with NULL from_stage from public_activity_events without duplicating
+# bill_added. Carries partitioned bill_sections natively. Never scheduled.
+on:
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Dry-run repair and print before/after counts without publishing to R2'
+        required: false
+        default: true
+        type: boolean
+      allow_shrink_public_activity_events:
+        description: 'Explicit one-time authorization to allow public_activity_events.parquet to shrink when dropping NULL-from_stage rows (publish only)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  # Share the exact group used by rollup-bill-family.yml so a repair never
+  # races the nightly or dispatched bill-family rollup.
+  group: rollup-bill-family
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install pinned dependencies
+        run: uv sync --frozen
+
+      - name: Validate inputs
+        env:
+          SKIP_UPLOAD: ${{ inputs.skip_upload }}
+          ALLOW_SHRINK_PUBLIC_ACTIVITY_EVENTS: ${{ inputs.allow_shrink_public_activity_events }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          WORK_DIR="$RUNNER_TEMP/bill-family-quality-repair"
+          rm -rf "$WORK_DIR"
+          mkdir -p "$WORK_DIR"
+          python3 - <<'PY'
+          import os
+
+          for key in ("SKIP_UPLOAD", "ALLOW_SHRINK_PUBLIC_ACTIVITY_EVENTS"):
+              val = os.environ.get(key, "").strip().lower()
+              if val not in {"true", "false"}:
+                  raise SystemExit(f"{key} must be true or false, got {val!r}")
+          PY
+
+      - name: Repair bill-family quality (dry run)
+        if: inputs.skip_upload != false
+        env:
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
+          WORKFLOW_USER_AGENT: spicy-regs-repair-bill-family-quality
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          WORK_DIR="$RUNNER_TEMP/bill-family-quality-repair"
+          mkdir -p "$WORK_DIR"
+          curl -fsSL -H "User-Agent: $WORKFLOW_USER_AGENT" "${R2_PUBLIC_URL%/}/publication.v2.json" \
+            -o "$WORK_DIR/live-publication.v2.json"
+          uv run --frozen python -m spicy_regs.pipelines.prior_repairs repair-bill-family-quality \
+            --dry-run | tee "$WORK_DIR/dry-run-counts.json"
+
+      - name: Repair and publish bill-family quality
+        if: inputs.skip_upload == false
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          SPICY_REGS_DISK_FLOOR_GIB: '4'
+          ALLOW_SHRINK_PUBLIC_ACTIVITY_EVENTS: ${{ inputs.allow_shrink_public_activity_events }}
+          WORKFLOW_USER_AGENT: spicy-regs-repair-bill-family-quality
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          WORK_DIR="$RUNNER_TEMP/bill-family-quality-repair"
+          mkdir -p "$WORK_DIR/out"
+          curl -fsSL -H "User-Agent: $WORKFLOW_USER_AGENT" "${R2_PUBLIC_URL%/}/publication.v2.json" \
+            -o "$WORK_DIR/prior-publication.v2.json"
+          uv run --frozen python -m spicy_regs.pipelines.prior_repairs repair-bill-family-quality \
+            --dry-run | tee "$WORK_DIR/pre-repair-counts.json"
+          if [ "$ALLOW_SHRINK_PUBLIC_ACTIVITY_EVENTS" = "true" ]; then
+            export R2_ALLOW_SHRINK=1
+          fi
+          uv run --frozen python -m spicy_regs.pipelines.prior_repairs repair-bill-family-quality \
+            --output-dir "$WORK_DIR/out" --no-skip-upload
+          unset R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO
+          curl -fsSL -H "User-Agent: $WORKFLOW_USER_AGENT" "${R2_PUBLIC_URL%/}/publication.v2.json" \
+            -o "$WORK_DIR/post-publication.v2.json"
+
+      - name: Upload repair audit summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bill-family-quality-repair-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/bill-family-quality-repair/*-counts.json
+            ${{ runner.temp }}/bill-family-quality-repair/*-publication.v2.json
+            ${{ runner.temp }}/bill-family-quality-repair/out/source-evidence/**/journal.jsonl
+          if-no-files-found: warn
+          retention-days: 30

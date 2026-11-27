@@ -81,12 +81,12 @@ tables:
       documents the agency posts and the public comments it receives.
     columns:
       docket_id: "Unique docket identifier (e.g. `EPA-HQ-OAR-2021-0317`). Primary key / dedup key."
-      agency_code: "Posting agency's short code (e.g. `EPA`, `FDA`, `ACF`)."
+      agency_code: "Posting agency's short code (e.g. `EPA`, `FDA`, `ACF`). `lookup_agency` resolves it to Federal Register, eCFR and Federal Hierarchy organizations through RefSpec's REF-038 projection (vendored `reference/refspec/agency-projection.parquet`): measured 2026-10-30, 189 of 196 codes on 279,595 of 279,719 rows; `TRAIN`, `PCSCOTUS`, `USC`, `ERULE`, `EOA`, `BSC` and `GAPFAC` have no projection row."
       title: "Human-readable docket title."
       docket_type: "Docket category, typically `Rulemaking` or `Nonrulemaking`."
       modify_date: "Timestamp the docket was last modified on regulations.gov (ISO 8601 string)."
       abstract: "Agency-written summary of the docket (regulations.gov `dkAbstract`). Often null."
-      rin: "Regulation Identifier Number as reported by regulations.gov. Rarely populated: null, empty, or `Not Assigned` on more than 99% of dockets, and where set it holds a single RIN, often not the most recent one, even though a long-running docket can span several. Not a usable RIN join key; to link a RIN to a docket, use `fr_docket_links` (it carries both `regulation_id_numbers_json` and `docket_id`)."
+      rin: "Regulation Identifier Number as reported by regulations.gov, with publisher placeholders (`Not Assigned`, `0000-AA00`) and blank strings normalized to NULL while valid and historical RINs remain verbatim. Rarely populated (NULL on more than 99% of dockets), and where set it holds a single RIN, often not the most recent one, even though a long-running docket can span several. Not a usable RIN join key; to link a RIN to a docket, use `fr_docket_links` (it carries both `regulation_id_numbers` and `docket_id`)."
 
   documents:
     label: "Docket documents"
@@ -181,7 +181,7 @@ tables:
     columns:
       document_id: "Unique document identifier. Primary key / dedup key."
       docket_id: "Parent docket this document belongs to. Foreign key to `dockets.docket_id`."
-      agency_code: "Posting agency's short code."
+      agency_code: "Posting agency's short code. `lookup_agency` resolves it through RefSpec's REF-038 projection: measured 2026-10-30, 307 of 316 codes on 2,003,671 of 2,004,396 rows; the rest (`USC`, `BSC`, `TRAIN`, `PCSCOTUS`, `GAPFAC`, `ERULE`, `ARCTICGAS`, `PRES`, `EOA`) have no projection row."
       title: "Document title."
       document_type: "Coarse document category (e.g. `Rule`, `Proposed Rule`, `Notice`, `Supporting & Related Material`). For finer agency subtypes such as Notice of Proposed Rulemaking (NPRM), Extension of Comment Period, Interim Final Rule, or Withdrawal, join `document_attributes` 1:1 on `document_id` and read `document_attributes.subtype`."
       posted_date: "Date the document was posted publicly (ISO 8601 string)."
@@ -238,7 +238,7 @@ tables:
     columns:
       comment_on_document_id: "Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference. The comment re-read filled it: on receipt sha256:77a08369… (2026-10-03) it is set on 26,388,456 of 26,415,400 rows, on at least 98.97% of each of the 12 largest agencies' rows, and below 95% only at MSHA (1,892 of 1,993) and TRAIN (1 of 114). NULL means the record states none or the row was not read; `comment_reference_values_json` tells the two apart. NULL does not mean the comment names no document."
       comment_on_object_id: "Literal commentOn in the native object-ID namespace; not interchangeable with a public document key."
-      original_document_id: "Literal originalDocumentId, retained as an unresolved legacy source reference."
+      original_document_id: "Publisher `originalDocumentId` when non-blank; NULL when absent, null, or empty/whitespace (verbatim raw value preserved in `comment_reference_values_json`). Retained as an unresolved legacy source reference, not a current key."
       comment_reference_values_json: "JSON map containing only present source parent-reference fields, preserving null and empty values. {} means the source was read and fields were absent; SQL NULL means legacy or unread."
       comment_id: "Unique comment identifier. Primary key / dedup key."
       docket_id: "Source-supplied docket identifier for joining to `dockets.docket_id`. Null when the source does not identify a docket; mirror directory names and comment ID prefixes do not fill this field."
@@ -597,10 +597,13 @@ tables:
       timetable_json: "JSON array of planned and actual milestone actions with literal source dates and Federal Register citations. A date with day 00 has month precision; labels such as To Be Determined remain unchanged."
       cfr_references_json: "JSON array of CFR citations affected by the rulemaking. The join key to the CFR."
       legal_authority_json: "JSON array of legal-authority citations the agency cites for the rulemaking."
-      first_action_date: "Earliest distinct calendar date derived from the timetable, or NULL when none is derivable. Source month-only dates (MM/00/YYYY) use day 01 here; timetable_json retains their original precision."
-      next_action_date: "Second distinct calendar date derived from the timetable, or NULL when fewer than two dates are derivable. May be historical; it is not selected relative to today. Source month-only dates use day 01 here; timetable_json retains the literal dates."
+      first_action_date: "Earliest distinct calendar date derived from the timetable within years 1900–2100, or NULL when none is derivable. Source month-only dates (MM/00/YYYY) use day 01 here, and out-of-range sentinel or typo years are excluded; timetable_json retains literal source dates."
+      next_action_date: "Second distinct calendar date derived from the timetable within years 1900–2100, or NULL when fewer than two dates are derivable. May be historical; it is not selected relative to today. Source month-only dates use day 01 here, and out-of-range sentinel or typo years are excluded; timetable_json retains literal source dates."
       url: "URL of the entry's detail page on reginfo.gov."
-      related_rins_json: "JSON array of the RINs the publisher lists as related to this entry, each with its stated relation (`rin`, `rin_relation`), in source order. Values are stripped of leading and trailing whitespace while internal whitespace is preserved verbatim, and otherwise kept as written: no RIN shape is checked, so self-references, repeated pairs, malformed RINs and the cut-off relations `Related t` and `Previously report` remain. NULL when the edition states no related-RIN list."
+      related_rins_json: "JSON array of the RINs the publisher lists as related to this entry, each a (`rin`, `rin_relation`) pair in source order; a RIN listed twice keeps both positions. Values are stripped of leading and trailing whitespace while internal whitespace is preserved verbatim, and otherwise kept as written: no RIN shape is checked, so self-references, malformed values such as `d as AF61` and the cut-off relations `Related t` and `Previously report` remain. The publisher documents `Merge with` but writes `Merged with`. NULL means the row states no related-RIN list only in a generation replayed from every retained edition; a row restored from a regulations-native-v1 generation, which predates this column, is also NULL because it was never read. Incremental builds re-read such editions through the bounded backfill (60 per run, covering the full series in a single run), so that ambiguity lasts only until every held edition has been read once, except for a restored row the re-read no longer lists, which stays NULL. `agenda_related_rins` resolves each pair against held agenda rows."
+      legal_deadlines_json: "JSON array of statutory or judicial deadlines listed in the agenda entry's `LEGAL_DLINE_LIST`, each with `dline_type`, `dline_action_stage`, `dline_date`, and `dline_desc` in source order (edge-stripped, internal whitespace and literal values such as `nulldate` preserved). NULL when the edition states no legal-deadline list or predates reading it; `[]` when the list container is explicitly empty."
+      parent_rin: "Parent Regulation Identifier Number stated in `PARENT_RIN` (edge-stripped, verbatim otherwise), or NULL when absent or unread."
+      child_rins_json: "JSON array of child Regulation Identifier Numbers stated in `CHILD_RIN_LIST` in source order (edge-stripped, blank entries omitted, duplicates preserved). NULL when the edition states no child-RIN list or predates reading it; `[]` when the list container is explicitly empty."
   oira_reviews:
     label: "OIRA EO 12866 reviews"
     subject: rulemaking
@@ -1101,7 +1104,10 @@ tables:
       page a row was last read from and is NULL on a row not read since it
       was added, which is every document published before the 120-day window
       of that first run. It changes nightly on every row in the window, so
-      compare generations without it.
+      compare generations without it. The `agencies` array preserves one element
+      per publisher `<SUBAGY>`/`<AGENCY>` entry (distinct `raw_name`), so
+      canonical `name`, `id`, and `slug` can legitimately repeat across elements
+      on the same document and are not deduplicated.
     columns_from: spicy_docs
   sam_entities:
     identity_columns: [uei, entity_eft_indicator]

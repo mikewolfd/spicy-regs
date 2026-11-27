@@ -75,8 +75,8 @@ def policy(dataset: str) -> DatasetPolicy:
         IDENTITIES[dataset],
         (*RECEIPT_COLUMNS[dataset], "raw_conversion_inputs", "input_metadata", "raw_source_record"),
         policy_version=(
-            "regulations-native-v3" if dataset in {"comments", "federal_register"} else
-            "regulations-native-v2" if dataset in {"comment_periods", "lifecycle_events", "documents", "agenda_item_proceedings", "rule_targets", "proceedings", "regulatory_agenda_items", "unified_agenda", "fr_docket_links"} else "regulations-native-v1"),
+            "regulations-native-v3" if dataset in {"comments", "federal_register", "unified_agenda"} else
+            "regulations-native-v2" if dataset in {"comment_periods", "lifecycle_events", "documents", "agenda_item_proceedings", "rule_targets", "proceedings", "regulatory_agenda_items", "fr_docket_links"} else "regulations-native-v1"),
         nullable_identity_fields=NULLABLE_IDENTITIES.get(dataset, ()),
     )
 

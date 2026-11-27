@@ -376,23 +376,30 @@ def test_rollup_forwards_crpt_reread_and_retained_bundle_env_vars(tmp_path, monk
     assert calls[0]["retained_raw_archive"] == tmp_path / "raw"
 
 
-_LOCAL_CRPT_ORIGINALS = {
-    CRPT_830: (
-        Path("/Users/mikewolfd/Work/corpora/spicyregs/raw/objects/sha256/5d/5d903da3db098538f16931d4119bb239982c20ec775ddfb3e40ae906ce3742b2.gz"),
-        "HR",
-        "5517",
-    ),
-    CRPT_139: (
-        Path("/Users/mikewolfd/Work/corpora/spicyregs/raw/objects/sha256/9e/9ee28d8cc79cf20efca5c8f3b39c6bbca0501eb2ec2e96536a30d9dbb39d9483.gz"),
-        "S",
-        "3257",
-    ),
-    CRPT_758: (
-        Path("/Users/mikewolfd/Work/corpora/spicyregs/raw/objects/sha256/bf/bf716d85bc680819ae654c2cd3f0b4e1d2fd309dab1e0bb28f30b63722d052e6"),
-        "HR",
-        "3276",
-    ),
-}
+def _local_crpt_originals() -> dict[str, tuple[Path, str, str]]:
+    from spicy_docs.storage.raw_archive import default_raw_archive_root
+
+    raw_root = default_raw_archive_root()
+    return {
+        CRPT_830: (
+            raw_root / "objects/sha256/5d/5d903da3db098538f16931d4119bb239982c20ec775ddfb3e40ae906ce3742b2.gz",
+            "HR",
+            "5517",
+        ),
+        CRPT_139: (
+            raw_root / "objects/sha256/9e/9ee28d8cc79cf20efca5c8f3b39c6bbca0501eb2ec2e96536a30d9dbb39d9483.gz",
+            "S",
+            "3257",
+        ),
+        CRPT_758: (
+            raw_root / "objects/sha256/bf/bf716d85bc680819ae654c2cd3f0b4e1d2fd309dab1e0bb28f30b63722d052e6",
+            "HR",
+            "3276",
+        ),
+    }
+
+
+_LOCAL_CRPT_ORIGINALS = _local_crpt_originals()
 
 
 @pytest.mark.skipif(
@@ -790,8 +797,39 @@ def test_retained_bundle_refuses_tampered_wrapper_blob_or_reread_combination(tmp
         load_retained_hearing_bundle(tampered_dir / "selected-capture-pins.json", bundle_root=tampered_dir)
 
 
-_REAL_PINS = Path("/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/crs-followup-20261114/selected-capture-pins.json")
-_REAL_BUNDLE_ROOT = Path("/Users/mikewolfd/Work/corpora/spicyregs/output/committee-reports/history/govinfo-withdrawn-20261108")
+def test_retained_hearing_details_falls_back_across_joint_sibling_chamber_urls():
+    from spicy_docs.reading.paged_json import PagedJsonUnavailableError
+    from spicy_docs.sources.congress.listing import LIST_ROUTES
+    from spicy_docs.sources.govinfo.bodies import parse_package_id
+    from spicy_docs.transport.captured import CapturedBodyResponse
+    from spicy_regs.sources.hearing_detail import hearing_detail_urls
+    from spicy_regs.transforms.build_committee_reports import _RetainedHearingDetails
+
+    identity = parse_package_id("CHRG-119jhrg61392")
+    urls = hearing_detail_urls(identity)
+    assert len(urls) == 3
+    senate_url = urls[1]
+    body = json.dumps({"hearing": {"chamber": "Senate", "congress": 119, "jacketNumber": 61392}}).encode()
+    capture = CapturedBodyResponse(
+        requested_url=senate_url,
+        resolved_url=senate_url,
+        status_code=200,
+        content_type="application/json",
+        observed_at="2026-11-08T00:00:00Z",
+        body=body,
+    )
+    reader = _RetainedHearingDetails(capture, urls)
+    with pytest.raises(PagedJsonUnavailableError):
+        list(reader.records(LIST_ROUTES["hearing-detail"], urls[0], max_pages=1))
+    pages = list(reader.records(LIST_ROUTES["hearing-detail"], senate_url, max_pages=1))
+    assert len(pages) == 1 and pages[0].capture.requested_url == senate_url
+    with pytest.raises(ValueError, match="Unselected offline hearing-detail route"):
+        list(reader.records(LIST_ROUTES["hearing-detail"], "https://api.congress.gov/v3/hearing/119/house/99999", max_pages=1))
+
+
+_LOCAL_CORPORA_ROOT = Path.home() / "Work/corpora"
+_REAL_PINS = _LOCAL_CORPORA_ROOT / "supply-2026-09-02/receipts/crs-followup-20261114/selected-capture-pins.json"
+_REAL_BUNDLE_ROOT = _LOCAL_CORPORA_ROOT / "spicyregs/output/committee-reports/history/govinfo-withdrawn-20261108"
 
 
 @pytest.mark.skipif(

@@ -22,7 +22,7 @@ on:
           - pilot-empty-original-document-id
           - fill-empty-original-document-id
       staging_key:
-        description: 'Data-bucket key of the staged reads.parquet (required for prepare/pilot/fill; optional journal prefix for empty-original-document-id and undo)'
+        description: 'Data-bucket key of the staged reads.parquet (required for prepare/pilot/fill; leave blank for empty-original-document-id to use its default journal prefix, or pass the original reads.parquet staging_key when undoing a fill)'
         required: false
         default: ''
         type: string
@@ -140,7 +140,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -n "$STAGING_KEY" ]; then
-            JOURNAL_PREFIX="$(dirname "$STAGING_KEY")/journals"
+            JOURNAL_PREFIX="$(dirname -- "$STAGING_KEY")/journals"
           elif [ "$OPERATION" = "prepare-empty-original-document-id" ] || [ "$OPERATION" = "pilot-empty-original-document-id" ] || [ "$OPERATION" = "fill-empty-original-document-id" ] || [ "$OPERATION" = "undo" ]; then
             JOURNAL_PREFIX="staging/comment-empty-original-document-id/journals"
           else
@@ -216,7 +216,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -n "$STAGING_KEY" ]; then
-            JOURNAL_PREFIX="$(dirname "$STAGING_KEY")/journals"
+            JOURNAL_PREFIX="$(dirname -- "$STAGING_KEY")/journals"
           elif [ "$OPERATION" = "prepare-empty-original-document-id" ] || [ "$OPERATION" = "pilot-empty-original-document-id" ] || [ "$OPERATION" = "fill-empty-original-document-id" ] || [ "$OPERATION" = "undo" ]; then
             JOURNAL_PREFIX="staging/comment-empty-original-document-id/journals"
           else

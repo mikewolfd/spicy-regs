@@ -180,7 +180,12 @@ _LITERAL_IDS = "The ids are copied as each summary file states them and are neve
 
 
 def _unlisted_rins(x_pattern: int, well_formed: int, placeholder: int, detail: str = "") -> str:
-    """A RIN join's scope reason: the three kinds of RIN no Unified Agenda edition lists (receipt rin_orphans.json)."""
+    """A RIN join's scope reason: the three kinds of RIN no Unified Agenda edition lists (receipt rin_orphans.json).
+
+    Historical 2026-09-27 baseline note: ``dockets.rin`` now normalizes placeholder ``0000-AA00`` to NULL (ss-eyhu),
+    but the 2026-09-27 rulemaking snapshot recorded here still carried it; re-baselining waits for post-repair
+    ``materialize-rulemaking`` publication so ``changed-joins`` stays pinned to live snapshots.
+    """
     return (f"unified_agenda holds every readable edition, Fall 1995 to the newest (202510). Of the RINs no edition "
             f"lists, {x_pattern:,} are X-pattern codes (NOAA's 0648-X in-season series and other agencies', never on "
             f"the agenda; decision 61), {well_formed:,} are well formed but unlisted{detail}, and {placeholder} is the "

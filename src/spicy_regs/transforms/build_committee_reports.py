@@ -933,11 +933,23 @@ def load_retained_hearing_bundle(
 class _RetainedHearingDetails:
     """Offline Congress.gov hearing-detail reader backed strictly by one verified retained capture."""
 
-    def __init__(self, capture: CapturedBodyResponse):
+    def __init__(self, capture: CapturedBodyResponse, candidate_urls: Collection[str] = ()):
         self._capture = capture
+        self._candidate_urls = frozenset(candidate_urls)
 
     def records(self, route: Any, url: str, *, max_pages: int = 1) -> Iterator[Any]:
         if url != self._capture.requested_url:
+            if url in self._candidate_urls:
+                raise PagedJsonUnavailableError(
+                    CapturedBodyResponse(
+                        requested_url=url,
+                        resolved_url=url,
+                        status_code=404,
+                        content_type="application/json",
+                        observed_at=self._capture.observed_at,
+                        body=b"",
+                    )
+                )
             raise ValueError(f"Unselected offline hearing-detail route: {url}")
         budget = replace(DISCOVERY_BUDGET, min_request_interval_seconds=0.0)
         with CongressListingReader(
@@ -1141,7 +1153,9 @@ def build_committee_reports(
                     "body_completeness": status,
                     "text_derivation": reading.derivation,
                 }
-                event_id, outcome, detail = _hearing_detail(_RetainedHearingDetails(rev.detail), body, evidence)
+                event_id, outcome, detail = _hearing_detail(
+                    _RetainedHearingDetails(rev.detail, hearing_detail_urls(body.identity)), body, evidence
+                )
                 meetings[outcome] += 1
                 if outcome not in {"meeting", "no_meeting"}:
                     raise RuntimeError(

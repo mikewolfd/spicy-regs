@@ -151,10 +151,20 @@ def test_docket_gaps_downloads_dockets_and_documents_via_managed_generations(tmp
 
 
 def test_a_served_docket_becomes_a_row_through_the_etl_extraction():
-    rows = list(docket_gaps.ExtractRecords(docket_gaps.DOCKETS).apply([SERVED]))
-    assert rows == [{"docket_id": "BIS-2023-0005", "agency_code": "BIS", "title": "Additions to the Entity List",
-                     "docket_type": "Rulemaking", "modify_date": "2023-03-29T14:51:26Z", "abstract": None,
-                     "rin": "Not Assigned"}]
+    placeholder = {"data": {**SERVED["data"], "id": "CFPB-2022-0070", "attributes": {**ATTRIBUTES, "rin": "0000-AA00"}}}
+    real_rin = {"data": {**SERVED["data"], "id": "EPA-2026-0001", "attributes": {**ATTRIBUTES, "rin": "2060-AV12"}}}
+    rows = list(docket_gaps.ExtractRecords(docket_gaps.DOCKETS).apply([SERVED, placeholder, real_rin]))
+    assert rows == [
+        {"docket_id": "BIS-2023-0005", "agency_code": "BIS", "title": "Additions to the Entity List",
+         "docket_type": "Rulemaking", "modify_date": "2023-03-29T14:51:26Z", "abstract": None,
+         "rin": None},
+        {"docket_id": "CFPB-2022-0070", "agency_code": "BIS", "title": "Additions to the Entity List",
+         "docket_type": "Rulemaking", "modify_date": "2023-03-29T14:51:26Z", "abstract": None,
+         "rin": None},
+        {"docket_id": "EPA-2026-0001", "agency_code": "BIS", "title": "Additions to the Entity List",
+         "docket_type": "Rulemaking", "modify_date": "2023-03-29T14:51:26Z", "abstract": None,
+         "rin": "2060-AV12"},
+    ]
 
 
 def test_a_served_docket_is_merged_over_the_selected_dockets_and_the_outcomes_uploaded(working, monkeypatch):
