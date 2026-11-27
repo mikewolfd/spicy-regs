@@ -126,7 +126,7 @@ All three downloaded weekly V2 bundles (`91,874` main rows, `8,891` othername ro
 A 15-NPI live canary cohort spanning all observed V2 transitions (active Type 1/Type 2, `w1->w2` deactivations, `w1->w2` combined-date reactivations, sidecar additions/updates/removals, and deactivated-NPI sidecar emissions) was built from the live downloaded `110926_111526` and `111626_112226` V2 ZIP archives through `spicy_regs.pipelines.nppes_providers.build` and verified through `local_publication._candidate`, `explorer_metadata.build_bundle`, and real MCP `describe_table` / `query_sql`:
 
 - **Logical ID:** `urn:spicy:artifact:spicy-regs-rollup-generation:5cf6c147d62556ca8fe178d6f9a2ea764531897e1a17b3f1a886d89f3f15fba7`
-- **Candidate Artifact Digest:** `sha256:2ef89e9a02d639faa858e40a4b9fb194083524a13a1b98d0f42b528a7abcc468`
+- **Candidate Artifact Digest:** `sha256:e92e57c29b5cb600063db8d07b71665e3e6db0c43262809eb9e4c9661755ae23`
 - **Member `nppes_provider_observations.parquet`:** `92` rows (`26` main across 15 NPIs, `41` practice_location, `13` othername, `12` endpoint), `16,373` bytes, `sha256:4a6f92d13e0ffc955deeb3a01ba3c46cc8b657edde1340f12259b828028bdf4d`
 - **Explorer Metadata:** `metadataStatus = "documented"`, `sourceStatus = "documented"`, `sources[0].id = "cms-nppes"`, `recordIdentity.columns = ["source_sha256", "source_member", "record_number"]`
 - **MCP `describe_table("nppes_provider_observations")`:** 17 columns matching declared Arrow `OBSERVATION_SCHEMA` (`schema_matches_declared = true`).

@@ -13,13 +13,14 @@ monthly baseline and three contiguous weekly V2 releases):
 - Reactivated main rows retain their historical ``NPI Deactivation Date`` alongside
   ``NPI Reactivation Date`` (with ``reactivation_date >= deactivation_date``) and
   restore ``Entity Type Code`` (``1`` or ``2``) plus active descriptive fields.
-- Weekly sidecar files (``othername``, ``practice_location``, ``endpoint``) emit
-  only NPIs present in that week's ``npidata`` main CSV and carry the NPI's full
-  current set for that sidecar kind (so omission for an NPI present in the week's
-  main CSV represents removal, whereas absence of an NPI from the week's main CSV
-  leaves its prior sidecars untouched). Deactivated NPIs continue to appear in
-  CMS sidecar exports, so sidecar consumers must check the current main lifecycle
-  state rather than treating sidecar presence as active provider status.
+- Sidecar files (``othername``, ``practice_location``, ``endpoint``) emit only
+  NPIs present in that release's ``npidata`` main CSV (100% in-main invariant)
+  and carry each touched NPI's full current set for that sidecar kind (so
+  omission for an NPI present in a week's main CSV represents removal, whereas
+  absence of an NPI from a week's main CSV leaves its prior sidecars untouched).
+  Deactivated NPIs continue to appear in CMS sidecar exports, so sidecar
+  consumers must check the current main lifecycle state rather than treating
+  sidecar presence as active provider status.
 """
 
 from __future__ import annotations
@@ -27,8 +28,11 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import os
 import re
+import stat
 import zipfile
+import zlib
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -147,14 +151,30 @@ class _PinnedStream:
         self.digest = hashlib.sha256()
 
     def readline(self, size: int) -> bytes:
+        from spicy_docs.sources.nppes import NppesSourceError
+
         raw = self.stream.readline(min(size, self.byte_size - self.size + 1))
         if not isinstance(raw, bytes):
-            raise ValueError("NPPES needs a binary stream")
+            raise NppesSourceError("NPPES needs a binary stream")
         self.size += len(raw)
         if self.size > self.byte_size:
-            raise ValueError("NPPES input exceeds its pinned byte size")
+            raise NppesSourceError("NPPES input exceeds its pinned byte size")
         self.digest.update(raw)
         return raw
+
+
+def _validate_zip_member_name(member_name: str) -> None:
+    from spicy_docs.sources.nppes import NppesSourceError
+
+    if (
+        not isinstance(member_name, str)
+        or not member_name
+        or "\x00" in member_name
+        or "\\" in member_name
+        or member_name.startswith("/")
+        or any(part in {"", ".", ".."} for part in member_name.split("/"))
+    ):
+        raise NppesSourceError(f"NPPES ZIP member name is unsafe or invalid: {member_name!r}")
 
 
 def read_v2_csv_cohort(
@@ -179,8 +199,9 @@ def read_v2_csv_cohort(
     and reactivation dates where ``reactivation_date >= deactivation_date``)
     while reusing SpicyDocs' positional CSV reader, NPI literal checks, and
     ``NppesCsv``/``NppesRow`` data types. Refuses malformed headers, wrong row
-    widths, duplicate main NPIs, out-of-range bytes/rows, and digest mismatches
-    without returning any partial result.
+    widths, invalid NPIs, duplicate main NPIs, out-of-range bytes/rows, and
+    digest mismatches by raising :class:`NppesSourceError` without returning
+    any partial result.
     """
     from spicy_docs.sources.fec.delimited import delimited_rows
     from spicy_docs.sources.nppes import NppesCsv, NppesRow, NppesSourceError, literal_npi
@@ -199,22 +220,27 @@ def read_v2_csv_cohort(
     if not cohort or len(set(cohort)) != len(cohort):
         raise NppesSourceError("Declare a nonempty NPPES cohort without duplicates")
     for npi in cohort:
-        literal_npi(npi, validate_npi)
+        try:
+            literal_npi(npi, validate_npi)
+        except NppesSourceError:
+            raise
+        except ValueError as error:
+            raise NppesSourceError(str(error)) from error
 
     selected = set(cohort)
     seen: set[str] = set()
     rows: list[NppesRow] = []
     scanned = 0
     pinned = _PinnedStream(stream, expected_bytes)
-    records = delimited_rows(
-        pinned,
-        sha256=expected_sha256,
-        encoding="utf-8",
-        delimiter=",",
-        quoting="csv",
-        max_record_bytes=max_record_bytes,
-    )
     try:
+        records = delimited_rows(
+            pinned,
+            sha256=expected_sha256,
+            encoding="utf-8",
+            delimiter=",",
+            quoting="csv",
+            max_record_bytes=max_record_bytes,
+        )
         header = next(records, None)
         if header is None or tuple(header["fields"]) != columns:
             raise NppesSourceError("NPPES CSV header differs from reviewed columns")
@@ -233,16 +259,17 @@ def read_v2_csv_cohort(
                 if npi in seen:
                     raise NppesSourceError("NPPES main CSV repeats a cohort NPI")
                 seen.add(npi)
-                try:
-                    classify_v2_main_state(dict(zip(columns, values, strict=True)))
-                except ValueError as error:
-                    raise NppesSourceError(str(error)) from error
+                classify_v2_main_state(dict(zip(columns, values, strict=True)))
             if len(rows) == max_selected_rows:
                 raise NppesSourceError("NPPES cohort exceeds max_selected_rows")
             source = row["source"]
             rows.append(NppesRow(npi, record_number, source["byte_offset"], source["byte_length"], tuple(values)))
+    except NppesSourceError:
+        raise
     except (csv.Error, UnicodeDecodeError) as error:
         raise NppesSourceError("NPPES CSV has malformed quotes or UTF-8") from error
+    except ValueError as error:
+        raise NppesSourceError(str(error)) from error
     if pinned.size != expected_bytes or "sha256:" + pinned.digest.hexdigest() != expected_sha256:
         raise NppesSourceError("NPPES CSV differs from its byte/digest pin")
     return NppesCsv(
@@ -250,24 +277,41 @@ def read_v2_csv_cohort(
     )
 
 
-def verify_zip_pin(zip_path: Path, *, expected_sha256: str, expected_bytes: int) -> None:
-    """Refuse a changed or truncated CMS ZIP archive before reading any member."""
+def _verify_zip_stream(fh: Any, *, expected_sha256: str, expected_bytes: int) -> None:
     from spicy_docs.sources.nppes import NppesSourceError
 
     if type(expected_bytes) is not int or expected_bytes < 1:
         raise NppesSourceError("NPPES ZIP expected_bytes must be a positive integer")
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", expected_sha256):
         raise NppesSourceError("NPPES ZIP requires an exact SHA-256 pin")
+    st = os.fstat(fh.fileno())
+    if not stat.S_ISREG(st.st_mode):
+        raise NppesSourceError("NPPES ZIP archive must be a regular file")
     digest = hashlib.sha256()
     total = 0
-    with Path(zip_path).open("rb") as fh:
-        while chunk := fh.read(1024 * 1024):
-            total += len(chunk)
-            if total > expected_bytes:
-                raise NppesSourceError("NPPES ZIP archive exceeds its pinned byte size")
-            digest.update(chunk)
+    while chunk := fh.read(1024 * 1024):
+        total += len(chunk)
+        if total > expected_bytes:
+            raise NppesSourceError("NPPES ZIP archive exceeds its pinned byte size")
+        digest.update(chunk)
     if total != expected_bytes or "sha256:" + digest.hexdigest() != expected_sha256:
         raise NppesSourceError("NPPES ZIP archive differs from its byte/digest pin")
+
+
+def verify_zip_pin(zip_path: Path, *, expected_sha256: str, expected_bytes: int) -> None:
+    """Refuse a symlink, non-regular, changed, or truncated CMS ZIP archive."""
+    from spicy_docs.sources.nppes import NppesSourceError
+
+    path = Path(zip_path)
+    if path.is_symlink():
+        raise NppesSourceError("NPPES ZIP archive must not be a symlink")
+    try:
+        with path.open("rb") as fh:
+            _verify_zip_stream(fh, expected_sha256=expected_sha256, expected_bytes=expected_bytes)
+    except NppesSourceError:
+        raise
+    except OSError as error:
+        raise NppesSourceError(f"NPPES ZIP archive could not be read: {error}") from error
 
 
 def read_v2_zip_member(
@@ -288,32 +332,56 @@ def read_v2_zip_member(
     max_selected_rows: int,
     max_record_bytes: int = 1024 * 1024,
 ) -> NppesCsv:
-    """Verify a pinned CMS V2 ZIP archive and read one exact CSV member."""
+    """Verify a pinned CMS V2 ZIP archive on one open handle and read one exact CSV member.
+
+    Eliminates TOCTOU reopens by hashing and reading ``zipfile.ZipFile`` from
+    the same open file descriptor, rejecting symlinks, unsafe member paths,
+    duplicate Central Directory entries, directory members, and declared-size
+    mismatches via :class:`NppesSourceError`.
+    """
     from spicy_docs.sources.nppes import NppesSourceError
 
-    verify_zip_pin(zip_path, expected_sha256=archive_sha256, expected_bytes=archive_bytes)
+    _validate_zip_member_name(member_name)
+    if type(member_bytes) is not int or member_bytes < 1:
+        raise NppesSourceError("NPPES member_bytes must be a positive integer")
+    path = Path(zip_path)
+    if path.is_symlink():
+        raise NppesSourceError("NPPES ZIP archive must not be a symlink")
     try:
-        with zipfile.ZipFile(zip_path) as archive:
-            if member_name not in archive.namelist():
-                raise NppesSourceError(f"NPPES ZIP archive is missing member {member_name!r}")
-            with archive.open(member_name, "r") as stream:
-                return read_v2_csv_cohort(
-                    stream,
-                    kind=kind,
-                    scope=scope,
-                    source_url=source_url,
-                    member_name=member_name,
-                    expected_sha256=member_sha256,
-                    expected_bytes=member_bytes,
-                    columns=columns,
-                    cohort=cohort,
-                    validate_npi=validate_npi,
-                    max_scanned_rows=max_scanned_rows,
-                    max_selected_rows=max_selected_rows,
-                    max_record_bytes=max_record_bytes,
-                )
-    except zipfile.BadZipFile as error:
-        raise NppesSourceError("NPPES archive is not a valid ZIP file") from error
+        with path.open("rb") as fh:
+            _verify_zip_stream(fh, expected_sha256=archive_sha256, expected_bytes=archive_bytes)
+            fh.seek(0)
+            with zipfile.ZipFile(fh, "r") as archive:
+                matches = [info for info in archive.infolist() if info.filename == member_name]
+                if not matches:
+                    raise NppesSourceError(f"NPPES ZIP archive is missing member {member_name!r}")
+                if len(matches) > 1:
+                    raise NppesSourceError(f"NPPES ZIP archive contains duplicate member {member_name!r}")
+                info = matches[0]
+                if info.is_dir():
+                    raise NppesSourceError(f"NPPES ZIP member {member_name!r} is a directory")
+                if info.file_size != member_bytes:
+                    raise NppesSourceError(f"NPPES ZIP member {member_name!r} declared size differs from pin")
+                with archive.open(info, "r") as stream:
+                    return read_v2_csv_cohort(
+                        stream,
+                        kind=kind,
+                        scope=scope,
+                        source_url=source_url,
+                        member_name=member_name,
+                        expected_sha256=member_sha256,
+                        expected_bytes=member_bytes,
+                        columns=columns,
+                        cohort=cohort,
+                        validate_npi=validate_npi,
+                        max_scanned_rows=max_scanned_rows,
+                        max_selected_rows=max_selected_rows,
+                        max_record_bytes=max_record_bytes,
+                    )
+    except NppesSourceError:
+        raise
+    except (zipfile.BadZipFile, zlib.error, RuntimeError, NotImplementedError, EOFError, OSError) as error:
+        raise NppesSourceError(f"NPPES ZIP archive failed verification or extraction: {error}") from error
 
 
 def observation_rows(csv_input: NppesCsv) -> Iterable[dict[str, Any]]:
@@ -404,15 +472,13 @@ class MainSnapshot:
     providers: tuple[tuple[str, NppesCsv, NppesRow], ...]
 
 
-def apply_main_release(previous: MainSnapshot | None, release: MainRelease, *, sidecars: tuple[Any, ...] = ()) -> MainSnapshot:
-    """Replace monthly state or apply contiguous whole-row weekly replacements.
-
-    This main-only transition refuses any sidecar inputs (use :func:`apply_v2_release`
-    for qualified V2 main + sidecar transitions). No previous snapshot is mutated,
-    including when a late validation refuses.
-    """
-    if sidecars:
-        raise ValueError("Main-only transition refuses sidecars; use apply_v2_release for qualified V2 sidecars")
+def _apply_main_release_checked(
+    previous: MainSnapshot | None,
+    release: MainRelease,
+    *,
+    expected_predecessor: str | None,
+    allow_monthly_boundary_day_overlap: bool,
+) -> MainSnapshot:
     data = release.csv_input
     if data.kind != "main" or data.scope != "member":
         raise ValueError("NPPES lifecycle needs a complete main member; excerpt is changes only")
@@ -421,9 +487,15 @@ def apply_main_release(previous: MainSnapshot | None, release: MainRelease, *, s
     if previous is not None and data.cohort != previous.release.csv_input.cohort:
         raise ValueError("NPPES lifecycle cohort changed")
     if release.kind == "weekly":
-        if previous is None or release.predecessor != previous.release.digest:
+        if previous is None or release.predecessor != expected_predecessor:
             raise ValueError("NPPES weekly update has a missing or different predecessor")
-        if release.start != previous.release.end + timedelta(days=1):
+        exact_next_day = previous.release.end + timedelta(days=1)
+        boundary_overlap_ok = (
+            allow_monthly_boundary_day_overlap
+            and previous.release.kind == "monthly"
+            and release.start == previous.release.end
+        )
+        if release.start != exact_next_day and not boundary_overlap_ok:
             raise ValueError("NPPES weekly sequence has a gap or overlap")
         if data.columns != previous.release.csv_input.columns:
             raise ValueError("NPPES main layout changed across releases")
@@ -443,6 +515,32 @@ def apply_main_release(previous: MainSnapshot | None, release: MainRelease, *, s
     )
 
 
+def apply_main_release(
+    previous: MainSnapshot | None,
+    release: MainRelease,
+    *,
+    sidecars: tuple[Any, ...] = (),
+    allow_monthly_boundary_day_overlap: bool = False,
+) -> MainSnapshot:
+    """Replace monthly state or apply contiguous whole-row weekly replacements.
+
+    This main-only transition refuses any sidecar inputs (use :func:`apply_v2_release`
+    for qualified V2 main + sidecar transitions). When ``allow_monthly_boundary_day_overlap``
+    is ``True``, permits ``release.start == previous.release.end`` solely on a
+    ``monthly -> weekly`` transition (accounting for CMS's monthly member filename
+    end date overlapping the opening day of the first weekly archive). Weekly-to-weekly
+    overlaps always refuse. No previous snapshot is mutated, including on refusal.
+    """
+    if sidecars:
+        raise ValueError("Main-only transition refuses sidecars; use apply_v2_release for qualified V2 sidecars")
+    return _apply_main_release_checked(
+        previous,
+        release,
+        expected_predecessor=previous.release.digest if previous is not None else None,
+        allow_monthly_boundary_day_overlap=allow_monthly_boundary_day_overlap,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class V2Snapshot:
     """Immutable NPPES V2 directory snapshot covering main records and qualified sidecars."""
@@ -450,6 +548,20 @@ class V2Snapshot:
     main: MainSnapshot
     # Mapping of sidecar kind -> tuple of (npi, supplying NppesCsv, NppesRow) in cohort/source order.
     sidecars: tuple[tuple[str, tuple[tuple[str, NppesCsv, NppesRow], ...]], ...]
+    # Sorted per-kind pins of the most recently applied sidecar CSVs: (kind, sha256, member_name, columns).
+    sidecar_pins: tuple[tuple[str, str, str, tuple[str, ...]], ...] = ()
+
+    @property
+    def digest(self) -> str:
+        """Composite SHA-256 digest committing to both main release and tracked sidecar pins."""
+        value = [
+            self.main.release.digest,
+            [
+                [kind, sha256, member_name, list(columns)]
+                for kind, sha256, member_name, columns in self.sidecar_pins
+            ],
+        ]
+        return "sha256:" + hashlib.sha256(json.dumps(value, separators=(",", ":")).encode()).hexdigest()
 
 
 def apply_v2_release(
@@ -457,6 +569,8 @@ def apply_v2_release(
     release: MainRelease,
     *,
     sidecars: tuple[NppesCsv, ...] = (),
+    allow_monthly_boundary_day_overlap: bool = False,
+    predecessor_digest: str | None = None,
 ) -> V2Snapshot:
     """Apply a qualified NPPES V2 monthly or weekly main + sidecar release atomically.
 
@@ -465,19 +579,55 @@ def apply_v2_release(
     - Every sidecar input must be a complete ``member`` ``NppesCsv`` of a distinct
       kind in ``{"othername", "practice_location", "endpoint"}`` matching the
       main release's cohort.
-    - On a weekly release, every sidecar row's NPI must appear in that week's
-      ``main`` CSV (100% ``in_week_main`` invariant); orphan weekly sidecar rows
+    - Every sidecar row's NPI must appear in that release's ``main`` CSV on both
+      monthly and weekly releases (100% in-main invariant); orphan sidecar rows
       refuse atomically.
+    - On a weekly update, every sidecar kind tracked in ``previous`` must be
+      supplied with an unchanged column layout; omitting a tracked sidecar kind
+      or drifting its column layout refuses atomically.
+    - On a weekly update when ``previous`` tracks sidecars, the update must
+      authenticate the composite ``previous.digest`` (via ``release.predecessor ==
+      previous.digest``, or explicit ``predecessor_digest == previous.digest``
+      beside ``release.predecessor == previous.main.release.digest``).
     - For NPIs present in a weekly ``main`` CSV, each supplied sidecar kind
       replaces that NPI's prior sidecar rows in full (so zero rows for that NPI
       in the week's sidecar file removes its prior rows for that kind).
     - For NPIs absent from a weekly ``main`` CSV, prior sidecar rows carry
       forward untouched (absence from a weekly file is never deletion).
-    - On a monthly replacement, all sidecar sets reset to the monthly release.
+    - On a monthly replacement, all sidecar sets and tracked sidecar pins reset
+      to the monthly release.
     """
     from spicy_docs.sources.nppes import NppesCsv
 
-    next_main = apply_main_release(previous.main if previous is not None else None, release)
+    expected_main_predecessor: str | None = None
+    if release.kind == "weekly":
+        if previous is None:
+            raise ValueError("NPPES weekly update has a missing predecessor")
+        if predecessor_digest is not None and predecessor_digest != previous.digest:
+            raise ValueError("NPPES V2 weekly update predecessor_digest differs from prior snapshot")
+        if previous.sidecar_pins:
+            if release.predecessor == previous.digest:
+                expected_main_predecessor = previous.digest
+            elif release.predecessor == previous.main.release.digest and predecessor_digest == previous.digest:
+                expected_main_predecessor = previous.main.release.digest
+            else:
+                raise ValueError(
+                    "NPPES V2 weekly update must authenticate previous.digest when predecessor tracks sidecars"
+                )
+        else:
+            expected_main_predecessor = (
+                previous.digest if release.predecessor == previous.digest else previous.main.release.digest
+            )
+    elif predecessor_digest is not None:
+        raise ValueError("NPPES monthly replacement must not claim incremental predecessor_digest")
+
+    next_main = _apply_main_release_checked(
+        previous.main if previous is not None else None,
+        release,
+        expected_predecessor=expected_main_predecessor,
+        allow_monthly_boundary_day_overlap=allow_monthly_boundary_day_overlap,
+    )
+
     seen_kinds: set[str] = set()
     by_kind_input: dict[str, NppesCsv] = {}
     for sc in sidecars:
@@ -492,49 +642,63 @@ def apply_v2_release(
         seen_kinds.add(sc.kind)
         by_kind_input[sc.kind] = sc
 
-    touched_npis = {row.npi for row in release.csv_input.rows}
     prior_map: dict[str, dict[str, list[tuple[NppesCsv, NppesRow]]]] = {}
+    prior_columns: dict[str, tuple[str, ...]] = {}
     if release.kind == "weekly" and previous is not None:
+        for kind, _sha, _member, cols in previous.sidecar_pins:
+            prior_columns[kind] = cols
         for kind, entries in previous.sidecars:
             per_npi: dict[str, list[tuple[NppesCsv, NppesRow]]] = {}
             for npi, src, row in entries:
                 per_npi.setdefault(npi, []).append((src, row))
+                prior_columns.setdefault(kind, src.columns)
             prior_map[kind] = per_npi
 
-    all_kinds = sorted(set(prior_map) | set(by_kind_input))
+        tracked_kinds = set(prior_columns) | set(prior_map)
+        missing_kinds = sorted(tracked_kinds - set(by_kind_input))
+        if missing_kinds:
+            raise ValueError(
+                f"NPPES weekly update omits previously tracked sidecar kind(s): {', '.join(missing_kinds)}"
+            )
+        for kind, prev_cols in prior_columns.items():
+            if by_kind_input[kind].columns != prev_cols:
+                raise ValueError(f"NPPES {kind} sidecar layout changed across releases")
+
+    touched_npis = {row.npi for row in release.csv_input.rows}
+    all_kinds = sorted(by_kind_input)
     next_sidecars: list[tuple[str, tuple[tuple[str, NppesCsv, NppesRow], ...]]] = []
+    next_pins: list[tuple[str, str, str, tuple[str, ...]]] = []
     for kind in all_kinds:
-        if kind in by_kind_input:
-            sc_csv = by_kind_input[kind]
-            if release.kind == "weekly":
-                for row in sc_csv.rows:
-                    if row.npi not in touched_npis:
-                        raise ValueError(
-                            f"NPPES weekly {kind} sidecar references NPI {row.npi} absent from week's main CSV"
-                        )
-            per_npi = {
-                npi: list(items)
-                for npi, items in prior_map.get(kind, {}).items()
-                if release.kind == "weekly" and npi not in touched_npis
-            }
-            for row in sc_csv.rows:
-                per_npi.setdefault(row.npi, []).append((sc_csv, row))
-        else:
-            per_npi = prior_map.get(kind, {})
+        sc_csv = by_kind_input[kind]
+        for row in sc_csv.rows:
+            if row.npi not in touched_npis:
+                raise ValueError(
+                    f"NPPES {release.kind} {kind} sidecar references NPI {row.npi} absent from release's main CSV"
+                )
+        per_npi = {
+            npi: list(items)
+            for npi, items in prior_map.get(kind, {}).items()
+            if release.kind == "weekly" and npi not in touched_npis
+        }
+        for row in sc_csv.rows:
+            per_npi.setdefault(row.npi, []).append((sc_csv, row))
 
         ordered: list[tuple[str, NppesCsv, NppesRow]] = []
         for npi in release.csv_input.cohort:
             for src, row in per_npi.get(npi, ()):
                 ordered.append((npi, src, row))
         next_sidecars.append((kind, tuple(ordered)))
+        next_pins.append((kind, sc_csv.sha256, sc_csv.member_name, sc_csv.columns))
 
-    return V2Snapshot(next_main, tuple(next_sidecars))
+    return V2Snapshot(next_main, tuple(next_sidecars), tuple(next_pins))
 
 
 def snapshot_rows(snapshot: MainSnapshot | V2Snapshot) -> Iterable[dict[str, Any]]:
     """Yield current main observations with each row's actual supplying input."""
+    is_v2_with_sidecars = isinstance(snapshot, V2Snapshot) and bool(snapshot.sidecar_pins)
     main_snapshot = snapshot.main if isinstance(snapshot, V2Snapshot) else snapshot
-    release_digest = main_snapshot.release.digest
+    release_digest = snapshot.digest if is_v2_with_sidecars else main_snapshot.release.digest
+    product = "v2-main-and-sidecars" if is_v2_with_sidecars else "main-records-only"
     for _npi, data, row in main_snapshot.providers:
         fields = dict(zip(data.columns, row.values, strict=True))
         yield {
@@ -545,7 +709,7 @@ def snapshot_rows(snapshot: MainSnapshot | V2Snapshot) -> Iterable[dict[str, Any
             "source_member": data.member_name,
             "record_number": row.record_number,
             "main_release_digest": release_digest,
-            "product": "main-records-only",
+            "product": product,
         }
 
 
@@ -560,11 +724,13 @@ def v2_snapshot_sidecar_rows(snapshot: V2Snapshot) -> Iterable[dict[str, Any]]:
     for npi, data, row in snapshot.main.providers:
         fields = dict(zip(data.columns, row.values, strict=True))
         main_states[npi] = (classify_v2_main_state(fields), fields["NPI Deactivation Date"])
-    release_digest = snapshot.main.release.digest
+    snapshot_digest = snapshot.digest
     for kind, entries in snapshot.sidecars:
         for npi, data, row in entries:
+            if npi not in main_states:
+                raise ValueError(f"NPPES V2 snapshot {kind} sidecar references NPI {npi} absent from main snapshot")
             fields = dict(zip(data.columns, row.values, strict=True))
-            state, deact_date = main_states.get(npi, ("absent_from_main", ""))
+            state, deact_date = main_states[npi]
             yield {
                 "npi": npi,
                 "kind": kind,
@@ -574,5 +740,6 @@ def v2_snapshot_sidecar_rows(snapshot: V2Snapshot) -> Iterable[dict[str, Any]]:
                 "source_sha256": data.sha256,
                 "source_member": data.member_name,
                 "record_number": row.record_number,
-                "main_release_digest": release_digest,
+                "main_release_digest": snapshot_digest,
+                "product": "v2-main-and-sidecars",
             }

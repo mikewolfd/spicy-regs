@@ -20,17 +20,29 @@ if TYPE_CHECKING:
     from spicy_docs.sources.nppes import NppesCsv
 
 
+def _asset_kind(local_path: Path, source_url: str) -> str:
+    suffix = Path(source_url.split("?", 1)[0]).suffix.lower() or local_path.suffix.lower()
+    if suffix == ".zip":
+        return "zip"
+    if suffix == ".csv":
+        return "csv"
+    return "binary"
+
+
 def build(
     csv_inputs: Iterable[NppesCsv],
     output_dir: Path,
     *,
-    raw_files: Iterable[tuple[Path, str, str]] = (),
+    raw_files: Iterable[tuple[Path, str, str]],
     release_metadata: Mapping[str, Any] | None = None,
 ):
     """Write ``nppes_provider_observations.parquet`` and package an admitted generation.
 
-    ``raw_files`` is an iterable of ``(local_path, source_url, stage)`` tuples for
-    the exact publisher ZIP archives or CSV originals retained with ``raw_source=True``.
+    ``raw_files`` is a required non-empty iterable of ``(local_path, source_url, stage)``
+    tuples for the exact publisher ZIP archives or CSV originals retained with
+    ``raw_source=True``. Every ``csv_inputs`` item's ``source_url`` must match a
+    retained ``raw_files`` entry, and retained originals are declared through
+    ``evidence.declare_used_inputs`` so input-proof resolution verifies every byte.
     Only publisher URLs, logical names, and content digests are journaled—never local
     machine paths.
     """
@@ -40,17 +52,30 @@ def build(
     inputs = tuple(csv_inputs)
     if not inputs:
         raise ValueError("NPPES generation build requires at least one pinned NppesCsv input")
+    raw_list = tuple((Path(path), source_url, stage) for path, source_url, stage in raw_files)
+    if not raw_list:
+        raise ValueError("NPPES generation build requires non-empty raw_files pinning retained originals")
+    raw_urls = {source_url for _, source_url, _ in raw_list}
+    if any(not url for url in raw_urls) or len(raw_urls) != len(raw_list):
+        raise ValueError("NPPES raw_files must provide unique non-empty publisher source URLs")
+    unretained = sorted({item.source_url for item in inputs} - raw_urls)
+    if unretained:
+        raise ValueError(
+            f"NPPES csv_inputs cite source_url(s) not retained in raw_files: {', '.join(unretained)}"
+        )
 
     evidence = CaptureEvidence(output_dir, FAMILY)
     try:
         retained_pins: list[dict[str, Any]] = []
-        for local_path, source_url, stage in raw_files:
+        used_inputs: list[dict[str, Any]] = []
+        for local_path, source_url, stage in raw_list:
             retained = evidence.retain_file(
-                Path(local_path),
+                local_path,
                 stage=stage,
                 raw_source=True,
                 source_url=source_url,
                 original_location=source_url,
+                source_id=source_url,
             )
             retained_pins.append(
                 {
@@ -60,6 +85,15 @@ def build(
                     "byte_size": retained["byte_size"],
                 }
             )
+            used_inputs.append(
+                {
+                    "location": source_url,
+                    "sha256": retained["sha256"],
+                    "bytes": retained["byte_size"],
+                    "asset_kind": _asset_kind(local_path, source_url),
+                }
+            )
+        evidence.declare_used_inputs(used_inputs, scope_id=f"{FAMILY}:inputs", complete=True)
         table = build_observations_multi(inputs, output_dir / f"{TABLE}.parquet")
         evidence.event(
             "nppes-v2-selection",
