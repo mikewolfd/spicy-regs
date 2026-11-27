@@ -268,3 +268,263 @@ def test_routed_observations_keep_their_position_while_failures_follow_normal_ro
     assert _ids(tmp_path / "s.parquet", "id") == ["0", "3"]
     assert _ids(tmp_path / "r.parquet", "receipt_id") == ["r0", "row1", "r3", "row2"]
     assert _ids(tmp_path / "r.parquet", "outcome") == ["accepted", "observed", "accepted", "refused"]
+
+
+@pytest.mark.parametrize("as_table", [False, True])
+def test_wide_text_batches_split_by_byte_bound_with_exact_parity(tmp_path, as_table):
+    """Wide text tables with fewer rows than batch_rows (like hearing_transcripts) split by max_batch_bytes
+    and produce bit-for-bit identical subjects, receipts, ordinals, and routed row decisions."""
+    body_size = 256 * 1024  # 256 KiB per row -> 32 rows = 8 MiB raw (< batch_rows=2000)
+    num_rows = 32
+    wide_schema = pa.schema([("id", pa.string()), ("body_text", pa.string())])
+    source_table = pa.table(
+        {
+            "v": [f"row-{i:03d}" for i in range(num_rows)],
+            "body_text": [f"B{i:03d}:" + ("x" * (body_size - 5)) for i in range(num_rows)],
+        }
+    )
+    source_path = tmp_path / "wide.parquet"
+    pq.write_table(source_table, source_path, row_group_size=num_rows)
+    source = source_table if as_table else source_path
+
+    strings = ", ".join(
+        f"CAST(NULL AS VARCHAR) AS {name}"
+        for name in RECEIPT_SCHEMA.names
+        if name not in {"witnesses", "receipt_id", "outcome", "attempt_id", "processing_json"}
+    )
+    query = (
+        f"SELECT v AS id, body_text, 'r' || file_row_number AS receipt_id, 'accepted' AS outcome, "
+        f"'a' || file_row_number AS attempt_id, body_text AS processing_json, {strings}, "
+        f"{WITNESS} AS witnesses, file_row_number AS _ordinal, file_row_number % 7 = 3 AS _reference "
+        f"FROM {etl_bulk.SOURCE_BATCH}"
+    )
+
+    def run(label_dir, *, max_batch_bytes):
+        label_dir.mkdir()
+        seen_ordinals: list[int] = []
+        registered_rows: list[int] = []
+
+        def attempt(table, index, row):
+            ordinal = table["_ordinal"][index].as_py()
+            assert row["v"] == f"row-{ordinal:03d}"
+            assert row["body_text"].startswith(f"B{ordinal:03d}:") and len(row["body_text"]) == body_size
+            seen_ordinals.append(ordinal)
+            outcome = "refused" if ordinal == 17 else "accepted"
+            receipt = {name: None for name in RECEIPT_SCHEMA.names} | {
+                "receipt_id": f"routed-{ordinal}",
+                "outcome": outcome,
+                "attempt_id": f"a{ordinal}",
+                "processing_json": row["body_text"],
+                "witnesses": [],
+            }
+            subj = {"id": f"routed-{ordinal}", "body_text": row["body_text"]} if outcome == "accepted" else None
+            return subj, receipt
+
+        with etl_bulk.bulk_connection() as (con, _):
+            from typing import cast
+
+            class RecordingCon:
+                def __getattr__(self, name):
+                    return getattr(con, name)
+
+                def register(self, name, obj):
+                    if name == etl_bulk.SOURCE_BATCH:
+                        registered_rows.append(obj.num_rows)
+                    return con.register(name, obj)
+
+            routed = etl_bulk.write_split(
+                cast(duckdb.DuckDBPyConnection, RecordingCon()),
+                query,
+                source=source,
+                batch_rows=2000,
+                expected_rows=num_rows,
+                subject_schema=wide_schema,
+                subject_path=label_dir / "s.parquet",
+                receipt_path=label_dir / "r.parquet",
+                row_attempt=attempt,
+                label="wide_transcripts",
+                refusals_last=True,
+                max_batch_bytes=max_batch_bytes,
+            )
+        return routed, seen_ordinals, registered_rows, pq.read_table(label_dir / "s.parquet"), pq.read_table(label_dir / "r.parquet")
+
+    routed_full, seen_full, reg_full, subj_full, rcpt_full = run(tmp_path / "unsplit", max_batch_bytes=64 * 1024 * 1024)
+    routed_split, seen_split, reg_split, subj_split, rcpt_split = run(tmp_path / "bounded", max_batch_bytes=1024 * 1024)
+
+    assert reg_full == [num_rows]
+    assert len(reg_split) >= 8 and sum(reg_split) == num_rows and max(reg_split) <= 4
+    assert routed_split == routed_full == 5
+    assert seen_split == seen_full == [3, 10, 17, 24, 31]
+    assert subj_split.equals(subj_full)
+    assert rcpt_split.equals(rcpt_full)
+
+
+@pytest.mark.parametrize("as_table", [False, True])
+def test_single_oversized_row_stays_intact_and_preserves_order_and_isolation(tmp_path, as_table):
+    """A single row exceeding max_batch_bytes runs as a 1-row batch without stalling or breaking isolation."""
+    rows = [
+        {"v": "small-0", "body_text": "a" * 100},
+        {"v": "small-1", "body_text": "b" * 100},
+        {"v": "huge-2", "body_text": "H" * (128 * 1024)},
+        {"v": "small-3", "body_text": "c" * 100},
+        {"v": "small-4", "body_text": "d" * 100},
+    ]
+    table = pa.Table.from_pylist(rows)
+    path = tmp_path / "skewed.parquet"
+    pq.write_table(table, path, row_group_size=5)
+    source = table if as_table else path
+
+    schema = pa.schema([("id", pa.string()), ("body_text", pa.string())])
+    strings = ", ".join(
+        f"CAST(NULL AS VARCHAR) AS {name}"
+        for name in RECEIPT_SCHEMA.names
+        if name not in {"witnesses", "receipt_id", "outcome", "attempt_id"}
+    )
+    query = (
+        f"SELECT v AS id, body_text, 'r' || file_row_number AS receipt_id, 'accepted' AS outcome, "
+        f"'a' || file_row_number AS attempt_id, {strings}, {WITNESS} AS witnesses, "
+        f"file_row_number AS _ordinal, file_row_number = 2 AS _reference, file_row_number = 2 AS _big "
+        f"FROM {etl_bulk.SOURCE_BATCH}"
+    )
+    seen = []
+
+    def attempt(tbl, index, row):
+        seen.append((tbl["_ordinal"][index].as_py(), row["v"], len(row["body_text"])))
+        return (
+            {"id": row["v"], "body_text": row["body_text"]},
+            {name: None for name in RECEIPT_SCHEMA.names}
+            | {"receipt_id": "routed-2", "outcome": "accepted", "attempt_id": "a2", "witnesses": []},
+        )
+
+    def isolating(tbl):
+        for index in range(len(tbl)):
+            yield tbl.slice(index, 1)
+
+    with etl_bulk.bulk_connection() as (con, _):
+        routed = etl_bulk.write_split(
+            con,
+            query,
+            source=source,
+            batch_rows=100,
+            expected_rows=5,
+            subject_schema=schema,
+            subject_path=tmp_path / "s.parquet",
+            receipt_path=tmp_path / "r.parquet",
+            row_attempt=attempt,
+            label="oversized",
+            segments=isolating,
+            isolate="_big",
+            max_batch_bytes=16 * 1024,
+        )
+    assert routed == 1 and seen == [(2, "huge-2", 128 * 1024)]
+    assert _ids(tmp_path / "s.parquet", "id") == ["small-0", "small-1", "huge-2", "small-3", "small-4"]
+    assert _ids(tmp_path / "r.parquet", "receipt_id") == ["r0", "r1", "routed-2", "r3", "r4"]
+    groups = [
+        pq.ParquetFile(tmp_path / "r.parquet").metadata.row_group(i).num_rows
+        for i in range(pq.ParquetFile(tmp_path / "r.parquet").metadata.num_row_groups)
+    ]
+    assert 1 in groups and sum(groups) == 5
+
+
+def test_wide_receipts_flush_pending_buffer_by_byte_bound(tmp_path, monkeypatch):
+    """Wide receipts flush before _GROUP rows once pending.nbytes hits RECEIPT_ROW_GROUP_BYTES."""
+    monkeypatch.setattr(etl_bulk, "RECEIPT_ROW_GROUP_BYTES", 32 * 1024)
+    from spicy_regs import etl_receipts
+
+    monkeypatch.setattr(etl_receipts, "RECEIPT_ROW_GROUP_BYTES", 32 * 1024)
+    table = pa.table({"v": [f"k{i}" for i in range(20)], "body": ["z" * 8_000 for _ in range(20)]})
+    strings = ", ".join(
+        f"CAST(NULL AS VARCHAR) AS {name}"
+        for name in RECEIPT_SCHEMA.names
+        if name not in {"witnesses", "receipt_id", "outcome", "attempt_id", "processing_json"}
+    )
+    query = (
+        f"SELECT v AS id, 'r' || file_row_number AS receipt_id, 'accepted' AS outcome, "
+        f"'a' || file_row_number AS attempt_id, body AS processing_json, {strings}, "
+        f"{WITNESS} AS witnesses, file_row_number AS _ordinal, false AS _reference "
+        f"FROM {etl_bulk.SOURCE_BATCH}"
+    )
+    with etl_bulk.bulk_connection() as (con, _):
+        etl_bulk.write_split(
+            con,
+            query,
+            source=table,
+            batch_rows=2000,
+            expected_rows=20,
+            subject_schema=SUBJECT,
+            subject_path=tmp_path / "s.parquet",
+            receipt_path=tmp_path / "r.parquet",
+            row_attempt=lambda *_: pytest.fail("no routed rows"),
+            label="wide_receipts",
+            max_batch_bytes=20 * 1024,
+        )
+    receipt_file = pq.ParquetFile(tmp_path / "r.parquet")
+    assert receipt_file.metadata.num_rows == 20
+    assert receipt_file.metadata.num_row_groups > 1
+    assert _ids(tmp_path / "r.parquet", "receipt_id") == [f"r{i}" for i in range(20)]
+
+
+def test_congress_bulk_wide_transcripts_succeeds_within_tight_memory_limit(tmp_path):
+    """Reproduces rollup-committee-reports hearing_transcripts wide-text OOM shape under a 256 MiB DuckDB limit."""
+    from spicy_regs import congress_bulk
+    from spicy_regs.etl_receipts import DatasetPolicy
+
+    num_rows = 48
+    body_bytes = 512 * 1024  # 24 MiB raw across 48 rows (< batch_rows=2000)
+    subject_schema = pa.schema([("package_id", pa.string()), ("body_text", pa.string())])
+    source_schema = pa.schema([("package_id", pa.string()), ("body_text", pa.string()), ("raw_meta", pa.string())])
+    policy = DatasetPolicy(
+        "hearing_transcripts",
+        subject_schema,
+        ("package_id",),
+        ("raw_meta",),
+        policy_version="hearing-transcripts/test",
+    )
+    src = tmp_path / "hearing_transcripts.parquet"
+    chunk = "Transcript line 0123456789abcdef " * (body_bytes // 33 + 1)
+    pq.write_table(
+        pa.table(
+            {
+                "package_id": [f"CHRG-119hhrg{i:04d}" for i in range(num_rows)],
+                "body_text": [f"H{i:04d}:" + chunk[: body_bytes - 6] for i in range(num_rows)],
+                "raw_meta": [f"meta-{i}" for i in range(num_rows)],
+            },
+            schema=source_schema,
+        ),
+        src,
+        row_group_size=num_rows,
+    )
+    witness = {
+        "source_id": "govinfo-chrg",
+        "source_uri": None,
+        "sha256": "sha256:" + "a" * 64,
+        "locator": "row:",
+        "body_version": None,
+    }
+    subj_path = tmp_path / "subjects.parquet"
+    rcpt_path = tmp_path / "receipts.parquet"
+    with etl_bulk.bulk_limits(threads=1, memory_limit="256MB", require_bulk=True):
+        routed = congress_bulk.write_mapped_bundle(
+            src,
+            subjects_path=subj_path,
+            receipts_path=rcpt_path,
+            policy=policy,
+            generation_id="gen-1",
+            processor="test/1",
+            witness=witness,
+            mapper=lambda raw: {"package_id": raw["package_id"], "body_text": raw["body_text"]},
+            row_attempt=lambda *_: pytest.fail("should remain on bulk path"),
+            processing_field="source_fields",
+            attempt_prefix="chrg:",
+            entry_kind="row",
+        )
+    assert routed == 0
+    assert pq.ParquetFile(subj_path).metadata.num_rows == num_rows
+    assert pq.ParquetFile(rcpt_path).metadata.num_rows == num_rows
+    assert _ids(subj_path, "package_id") == [f"CHRG-119hhrg{i:04d}" for i in range(num_rows)]
+
+
+@pytest.mark.parametrize("bad", [0, -1, True])
+def test_invalid_max_batch_bytes_refuses(tmp_path, bad):
+    with pytest.raises(ValueError, match="max_batch_bytes must be a positive integer"):
+        _split(tmp_path, max_batch_bytes=bad)
