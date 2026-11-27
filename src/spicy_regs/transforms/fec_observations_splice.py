@@ -711,6 +711,89 @@ def _splice_relationships(
     return prior_total, spliced_total, False
 
 
+def _iter_untouched_batches(
+    path: Path,
+    changed: tuple[str, ...],
+    *,
+    batch_size: int = SPLICE_BATCH_ROWS,
+) -> Any:
+    """Stream non-empty Arrow record batches for rows outside ``changed`` collections in file order."""
+    schema = pq.read_schema(path)
+    has_cid_col = "collection_id" in schema.names
+    changed_set = frozenset(changed)
+    changed_array = pa.array(changed, type=pa.string()) if has_cid_col else None
+
+    with pq.ParquetFile(path) as source:
+        for batch in source.iter_batches(batch_size=batch_size, use_threads=False):
+            if batch.num_rows == 0:
+                continue
+            if has_cid_col:
+                assert changed_array is not None
+                cid_col = batch.column("collection_id")
+                mask = _pc_call("is_in", cid_col, value_set=changed_array)
+                if not bool(_pc_call("any", mask).as_py()):
+                    yield batch
+                    continue
+                kept = batch.filter(_pc_call("invert", mask))
+                if kept.num_rows:
+                    yield kept
+            else:
+                loc_col = batch.column("source_locator_json").to_pylist()
+                keep_flags = [
+                    (json.loads(loc).get("collection_id") if loc else None) not in changed_set for loc in loc_col
+                ]
+                if all(keep_flags):
+                    yield batch
+                elif any(keep_flags):
+                    yield batch.filter(pa.array(keep_flags, type=pa.bool_()))
+
+
+def _verify_ordered_untouched_parity(
+    prior_path: Path,
+    spliced_path: Path,
+    changed: tuple[str, ...],
+    *,
+    batch_size: int = SPLICE_BATCH_ROWS * 2,
+) -> int:
+    """Prove exact 1:1 ordered Arrow equality on all untouched rows in O(batch) RAM and 0 disk spill."""
+    prior_schema = pq.read_schema(prior_path)
+    spliced_schema = pq.read_schema(spliced_path)
+    if not prior_schema.equals(spliced_schema, check_metadata=False):
+        raise ValueError(
+            f"Untouched collection parity failed for {prior_path.name}: "
+            f"schema mismatch ({prior_schema.names} vs {spliced_schema.names})"
+        )
+
+    prior_iter = _iter_untouched_batches(prior_path, changed, batch_size=batch_size)
+    spliced_iter = _iter_untouched_batches(spliced_path, changed, batch_size=batch_size)
+    prior_buf: pa.RecordBatch | None = None
+    spliced_buf: pa.RecordBatch | None = None
+    matched_rows = 0
+
+    while True:
+        if prior_buf is None or prior_buf.num_rows == 0:
+            prior_buf = next(prior_iter, None)
+        if spliced_buf is None or spliced_buf.num_rows == 0:
+            spliced_buf = next(spliced_iter, None)
+        if prior_buf is None and spliced_buf is None:
+            return matched_rows
+        if prior_buf is None or spliced_buf is None:
+            raise ValueError(
+                f"Untouched collection parity failed for {prior_path.name}: "
+                f"row count mismatch after {matched_rows} matched rows "
+                f"(prior_exhausted={prior_buf is None}, spliced_exhausted={spliced_buf is None})"
+            )
+        step = min(prior_buf.num_rows, spliced_buf.num_rows)
+        if not prior_buf.slice(0, step).equals(spliced_buf.slice(0, step)):
+            raise ValueError(
+                f"Untouched collection parity failed for {prior_path.name}: "
+                f"value mismatch in untouched slice starting at row {matched_rows}"
+            )
+        matched_rows += step
+        prior_buf = prior_buf.slice(step) if step < prior_buf.num_rows else None
+        spliced_buf = spliced_buf.slice(step) if step < spliced_buf.num_rows else None
+
+
 def verify_splice_parity(
     *,
     prior_dir: Path,
@@ -721,62 +804,29 @@ def verify_splice_parity(
     temp_limit: str = DEFAULT_DUCKDB_TEMP_LIMIT,
     threads: int = 4,
 ) -> dict[str, Any]:
-    """Prove bidirectional ``EXCEPT ALL`` equality on every untouched collection across all 3 tables."""
+    """Prove exact ordered streaming Arrow equality on every untouched collection across all 3 tables."""
     changed = tuple(sorted(set(changed_collection_ids)))
     if not changed:
         raise ValueError("Parity verification requires explicit changed_collection_ids")
     in_list = _sql_in_list(changed)
-    summary: dict[str, Any] = {"changed_collections": list(changed), "tables": {}}
+    summary: dict[str, Any] = {
+        "changed_collections": list(changed),
+        "verification_mode": "streaming_ordered_arrow",
+        "tables": {},
+    }
+
+    for filename in OUTPUTS:
+        untouched_rows = _verify_ordered_untouched_parity(prior_dir / filename, spliced_dir / filename, changed)
+        summary["tables"][filename] = {
+            "prior_untouched_rows": untouched_rows,
+            "spliced_untouched_rows": untouched_rows,
+            "prior_only_rows": 0,
+            "spliced_only_rows": 0,
+        }
 
     with TemporaryDirectory(prefix="fec-splice-parity-") as temp_root:
         cfg = _duckdb_config(memory_limit, temp_limit, threads, Path(temp_root))
         with duckdb.connect(config=cfg) as con:
-            for filename in OUTPUTS:
-                prior_path = str(prior_dir / filename)
-                spliced_path = str(spliced_dir / filename)
-                cols = set(pq.read_schema(prior_path).names)
-                if "collection_id" in cols:
-                    where = f"WHERE collection_id NOT IN {in_list}"
-                else:
-                    where = (
-                        f"WHERE COALESCE(json_extract_string(source_locator_json, '$.collection_id'), '') "
-                        f"NOT IN {in_list}"
-                    )
-                [(prior_untouched,)] = con.execute(
-                    f"SELECT count(*) FROM read_parquet(?, hive_partitioning=false) {where}",
-                    [prior_path],
-                ).fetchall()
-                [(spliced_untouched,)] = con.execute(
-                    f"SELECT count(*) FROM read_parquet(?, hive_partitioning=false) {where}",
-                    [spliced_path],
-                ).fetchall()
-                [(prior_only,)] = con.execute(
-                    f"SELECT count(*) FROM ("
-                    f"SELECT * FROM read_parquet(?, hive_partitioning=false) {where} "
-                    f"EXCEPT ALL "
-                    f"SELECT * FROM read_parquet(?, hive_partitioning=false) {where})",
-                    [prior_path, spliced_path],
-                ).fetchall()
-                [(spliced_only,)] = con.execute(
-                    f"SELECT count(*) FROM ("
-                    f"SELECT * FROM read_parquet(?, hive_partitioning=false) {where} "
-                    f"EXCEPT ALL "
-                    f"SELECT * FROM read_parquet(?, hive_partitioning=false) {where})",
-                    [spliced_path, prior_path],
-                ).fetchall()
-                if prior_untouched != spliced_untouched or prior_only != 0 or spliced_only != 0:
-                    raise ValueError(
-                        f"Untouched collection parity failed for {filename}: "
-                        f"prior_untouched={prior_untouched}, spliced_untouched={spliced_untouched}, "
-                        f"prior_only={prior_only}, spliced_only={spliced_only}"
-                    )
-                summary["tables"][filename] = {
-                    "prior_untouched_rows": prior_untouched,
-                    "spliced_untouched_rows": spliced_untouched,
-                    "prior_only_rows": prior_only,
-                    "spliced_only_rows": spliced_only,
-                }
-
             [(untouched_collections,)] = con.execute(
                 f"SELECT count(DISTINCT collection_id) FROM read_parquet(?, hive_partitioning=false) "
                 f"WHERE collection_id NOT IN {in_list}",

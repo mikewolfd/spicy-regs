@@ -444,3 +444,46 @@ def test_disk_headroom_guard_safe_cleanup_and_cli_splice(tmp_path, monkeypatch):
     assert summary["prior_cleaned"] is True
     assert not fx["prior_dir"].exists()
     admit_generation_for_publication(Path(summary["generation_dir"]))
+
+
+def test_streaming_ordered_untouched_parity_cross_batch_and_fail_closed(tmp_path):
+    from spicy_regs.transforms.fec_observations_splice import _verify_ordered_untouched_parity
+
+    schema = pa.schema([("collection_id", pa.string()), ("val", pa.string())])
+    prior_path = tmp_path / "prior.parquet"
+    spliced_path = tmp_path / "spliced.parquet"
+
+    prior_rows = [
+        {"collection_id": "keep-1", "val": "a"},
+        {"collection_id": "drop-1", "val": "old"},
+        {"collection_id": "keep-2", "val": None},
+        {"collection_id": "keep-3", "val": "b"},
+        {"collection_id": "keep-4", "val": "c"},
+    ]
+    spliced_rows = [
+        {"collection_id": "keep-1", "val": "a"},
+        {"collection_id": "drop-1", "val": "new-1"},
+        {"collection_id": "drop-1", "val": "new-2"},
+        {"collection_id": "keep-2", "val": None},
+        {"collection_id": "keep-3", "val": "b"},
+        {"collection_id": "keep-4", "val": "c"},
+    ]
+    pq.write_table(pa.Table.from_pylist(prior_rows, schema=schema), prior_path)
+    pq.write_table(pa.Table.from_pylist(spliced_rows, schema=schema), spliced_path)
+
+    # Different batch boundaries align cleanly and match all 4 untouched rows.
+    assert _verify_ordered_untouched_parity(prior_path, spliced_path, ("drop-1",), batch_size=2) == 4
+
+    # Single mutated untouched cell must fail closed.
+    mutated_rows = list(spliced_rows)
+    mutated_rows[4] = {"collection_id": "keep-3", "val": "CORRUPTED"}
+    mutated_path = tmp_path / "mutated.parquet"
+    pq.write_table(pa.Table.from_pylist(mutated_rows, schema=schema), mutated_path)
+    with pytest.raises(ValueError, match="value mismatch"):
+        _verify_ordered_untouched_parity(prior_path, mutated_path, ("drop-1",), batch_size=2)
+
+    # Dropped untouched row must fail closed.
+    dropped_path = tmp_path / "dropped.parquet"
+    pq.write_table(pa.Table.from_pylist(spliced_rows[:-1], schema=schema), dropped_path)
+    with pytest.raises(ValueError, match="row count mismatch"):
+        _verify_ordered_untouched_parity(prior_path, dropped_path, ("drop-1",), batch_size=2)
