@@ -16,7 +16,7 @@ import json
 import os
 from collections import Counter
 from collections.abc import Callable, Collection, Iterator, Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from functools import cache, partial
 from importlib.metadata import version
@@ -57,8 +57,11 @@ from spicy_docs.sources.govinfo.body_acquisition import (
 from spicy_docs.reading.refusals import RefusedResponse
 from spicy_docs.reading.paged_json import PagedJsonSourceError, PagedJsonUnavailableError
 from spicy_docs.schemas.tables import text
-from spicy_docs.sources.congress.listing import LIST_ROUTES
+from spicy_docs.sources.congress.listing import LIST_ROUTES, CongressListingReader
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, collection_url
+from spicy_docs.storage.blobs import iter_verified_blob
+from spicy_docs.storage.raw_archive import CentralRawArchiveStore, default_raw_archive_root
+from spicy_docs.transport.captured import CapturedBodyResponse
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
 from spicy_regs.govinfo_revisions import latest_read, revision_instant
@@ -597,6 +600,354 @@ def _link_committee_codes(links: Path, transcripts: Path) -> int:
     return moved
 
 
+_RETAINED_METADATA_LIMIT = 8 * 1024 * 1024
+_RETAINED_MAX_FILE_BYTES = 16 * 1024 * 1024
+_RETAINED_MAX_TOTAL_BYTES = 64 * 1024 * 1024
+_RETAINED_MAX_REVISIONS = 50
+_HEX_CHARS = frozenset("0123456789abcdef")
+
+
+def _sha256_bytes(payload: bytes) -> str:
+    return "sha256:" + hashlib.sha256(payload).hexdigest()
+
+
+def _bounded_bytes(path: Path, limit: int) -> bytes:
+    """Read a resident local file within ``limit``, refusing cloud-dataless or mutating inputs."""
+    stat = path.stat()
+    if getattr(stat, "st_flags", 0) & 0x40000000:
+        raise ValueError(f"Cloud-dataless evidence is outside retained replay: {path.name}")
+    if stat.st_size > limit:
+        raise ValueError(f"Retained evidence exceeds its admitted byte bound: {path.name}")
+    payload = path.read_bytes()
+    if len(payload) != stat.st_size:
+        raise ValueError(f"Retained evidence changed while reading: {path.name}")
+    return payload
+
+
+def _captured_response(event: Mapping[str, Any], payload: bytes) -> CapturedBodyResponse:
+    """Build a verified ``CapturedBodyResponse`` from a retained capture event and its checked bytes."""
+    for field in ("requested_url", "resolved_url", "observed_at"):
+        if not isinstance(event.get(field), str) or not event[field]:
+            raise ValueError(f"Retained capture event lacks {field}")
+    status = event.get("status_code")
+    if type(status) is not int or status != 200:
+        raise ValueError("Retained capture event must record a complete HTTP 200 response")
+    return CapturedBodyResponse(
+        requested_url=event["requested_url"],
+        resolved_url=event["resolved_url"],
+        status_code=status,
+        content_type=event.get("content_type"),
+        observed_at=event["observed_at"],
+        body=payload,
+        content_encoding=str(event.get("content_encoding") or "identity"),
+        method=str(event.get("method") or "GET"),
+    )
+
+
+def _retained_http_response(capture: CapturedBodyResponse) -> httpx.Response:
+    """Replay one verified retained capture through httpx while preserving its original capture clock."""
+    return httpx.Response(
+        capture.status_code,
+        headers={"Content-Type": capture.content_type or ""},
+        stream=httpx.ByteStream(capture.body),
+        extensions={"spicy_docs_retained_observed_at": capture.observed_at},
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class RetainedHearingRevision:
+    """One verified historical hearing revision bound to preserved wrapper events and original bytes."""
+
+    package_id: str
+    last_modified: str
+    source_evidence_artifact: str
+    summary: CapturedBodyResponse
+    mods: CapturedBodyResponse
+    body: CapturedBodyResponse
+    detail: CapturedBodyResponse
+    wrapper_lines: tuple[int, ...]
+    wrapper_generation: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class RetainedHearingBundle:
+    """An audited, cryptographically verified offline cohort of withdrawn GovInfo hearing revisions."""
+
+    pins_sha256: str
+    wrapper_sha256: str
+    wrapper_bytes: int
+    revisions: tuple[RetainedHearingRevision, ...]
+    unique_originals: int
+    decoded_bytes: int
+
+    @property
+    def packages(self) -> tuple[str, ...]:
+        return tuple(sorted({revision.package_id for revision in self.revisions}))
+
+
+def load_retained_hearing_bundle(
+    pins_path: Path,
+    *,
+    bundle_root: Path | None = None,
+    raw_archive_root: Path | None = None,
+) -> RetainedHearingBundle:
+    """Load and cryptographically verify an audited retained-hearing pin selection before any merge.
+
+    Accepts either a ``selected-capture-pins.json`` file or a directory containing it. Every pinned metadata file
+    (including ``evidence-events.jsonl``), wrapper event binding, summary coordinate, and original blob SHA-256 and
+    byte size is checked up front; any mismatch refuses before writing or modifying tables. Original bytes resolve
+    first from ``<bundle_root>/originals/<sha256>`` (matching R2 ``archive/committee-reports-govinfo-withdrawn-*``)
+    and fall back to ``CentralRawArchiveStore`` when present.
+    """
+    pins_path = Path(pins_path)
+    if pins_path.is_dir():
+        pins_file = pins_path / "selected-capture-pins.json"
+        effective_root = Path(bundle_root) if bundle_root is not None else pins_path
+    else:
+        pins_file = pins_path
+        effective_root = Path(bundle_root) if bundle_root is not None else None
+    if not pins_file.is_file():
+        raise ValueError(f"Retained bundle selection file is missing: {pins_file.name}")
+
+    pins_payload = _bounded_bytes(pins_file, _RETAINED_METADATA_LIMIT)
+    pins_sha256 = _sha256_bytes(pins_payload)
+    selection = json.loads(pins_payload)
+    if not isinstance(selection, dict):
+        raise ValueError("Retained bundle selection must be a JSON object")
+
+    metadata = selection.get("retained_bundle_metadata")
+    selected = selection.get("selected")
+    if not isinstance(metadata, dict) or "evidence-events.jsonl" not in metadata:
+        raise ValueError("Retained bundle selection lacks retained_bundle_metadata['evidence-events.jsonl']")
+    if not isinstance(selected, list) or not selected:
+        raise ValueError("Retained bundle selection must name at least one revision coordinate")
+    if len(selected) > _RETAINED_MAX_REVISIONS:
+        raise ValueError(f"Retained bundle exceeds the {_RETAINED_MAX_REVISIONS}-revision bound")
+
+    wrapper_pin = metadata["evidence-events.jsonl"]
+    if (
+        not isinstance(wrapper_pin, dict)
+        or not isinstance(wrapper_pin.get("sha256"), str)
+        or type(wrapper_pin.get("bytes")) is not int
+    ):
+        raise ValueError("Retained bundle evidence-events.jsonl pin lacks sha256 or byte size")
+
+    if effective_root is not None:
+        wrapper_path = effective_root / "evidence-events.jsonl"
+        bundle_dir = effective_root
+    elif (pins_file.parent / "evidence-events.jsonl").is_file():
+        wrapper_path = pins_file.parent / "evidence-events.jsonl"
+        bundle_dir = pins_file.parent
+    elif isinstance(wrapper_pin.get("path"), str):
+        wrapper_path = Path(wrapper_pin["path"])
+        bundle_dir = wrapper_path.parent
+    else:
+        raise ValueError("Retained bundle cannot locate evidence-events.jsonl")
+
+    wrapper_payload: bytes | None = None
+    for name, meta in metadata.items():
+        if not isinstance(name, str) or Path(name).name != name or not isinstance(meta, dict):
+            raise ValueError("Retained bundle metadata entry is invalid")
+        expected_sha = meta.get("sha256")
+        expected_bytes = meta.get("bytes")
+        if not isinstance(expected_sha, str) or type(expected_bytes) is not int or expected_bytes < 0:
+            raise ValueError(f"Retained bundle metadata pin is incomplete: {name}")
+        candidate = bundle_dir / name
+        if effective_root is None and not candidate.is_file() and isinstance(meta.get("path"), str):
+            candidate = Path(meta["path"])
+        if not candidate.is_file():
+            raise ValueError(f"Retained bundle metadata file is missing: {name}")
+        payload = _bounded_bytes(candidate, _RETAINED_METADATA_LIMIT)
+        if len(payload) != expected_bytes or _sha256_bytes(payload) != expected_sha:
+            raise ValueError(f"Preserved bundle file differs from its selected SHA-256 or size: {name}")
+        if name == "evidence-events.jsonl":
+            wrapper_payload = payload
+    assert wrapper_payload is not None
+    wrappers = [json.loads(line) for line in wrapper_payload.splitlines()]
+
+    archive_store: CentralRawArchiveStore | None = None
+    archive_checked = False
+    blob_cache: dict[str, bytes] = {}
+    decoded_total = 0
+
+    def read_original(digest: Any, byte_size: Any) -> bytes:
+        nonlocal archive_store, archive_checked, decoded_total
+        if not isinstance(digest, str) or not digest.startswith("sha256:"):
+            raise ValueError("Retained original lacks a sha256 digest")
+        hex_digest = digest.removeprefix("sha256:")
+        if len(hex_digest) != 64 or not set(hex_digest) <= _HEX_CHARS:
+            raise ValueError("Retained original digest is not a 64-hex sha256")
+        if type(byte_size) is not int or not 0 <= byte_size <= _RETAINED_MAX_FILE_BYTES:
+            raise ValueError("Retained original byte size is outside its admitted bound")
+        if digest in blob_cache:
+            cached = blob_cache[digest]
+            if len(cached) != byte_size:
+                raise ValueError("Retained original byte size conflicts with earlier binding")
+            return cached
+        original_file = bundle_dir / "originals" / hex_digest
+        if original_file.is_file():
+            payload = _bounded_bytes(original_file, _RETAINED_MAX_FILE_BYTES)
+        else:
+            if not archive_checked:
+                archive_checked = True
+                candidate_root = (
+                    Path(raw_archive_root) if raw_archive_root is not None else default_raw_archive_root()
+                )
+                if candidate_root.is_dir():
+                    archive_store = CentralRawArchiveStore(candidate_root, create=False)
+            if archive_store is None:
+                raise ValueError(f"Retained original blob is missing for {digest}")
+            payload = b"".join(iter_verified_blob(archive_store, digest, byte_size))
+        if len(payload) != byte_size or _sha256_bytes(payload) != digest:
+            raise ValueError("Retained original differs from its pinned SHA-256 or byte size")
+        decoded_total += len(payload)
+        if decoded_total > _RETAINED_MAX_TOTAL_BYTES:
+            raise ValueError("Retained bundle originals exceed the admitted total byte bound")
+        blob_cache[digest] = payload
+        return payload
+
+    def require_capture_event(event: Any) -> Mapping[str, Any]:
+        if (
+            not isinstance(event, dict)
+            or event.get("event") != "capture"
+            or event.get("response_complete") is not True
+            or event.get("body_retained") is not True
+            or event.get("status_code") != 200
+        ):
+            raise ValueError("Retained event does not pin a complete retained HTTP 200 capture")
+        return event
+
+    revisions: list[RetainedHearingRevision] = []
+    seen_coords: set[tuple[str, str]] = set()
+    for row in selected:
+        if not isinstance(row, dict):
+            raise ValueError("Retained bundle coordinate entry must be an object")
+        package_id = row.get("package_id")
+        last_modified = row.get("last_modified")
+        evidence_id = row.get("source_evidence_artifact")
+        if not isinstance(package_id, str) or not isinstance(last_modified, str) or not isinstance(evidence_id, str):
+            raise ValueError("Retained bundle coordinate lacks package_id, last_modified, or source_evidence_artifact")
+        identity = parse_package_id(package_id)
+        if identity.collection != "CHRG":
+            raise ValueError(f"Retained hearing bundle supports CHRG packages only, got {package_id}")
+        revision_instant(last_modified)
+        coord = (package_id, last_modified)
+        if coord in seen_coords:
+            raise ValueError(f"Retained bundle repeats dated coordinate {package_id}@{last_modified}")
+        seen_coords.add(coord)
+
+        source_captures = row.get("original_source_captures")
+        if not isinstance(source_captures, list) or len(source_captures) != 3:
+            raise ValueError(f"Retained coordinate {package_id}@{last_modified} must bind summary, mods, and body")
+
+        captures: dict[str, CapturedBodyResponse] = {}
+        matched_lines: list[int] = []
+        wrapper_generation: str | None = None
+        for raw_event in source_captures:
+            event = require_capture_event(raw_event)
+            matches = [
+                (line_no, wrapper)
+                for line_no, wrapper in enumerate(wrappers, 1)
+                if isinstance(wrapper, dict)
+                and wrapper.get("evidence") == evidence_id
+                and isinstance(wrapper.get("event"), dict)
+                and all(event.get(key) == value for key, value in wrapper["event"].items())
+            ]
+            if len(matches) != 1:
+                raise ValueError("Selected original lacks exactly one matching genuine wrapper event")
+            line_no, wrapper = matches[0]
+            if package_id not in str(event.get("requested_url", "")):
+                raise ValueError(f"Selected original URL differs from package {package_id}")
+            payload = read_original(event.get("sha256"), event.get("byte_size"))
+            capture = _captured_response(event, payload)
+            tail = capture.requested_url.rsplit("/", 1)[-1]
+            role = tail if tail in {"summary", "mods"} else "body"
+            if role in captures:
+                raise ValueError(f"Retained coordinate {package_id}@{last_modified} duplicates {role} capture")
+            captures[role] = capture
+            matched_lines.append(line_no)
+            if wrapper_generation is None and isinstance(wrapper.get("generation"), str):
+                wrapper_generation = wrapper["generation"]
+
+        if set(captures) != {"summary", "mods", "body"}:
+            raise ValueError(f"Retained coordinate {package_id}@{last_modified} lacks summary, mods, or body")
+        summary_doc = json.loads(captures["summary"].body)
+        if summary_doc.get("packageId") != package_id or summary_doc.get("lastModified") != last_modified:
+            raise ValueError(f"Retained summary payload disagrees with selected coordinate {package_id}@{last_modified}")
+
+        ref = row.get("detail_original_event_reference")
+        if not isinstance(ref, dict):
+            raise ValueError(f"Retained coordinate {package_id}@{last_modified} lacks detail_original_event_reference")
+        source_file = ref.get("source_file")
+        if (
+            not isinstance(source_file, dict)
+            or source_file.get("sha256") != wrapper_pin["sha256"]
+            or source_file.get("bytes") != wrapper_pin["bytes"]
+        ):
+            raise ValueError("Detail wrapper source pin differs from retained evidence-events.jsonl")
+        line_no = ref.get("wrapper_line")
+        if type(line_no) is not int or not 1 <= line_no <= len(wrappers):
+            raise ValueError("Selected detail wrapper_line is outside retained evidence-events.jsonl")
+        detail_wrapper = wrappers[line_no - 1]
+        if (
+            detail_wrapper != ref.get("wrapper")
+            or not isinstance(detail_wrapper, dict)
+            or detail_wrapper.get("evidence") != evidence_id
+        ):
+            raise ValueError("Selected detail wrapper line differs from its retained event")
+        detail_event = require_capture_event(detail_wrapper.get("event"))
+        detail_url = str(detail_event.get("requested_url", ""))
+        if package_id not in detail_url and str(identity.number) not in detail_url:
+            raise ValueError(f"Selected detail URL differs from package {package_id}")
+        detail_payload = read_original(detail_event.get("sha256"), detail_event.get("byte_size"))
+        detail_capture = _captured_response(detail_event, detail_payload)
+        matched_lines.append(line_no)
+        if wrapper_generation is None and isinstance(detail_wrapper.get("generation"), str):
+            wrapper_generation = detail_wrapper["generation"]
+
+        revisions.append(
+            RetainedHearingRevision(
+                package_id=package_id,
+                last_modified=last_modified,
+                source_evidence_artifact=evidence_id,
+                summary=captures["summary"],
+                mods=captures["mods"],
+                body=captures["body"],
+                detail=detail_capture,
+                wrapper_lines=tuple(matched_lines),
+                wrapper_generation=wrapper_generation,
+            )
+        )
+
+    revisions.sort(key=lambda item: (item.package_id, revision_instant(item.last_modified), item.last_modified))
+    return RetainedHearingBundle(
+        pins_sha256=pins_sha256,
+        wrapper_sha256=wrapper_pin["sha256"],
+        wrapper_bytes=wrapper_pin["bytes"],
+        revisions=tuple(revisions),
+        unique_originals=len(blob_cache),
+        decoded_bytes=decoded_total,
+    )
+
+
+class _RetainedHearingDetails:
+    """Offline Congress.gov hearing-detail reader backed strictly by one verified retained capture."""
+
+    def __init__(self, capture: CapturedBodyResponse):
+        self._capture = capture
+
+    def records(self, route: Any, url: str, *, max_pages: int = 1) -> Iterator[Any]:
+        if url != self._capture.requested_url:
+            raise ValueError(f"Unselected offline hearing-detail route: {url}")
+        budget = replace(DISCOVERY_BUDGET, min_request_interval_seconds=0.0)
+        with CongressListingReader(
+            budget=budget,
+            api_key="offline-retained-bundle",
+            transport=httpx.MockTransport(lambda _request: _retained_http_response(self._capture)),
+        ) as reader:
+            yield from reader.records(route, url, max_pages=max_pages)
+
+
 def build_committee_reports(
     output_dir: Path,
     *,
@@ -608,21 +959,41 @@ def build_committee_reports(
     evidence: CaptureEvidence | None = None,
     reread: Collection[str] = (),
     coverage: dict | None = None,
+    retained_bundle: Path | RetainedHearingBundle | None = None,
+    retained_bundle_root: Path | None = None,
+    retained_raw_archive: Path | None = None,
 ) -> tuple[Path, ...]:
     """Build five contract tables and the acquisition checkpoint, with one owner.
 
-    ``reread`` names hearings to read again whatever their checkpoints say, and
-    nothing else: discovery is skipped, so every other row and checkpoint is
-    carried from the prior unchanged. It re-establishes the named hearings'
-    capture evidence without moving the rest of the family, and refuses
-    (see :func:`_refuse_unsafe_reread`) rather than publish a state only a
-    discovery run can settle.
+    ``reread`` names CRPT or CHRG packages to read again whatever their checkpoints
+    say, and nothing else: discovery is skipped and the inherited
+    ``committee-discovery`` cursor is preserved unchanged, so every other row and
+    checkpoint carries forward from the prior. It refuses (see
+    :func:`_refuse_unsafe_reread`) rather than publish a state only a discovery
+    run can settle.
+
+    ``retained_bundle`` instead merges an audited, cryptographically verified
+    offline cohort of withdrawn GovInfo hearing revisions (e.g.
+    ``selected-capture-pins.json``) onto the prior generation without making any
+    network request or moving the discovery cursor.
     """
-    if outside := sorted(key for key in reread if not key.startswith("CHRG-")):
-        # A report's re-read can move the ``committee_reports`` watermark past
-        # packages changed since the last listing, which this run never asks for.
-        raise ValueError(f"reread takes hearings only; a report would move the discovery watermark: {outside}")
-    if reader is None or acquirer is None or hearings is None:
+    if reread and retained_bundle is not None:
+        raise ValueError("reread and retained_bundle cannot be combined")
+    if outside := sorted(key for key in reread if not key.startswith(("CRPT-", "CHRG-"))):
+        raise ValueError(f"reread names packages outside CRPT and CHRG: {outside}")
+
+    retained: RetainedHearingBundle | None = None
+    if retained_bundle is not None:
+        retained = (
+            retained_bundle
+            if isinstance(retained_bundle, RetainedHearingBundle)
+            else load_retained_hearing_bundle(
+                retained_bundle,
+                bundle_root=retained_bundle_root,
+                raw_archive_root=retained_raw_archive,
+            )
+        )
+    elif reader is None or acquirer is None or hearings is None:
         api_key = _resolve_api_key()
         if not api_key:
             raise RuntimeError(f"Committee reports need an api.data.gov key (set one of {', '.join(API_KEY_ENV_VARS)})")
@@ -647,13 +1018,26 @@ def build_committee_reports(
     since = _since(evidence=evidence, now=discovered_at)
     raw_until = os.environ.get("COMMITTEE_REPORTS_UNTIL", "").strip()
     until = (raw_until if raw_until.endswith("Z") else f"{raw_until}T00:00:00Z") if raw_until else None
-    logger.info("Committee reports: {}; cap {} per collection; agenda cap 0",
-                f"re-reading only {sorted(reread)}" if reread else f"modified since {since}", max_packages)
+    mode_desc = (
+        f"merging {len(retained.revisions)} retained hearing revisions across {list(retained.packages)}"
+        if retained is not None
+        else f"re-reading only {sorted(reread)}"
+        if reread
+        else f"modified since {since}"
+    )
+    logger.info("Committee reports: {}; cap {} per collection; agenda cap 0", mode_desc, max_packages)
     observed_at = datetime.now(UTC).isoformat()
     if evidence:
-        evidence.event("selection", since=None if reread else since, reread=sorted(reread),
-                       max_packages_per_collection=max_packages, max_pages=MAX_PAGES,
-                       agenda_cap=0, checkpoint_observed_at=observed_at)
+        evidence.event(
+            "selection",
+            since=None if (reread or retained is not None) else since,
+            reread=sorted(reread),
+            retained_bundle_pins_sha256=None if retained is None else retained.pins_sha256,
+            max_packages_per_collection=max_packages,
+            max_pages=MAX_PAGES,
+            agenda_cap=0,
+            checkpoint_observed_at=observed_at,
+        )
     link_rows: list[dict] = []
     evaluated_hearings: set[tuple[str, str]] = set()
     protected_hearings: set[str] = set()
@@ -669,122 +1053,246 @@ def build_committee_reports(
     refused = unchanged = linked = deferred = listed_count = 0
     attempted: dict[str, list[str]] = {}
 
-    for collection in ("CRPT", "CHRG"):
-        if reread:
-            listed = {}
-            pending = {key: reads.get(key, {}).get("last_modified") for key in reread
-                       if key.startswith(collection + "-")}
-        else:
-            try:
-                listed = _package_ids(reader, collection, since, evidence, until=until)
-            except Exception as error:
-                if evidence:
-                    evidence.refusal(error, stage=collection + ":listing")
-                raise
-            pending = {key: row.get("last_modified") for key, row in reads.items()
-                       if key.startswith(collection + "-") and not _settled(row, collection)}
-            pending.update({key: modified for key, modified in listed.items()
-                            if not _settled(reads.get(key, {}), collection, modified)})
-            pending = dict(sorted(pending.items(), key=lambda item: _retry_order(reads.get(item[0], {}), item[1])))
-        listed_count += len(listed)
-        deferred += max(0, len(pending) - max_packages)
-        unchanged += len(listed) - sum(key in pending for key in listed)
+    if retained is not None:
         if evidence:
-            evidence.event("package-selection", collection=collection, listed=listed,
-                           selected=list(pending)[:max_packages], deferred=list(pending)[max_packages:],
-                           unchanged=[key for key in listed if key not in pending],
-                           refused_final=sorted(key for key, row in reads.items() if key.startswith(collection + "-")
-                                                and row.get("outcome") == REFUSED_FINAL and key not in pending))
-        for package_id, modified in pending.items():
-            reads[package_id] = {"package_id": package_id, "last_modified": modified,
-                                 "outcome": "pending", "rule_version": RULE_VERSIONS[collection],
-                                 "observed_at": observed_at}
-        logger.info("{}: {} pending; {} deferred by package cap", collection, len(pending), max(0, len(pending) - max_packages))
-        attempted[collection] = list(pending)[:max_packages]
-        prior_hearing_rows = _prior_hearing_rows(prior_hearings, attempted[collection]) if collection == "CHRG" else {}
-        for package_id in attempted[collection]:
-            state = reads[package_id]
-            try:
-                prior_read = previous_reads.get(package_id, {})
-                reuse = (partial(_reuse_hearing_text, prior=prior_hearing_rows, prior_read=prior_read)
-                         if collection == "CHRG" else None)
-                bodies = _read_bodies(acquirer, package_id, collection, evidence, reuse=reuse)
-            except (CredentialRefusedError, SourceEvidenceError):
-                raise
-            except Exception as error:  # noqa: BLE001 — retained for the next run
-                if evidence:
-                    evidence.refusal(error, stage=package_id)
-                refused += 1
-                if _refusal_is_final(error):
-                    # Not asked again until its stamp, the rule or the bounds move.
-                    state.update(outcome=REFUSED_FINAL, rule_version=refusal_rule(collection, _refusal_basis(error)))
-                else:
-                    state["outcome"] = "refused"
-                logger.warning("{}: {} {}: {}", collection, package_id, state["outcome"].replace("_", " "),
-                               scrub_credential(str(error), evidence.credential if evidence else ""))
-                if evidence:
-                    evidence.event("package-outcome", **state)
-                continue
+            evidence.event(
+                "retained-bundle-merge",
+                pins_sha256=retained.pins_sha256,
+                wrapper_sha256=retained.wrapper_sha256,
+                wrapper_bytes=retained.wrapper_bytes,
+                selected_packages=list(retained.packages),
+                selected_revisions=len(retained.revisions),
+                unique_originals=retained.unique_originals,
+                decoded_bytes=retained.decoded_bytes,
+                new_acquisition=False,
+                bindings=[
+                    {
+                        "package_id": rev.package_id,
+                        "last_modified": rev.last_modified,
+                        "wrapper_evidence": rev.source_evidence_artifact,
+                        "wrapper_generation": rev.wrapper_generation,
+                        "wrapper_lines": list(rev.wrapper_lines),
+                        "summary_sha256": rev.summary.sha256,
+                        "mods_sha256": rev.mods.sha256,
+                        "body_sha256": rev.body.sha256,
+                        "detail_sha256": rev.detail.sha256,
+                    }
+                    for rev in retained.revisions
+                ],
+            )
+        attempted["CHRG"] = list(retained.packages)
+        prior_hearing_rows = _prior_hearing_rows(prior_hearings, retained.packages)
+        in_run_text: dict[tuple[str, str], ReadBody] = {}
+        offline_budget = replace(BODY_BUDGET, min_request_interval_seconds=0.0)
+        for rev in retained.revisions:
+            package_id = rev.package_id
+            originals = {cap.requested_url: cap for cap in (rev.summary, rev.mods, rev.body)}
+
+            def replay_govinfo(request: httpx.Request, *, _originals: Mapping[str, CapturedBodyResponse] = originals) -> httpx.Response:
+                url = str(request.url)
+                if url not in _originals:
+                    raise ValueError(f"Unselected offline route: {url}")
+                return _retained_http_response(_originals[url])
+
+            prior_read = previous_reads.get(package_id, {})
+
+            def reuse_retained(
+                body: Any,
+                *,
+                _prior_read: Mapping[str, Any] = prior_read,
+            ) -> ReadBody | None:
+                cached = in_run_text.get((body.format, body.body_capture.sha256))
+                if cached is not None:
+                    return ReadBody(
+                        body,
+                        cached.text,
+                        cached.completeness,
+                        cached.text_sha256,
+                        cached.derivation,
+                        cached.page_count,
+                    )
+                return _reuse_hearing_text(body, prior_hearing_rows, _prior_read)
+
+            with GovInfoBodyAcquirer(
+                budget=offline_budget,
+                api_key="offline-retained-bundle",
+                transport=httpx.MockTransport(replay_govinfo),
+            ) as offline_acquirer:
+                bodies = _read_bodies(offline_acquirer, package_id, "CHRG", evidence, reuse=reuse_retained)
             modified = bodies[0].body.summary.last_modified
-            # A placeholder whose part offers no PDF is complete: nothing more
-            # is published, its row says so, and a new stamp or rule re-reads it.
-            state.update(last_modified=modified, outcome="complete")
+            if modified != rev.last_modified:
+                raise ValueError(
+                    f"{package_id}: retained summary last_modified {modified!r} differs from pinned {rev.last_modified!r}"
+                )
             for reading in bodies:
                 body = reading.body
+                in_run_text.setdefault((body.format, body.body_capture.sha256), reading)
                 status = reading.completeness
                 renditions[body.format] += 1
                 completeness[status] += 1
-                # A report part states its own bills; a multi-part package's
-                # root states none (CRPT-119hrpt455, -119hrpt494). A hearing
-                # has no part, so its bills are the package's.
                 stated = body.part if body.part is not None else body.mods
                 primary = stated.primary_bill
                 bill = None if primary is None else _bill_key(package_id, primary)
                 linked += bill is not None
                 mentions.update(entry.context for entry in stated.bills if entry.context != PRIMARY_BILL_CONTEXT)
-                common = {"page_count": reading.page_count,
-                          "text_sha256": reading.text_sha256, "body_completeness": status,
-                          "text_derivation": reading.derivation}
-                if collection == "CHRG":
-                    event_id, outcome, detail = _hearing_detail(hearings, body, evidence)
-                    meetings[outcome] += 1
-                    # A package's bodies may answer differently: a retried refusal
-                    # outranks a detail still awaited, which outranks a settled one.
-                    rule = (RULE_VERSIONS[collection] if outcome == "refused"
-                            else _unavailable_rule(body, collection) if outcome == "unavailable" else None)
-                    held = _DETAIL_RANK[state["rule_version"]] if state["outcome"] == DETAIL_REFUSED else -1
-                    if rule is not None and _DETAIL_RANK[rule] > held:
-                        state.update(outcome=DETAIL_REFUSED, rule_version=rule)
-                    held_row = prior_hearing_rows.get((package_id, modified))
-                    if (event_id is None and held_row is not None
-                            and (_qualified_prior_event(held_row, body) or outcome in {"refused", "unavailable"})):
-                        # The current observation remains in source evidence; do not replace its dated parent/links.
-                        if state["outcome"] == "complete":
-                            protected_hearings.add(package_id)
-                        continue
-                    hearing_rows.append(shape_hearing_transcript(
-                        body, event_id=event_id, hearing_detail=detail,
-                        body_text=reading.text if status != PLACEHOLDER else None, **common
-                    ))
-                    link_rows.extend(shape_hearing_bill_link(link, last_modified=modified)
-                                     for link in cover_links(body.mods, event_id=event_id))
-                    evaluated_hearings.add((package_id, modified))
-                else:
-                    estimate = read_cbo_estimate(reading.text)
-                    report_rows.append(shape_committee_report(
-                        body, bill_id=bill, estimate=estimate,
-                        recital_bill_id=recital_bill_id(estimate, body.identity.congress), **common))
-                    letter_rows.extend(shape_committee_report_cbo_letter(
-                        letter, package_id=package_id, part_id=body.part.part_id, seq=seq, last_modified=modified
-                    ) for seq, letter in enumerate(estimate.letters))
-                    assert reading.extracted is not None
-                    section_rows.extend(shape_report_section(
-                        block, package_id=package_id, part_id=body.part.part_id, seq=seq, last_modified=modified
-                    ) for seq, block in enumerate(parse_agency_blocks(_section_input(reading.extracted))))
-            if collection == "CRPT":
-                evaluated_reports.add((package_id, modified))
+                common = {
+                    "page_count": reading.page_count,
+                    "text_sha256": reading.text_sha256,
+                    "body_completeness": status,
+                    "text_derivation": reading.derivation,
+                }
+                event_id, outcome, detail = _hearing_detail(_RetainedHearingDetails(rev.detail), body, evidence)
+                meetings[outcome] += 1
+                if outcome not in {"meeting", "no_meeting"}:
+                    raise RuntimeError(
+                        f"retained bundle detail did not complete for {package_id}@{modified}: {outcome}"
+                    )
+                held_row = prior_hearing_rows.get((package_id, modified))
+                if event_id is None and held_row is not None and _qualified_prior_event(held_row, body):
+                    protected_hearings.add(package_id)
+                    continue
+                hearing_rows.append(
+                    shape_hearing_transcript(
+                        body,
+                        event_id=event_id,
+                        hearing_detail=detail,
+                        body_text=reading.text if status != PLACEHOLDER else None,
+                        **common,
+                    )
+                )
+                link_rows.extend(
+                    shape_hearing_bill_link(link, last_modified=modified)
+                    for link in cover_links(body.mods, event_id=event_id)
+                )
+                evaluated_hearings.add((package_id, modified))
+            reads[package_id] = {
+                "package_id": package_id,
+                "last_modified": modified,
+                "outcome": "complete",
+                "rule_version": RULE_VERSIONS["CHRG"],
+                "observed_at": observed_at,
+            }
+        if evidence:
+            for package_id in retained.packages:
+                evidence.event("package-outcome", **latest_read(previous_reads.get(package_id, {}), reads[package_id]))
+    else:
+        assert reader is not None and acquirer is not None and hearings is not None
+        for collection in ("CRPT", "CHRG"):
+            if reread:
+                listed = {}
+                pending = {key: reads.get(key, {}).get("last_modified") for key in reread
+                           if key.startswith(collection + "-")}
+            else:
+                try:
+                    listed = _package_ids(reader, collection, since, evidence, until=until)
+                except Exception as error:
+                    if evidence:
+                        evidence.refusal(error, stage=collection + ":listing")
+                    raise
+                pending = {key: row.get("last_modified") for key, row in reads.items()
+                           if key.startswith(collection + "-") and not _settled(row, collection)}
+                pending.update({key: modified for key, modified in listed.items()
+                                if not _settled(reads.get(key, {}), collection, modified)})
+                pending = dict(sorted(pending.items(), key=lambda item: _retry_order(reads.get(item[0], {}), item[1])))
+            listed_count += len(listed)
+            deferred += max(0, len(pending) - max_packages)
+            unchanged += len(listed) - sum(key in pending for key in listed)
             if evidence:
-                evidence.event("package-outcome", **state)
+                evidence.event("package-selection", collection=collection, listed=listed,
+                               selected=list(pending)[:max_packages], deferred=list(pending)[max_packages:],
+                               unchanged=[key for key in listed if key not in pending],
+                               refused_final=sorted(key for key, row in reads.items() if key.startswith(collection + "-")
+                                                    and row.get("outcome") == REFUSED_FINAL and key not in pending))
+            for package_id, modified in pending.items():
+                reads[package_id] = {"package_id": package_id, "last_modified": modified,
+                                     "outcome": "pending", "rule_version": RULE_VERSIONS[collection],
+                                     "observed_at": observed_at}
+            logger.info("{}: {} pending; {} deferred by package cap", collection, len(pending), max(0, len(pending) - max_packages))
+            attempted[collection] = list(pending)[:max_packages]
+            prior_hearing_rows = _prior_hearing_rows(prior_hearings, attempted[collection]) if collection == "CHRG" else {}
+            for package_id in attempted[collection]:
+                state = reads[package_id]
+                try:
+                    prior_read = previous_reads.get(package_id, {})
+                    reuse = (partial(_reuse_hearing_text, prior=prior_hearing_rows, prior_read=prior_read)
+                             if collection == "CHRG" else None)
+                    bodies = _read_bodies(acquirer, package_id, collection, evidence, reuse=reuse)
+                except (CredentialRefusedError, SourceEvidenceError):
+                    raise
+                except Exception as error:  # noqa: BLE001 — retained for the next run
+                    if evidence:
+                        evidence.refusal(error, stage=package_id)
+                    refused += 1
+                    if _refusal_is_final(error):
+                        # Not asked again until its stamp, the rule or the bounds move.
+                        state.update(outcome=REFUSED_FINAL, rule_version=refusal_rule(collection, _refusal_basis(error)))
+                    else:
+                        state["outcome"] = "refused"
+                    logger.warning("{}: {} {}: {}", collection, package_id, state["outcome"].replace("_", " "),
+                                   scrub_credential(str(error), evidence.credential if evidence else ""))
+                    if evidence:
+                        evidence.event("package-outcome", **state)
+                    continue
+                modified = bodies[0].body.summary.last_modified
+                # A placeholder whose part offers no PDF is complete: nothing more
+                # is published, its row says so, and a new stamp or rule re-reads it.
+                state.update(last_modified=modified, outcome="complete")
+                for reading in bodies:
+                    body = reading.body
+                    status = reading.completeness
+                    renditions[body.format] += 1
+                    completeness[status] += 1
+                    # A report part states its own bills; a multi-part package's
+                    # root states none (CRPT-119hrpt455, -119hrpt494). A hearing
+                    # has no part, so its bills are the package's.
+                    stated = body.part if body.part is not None else body.mods
+                    primary = stated.primary_bill
+                    bill = None if primary is None else _bill_key(package_id, primary)
+                    linked += bill is not None
+                    mentions.update(entry.context for entry in stated.bills if entry.context != PRIMARY_BILL_CONTEXT)
+                    common = {"page_count": reading.page_count,
+                              "text_sha256": reading.text_sha256, "body_completeness": status,
+                              "text_derivation": reading.derivation}
+                    if collection == "CHRG":
+                        event_id, outcome, detail = _hearing_detail(hearings, body, evidence)
+                        meetings[outcome] += 1
+                        # A package's bodies may answer differently: a retried refusal
+                        # outranks a detail still awaited, which outranks a settled one.
+                        rule = (RULE_VERSIONS[collection] if outcome == "refused"
+                                else _unavailable_rule(body, collection) if outcome == "unavailable" else None)
+                        held = _DETAIL_RANK[state["rule_version"]] if state["outcome"] == DETAIL_REFUSED else -1
+                        if rule is not None and _DETAIL_RANK[rule] > held:
+                            state.update(outcome=DETAIL_REFUSED, rule_version=rule)
+                        held_row = prior_hearing_rows.get((package_id, modified))
+                        if (event_id is None and held_row is not None
+                                and (_qualified_prior_event(held_row, body) or outcome in {"refused", "unavailable"})):
+                            # The current observation remains in source evidence; do not replace its dated parent/links.
+                            if state["outcome"] == "complete":
+                                protected_hearings.add(package_id)
+                            continue
+                        hearing_rows.append(shape_hearing_transcript(
+                            body, event_id=event_id, hearing_detail=detail,
+                            body_text=reading.text if status != PLACEHOLDER else None, **common
+                        ))
+                        link_rows.extend(shape_hearing_bill_link(link, last_modified=modified)
+                                         for link in cover_links(body.mods, event_id=event_id))
+                        evaluated_hearings.add((package_id, modified))
+                    else:
+                        estimate = read_cbo_estimate(reading.text)
+                        report_rows.append(shape_committee_report(
+                            body, bill_id=bill, estimate=estimate,
+                            recital_bill_id=recital_bill_id(estimate, body.identity.congress), **common))
+                        letter_rows.extend(shape_committee_report_cbo_letter(
+                            letter, package_id=package_id, part_id=body.part.part_id, seq=seq, last_modified=modified
+                        ) for seq, letter in enumerate(estimate.letters))
+                        assert reading.extracted is not None
+                        section_rows.extend(shape_report_section(
+                            block, package_id=package_id, part_id=body.part.part_id, seq=seq, last_modified=modified
+                        ) for seq, block in enumerate(parse_agency_blocks(_section_input(reading.extracted))))
+                if collection == "CRPT":
+                    evaluated_reports.add((package_id, modified))
+                if evidence:
+                    evidence.event("package-outcome", **state)
 
     # The one state that fails the run (through the rollup's deferred failure, after publishing): a collection
     # that attempted packages this run and read none of them, the signature of a reader or source refusing
@@ -797,8 +1305,12 @@ def build_committee_reports(
         considered = [reads[key] for key in keys if reads[key]["outcome"] != REFUSED_FINAL]
         if considered and not any(_read_this_run(row, collection) for row in considered):
             nothing_read.append(collection)
-    completed_hearings = {key for key, _modified in evaluated_hearings} | protected_hearings
-    if unfinished := sorted(key for key in reread if key not in completed_hearings or reads[key]["outcome"] != "complete"):
+    completed = (
+        {key for key, _modified in evaluated_hearings}
+        | protected_hearings
+        | {key for key, _modified in evaluated_reports}
+    )
+    if unfinished := sorted(key for key in reread if key not in completed or reads[key]["outcome"] != "complete"):
         # A refused named read would publish a checkpoint every later run
         # retries, and a refused hearing detail would drop the prior event_id.
         raise RuntimeError(f"reread did not complete, so nothing is merged: {unfinished}")
@@ -872,7 +1384,8 @@ def build_committee_reports(
         annotate("warning", "Committee reports: acquisition pending",
                  f"{len(pending)} package(s) pending, retried next run: {len(retrying)} refused ({ids(retrying)}), "
                  f"{len(waiting_cap)} deferred by the {max_packages}-package cap ({ids(waiting_cap)})")
-    status = {"discovery": "not_requested" if reread else "complete", "since": None if reread else since,
+    discovery_state = "retained_bundle" if retained is not None else "not_requested" if reread else "complete"
+    status = {"discovery": discovery_state, "since": None if (reread or retained is not None) else since,
               "until": until, "listed": listed_count, "unchanged": unchanged, "refused": refused, "deferred": deferred,
               "pending": len(pending), "nothing_read": nothing_read,
               "awaiting_detail": len(waiting),
@@ -884,6 +1397,7 @@ def build_committee_reports(
         state = evidence.inherited_event("committee-discovery") or {}
         explicit = bool(os.environ.get("COMMITTEE_REPORTS_SINCE", "").strip()) or until is not None
         evidence.event("committee-discovery",
-                       cursor=discovered_at.isoformat() if not reread and not explicit else state.get("cursor"),
-                       since=status["since"], mode="reread" if reread else "explicit-window" if explicit else "refresh")
+                       cursor=discovered_at.isoformat() if not reread and retained is None and not explicit else state.get("cursor"),
+                       since=status["since"],
+                       mode="retained-bundle" if retained is not None else "reread" if reread else "explicit-window" if explicit else "refresh")
     return (*paths.values(), read_path)
