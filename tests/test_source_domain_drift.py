@@ -552,6 +552,31 @@ def test_gao_topics_are_the_listing_plus_science_and_technology(documented):
     assert gao.values[:30] == tuple(sorted(gao.values[:30], key=str.casefold))
 
 
+def test_gao_report_published_topics_are_labels_only_with_non_destructive_caveat(documented, labels_only):
+    """ss-zmah (owner approval 2026-11-27): gao_reports.topics surfaces the 31 published GAO topic filter values
+    beside a non-destructive caveat without gating or mutating the 12,100+ native mixed keywords."""
+
+    domain = labels_only["gao-report-published-topic"]
+    rec_domain = documented["gao-recommendation-topic"]
+    assert "gao-report-published-topic" not in DOMAIN_KEYS
+    assert (domain.table, domain.column, len(domain.values)) == ("gao_reports", "topics", 31)
+    assert domain.values == rec_domain.values
+    assert dict(domain.labels) == dict(rec_domain.labels)
+    assert domain.values[-1] == "Science and Technology"
+    assert domain.caveat is not None
+    assert "12,100+" in domain.caveat
+    assert "top-level topic filter set" in domain.caveat
+    assert "2026-11-27" in domain.caveat
+
+    values = documented_values(DOMAIN_DIR)
+    entry = values["gao_reports"]["topics"]
+    assert entry["domain"] == "gao-report-published-topic"
+    assert entry["checked"] is False
+    assert len(entry["values"]) == 31
+    assert entry["caveat"] == domain.caveat
+    assert {"observed_off_list", "unobserved", "observed_at"}.isdisjoint(entry)
+
+
 def test_a_vendored_fec_list_parsed_from_other_bytes_is_refused(tmp_path):
     """The derived list is not its own witness: its recorded source digest must be the pinned capture's."""
 

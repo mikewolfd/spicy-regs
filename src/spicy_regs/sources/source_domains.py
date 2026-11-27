@@ -471,11 +471,15 @@ class _DomainDeclaration:
 #   (:data:`_LABEL_ONLY_DECLARATIONS`), for the reasons stated there.
 # * ``origin_chamber`` and ``bill_committees.chamber`` have no publisher list:
 #   the BILLSTATUS guide's chamber column belongs to its summary-version table.
-# * ``gao_reports.topics`` mixes published topics with free keywords (12,100
-#   distinct values), and ``gao_decisions.topics`` holds decision-type labels,
-#   not topics; neither is GAO's topic list. CBO's taxonomy waits for its archive
-#   route. CRS topics already retain literal report-revision labels in native
-#   STRUCT(topic)[] values; they do not establish a controlled topic domain.
+# * ``gao_reports.topics`` is labels only (:data:`_LABEL_ONLY_DECLARATIONS`,
+#   ``gao-report-published-topic``): it retains all 12,100+ native mixed
+#   keywords untouched and documents GAO's 31 published top-level topic filter
+#   values beside an explicit non-destructive caveat (owner approval 2026-11-27,
+#   ss-zmah). ``gao_decisions.topics`` is permanently excluded because it holds
+#   decision-type metadata, not GAO topic categories. CBO capture-local browse
+#   labels are deferred pending its archive route. CRS topics already retain
+#   literal report-revision labels in native STRUCT(topic)[] values; they do not
+#   establish a controlled topic domain.
 _DECLARATIONS: tuple[_DomainDeclaration, ...] = (
     _DomainDeclaration(
         key="regulations-gov-document-type",
@@ -661,6 +665,14 @@ _ACTION_CODE_CAVEAT = (
     "purposes', so a label is the guide's current text for the code, not a statement of what an older action meant."
 )
 
+#: Non-destructive caveat for GAO published topic filter metadata on gao_reports.topics (ss-zmah).
+_GAO_REPORT_TOPICS_CAVEAT = (
+    "gao_reports.topics retains all 12,100+ native mixed keywords untouched (including GovInfo MODS subject/topic "
+    "terms, program names, places, and GAO topic headings). These 31 values represent GAO's published top-level "
+    "topic filter set (30 from GAO's Browse Topics Alphabetically listing plus Science and Technology) rather than "
+    "an exhaustive or gating column domain (owner approval 2026-11-27)."
+)
+
 # Labels only: never observed, never diffed, never in the ledger. A list belongs
 # here only when its publisher says it is incomplete or the off-list share is
 # noise, because then a gate is a ledger of exceptions that gates nothing (the
@@ -680,6 +692,9 @@ _ACTION_CODE_CAVEAT = (
 #   with its original and reason in the receipt
 #   (``transforms/fec_identity_native.py``). What stays off-list is still
 #   noise, so the list stays labels only.
+# * ``gao_reports.topics``: retains all 12,100+ native mixed keywords untouched;
+#   surfaces GAO's 31 published top-level topic filter values with a non-destructive
+#   caveat rather than gating rows (owner approval 2026-11-27, ss-zmah).
 _LABEL_ONLY_DECLARATIONS: tuple[_DomainDeclaration, ...] = (
     _DomainDeclaration(
         key="billstatus-action-code",
@@ -711,6 +726,19 @@ _LABEL_ONLY_DECLARATIONS: tuple[_DomainDeclaration, ...] = (
         element="party",
         expected_values=95,
         expected_raw_options=95,
+    ),
+    _DomainDeclaration(
+        key="gao-report-published-topic",
+        table="gao_reports",
+        column="topics",
+        capture_key="gao-topics-listing",
+        locator="Browse Topics Alphabetically listing, read by RefSpec parse_gao_published_topics; "
+        "plus gao-science-and-technology-2026-09-01.html, read by RefSpec parse_gao_topic_page",
+        element="topicsListing",
+        expected_values=31,
+        expected_raw_options=31,
+        caveat=_GAO_REPORT_TOPICS_CAVEAT,
+        also_from=(("gao-science-and-technology", "scienceAndTechnology"),),
     ),
 )
 

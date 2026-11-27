@@ -50,13 +50,15 @@ Optional `targets` map an existing resolver table name (or `uscode_edition_secti
 which installs `usc_release_point_sections`) to a local Parquet `path` and exact
 `sha256:` digest. Reads use a verified copy of those bytes. Result candidates name
 the target file pin and the existing resolver's grain under `selected-target-lookup/2`
-(policy `legislative-documents/3`). For example, `usc_release_point_sections` matches
-sections or range stubs printed at the held OLRC release point, not Code text or proof
-of current applicability (consult `usc_citation_verdicts` for OLRC legal status and
-1994–2024 annual-edition presence). Prior `/1` generations (`legislative-documents/1`
-and `legislative-documents/2`, recorded against `law_code_sections`) remain readable
-and their carried candidate keys stay linkable. An unknown source edition stays
-unknown even when a target lookup finds a release-point section.
+(policy `legislative-documents/4`, `list<native-legal-target/4>`). For example,
+`usc_release_point_sections` matches sections or range stubs printed at the held OLRC
+release point, not Code text or proof of current applicability (consult
+`usc_citation_verdicts` for OLRC legal status and 1994–2024 annual-edition presence).
+Prior generations (`legislative-documents/1` and `legislative-documents/2` recorded
+against `law_code_sections`, and `legislative-documents/3` recorded under
+`selected-target-lookup/2` prior to span columns) remain readable and their carried
+candidate keys stay linkable. An unknown source edition stays unknown even when a
+target lookup finds a release-point section.
 
 Bounds are explicit: at most 100 source inputs, 16 MiB per XML and 64 MiB total
 XML, 10,000 selected observations per run, and 64 MiB per optional target
@@ -351,10 +353,11 @@ eCFR profiles, and extended to GPO USLM 2.x and Congressional Bill DTD):
   self-closing elements carry NULL offsets/slice text while preserving
   `source_path` and rendition metadata.
 - **Backward compatibility:** Earlier `/002` and `/003` XPath-only generations
-  (`legislative-documents/1` and `/2`) restore cleanly through
-  `policy_migrations.json` and `recorded_subject`, and incremental scope merges
-  NULL-fill the appended span columns for untouched prior scopes without
-  mutating their `source_path` or `rule_version`.
+  (`native_legal_references` `legislative-documents/1`, `/2`, and `/3`;
+  `native_legal_reference_reads` `legislative-documents/1` and `/2`) restore
+  cleanly through `policy_migrations.json` and `recorded_subject`, and
+  incremental scope merges NULL-fill the appended span columns for untouched
+  prior scopes without mutating their `source_path` or `rule_version`.
 
 ### Statutes at Large (`STATUTE-*.xml`) workflow & qualification
 
