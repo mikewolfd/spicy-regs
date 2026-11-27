@@ -674,28 +674,28 @@ JOINS: tuple[Join, ...] = (
           'members', 'bioguide_id',
           565, 0, 'scope',
           'Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The '
-          'explorer follows current published records; input_pins_json identifies the historical input used by the '
+          'explorer follows current published records; generation-level artifact parents pin the historical input used by the '
           'resolver.',
           expected_cardinality="one"),
     _join('scorecard_item_links', 'bill_id',
           'congress_bills', 'bill_id',
           95, 0, 'scope',
           'Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The '
-          'explorer follows current published records; input_pins_json identifies the historical input used by the '
+          'explorer follows current published records; generation-level artifact parents pin the historical input used by the '
           'resolver.',
           expected_cardinality="one"),
     _join('scorecard_item_links', 'vote_id',
           'roll_call_votes', 'vote_id',
           112, 0, 'scope',
           'Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The '
-          'explorer follows current published records; input_pins_json identifies the historical input used by the '
+          'explorer follows current published records; generation-level artifact parents pin the historical input used by the '
           'resolver.',
           expected_cardinality="one"),
     _join('scorecard_item_links', 'amendment_id',
           'amendments', 'amendment_id',
           0, 0, 'empty',
           'Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The '
-          'explorer follows current published records; input_pins_json identifies the historical input used by the '
+          'explorer follows current published records; generation-level artifact parents pin the historical input used by the '
           'resolver.',
           expected_cardinality="one"),
     _join('fec_account_transfers', 'definition_set_id',

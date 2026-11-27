@@ -186,9 +186,13 @@ def test_analysis_pins_every_partition_and_keeps_publisher_identities(tmp_path, 
     assert member["bioguide_id"] == "X000001"
     assert item["bill_id"] == "119-hr-1"
     assert item["vote_id"] is None
-    assert json.loads(item["input_pins_json"])["congress_bills"] == parents["congress_bills.parquet"]
+    assert "input_pins_json" not in item and "source_context_json" not in item
+    assert "input_pins_json" not in member and "source_context_json" not in member
+    assert "term_candidates_json" not in member and "geography_evidence_json" not in member
+    qualification = json.loads((output / "scorecard-analysis-qualification.json").read_text())
+    assert qualification["input_pins"]["congress_bills"] == parents["congress_bills.parquet"]
     item_receipt = read_family(output, ANALYSIS_NAMES)["scorecard_item_links"][0]
-    assert json.loads(item_receipt["input_pins_json"])["congress_bills"] == parents["congress_bills.parquet"]
+    assert item_receipt["bill_id"] == "119-hr-1" and "input_pins_json" not in item_receipt
     sealed = tmp_path / "analysis-generation"
     build_generation(
         sealed,
@@ -248,7 +252,9 @@ def test_lcv_comparison_flows_through_pinned_analysis_family(tmp_path, monkeypat
     assert row["comparison_status"] == "not_voting"
     assert row["publisher_credit_text"] == "excused"
     assert row["official_position_text"] == "Not Voting"
-    assert json.loads(row["input_pins_json"])["member_votes"] == parents["member_votes.parquet"]
+    assert "input_pins_json" not in row
+    qualification = json.loads((output / "scorecard-analysis-qualification.json").read_text())
+    assert qualification["input_pins"]["member_votes"] == parents["member_votes.parquet"]
     sealed = tmp_path / "generation"
     build_generation(sealed, family="scorecard-analysis", files=files, expected_keys=rollup.outputs,
                      parents=parents, read_snapshot=index, **generation_options(output, ANALYSIS_NAMES))
@@ -329,9 +335,8 @@ def test_analysis_preserves_unresolved_people_and_independent_actions(tmp_path, 
     person = reconstructed["scorecard_member_links"][0]
     assert person["bioguide_id"] is None
     assert person["resolution_status"] == "unresolved"
-    observed = json.loads(person["source_context_json"])
-    assert observed["member_name"] == source_people[0]["member_name"]
-    assert observed["identifiers_json"] == source_people[0]["identifiers_json"]
+    assert "unrecognized_identifier_scheme:ocd-person" in (person["reason"] or "")
+    assert "source_context_json" not in person
     [main_motion] = [row for row in pq.read_table(links).to_pylist() if row["item_id"] == "committee-motion"]
     assert main_motion["resolution_status"] == "unresolved"
     assert main_motion["vote_id"] is None and main_motion["bill_id"] is None

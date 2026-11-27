@@ -4,9 +4,9 @@
 
 **Scorecard item links**
 
-One resolution disposition per source item reference occurrence; a bill action does not imply a roll call.
+One resolution disposition per source item reference occurrence; a bill action does not imply a roll call. Original item literals remain in scorecard_items and input pins are recorded at the generation level.
 
-**Coverage.** Derived exact identity links over pinned scorecard and congressional tables. Historical context constrains member matches; unresolved and ambiguous identities remain visible. No fuzzy matching or score conversion is applied. *(measured 2026-10-03)*
+**Coverage.** Derived exact identity links over pinned scorecard and congressional tables. Historical context constrains member matches; unresolved and ambiguous identities remain visible. No fuzzy matching or score conversion is applied. *(measured 2026-11-26)*
 
 - **Parquet file:** `scorecard_item_links.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -36,5 +36,3 @@ One resolution disposition per source item reference occurrence; a bill action d
 | `candidate_count` | `INTEGER` | Number of candidates, retained as decimal text. |
 | `candidates_json` | `VARCHAR` | JSON array of candidate identifiers retained for review. |
 | `reason` | `VARCHAR` | Explanation of the resolution outcome or refusal. |
-| `source_context_json` | `VARCHAR` | Source identity and period context used by the resolver, retained as JSON. |
-| `input_pins_json` | `VARCHAR` | Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table. |

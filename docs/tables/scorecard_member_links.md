@@ -4,9 +4,9 @@
 
 **Scorecard member links**
 
-One resolution disposition per publisher member. Normalized geography uses accepted, period-qualified congressional terms after identity resolution. Exact reviewed source corrections retain their evidence; original publisher geography remains in source_context_json and scorecard_members.
+One resolution disposition per publisher member. Normalized state, district and party use accepted, period-qualified congressional terms after identity resolution. Exact reviewed source corrections retain their evidence; original publisher literals remain in scorecard_members and input pins are recorded at the generation level.
 
-**Coverage.** Derived exact identity links over pinned scorecard and congressional tables. Historical context constrains member matches; unresolved and ambiguous identities remain visible. No fuzzy matching or score conversion is applied. *(measured 2026-10-03)*
+**Coverage.** Derived exact identity links over pinned scorecard and congressional tables. Historical context constrains member matches; unresolved and ambiguous identities remain visible. No fuzzy matching or score conversion is applied. *(measured 2026-11-26)*
 
 - **Parquet file:** `scorecard_member_links.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -17,18 +17,18 @@ One resolution disposition per publisher member. Normalized geography uses accep
 | --- | --- | --- |
 | `scorecard_id` | `VARCHAR` | Stable publisher edition identifier; join within the recorded source snapshot. |
 | `publisher_member_key` | `VARCHAR` | Unchanged publisher member key within the edition. |
-| `bioguide_id` | `VARCHAR` | Exact resolved congressional member identifier; NULL when unresolved or ambiguous. |
+| `bioguide_id` | `VARCHAR` | Exact resolved congressional member identifier; NULL when unresolved, ambiguous or conflicting. |
 | `source_snapshot_id` | `VARCHAR` | Source snapshot used for resolution; require equality when joining to refreshed source facts. |
 | `capture_id` | `VARCHAR` | Source capture identifier carried through from the publisher fact. |
 | `source_url` | `VARCHAR` | Original publisher URL for the source fact. |
 | `source_path` | `VARCHAR` | Location of the source fact or reference within the captured document. |
-| `normalized_state` | `VARCHAR` | State agreed by the resolved member's relevant terms in the source chamber and period, after any exact reviewed correction. NULL for missing or conflicting state context; original text remains in source_context_json. |
-| `state_status` | `VARCHAR` | confirmed or corrected_from_reviewed_evidence for an accepted state; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state or ambiguous_term_state. Missing term dates or unknown chamber prevent confirmation when the term may overlap the period. Correction does not waive historical member matching. |
-| `normalized_district` | `VARCHAR` | District agreed by the resolved member's relevant House terms in the source chamber and period; 0 means at-large. NULL for Senate, unresolved identity, missing context or conflicting term geography. Raw publisher text remains in source_context_json. |
-| `district_status` | `VARCHAR` | confirmed, corrected_from_term or supplied_from_term for a qualified district; not_applicable for Senate; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state, ambiguous_term_state, unqualified_term_district or ambiguous_term_district. input_pins_json identifies the term input. |
-| `correction_evidence_json` | `VARCHAR` | Exact reviewed source-error correction, evidence, and disposition: applied or not_applied_source_changed. Changed source records keep ordinary identity matching without the stale correction; NULL means no reviewed correction was considered. The original publisher row remains in source_context_json. A correction alone does not establish a resolved identity. |
-| `term_candidates_json` | `VARCHAR` | JSON object keyed by congressional member identifier, recording the historical terms used for identity matching. Geography also checks other relevant terms in the pinned term input. |
-| `geography_evidence_json` | `VARCHAR` | Version 1 geography evidence: relevant terms, uncertain terms, half-open source windows and uncovered intervals. Separate from identity candidates; confirmation requires complete coverage of every declared window. |
+| `normalized_state` | `VARCHAR` | State agreed by the resolved member's relevant terms in the source chamber and period, after any exact reviewed correction. NULL for missing period coverage or conflicting state context; original text remains in scorecard_members. |
+| `state_status` | `VARCHAR` | confirmed, supplied_from_term, corrected_from_term or corrected_from_reviewed_evidence for an accepted state; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state or ambiguous_term_state. Missing term dates or unknown chamber prevent confirmation when the term may overlap the period. Correction does not waive historical member matching. |
+| `normalized_district` | `VARCHAR` | District agreed by the resolved member's relevant House terms in the source chamber and period; 0 means at-large. NULL for Senate, unresolved identity, missing context or conflicting term geography. Raw publisher text remains in scorecard_members. |
+| `district_status` | `VARCHAR` | confirmed, corrected_from_term or supplied_from_term for a qualified district; not_applicable for Senate; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state, ambiguous_term_state, unqualified_term_district or ambiguous_term_district. |
+| `normalized_party` | `VARCHAR` | Party agreed by the resolved member's relevant terms in the source chamber and period. NULL when identity is unresolved, period term coverage is incomplete, or term party is missing or changes during the period; raw publisher text remains in scorecard_members. |
+| `party_status` | `VARCHAR` | confirmed, corrected_from_term or supplied_from_term for an accepted period party; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state, ambiguous_term_state, unqualified_term_party or ambiguous_term_party. |
+| `correction_evidence_json` | `VARCHAR` | Exact reviewed source-error correction, evidence, and disposition: applied or not_applied_source_changed. Changed source records keep ordinary identity matching without the stale correction; NULL means no reviewed correction was considered. The original publisher row remains in scorecard_members. A correction alone does not establish a resolved identity. |
 | `override_version` | `VARCHAR` | Version of an explicit member override, when used. |
 | `resolution_status` | `VARCHAR` | Resolution outcome, including resolved, unresolved, ambiguous or conflicting source identifiers. |
 | `resolution_rule` | `VARCHAR` | Exact matching rule that produced this disposition. |
@@ -36,5 +36,3 @@ One resolution disposition per publisher member. Normalized geography uses accep
 | `candidate_count` | `INTEGER` | Number of candidates, retained as decimal text. |
 | `candidates_json` | `VARCHAR` | JSON array of candidate identifiers retained for review. |
 | `reason` | `VARCHAR` | Explanation of the resolution outcome or refusal. |
-| `source_context_json` | `VARCHAR` | Source identity and period context used by the resolver, retained as JSON. |
-| `input_pins_json` | `VARCHAR` | Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table. |

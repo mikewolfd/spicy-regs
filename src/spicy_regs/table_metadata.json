@@ -21172,10 +21172,10 @@
   "scorecard_member_links": {
     "table": "scorecard_member_links",
     "label": "Scorecard member links",
-    "summary": "One resolution disposition per publisher member. Normalized geography uses accepted, period-qualified congressional terms after identity resolution. Exact reviewed source corrections retain their evidence; original publisher geography remains in source_context_json and scorecard_members.",
+    "summary": "One resolution disposition per publisher member. Normalized state, district and party use accepted, period-qualified congressional terms after identity resolution. Exact reviewed source corrections retain their evidence; original publisher literals remain in scorecard_members and input pins are recorded at the generation level.",
     "coverage": "Derived exact identity links over pinned scorecard and congressional tables. Historical context constrains member matches; unresolved and ambiguous identities remain visible. No fuzzy matching or score conversion is applied.",
     "kind": "derived",
-    "measured_on": "2026-10-03",
+    "measured_on": "2026-11-26",
     "data_quality": null,
     "columns": [
       {
@@ -21191,7 +21191,7 @@
       {
         "column_name": "bioguide_id",
         "column_type": "VARCHAR",
-        "description": "Exact resolved congressional member identifier; NULL when unresolved or ambiguous."
+        "description": "Exact resolved congressional member identifier; NULL when unresolved, ambiguous or conflicting."
       },
       {
         "column_name": "source_snapshot_id",
@@ -21216,37 +21216,37 @@
       {
         "column_name": "normalized_state",
         "column_type": "VARCHAR",
-        "description": "State agreed by the resolved member's relevant terms in the source chamber and period, after any exact reviewed correction. NULL for missing or conflicting state context; original text remains in source_context_json."
+        "description": "State agreed by the resolved member's relevant terms in the source chamber and period, after any exact reviewed correction. NULL for missing period coverage or conflicting state context; original text remains in scorecard_members."
       },
       {
         "column_name": "state_status",
         "column_type": "VARCHAR",
-        "description": "confirmed or corrected_from_reviewed_evidence for an accepted state; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state or ambiguous_term_state. Missing term dates or unknown chamber prevent confirmation when the term may overlap the period. Correction does not waive historical member matching."
+        "description": "confirmed, supplied_from_term, corrected_from_term or corrected_from_reviewed_evidence for an accepted state; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state or ambiguous_term_state. Missing term dates or unknown chamber prevent confirmation when the term may overlap the period. Correction does not waive historical member matching."
       },
       {
         "column_name": "normalized_district",
         "column_type": "VARCHAR",
-        "description": "District agreed by the resolved member's relevant House terms in the source chamber and period; 0 means at-large. NULL for Senate, unresolved identity, missing context or conflicting term geography. Raw publisher text remains in source_context_json."
+        "description": "District agreed by the resolved member's relevant House terms in the source chamber and period; 0 means at-large. NULL for Senate, unresolved identity, missing context or conflicting term geography. Raw publisher text remains in scorecard_members."
       },
       {
         "column_name": "district_status",
         "column_type": "VARCHAR",
-        "description": "confirmed, corrected_from_term or supplied_from_term for a qualified district; not_applicable for Senate; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state, ambiguous_term_state, unqualified_term_district or ambiguous_term_district. input_pins_json identifies the term input."
+        "description": "confirmed, corrected_from_term or supplied_from_term for a qualified district; not_applicable for Senate; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state, ambiguous_term_state, unqualified_term_district or ambiguous_term_district."
+      },
+      {
+        "column_name": "normalized_party",
+        "column_type": "VARCHAR",
+        "description": "Party agreed by the resolved member's relevant terms in the source chamber and period. NULL when identity is unresolved, period term coverage is incomplete, or term party is missing or changes during the period; raw publisher text remains in scorecard_members."
+      },
+      {
+        "column_name": "party_status",
+        "column_type": "VARCHAR",
+        "description": "confirmed, corrected_from_term or supplied_from_term for an accepted period party; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state, ambiguous_term_state, unqualified_term_party or ambiguous_term_party."
       },
       {
         "column_name": "correction_evidence_json",
         "column_type": "VARCHAR",
-        "description": "Exact reviewed source-error correction, evidence, and disposition: applied or not_applied_source_changed. Changed source records keep ordinary identity matching without the stale correction; NULL means no reviewed correction was considered. The original publisher row remains in source_context_json. A correction alone does not establish a resolved identity."
-      },
-      {
-        "column_name": "term_candidates_json",
-        "column_type": "VARCHAR",
-        "description": "JSON object keyed by congressional member identifier, recording the historical terms used for identity matching. Geography also checks other relevant terms in the pinned term input."
-      },
-      {
-        "column_name": "geography_evidence_json",
-        "column_type": "VARCHAR",
-        "description": "Version 1 geography evidence: relevant terms, uncertain terms, half-open source windows and uncovered intervals. Separate from identity candidates; confirmation requires complete coverage of every declared window."
+        "description": "Exact reviewed source-error correction, evidence, and disposition: applied or not_applied_source_changed. Changed source records keep ordinary identity matching without the stale correction; NULL means no reviewed correction was considered. The original publisher row remains in scorecard_members. A correction alone does not establish a resolved identity."
       },
       {
         "column_name": "override_version",
@@ -21282,16 +21282,6 @@
         "column_name": "reason",
         "column_type": "VARCHAR",
         "description": "Explanation of the resolution outcome or refusal."
-      },
-      {
-        "column_name": "source_context_json",
-        "column_type": "VARCHAR",
-        "description": "Source identity and period context used by the resolver, retained as JSON."
-      },
-      {
-        "column_name": "input_pins_json",
-        "column_type": "VARCHAR",
-        "description": "Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table."
       }
     ],
     "subject": "congress",
@@ -21309,27 +21299,25 @@
       "state_status",
       "normalized_district",
       "district_status",
+      "normalized_party",
+      "party_status",
       "correction_evidence_json",
-      "term_candidates_json",
-      "geography_evidence_json",
       "override_version",
       "resolution_status",
       "resolution_rule",
       "rule_version",
       "candidate_count",
       "candidates_json",
-      "reason",
-      "source_context_json",
-      "input_pins_json"
+      "reason"
     ]
   },
   "scorecard_item_links": {
     "table": "scorecard_item_links",
     "label": "Scorecard item links",
-    "summary": "One resolution disposition per source item reference occurrence; a bill action does not imply a roll call.",
+    "summary": "One resolution disposition per source item reference occurrence; a bill action does not imply a roll call. Original item literals remain in scorecard_items and input pins are recorded at the generation level.",
     "coverage": "Derived exact identity links over pinned scorecard and congressional tables. Historical context constrains member matches; unresolved and ambiguous identities remain visible. No fuzzy matching or score conversion is applied.",
     "kind": "derived",
-    "measured_on": "2026-10-03",
+    "measured_on": "2026-11-26",
     "data_quality": null,
     "columns": [
       {
@@ -21436,16 +21424,6 @@
         "column_name": "reason",
         "column_type": "VARCHAR",
         "description": "Explanation of the resolution outcome or refusal."
-      },
-      {
-        "column_name": "source_context_json",
-        "column_type": "VARCHAR",
-        "description": "Source identity and period context used by the resolver, retained as JSON."
-      },
-      {
-        "column_name": "input_pins_json",
-        "column_type": "VARCHAR",
-        "description": "Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table."
       }
     ],
     "subject": "congress",
@@ -21465,18 +21443,16 @@
       "rule_version",
       "candidate_count",
       "candidates_json",
-      "reason",
-      "source_context_json",
-      "input_pins_json"
+      "reason"
     ]
   },
   "scorecard_action_comparisons": {
     "table": "scorecard_action_comparisons",
     "label": "Scorecard action comparisons",
-    "summary": "One descriptive comparison per publisher member-item result. Publisher credit and official position remain separate; missing or ambiguous evidence stays unresolved. Join source facts on their recorded snapshot.",
-    "coverage": "Derived. LCV 2025 explicit floor-vote targets compared with exact pinned official member votes. The selected Common Cause 2022 House DISCLOSE item compares dated cosponsorship with its explicit source cutoff. Other items and score reproduction are deferred. Implementation does not establish hosted adoption.",
+    "summary": "One descriptive comparison per publisher member-item result across eligible vote-linked scorecards and the selected historical sponsorship item. Publisher credit and official position remain separate; missing or ambiguous evidence stays unresolved. Join source facts on their recorded snapshot; input pins are recorded at the generation level.",
+    "coverage": "Derived. Qualified per-publisher floor-vote targets across all scorecards with resolved roll-call links compared with exact pinned official member votes, plus the selected Common Cause 2022 House DISCLOSE cosponsorship cutoff item. Non-vote items, unlinked votes and unsupported targets stay explicitly classified; score reproduction is deferred.",
     "kind": "derived",
-    "measured_on": "2026-10-19",
+    "measured_on": "2026-11-26",
     "data_quality": null,
     "columns": [
       {
@@ -21532,7 +21508,7 @@
       {
         "column_name": "publisher_target_text",
         "column_type": "VARCHAR",
-        "description": "Literal publisher preferred position; only qualified spellings are interpreted."
+        "description": "Literal publisher preferred position; only qualified per-publisher spellings are interpreted."
       },
       {
         "column_name": "publisher_action_text",
@@ -21562,22 +21538,17 @@
       {
         "column_name": "comparison_status",
         "column_type": "VARCHAR",
-        "description": "same, different, not_voting, present, unresolved or not_applicable. Missing official records and same-day sponsorship cutoff ambiguity are unresolved."
+        "description": "same, different, not_voting, present, unresolved or not_applicable. Missing official records, unsupported publisher targets and same-day sponsorship cutoff ambiguity stay unresolved."
       },
       {
         "column_name": "reason",
         "column_type": "VARCHAR",
-        "description": "Specific evidence condition supporting the comparison or its unresolved disposition."
+        "description": "Specific evidence condition supporting the comparison or its unresolved/not_applicable disposition."
       },
       {
         "column_name": "rule_version",
         "column_type": "VARCHAR",
-        "description": "Version of the narrow publisher-specific comparison method."
-      },
-      {
-        "column_name": "input_pins_json",
-        "column_type": "VARCHAR",
-        "description": "Immutable source and congressional input generation and member pins."
+        "description": "Version of the deterministic publisher-qualified comparison method."
       },
       {
         "column_name": "capture_id",
@@ -48594,7 +48565,7 @@
       {
         "dataset": "scorecard_action_comparisons",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v2",
+        "policy_version": "scorecards-etl-comparisons-v3",
         "identity_columns": [
           "scorecard_id",
           "item_id",
@@ -48608,7 +48579,7 @@
       {
         "dataset": "scorecard_item_links",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v2",
+        "policy_version": "scorecards-etl-item-links-v3",
         "identity_columns": [
           "scorecard_id",
           "item_id",
@@ -48652,7 +48623,7 @@
       {
         "dataset": "scorecard_member_links",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-member-links-v4",
+        "policy_version": "scorecards-etl-member-links-v5",
         "identity_columns": [
           "scorecard_id",
           "publisher_member_key"

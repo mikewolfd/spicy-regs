@@ -1,6 +1,5 @@
-"""Narrow LCV method: preserve credit and refuse unsupported evidence."""
+"""Qualified multi-publisher roll-call comparisons: preserve credit and refuse unsupported evidence."""
 from copy import deepcopy
-import json
 
 import pytest
 
@@ -42,7 +41,7 @@ def fixture():
             link.update(resolution_status="ambiguous", vote_id=None)
         links["scorecard_item_links"].append(link)
         if case == "repeated":
-            links["scorecard_item_links"].append(link | {"reference_id": "reference:second"})
+            links["scorecard_item_links"].append(link | {"reference_id": "reference:second", "vote_id": "119-senate-1-25"})
         people.append(dict(bioguide_id=bio, lis_id="S" + item))
         if case != "missing":
             position = {"same": "nay", "different": "yea", "not_voting": "not_voting", "present": "present",
@@ -133,4 +132,75 @@ def test_retained_zeldin_item_literal_examples():
     rows = compare_lcv_2025(source, links, results, votes, people, pins, metrics)
     assert [r["comparison_status"] for r in rows] == ["same", "different", "not_voting"]
     assert [r["publisher_credit_text"] for r in rows] == ["pro", "anti", "excused"]
-    assert all(tuple(r) == COLUMNS and json.loads(r["input_pins_json"]) == pins for r in rows)
+    assert all(tuple(r) == COLUMNS and "input_pins_json" not in r for r in rows)
+
+
+def test_multi_publisher_target_rules_corroborating_links_and_explicit_refusals():
+    from spicy_regs.scorecards.action_comparisons import compare_roll_calls
+
+    _, _, _, _, _, pins, _ = fixture()
+    source = {
+        "scorecards": [
+            dict(scorecard_id="peace_action:2024", snapshot_id="s1", publisher_id="peace_action", year_text="2024"),
+            dict(scorecard_id="frc_action:2025", snapshot_id="s2", publisher_id="frc_action", year_text="2025"),
+            dict(scorecard_id="cpac:2023", snapshot_id="s3", publisher_id="cpac", year_text="2023"),
+            dict(scorecard_id="dav:109", snapshot_id="s4", publisher_id="dav", year_text=None),
+            dict(scorecard_id="hrc:118", snapshot_id="s5", publisher_id="hrc", year_text=None),
+        ],
+        "scorecard_items": [
+            dict(scorecard_id="peace_action:2024", snapshot_id="s1", item_id="p1", item_kind_text="vote", publisher_position_text="favor"),
+            dict(scorecard_id="frc_action:2025", snapshot_id="s2", item_id="f1", item_kind_text="roll call", publisher_position_text="FRC Action opposed this Bill."),
+            dict(scorecard_id="cpac:2023", snapshot_id="s3", item_id="c1", item_kind_text="roll_call", publisher_position_text="supported this amendment"),
+            dict(scorecard_id="dav:109", snapshot_id="s4", item_id="d1", item_kind_text="roll_call", publisher_position_text=None),
+            dict(scorecard_id="hrc:118", snapshot_id="s5", item_id="h1", item_kind_text="cosponsorship", publisher_position_text="HRC opposed the bill."),
+            dict(scorecard_id="hrc:118", snapshot_id="s5", item_id="h2", item_kind_text=None, publisher_position_text="HRC opposed the bill."),
+        ],
+    }
+    links = {
+        "scorecard_member_links": [
+            dict(scorecard_id="peace_action:2024", publisher_member_key="m1", source_snapshot_id="s1", bioguide_id="A000001", resolution_status="resolved"),
+            dict(scorecard_id="frc_action:2025", publisher_member_key="m1", source_snapshot_id="s2", bioguide_id="A000001", resolution_status="resolved"),
+            dict(scorecard_id="cpac:2023", publisher_member_key="m1", source_snapshot_id="s3", bioguide_id="A000001", resolution_status="resolved"),
+            dict(scorecard_id="dav:109", publisher_member_key="m1", source_snapshot_id="s4", bioguide_id="A000001", resolution_status="resolved"),
+            dict(scorecard_id="hrc:118", publisher_member_key="m1", source_snapshot_id="s5", bioguide_id="A000001", resolution_status="resolved"),
+        ],
+        "scorecard_item_links": [
+            # Peace Action corroborating item:direct + reference:vote agreeing on same vote_id
+            dict(scorecard_id="peace_action:2024", item_id="p1", source_snapshot_id="s1", reference_id="item:direct", vote_id="118-house-2-10", resolution_status="resolved"),
+            dict(scorecard_id="peace_action:2024", item_id="p1", source_snapshot_id="s1", reference_id="reference:vote", vote_id="118-house-2-10", resolution_status="resolved"),
+            # FRC Action roll call + separate bill reference (vote_id=None)
+            dict(scorecard_id="frc_action:2025", item_id="f1", source_snapshot_id="s2", reference_id="item:direct", vote_id="119-house-1-10", resolution_status="resolved"),
+            dict(scorecard_id="frc_action:2025", item_id="f1", source_snapshot_id="s2", reference_id="reference:bill", vote_id=None, bill_id="119-hr-1", resolution_status="resolved"),
+            # CPAC 2023
+            dict(scorecard_id="cpac:2023", item_id="c1", source_snapshot_id="s3", reference_id="item:direct", vote_id="118-house-1-5", resolution_status="resolved"),
+            # DAV without publisher target
+            dict(scorecard_id="dav:109", item_id="d1", source_snapshot_id="s4", reference_id="item:direct", vote_id="109-house-2-1", resolution_status="resolved"),
+            # HRC cosponsorship (non-floor) & unlinked vote
+            dict(scorecard_id="hrc:118", item_id="h1", source_snapshot_id="s5", reference_id="item:direct", vote_id=None, bill_id="118-hr-1", resolution_status="resolved", reason="no_roll_selected_from_bill_or_amendment_alone"),
+            dict(scorecard_id="hrc:118", item_id="h2", source_snapshot_id="s5", reference_id="item:direct", vote_id=None, bill_id=None, resolution_status="unresolved", reason="incomplete_roll_identifiers"),
+        ],
+    }
+    results = [
+        dict.fromkeys(RESULT_COLUMNS) | dict(scorecard_id="peace_action:2024", snapshot_id="s1", item_id="p1", result_id="r1", publisher_member_key="m1", result_text="wpc_voted_with_us"),
+        dict.fromkeys(RESULT_COLUMNS) | dict(scorecard_id="frc_action:2025", snapshot_id="s2", item_id="f1", result_id="r1", publisher_member_key="m1", result_text="-"),
+        dict.fromkeys(RESULT_COLUMNS) | dict(scorecard_id="cpac:2023", snapshot_id="s3", item_id="c1", result_id="r1", publisher_member_key="m1", result_text="+"),
+        dict.fromkeys(RESULT_COLUMNS) | dict(scorecard_id="dav:109", snapshot_id="s4", item_id="d1", result_id="r1", publisher_member_key="m1", result_text="+"),
+        dict.fromkeys(RESULT_COLUMNS) | dict(scorecard_id="hrc:118", snapshot_id="s5", item_id="h1", result_id="r1", publisher_member_key="m1", result_text="●"),
+        dict.fromkeys(RESULT_COLUMNS) | dict(scorecard_id="hrc:118", snapshot_id="s5", item_id="h2", result_id="r1", publisher_member_key="m1", result_text="○"),
+    ]
+    votes = [
+        dict(vote_id="118-house-2-10", member_key="A000001", bioguide_id="A000001", lis_id=None, position="Yea", position_normalized="yea"),
+        dict(vote_id="119-house-1-10", member_key="A000001", bioguide_id="A000001", lis_id=None, position="Yea", position_normalized="yea"),
+        dict(vote_id="118-house-1-5", member_key="A000001", bioguide_id="A000001", lis_id=None, position="Not Voting", position_normalized="not_voting"),
+    ]
+    people = [dict(bioguide_id="A000001", lis_id=None)]
+    rows = compare_roll_calls(source, links, results, votes, people, pins, [])
+    assert [(r["scorecard_id"], r["comparison_status"], r["reason"], r["publisher_credit_text"]) for r in rows] == [
+        ("peace_action:2024", "same", "exact_roll_call_position", "wpc_voted_with_us"),
+        ("frc_action:2025", "different", "exact_roll_call_position", "-"),
+        ("cpac:2023", "not_voting", "explicit_official_position", "+"),
+        ("dav:109", "unresolved", "missing_publisher_target", "+"),
+        ("hrc:118", "not_applicable", "non_floor_vote_item_kind", "●"),
+        ("hrc:118", "unresolved", "unresolved_member_or_roll_call", "○"),
+    ]
+    assert rows[0]["reference_id"] == "item:direct" and rows[0]["vote_id"] == "118-house-2-10"

@@ -13,7 +13,9 @@ from spicy_regs.scorecards.action_comparisons import TABLE as COMPARISON_TABLE, 
 
 POLICY_VERSION = "scorecards-etl-v2"
 RATING_POLICY_VERSION = "scorecards-etl-ratings-v4"
-MEMBER_LINK_POLICY_VERSION = "scorecards-etl-member-links-v4"
+MEMBER_LINK_POLICY_VERSION = "scorecards-etl-member-links-v5"
+ITEM_LINK_POLICY_VERSION = "scorecards-etl-item-links-v3"
+COMPARISON_POLICY_VERSION = "scorecards-etl-comparisons-v3"
 SOURCE_COLUMNS = {name: contract.columns for name, contract in SCORECARD_TABLES.items()}
 SOURCE_COLUMNS.update(LINK_COLUMNS)
 SOURCE_COLUMNS[COMPARISON_TABLE] = COMPARISON_COLUMNS
@@ -335,7 +337,11 @@ def map_source_row(name: str, row: Mapping) -> dict:
         status = row.get("resolution_status")
         if status not in {None, "resolved", "unresolved", "ambiguous", "conflict"}:
             raise ValueError("Unknown scorecard resolution status")
-        targets = ("bioguide_id", "normalized_state", "normalized_district") if name == "scorecard_member_links" else ("vote_id", "bill_id", "amendment_id")
+        targets = (
+            ("bioguide_id", "normalized_state", "normalized_district", "normalized_party")
+            if name == "scorecard_member_links"
+            else ("vote_id", "bill_id", "amendment_id")
+        )
         if status != "resolved" and any(row.get(key) is not None for key in targets):
             raise ValueError("Unresolved scorecard association contains a resolved target")
     if name == COMPARISON_TABLE and row.get("comparison_status") not in STATUSES:
@@ -372,13 +378,18 @@ def map_source_row(name: str, row: Mapping) -> dict:
 def restore_source_row(name: str, row: Mapping) -> dict:
     """Restore the provider row after a receipt-checked internal read."""
     columns = SOURCE_COLUMNS[name]
-    # Earlier admitted link policies contain no normalized geography. Preserve
-    # that historical row exactly; a read is not a new resolution decision.
+    # Earlier admitted link policies contain no normalized geography/party or
+    # retained retired per-row JSON blobs. Preserve those historical rows
+    # exactly; a read is not a new resolution decision.
     geography = {"normalized_state", "state_status", "normalized_district", "district_status", "correction_evidence_json"}
+    party = {"normalized_party", "party_status"}
     if name == "scorecard_member_links" and not geography & row.keys():
         columns = tuple(field for field in columns if field not in geography)
-    if name == "scorecard_member_links" and "geography_evidence_json" not in row:
-        columns = tuple(field for field in columns if field != "geography_evidence_json")
+    if name == "scorecard_member_links" and not party & row.keys():
+        columns = tuple(field for field in columns if field not in party)
+    retired_json = ("input_pins_json", "source_context_json", "term_candidates_json", "geography_evidence_json")
+    if name in {"scorecard_member_links", "scorecard_item_links", COMPARISON_TABLE}:
+        columns = columns + tuple(field for field in retired_json if field in row and field not in columns)
     result = {field: row[field] for field in columns}
     for field, value in row.get("conversion_inputs", {}).items():
         if field not in BOOLEAN_FIELDS | DECIMAL_FIELDS | INTEGER_FIELDS:

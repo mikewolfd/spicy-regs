@@ -7251,7 +7251,7 @@
         "bioguide_id"
       ],
       "kind": "scope",
-      "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; input_pins_json identifies the historical input used by the resolver.",
+      "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; generation-level artifact parents pin the historical input used by the resolver.",
       "measured_via": null,
       "baseline_keys": 565,
       "baseline_missing": 0,
@@ -7305,7 +7305,7 @@
         "bill_id"
       ],
       "kind": "scope",
-      "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; input_pins_json identifies the historical input used by the resolver.",
+      "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; generation-level artifact parents pin the historical input used by the resolver.",
       "measured_via": null,
       "baseline_keys": 95,
       "baseline_missing": 0,
@@ -7359,7 +7359,7 @@
         "vote_id"
       ],
       "kind": "scope",
-      "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; input_pins_json identifies the historical input used by the resolver.",
+      "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; generation-level artifact parents pin the historical input used by the resolver.",
       "measured_via": null,
       "baseline_keys": 112,
       "baseline_missing": 0,
@@ -7413,7 +7413,7 @@
         "amendment_id"
       ],
       "kind": "empty",
-      "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; input_pins_json identifies the historical input used by the resolver.",
+      "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; generation-level artifact parents pin the historical input used by the resolver.",
       "measured_via": null,
       "baseline_keys": 0,
       "baseline_missing": 0,

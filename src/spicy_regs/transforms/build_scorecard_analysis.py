@@ -157,7 +157,7 @@ def build_scorecard_analysis(
     if any(input_pins[name] != publication.table_pin(comparison_index, name + ".parquet")
            for name in COMPARISON_INPUTS):
         raise ValueError("Action-comparison inputs differ from their selected publication pins")
-    results[COMPARISON_TABLE], sponsorship = build_comparisons(
+    results[COMPARISON_TABLE], comparison_coverage = build_comparisons(
         comparison_index, input_paths, source, results, official["members"], input_pins)
     definitions = (
         ("scorecard_member_links", MEMBER_LINK_COLUMNS, ("scorecard_id", "publisher_member_key")),
@@ -179,13 +179,19 @@ def build_scorecard_analysis(
             name: dict(sorted(Counter(row["resolution_status"] for row in rows).items()))
             for name, rows in results.items() if name != COMPARISON_TABLE
         },
-        "scope": "Exact identity links, LCV 2025 floor votes and the selected Common Cause 2022 House DISCLOSE sponsorship; publisher ratings remain unchanged.",
+        "scope": (
+            "Exact identity links, multi-publisher qualified roll-call vote comparisons across all resolved "
+            "roll-call scorecards, and the selected Common Cause 2022 House DISCLOSE sponsorship; publisher ratings remain unchanged."
+        ),
         "comparison": {
             "rule_versions": sorted({r["rule_version"] for r in results[COMPARISON_TABLE]}),
-            "scopes": sorted({r["scorecard_id"] for r in results[COMPARISON_TABLE]}),
-            "historical_sponsorship": sponsorship,
+            "scopes": comparison_coverage["compared_scopes"],
+            "vote_linked_scopes": comparison_coverage["vote_linked_scopes"],
+            "zero_result_vote_linked_scopes": comparison_coverage["zero_result_vote_linked_scopes"],
+            "by_publisher": comparison_coverage["by_publisher"],
+            "historical_sponsorship": comparison_coverage["historical_sponsorship"],
             "statuses": dict(sorted(Counter(r["comparison_status"] for r in results[COMPARISON_TABLE]).items())),
-            "deferred": ["other_historical_sponsorship_items", "score_reproduction", "other_publishers_and_editions"],
+            "deferred": ["other_historical_sponsorship_items", "score_reproduction"],
             "input_representations": {name: "complete_pinned_native_main_fields" for name in COMPARISON_INPUTS},
         },
         "official_input_representations": {
