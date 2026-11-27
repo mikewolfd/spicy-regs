@@ -71,6 +71,17 @@ def _extract_document(d: dict, *, attachment_relationship=None) -> dict:
     }
 
 
+def _extract_docket(d: dict) -> dict:
+    """SpicyDocs' docket extract, shared with ``repair_regulations`` so placeholder RINs normalize consistently.
+
+    Imported here, not at module level: base CLI and MCP installs lack ``spicy-docs``.
+    """
+    from spicy_docs.schemas.regulations import DOCKET as SOURCE_DOCKET
+
+    row = SOURCE_DOCKET.extract(d)
+    return {column: row[column] for column in DOCKET.schema}
+
+
 DOCKET = RecordType(
     name="dockets",
     path_pattern="/docket/",
@@ -84,15 +95,7 @@ DOCKET = RecordType(
         "rin": pl.Utf8,
     },
     dedup_key="docket_id",
-    extract=lambda d: {
-        "docket_id": (v.strip('"') if (v := d.get("data", {}).get("id")) else v),
-        "agency_code": d.get("data", {}).get("attributes", {}).get("agencyId"),
-        "title": d.get("data", {}).get("attributes", {}).get("title"),
-        "docket_type": d.get("data", {}).get("attributes", {}).get("docketType"),
-        "modify_date": d.get("data", {}).get("attributes", {}).get("modifyDate"),
-        "abstract": d.get("data", {}).get("attributes", {}).get("dkAbstract"),
-        "rin": d.get("data", {}).get("attributes", {}).get("rin"),
-    },
+    extract=_extract_docket,
 )
 
 

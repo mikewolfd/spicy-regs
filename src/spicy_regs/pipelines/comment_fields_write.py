@@ -179,6 +179,12 @@ def only_adds_attachments(read: str | None, held: str | None, promoted_v2: bool 
 #: every rendition without a file) and 0.85.0 adds each entry's id, and the ETL rewrites a row only when its
 #: ``modify_date`` moves, so a row read earlier keeps the earlier spelling until the re-read replaces it.
 ADDITIVE = {"attachments_json": only_adds_attachments}
+#: Supported prepared write operations: standard Mirrulations re-read fill and bounded empty-string nullification.
+FILL_OPERATION = "fill"
+EMPTY_ORIGINAL_DOCUMENT_ID_OPERATION = "empty_original_document_id"
+OPERATIONS = frozenset({FILL_OPERATION, EMPTY_ORIGINAL_DOCUMENT_ID_OPERATION})
+#: DuckDB TRIM strips only ASCII space by default; strip all ASCII whitespace (matching Python ``str.strip``).
+_ASCII_WHITESPACE_SQL = "' ' || chr(9) || chr(10) || chr(11) || chr(12) || chr(13)"
 #: The Iceberg scan's virtual column naming each row's data file.
 FILE_COLUMN = "filename"
 #: Compressed bytes of catalog data files per batch; a larger file is still one batch.
@@ -213,9 +219,34 @@ def _columns_md5(columns: list[str]) -> str:
     return _row_md5({c: f'"{c}"' for c in columns})
 
 
-def _filled(column: str, old: str, new: str) -> str:
+def _prepared_operation(prepared: dict) -> str:
+    """Validate and return the prepared operation (defaulting older receipts to ``fill``)."""
+    operation = prepared.get("operation", FILL_OPERATION)
+    if operation not in OPERATIONS:
+        raise RuntimeError(f"unsupported prepared operation {operation!r}; expected one of {sorted(OPERATIONS)}")
+    if operation == EMPTY_ORIGINAL_DOCUMENT_ID_OPERATION and prepared.get("columns") != ["original_document_id"]:
+        raise RuntimeError(
+            f"{EMPTY_ORIGINAL_DOCUMENT_ID_OPERATION} may only modify ['original_document_id'], "
+            f"got {prepared.get('columns')!r}"
+        )
+    return operation
+
+
+def _is_blank_sql(expr: str) -> str:
+    return f"({expr} IS NOT NULL AND trim({expr}, {_ASCII_WHITESPACE_SQL}) = '')"
+
+
+def _filled(column: str, old: str, new: str, *, operation: str = FILL_OPERATION) -> str:
     """The cell after the fill, for row alias ``old`` and fill-row alias ``new`` (whose ``_held_`` value an
-    :data:`ADDITIVE` replacement expects to find)."""
+    :data:`ADDITIVE` replacement or empty-string nullification expects to find)."""
+    if operation == EMPTY_ORIGINAL_DOCUMENT_ID_OPERATION:
+        if column != "original_document_id":
+            raise ValueError(f"{operation} may only update original_document_id, not {column!r}")
+        held, kept = f'{new}."_held_{column}"', f'{old}."{column}"'
+        return (
+            f"CASE WHEN {_is_blank_sql(kept)} AND {kept} = {held} "
+            f"THEN CAST(NULL AS {COMMENT.sql_type(column)}) ELSE {kept} END"
+        )
     held, kept, read = f'{new}."_held_{column}"', f'{old}."{column}"', f'{new}."{column}"'
     read = f"CAST({read} AS {COMMENT.sql_type(column)})"
     if column not in ADDITIVE:
@@ -223,8 +254,13 @@ def _filled(column: str, old: str, new: str) -> str:
     return f"CASE WHEN {held} IS NULL THEN COALESCE({kept}, {read}) WHEN {kept} = {held} THEN {read} ELSE {kept} END"
 
 
-def _changes(column: str, old: str, new: str) -> str:
+def _changes(column: str, old: str, new: str, *, operation: str = FILL_OPERATION) -> str:
     """Whether the fill changes the cell (aliases as in :func:`_filled`)."""
+    if operation == EMPTY_ORIGINAL_DOCUMENT_ID_OPERATION:
+        if column != "original_document_id":
+            raise ValueError(f"{operation} may only update original_document_id, not {column!r}")
+        held, kept = f'{new}."_held_{column}"', f'{old}."{column}"'
+        return f"({_is_blank_sql(kept)} AND {kept} = {held})"
     held, kept, read = f'{new}."_held_{column}"', f'{old}."{column}"', f'{new}."{column}"'
     fills = f"({kept} IS NULL AND {read} IS NOT NULL)"
     return fills if column not in ADDITIVE else f"(CASE WHEN {held} IS NULL THEN {fills} ELSE {kept} = {held} END)"
@@ -585,6 +621,138 @@ def prepare(
     return receipt
 
 
+def prepare_empty_original_document_id(
+    workdir: Path,
+    *,
+    scope: dict[str, str] | None = None,
+    con=None,
+    resources: ExportResources | None = None,
+) -> dict:
+    """Plan nullification of blank/whitespace-only ``original_document_id`` cells at one catalog snapshot.
+
+    Reads only narrow columns (``comment_id``, ``modify_date``, ``original_document_id``, and ``filename``) from the
+    catalog so the 27M-row live table prepares without wide payload scans or an external staged read. Only rows where
+    ``original_document_id IS NOT NULL AND trim(original_document_id) = ''`` are scheduled to become ``NULL``;
+    ``comment_reference_values_json`` and every other column remain completely untouched. Touches no catalog row and
+    needs no lock.
+    """
+    _refuse_committed_failures(workdir)
+    if scope:
+        unknown = [column for column in scope if column not in COMMENT.schema]
+        if unknown:
+            raise ValueError(f"unknown scope column(s) for comments: {unknown}")
+    own = con is None
+    con = con or iceberg._connect()
+    out = fill_dir(workdir)
+    out.mkdir(parents=True, exist_ok=True)
+    try:
+        (resources or WRITE_RESOURCES).configure(con, out / "spill")
+        storage_access(con)
+        namespace = iceberg._selected_catalog_namespace(con, COMMENT)
+        snapshot = iceberg._read_snapshot(con, COMMENT, namespace=namespace)
+        source = iceberg._snapshot_query(COMMENT, snapshot, namespace=namespace)
+        if "original_document_id" not in con.sql(f"SELECT * FROM ({source}) LIMIT 0").columns:
+            raise RuntimeError(f"the comments catalog lacks original_document_id at snapshot {snapshot.snapshot_id}")
+        table_rows = con.execute(f"SELECT count(*) FROM ({source})").fetchone()[0]
+        where = " AND ".join(f'"{column}" = {_sql(value)}' for column, value in (scope or {}).items()) or "TRUE"
+        work = out / "work"
+        work.mkdir(exist_ok=True)
+        index_file = work / "catalog-index.parquet"
+        index = f"read_parquet({_sql(index_file)})"
+        physical = source.replace(
+            "SELECT *",
+            f"SELECT comment_id, modify_date, original_document_id, {FILE_COLUMN} AS _file",
+            1,
+        )
+        con.execute(
+            f"""COPY (SELECT comment_id, modify_date, original_document_id, _file
+                      FROM ({physical} WHERE {where}))
+                TO {_sql(index_file)} (FORMAT PARQUET, COMPRESSION ZSTD)"""
+        )
+        duplicated = con.execute(
+            f"SELECT count(*) FROM (SELECT comment_id FROM {index} GROUP BY 1 HAVING count(*) > 1)"
+        ).fetchone()[0]
+        if duplicated:
+            raise RuntimeError(f"{duplicated} comment ids appear more than once in the catalog; run the dedupe first")
+        con.execute(
+            f"""COPY (
+                SELECT comment_id, modify_date, _file,
+                       CAST(NULL AS VARCHAR) AS original_document_id,
+                       original_document_id AS _held_original_document_id
+                FROM {index}
+                WHERE {_is_blank_sql('original_document_id')}
+            ) TO {_sql(out / 'fill.parquet')} (FORMAT PARQUET, COMPRESSION ZSTD)"""
+        )
+        (
+            catalog_rows,
+            empty_string_rows,
+            whitespace_only_rows,
+            non_empty_rows,
+            already_null_rows,
+        ) = con.execute(
+            f"""SELECT count(*),
+                       count(*) FILTER (WHERE original_document_id = ''),
+                       count(*) FILTER (
+                           WHERE original_document_id <> ''
+                             AND {_is_blank_sql('original_document_id')}
+                       ),
+                       count(*) FILTER (
+                           WHERE original_document_id IS NOT NULL
+                             AND NOT {_is_blank_sql('original_document_id')}
+                       ),
+                       count(*) FILTER (WHERE original_document_id IS NULL)
+                FROM {index}"""
+        ).fetchone()
+        fill_rows = f"read_parquet({_sql(out / 'fill.parquet')})"
+        to_fill = con.execute(f"SELECT count(*) FROM {fill_rows}").fetchone()[0]
+        if to_fill != empty_string_rows + whitespace_only_rows:
+            raise RuntimeError(
+                f"planned empty_original_document_id rows ({to_fill}) differ from blank count "
+                f"({empty_string_rows + whitespace_only_rows})"
+            )
+        sizes = data_files(con)
+        con.execute(
+            f"""COPY (SELECT _file AS file, count(*) AS rows FROM {fill_rows}
+                      GROUP BY 1 ORDER BY 1) TO {_sql(out / 'files.parquet')} (FORMAT PARQUET)"""
+        )
+        files = con.execute(f"SELECT file, rows FROM read_parquet({_sql(out / 'files.parquet')})").fetchall()
+        if iceberg._read_snapshot(con, COMMENT, namespace=namespace) != snapshot:
+            raise RuntimeError("Catalog changed while preparing empty_original_document_id nullification; retry")
+    finally:
+        if own:
+            con.close()
+    unsized = [file for file, _ in files if sizes.get(file) is None]
+    if unsized:
+        raise RuntimeError(
+            f"no size read for {len(unsized)} data files (first {unsized[0]}); the batches pack by "
+            "size, so prepare again"
+        )
+    fill_sha256 = _sha256(out / "fill.parquet")
+    receipt = {
+        "operation": EMPTY_ORIGINAL_DOCUMENT_ID_OPERATION,
+        "prepare_id": f"{snapshot.snapshot_id}-{fill_sha256[:12]}-{secrets.token_hex(4)}",
+        "fill_sha256": fill_sha256,
+        "snapshot": snapshot.__dict__,
+        "scope": scope or {},
+        "profile": EMPTY_ORIGINAL_DOCUMENT_ID_OPERATION,
+        "columns": ["original_document_id"],
+        "table_rows": table_rows,
+        "catalog_rows": catalog_rows,
+        "rows_to_fill": to_fill,
+        "empty_string_rows": empty_string_rows,
+        "whitespace_only_rows": whitespace_only_rows,
+        "non_empty_rows": non_empty_rows,
+        "already_null_rows": already_null_rows,
+        "cells_by_column": {"original_document_id": 0},
+        "nullified_by_column": {"original_document_id": to_fill},
+        "files": {file: {"rows": rows, "bytes": sizes[file]} for file, rows in files},
+        "prepared_at": _now(),
+    }
+    (out / "prepare.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    shutil.rmtree(out / "work")
+    return receipt
+
+
 # --------------------------------------------------------------------------- #
 # Write
 # --------------------------------------------------------------------------- #
@@ -623,6 +791,7 @@ def write(
         raise RuntimeError("--no-by-file is for a scoped pilot: prepare with --docket or --agency first")
     if "columns" not in prepared:
         raise RuntimeError("prepare.json names no fill columns (it predates fill profiles); prepare again")
+    _prepared_operation(prepared)
     journal = _journal(workdir, prepared)
     blocking = [(path, line) for path, line in _unresolved_failures(workdir)
                 if path == journal or line.get("committed")]
@@ -670,6 +839,7 @@ def _batch_id(files: list[str]) -> str:
 
 
 def _write_batch(con, workdir, journal, prepared, table, files, expected, by_file) -> tuple[dict, int]:
+    operation = _prepared_operation(prepared)
     columns = list(COMMENT.schema)
     col_list = ", ".join(f'"{c}"' for c in columns)
     file_list = ", ".join(map(_sql, files))
@@ -699,15 +869,17 @@ def _write_batch(con, workdir, journal, prepared, table, files, expected, by_fil
         con.execute(f"DROP TABLE {processing}")
         con.execute(f"CREATE OR REPLACE TEMP VIEW _prior AS SELECT * FROM read_parquet({_sql(preimage)})")
         kept = {"preimage": str(preimage), "preimage_sha256": _sha256(preimage)}
-        need = " OR ".join(_changes(c, "p", "b") for c in prepared["columns"])
+        need = " OR ".join(_changes(c, "p", "b", operation=operation) for c in prepared["columns"])
         planned = con.execute(f"""SELECT count(*) FROM _prior p JOIN _batch b
             ON p.comment_id = b.comment_id AND p.modify_date IS NOT DISTINCT FROM b.modify_date WHERE {need}""").fetchone()[0]
         _append(journal, {"state": "pending", **ids, "planned": planned, "snapshot_before": current.__dict__, **kept,
                           "before_files": sorted(before_files or ()), "by_file": by_file})
         changed = 0
         if planned:
-            values = ", ".join(f'{_filled(c, "p", "b")} AS "{c}"' if c in prepared["columns"] else f'p."{c}"'
-                               for c in columns)
+            values = ", ".join(
+                f'{_filled(c, "p", "b", operation=operation)} AS "{c}"' if c in prepared["columns"] else f'p."{c}"'
+                for c in columns
+            )
             con.execute(f'CREATE OR REPLACE TEMP TABLE _filled AS SELECT {values} FROM _prior p JOIN _batch b '
                         f'ON p.comment_id=b.comment_id AND p.modify_date IS NOT DISTINCT FROM b.modify_date WHERE {need}')
             if con.execute('SELECT count(*) FROM _filled').fetchone()[0] != planned:
@@ -717,7 +889,18 @@ def _write_batch(con, workdir, journal, prepared, table, files, expected, by_fil
             except (ValueError, RuntimeError) as error:
                 raise FillVerificationError(f'Native subject and receipt differ: {error}') from error
             changed = planned
-            _check(con, table, columns, prepared["columns"], files, before_files, by_file, prepared["table_rows"], postimage=postimage)
+            _check(
+                con,
+                table,
+                columns,
+                prepared["columns"],
+                files,
+                before_files,
+                by_file,
+                prepared["table_rows"],
+                postimage=postimage,
+                operation=operation,
+            )
             kept |= {"postimage": str(postimage), "postimage_sha256": _sha256(postimage)}
         con.execute("COMMIT")
     except Exception as error:
@@ -747,7 +930,8 @@ def _write_batch(con, workdir, journal, prepared, table, files, expected, by_fil
 
 
 def _check(con, table: str, columns: list[str], filled: list[str], files: list[str], before_files: set[str] | None,
-           by_file: bool, table_rows: int, *, postimage: Path, at: int | None = None) -> None:
+           by_file: bool, table_rows: int, *, postimage: Path, at: int | None = None,
+           operation: str = FILL_OPERATION) -> None:
     """Inside the transaction: the batch's rows equal the pre-image with the fill applied to its ``filled`` columns,
     new files hold nothing else, and the table holds the ``table_rows`` it held at prepare.
 
@@ -787,7 +971,7 @@ def _check(con, table: str, columns: list[str], filled: list[str], files: list[s
                     FROM {table} WHERE {where} AND comment_id IN (SELECT comment_id FROM _prior)""")
     con.execute(f"COPY _got TO {_sql(postimage)} (FORMAT PARQUET, COMPRESSION ZSTD)")
     con.execute(f"DROP TABLE {table}")
-    want = {c: _filled(c, "p", "b") if c in filled else f'p."{c}"' for c in columns}
+    want = {c: _filled(c, "p", "b", operation=operation) if c in filled else f'p."{c}"' for c in columns}
     con.execute(f"""CREATE OR REPLACE TEMP TABLE _want AS SELECT p.comment_id, {_row_md5(want)} AS row_md5
                     FROM _prior p LEFT JOIN _batch b
                     ON p.comment_id = b.comment_id AND p.modify_date IS NOT DISTINCT FROM b.modify_date""")
@@ -856,7 +1040,8 @@ def _recover(con, journal: Path, pending: dict, prepared: dict, table: str, expe
     postimage = Path(kept["preimage"]).with_name(f"{Path(kept['preimage']).stem}-written.parquet")
     try:
         _check(con, table, list(COMMENT.schema), prepared["columns"], pending["files"], set(pending["before_files"]),
-               pending["by_file"], prepared["table_rows"], postimage=postimage, at=after["snapshot_id"])
+               pending["by_file"], prepared["table_rows"], postimage=postimage, at=after["snapshot_id"],
+               operation=_prepared_operation(prepared))
     except FillVerificationError as error:
         kept |= {"postimage": str(postimage), "postimage_sha256": _sha256(postimage)}
         _append(journal, {"state": "failed", **ids, "committed": True, "reason": f"recovered commit: {error}", **kept,
@@ -964,3 +1149,52 @@ def undo(workdir: Path, batch: str, *, expected_snapshot: int, con=None) -> dict
                           "snapshot_before": current.__dict__, "snapshot_after": after})
         raise FillVerificationError(f"the undo of batch {batch} committed but {problem}; stop (runbook)")
     return {"batch": batch, "rows_restored": restored, "snapshot_before": current.__dict__, "snapshot_after": after}
+
+
+def _cli_app():
+    from cyclopts import App
+
+    cli = App(name="comment-fields-write", help=__doc__)
+
+    @cli.command(name="prepare-empty-original-document-id")
+    def prepare_empty_original_document_id_command(
+        *, workdir: Path, docket: str | None = None, agency: str | None = None,
+    ) -> None:
+        """Prepare nullification of empty/whitespace-only original_document_id cells (no write)."""
+        from dotenv import load_dotenv
+
+        load_dotenv()
+        scope = {k: v for k, v in (("docket_id", docket), ("agency_code", agency)) if v}
+        print(json.dumps(prepare_empty_original_document_id(workdir, scope=scope or None), indent=2))
+
+    @cli.command(name="write")
+    def write_command(
+        *, workdir: Path, batch_bytes: int = BATCH_BYTES, by_file: bool = True, clear_failure: bool = False,
+    ) -> None:
+        """Apply the prepared comment catalog write under the catalog lock."""
+        from dotenv import load_dotenv
+
+        load_dotenv()
+        print(json.dumps(write(workdir, batch_bytes=batch_bytes, by_file=by_file, clear_failure=clear_failure), indent=2))
+
+    @cli.command(name="undo")
+    def undo_command(*, workdir: Path, batch: str, expected_snapshot: int) -> None:
+        """Restore a committed batch from its pre-image at ``--expected-snapshot``."""
+        from dotenv import load_dotenv
+
+        load_dotenv()
+        print(json.dumps(undo(workdir, batch, expected_snapshot=expected_snapshot), indent=2))
+
+    @cli.command(name="journals")
+    def journals_command(*, workdir: Path, prefix: str, push: bool = False) -> None:
+        """Pull or push write journals in the data bucket under ``--prefix``."""
+        from dotenv import load_dotenv
+
+        load_dotenv()
+        print(json.dumps(sync_journals(workdir, prefix, push=push)))
+
+    return cli
+
+
+if __name__ == "__main__":
+    _cli_app()()

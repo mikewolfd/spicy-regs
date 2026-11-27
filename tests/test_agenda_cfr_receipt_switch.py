@@ -111,7 +111,12 @@ def test_the_unified_agenda_night_is_the_receipt_routes_night(tmp_path):
     # Not in the night's read: the row stands as published, read back and mapped again.
     published = {(row["rin"], row["agenda_edition"]): row
                  for row in pq.read_table(FIXTURE / "unified_agenda/unified_agenda.parquet").to_pylist()}
-    assert rows[labelled["not_reread"], "202510"] == published[labelled["not_reread"], "202510"]
+    assert rows[labelled["not_reread"], "202510"] == {
+        **published[labelled["not_reread"], "202510"],
+        "legal_deadlines": None,
+        "parent_rin": None,
+        "child_rins": None,
+    }
     assert {row["related_rins"] is None for row in rows.values()} == {True, False}
 
 
@@ -155,7 +160,7 @@ def test_the_cfr_night_is_the_receipt_routes_night_once_the_table_carries_its_ma
 
 def test_the_page_urls_are_their_identities(tmp_path):
     """Each receipt's ``url`` (receipt-only, never published) is the builder's template of the row's identity."""
-    from spicy_regs.etl_receipts import read_with_receipts
+    from spicy_regs.etl_receipts import read_with_receipts, selected_subject_policy
     from spicy_regs.transforms.regulations_receipts import policy
 
     pages = {
@@ -166,9 +171,11 @@ def test_the_page_urls_are_their_identities(tmp_path):
     for dataset, page in pages.items():
         from spicy_regs.etl_receipts import select_receipts
 
+        subject_path = FIXTURE / dataset / f"{dataset}.parquet"
         scoped = select_receipts(FIXTURE / dataset / "etl_receipts.parquet", tmp_path / f"{dataset}.parquet",
                                  dataset=dataset)
-        rows = list(read_with_receipts([FIXTURE / dataset / f"{dataset}.parquet"], [scoped], policy(dataset),
+        admitted = selected_subject_policy(policy(dataset), [subject_path])
+        rows = list(read_with_receipts([subject_path], [scoped], admitted,
                                        generation_id=MANIFEST[dataset]["generationId"]))
         assert len(rows) == MANIFEST[dataset]["rows"]
         assert all(row["url"] == row["raw_conversion_inputs"]["url"] == page(row) for row in rows)
@@ -217,7 +224,8 @@ def test_the_hosted_job_merges_at_the_pinned_table_and_publishes_no_receipts(tmp
     alone, publishes the night's table without receipts, and that table is the receipt route's night."""
     import functools
 
-    from spicy_regs import subject_catalog
+    from spicy_regs import etl_policy_registry, subject_catalog
+    from spicy_regs.etl_receipts import selected_subject_policy
     from spicy_regs.generations import build_generation
     from spicy_regs.sources import publication
     from spicy_regs.transforms.regulations_receipts import policy
@@ -226,11 +234,16 @@ def test_the_hosted_job_merges_at_the_pinned_table_and_publishes_no_receipts(tmp
 
     family = MANIFEST[dataset]["family"]
     index = stored(remote, monkeypatch)
+    subject_path = FIXTURE / dataset / f"{dataset}.parquet"
+    prior_policy = selected_subject_policy(policy(dataset), [subject_path])
+    installed = etl_policy_registry.installed_policies()
     with monkeypatch.context() as as_published:
         as_published.setattr(subject_catalog, "retired_receipt_datasets", lambda: frozenset())
+        as_published.setattr(etl_policy_registry, "installed_policies", lambda: {**installed, dataset: prior_policy})
         build_generation(tmp_path / "prior-generation", family=family,
-                         files=[FIXTURE / dataset / f"{dataset}.parquet"], expected_keys=[f"{dataset}.parquet"],
-                         receipt_path=FIXTURE / dataset / "etl_receipts.parquet", receipt_policies=[policy(dataset)],
+                         files=[subject_path], expected_keys=[f"{dataset}.parquet"],
+                         receipt_path=FIXTURE / dataset / "etl_receipts.parquet",
+                         receipt_policies=[prior_policy],
                          receipt_generation_id=MANIFEST[dataset]["generationId"])
         publication.publish_generation(tmp_path / "prior-generation", client=remote, bucket="spicy-regs",
                                        prior_index=publication.empty_index())

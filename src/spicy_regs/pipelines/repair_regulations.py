@@ -10,16 +10,22 @@ state. Raw-reader callers may use ``repair_records`` with their own retained
 input pins.
 """
 
+from collections import Counter
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict
+from datetime import UTC, datetime
 from importlib.metadata import version
 import json
 from pathlib import Path
+import re
 from tempfile import TemporaryDirectory
 
 from cyclopts import App
+import duckdb
+import pyarrow as pa
+import pyarrow.parquet as pq
 from rulespec_artifacts import ArtifactPin, LocalMemberSource
-from spicy_docs.schemas.regulations import RECORD_TYPES as SOURCE_TYPES
+from spicy_docs.schemas.regulations import RECORD_TYPES as SOURCE_TYPES, _docket_rin
 from spicy_docs.source_native import SourceNativeReleaseReader
 from spicy_docs.sources.regulations_gov.api import AttachmentRelationship
 from spicy_docs.sources.regulations_gov.attachment_records import attachment_records_json
@@ -44,6 +50,8 @@ PROFILES = {
     "comments": REGULATIONS_GOV_COMMENT_PROFILE,
 }
 COMMENT_RECEIPT = "comments-repair.json"
+DOCKETS_RIN_RECEIPT = "dockets-rin-repair.json"
+_EXPECT_PRIOR_RE = re.compile(r"[0-9a-f]{8,64}")
 
 
 def repair_records(
@@ -290,7 +298,234 @@ def _rows(con, sql: str) -> list[dict]:
     return [dict(zip(names, row)) for row in cursor.fetchall()]
 
 
+def _normalize_expect_prior(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    digest = cleaned.removeprefix("sha256:")
+    if not _EXPECT_PRIOR_RE.fullmatch(digest):
+        raise ValueError(f"expect_prior must be 8-64 lowercase hex chars (optional sha256: prefix), got {value!r}")
+    return digest
+
+
+def repair_docket_rins(
+    output_dir: Path,
+    *,
+    publish: bool = False,
+    public_url: str | None = None,
+    inputs=None,
+    expect_prior: str | None = None,
+) -> dict:
+    """Normalize placeholder docket ``rin`` values on the selected ``dockets`` table.
+
+    ``dockets`` has retired receipts (``receipts_retired: true``), so ``run-rollup-dockets``
+    raises ``Unchanged``. This repair reads the selected ``dockets.parquet``, normalizes
+    ``rin`` with :func:`spicy_docs.schemas.regulations._docket_rin` (setting ``'Not Assigned'``,
+    ``'0000-AA00'``, and blank/whitespace values to ``NULL`` while preserving every valid and
+    historical RIN and all 6 other columns verbatim), verifies row count, schema parity, and
+    non-``rin`` column identity, seals the 7-column ``regulations-native-v1`` generation via
+    :func:`finish_dataset`, and publishes only when ``publish=True`` and rows changed.
+    """
+    from spicy_regs.pipelines.regulatory_publication import finish_dataset, restore_dataset
+    from spicy_regs.selected_generations import SelectedInputs, unique_build_directory
+    from spicy_regs.sources import publication
+    from spicy_regs.transforms.regulations_receipts import policy
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    expected_prior = _normalize_expect_prior(expect_prior)
+    selected = (
+        inputs
+        if inputs is not None
+        else SelectedInputs(output_dir, unique_build_directory(output_dir), public_url=public_url)
+    )
+    if publish and selected.index is None:
+        raise ValueError("Publishing dockets RIN repair requires a captured remote publication index")
+
+    family = "dockets"
+    prior_digest: str | None = None
+    if selected.index is not None:
+        owner = publication.table_owner(selected.index, "dockets.parquet")
+        family = owner[0] if owner else "dockets"
+        prior_entry = selected.index.get("families", {}).get(family)
+        if isinstance(prior_entry, Mapping):
+            digest_value = prior_entry.get("artifactDigest")
+            prior_digest = digest_value if isinstance(digest_value, str) else None
+
+    if expected_prior is not None:
+        if prior_digest is None:
+            raise ValueError(f"expect_prior {expected_prior!r} requires a live remote index entry for {family!r}")
+        if not prior_digest.removeprefix("sha256:").startswith(expected_prior):
+            raise ValueError(f"Live {family} digest is {prior_digest}, not the expected {expected_prior}")
+
+    declared = policy("dockets")
+    expected_columns = list(declared.subject_schema.names)
+    total_rows = 0
+    non_null_rin_before = 0
+    non_null_rin_after = 0
+    changed_rows = 0
+    nullified_rows = 0
+    trimmed_rows = 0
+    unchanged_non_null_rows = 0
+    changed_counts: Counter[tuple[str | None, str | None]] = Counter()
+
+    with TemporaryDirectory(prefix=".docket-rin-repair-", dir=output_dir) as directory:
+        staging = Path(directory)
+        prior_path = staging / "prior.parquet"
+        repaired_path = staging / "dockets.parquet"
+        if not restore_dataset(output_dir, "dockets", prior_path, inputs=selected):
+            raise RuntimeError("dockets: no selected dockets generation to repair")
+
+        with pq.ParquetFile(prior_path) as parquet_file:
+            source_schema = parquet_file.schema_arrow
+            if source_schema.names != expected_columns:
+                raise ValueError(
+                    f"dockets schema mismatch: expected {expected_columns}, got {source_schema.names}"
+                )
+            rin_index = source_schema.get_field_index("rin")
+            rin_field = source_schema.field(rin_index)
+            with pq.ParquetWriter(repaired_path, source_schema, compression="zstd") as writer:
+                for batch in parquet_file.iter_batches(batch_size=50_000):
+                    raw_rins = batch.column(rin_index).to_pylist()
+                    normalized_rins: list[str | None] = []
+                    for value in raw_rins:
+                        total_rows += 1
+                        if value is not None:
+                            non_null_rin_before += 1
+                        normalized = _docket_rin(value)
+                        normalized_rins.append(normalized)
+                        if normalized is not None:
+                            non_null_rin_after += 1
+                        if normalized != value:
+                            changed_rows += 1
+                            changed_counts[(value, normalized)] += 1
+                            if value is not None and normalized is None:
+                                nullified_rows += 1
+                            elif value is not None and normalized is not None:
+                                trimmed_rows += 1
+                        elif value is not None:
+                            unchanged_non_null_rows += 1
+                    updated = batch.set_column(
+                        rin_index, rin_field, pa.array(normalized_rins, type=rin_field.type)
+                    )
+                    writer.write_batch(updated)
+
+        with pq.ParquetFile(repaired_path) as repaired_file:
+            if repaired_file.metadata.num_rows != total_rows:
+                raise RuntimeError(
+                    f"dockets RIN repair row count changed: expected {total_rows}, got {repaired_file.metadata.num_rows}"
+                )
+            if repaired_file.schema_arrow.names != expected_columns:
+                raise RuntimeError("dockets RIN repair altered table columns")
+            for batch in repaired_file.iter_batches(batch_size=50_000, columns=["rin"]):
+                for value in batch.column(0).to_pylist():
+                    if value is not None and _docket_rin(value) != value:
+                        raise RuntimeError(f"dockets RIN repair left non-normalized rin value: {value!r}")
+
+        non_rin = ", ".join(f'"{column}"' for column in expected_columns if column != "rin")
+        con = duckdb.connect()
+        try:
+            diff_rows = con.execute(
+                f"""SELECT
+                    (SELECT count(*) FROM (
+                        SELECT {non_rin} FROM read_parquet(?) EXCEPT ALL SELECT {non_rin} FROM read_parquet(?)
+                    ))
+                    + (SELECT count(*) FROM (
+                        SELECT {non_rin} FROM read_parquet(?) EXCEPT ALL SELECT {non_rin} FROM read_parquet(?)
+                    ))""",
+                [str(prior_path), str(repaired_path), str(repaired_path), str(prior_path)],
+            ).fetchone()
+            remaining_placeholders = con.execute(
+                """SELECT count(*) FROM read_parquet(?)
+                   WHERE rin IN ('Not Assigned', '0000-AA00')
+                      OR (rin IS NOT NULL AND trim(rin, ' ' || chr(9) || chr(10) || chr(11) || chr(12) || chr(13)) = '')""",
+                [str(repaired_path)],
+            ).fetchone()
+        finally:
+            con.close()
+        if diff_rows is None or diff_rows[0] != 0:
+            raise RuntimeError(f"dockets RIN repair modified {diff_rows[0] if diff_rows else 'unknown'} non-rin rows")
+        if remaining_placeholders is None or remaining_placeholders[0] != 0:
+            raise RuntimeError(
+                f"dockets RIN repair left {remaining_placeholders[0] if remaining_placeholders else 'unknown'} placeholder RINs"
+            )
+
+        publish_effective = publish and changed_rows > 0
+        finish_dataset(output_dir, "dockets", repaired_path, publish=publish_effective, inputs=selected)
+
+    final_path = output_dir / "dockets.parquet"
+    if not pq.read_schema(final_path).equals(declared.subject_schema):
+        raise RuntimeError("Sealed dockets.parquet schema does not match regulations-native-v1")
+    if pq.ParquetFile(final_path).metadata.num_rows != total_rows:
+        raise RuntimeError("Sealed dockets.parquet row count does not match input")
+
+    published_digest: str | None = None
+    if publish_effective and selected.index is not None:
+        published_entry = selected.index.get("families", {}).get(family)
+        if isinstance(published_entry, Mapping):
+            digest_value = published_entry.get("artifactDigest")
+            published_digest = digest_value if isinstance(digest_value, str) else None
+
+    receipt = {
+        "format": "spicy-regs-dockets-rin-repair",
+        "version": 1,
+        "table": "dockets",
+        "family": family,
+        "policy_version": declared.policy_version,
+        "mode": "publish" if publish_effective else "dry-run",
+        "requested_publish": publish,
+        "published": publish_effective,
+        "skipped_reason": "already_clean" if publish and changed_rows == 0 else None,
+        "prior_digest": prior_digest,
+        "published_digest": published_digest,
+        "columns": expected_columns,
+        "total_rows": total_rows,
+        "non_null_rin_before": non_null_rin_before,
+        "non_null_rin_after": non_null_rin_after,
+        "changed_rows": changed_rows,
+        "nullified_rows": nullified_rows,
+        "trimmed_rows": trimmed_rows,
+        "unchanged_non_null_rows": unchanged_non_null_rows,
+        "remaining_placeholder_rins": 0,
+        "non_rin_columns_unchanged": True,
+        "changed_values_summary": [
+            {"before": before, "after": after, "rows": count}
+            for (before, after), count in sorted(
+                changed_counts.items(), key=lambda item: (-item[1], item[0][0] or "", item[0][1] or "")
+            )[:50]
+        ],
+        "output_path": str(final_path),
+        "spicy_docs_version": version("spicy-docs"),
+        "acquisition_manifest_changed": False,
+        "repaired_at": datetime.now(UTC).isoformat(),
+    }
+    (output_dir / DOCKETS_RIN_RECEIPT).write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+    return receipt
+
+
 app = App(help=__doc__)
+
+
+@app.command(name="repair-docket-rins")
+def repair_docket_rins_command(
+    *,
+    output_dir: Path = Path("output"),
+    skip_upload: bool = True,
+    public_url: str | None = None,
+    expect_prior: str | None = None,
+) -> None:
+    """Normalize placeholder RINs in the selected dockets table and optionally publish."""
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    result = repair_docket_rins(
+        output_dir,
+        publish=not skip_upload,
+        public_url=public_url,
+        expect_prior=expect_prior,
+    )
+    print(json.dumps(result, indent=2))
 
 
 @app.default

@@ -38,6 +38,11 @@ from spicy_docs.interpretation.bill_stage import infer_stage, infer_stage_from_a
 from spicy_docs.interpretation.bill_summaries import summarize_bill, summarize_diff
 from spicy_docs.interpretation.gemini_call import DEFAULT_MODEL, model_call
 from spicy_docs.interpretation.section_classification import classify_sections
+from spicy_docs.interpretation.version_kind import (
+    VERSION_KIND_LABELS,
+    VERSION_KIND_WARNINGS,
+    version_kind_finding,
+)
 from spicy_docs.interpretation.vote_matching import (
     VoteMatchError,
     VoteReference,
@@ -66,6 +71,7 @@ from spicy_docs.sources.congress.bill_versions import (
     consecutive_pairs,
     printing_order,
     printing_version_code,
+    version_slug,
 )
 from spicy_docs.sources.congress.bulk_status import (
     BulkListingEntry,
@@ -1452,6 +1458,168 @@ def _put(columns: dict[str, list[Any]], index: int, values: Mapping[str, Any]) -
     return moved
 
 
+#: Normalized string columns where retained held rows must coerce ``"" -> None`` without altering raw status/XML.
+HELD_EMPTY_STRING_COLUMNS: Mapping[str, tuple[str, ...]] = {
+    "bill_versions": ("version_date",),
+    "section_diffs": ("from_version_date", "to_version_date"),
+    "bill_cosponsors": ("sponsorship_date", "sponsorship_withdrawn_date", "district"),
+}
+
+
+def _kind_code_for_row(
+    version_code: str | None,
+    label: str | None,
+    package_id: str | None,
+    *,
+    slug_cache: dict[str, str | None] | None = None,
+) -> str | None:
+    """The code a held ``bill_versions`` row's kind reads from: matches ``spicy_docs._kind_code``."""
+    if not version_code or not label:
+        return version_code
+    if slug_cache is not None and label in slug_cache:
+        stage = slug_cache[label]
+    else:
+        try:
+            stage = version_slug(label)
+        except VersionCodeError:
+            stage = None
+        if slug_cache is not None:
+            slug_cache[label] = stage
+    if stage is None or version_code == stage:
+        return version_code
+    version = BillTextVersion(type=label, date=None, formats=(), package_id=package_id)
+    try:
+        reprint = printing_version_code(version)
+    except VersionCodeError:
+        return version_code
+    return stage if version_code == reprint != stage else version_code
+
+
+def reclassify_held_bill_versions(versions: Path) -> dict[str, int]:
+    """Re-run ``version_kind_finding`` over held ``bill_versions`` rows and normalize empty ``version_date`` to NULL.
+
+    Deterministic and non-refetching, matching :func:`restage_held_rows`: classifies each row from its stored
+    ``version_code``, ``label``, ``package_id``, ``section_count`` (and ``kind_body_bytes`` when retained, else
+    ``None``), updates ``kind``, ``kind_label``, ``kind_warning`` (and ``kind_rule`` / ``kind_section_count`` when
+    present in the schema), and normalizes ``"" -> None`` on ``version_date``. Rewrites ``versions`` in place only
+    when at least one row moved.
+    """
+    import pyarrow.parquet as pq
+
+    schema_names = set(pq.read_schema(versions).names)
+    required = ("version_code", "kind", "kind_label", "kind_warning")
+    if not set(required) <= schema_names:
+        return {"rows": pq.read_metadata(versions).num_rows, "kind_moved": 0, "version_date_cleaned": 0, "rows_moved": 0}
+    optional_reads = [c for c in ("label", "package_id", "section_count", "kind_body_bytes") if c in schema_names]
+    optional_writes = [c for c in ("kind_rule", "kind_section_count", "version_date") if c in schema_names]
+    read_cols = list(dict.fromkeys([*required, *optional_reads, *optional_writes]))
+    data = pq.read_table(versions, columns=read_cols).to_pydict()
+    version_codes = data["version_code"]
+    labels = data.get("label")
+    package_ids = data.get("package_id")
+    section_counts = data.get("section_count")
+    kind_body_bytes = data.get("kind_body_bytes")
+    has_kind_rule = "kind_rule" in schema_names
+    has_kind_section_count = "kind_section_count" in schema_names
+    has_version_date = "version_date" in schema_names
+
+    write_cols = ["kind", "kind_label", "kind_warning"]
+    if has_kind_rule:
+        write_cols.append("kind_rule")
+    if has_kind_section_count:
+        write_cols.append("kind_section_count")
+    if has_version_date:
+        write_cols.append("version_date")
+    updated = {col: data[col] for col in write_cols}
+
+    n = len(version_codes)
+    kind_moved = version_date_cleaned = rows_moved = 0
+    findings: dict[tuple[str | None, int | None, int | None], Any] = {}
+    slug_cache: dict[str, str | None] = {}
+    for index in range(n):
+        code = _kind_code_for_row(
+            version_codes[index],
+            labels[index] if labels is not None else None,
+            package_ids[index] if package_ids is not None else None,
+            slug_cache=slug_cache,
+        )
+        sc = _int_or_none(section_counts[index]) if section_counts is not None else None
+        bb = _int_or_none(kind_body_bytes[index]) if kind_body_bytes is not None else None
+        finding_key = (code, sc, bb)
+        if (finding := findings.get(finding_key)) is None:
+            finding = findings[finding_key] = version_kind_finding(code, section_count=sc, body_bytes=bb)
+        values: dict[str, str | None] = {
+            "kind": text(finding.kind),
+            "kind_label": text(VERSION_KIND_LABELS.get(finding.kind)),
+            "kind_warning": text(VERSION_KIND_WARNINGS.get(finding.kind)),
+        }
+        if has_kind_rule:
+            values["kind_rule"] = text(finding.rule)
+        if has_kind_section_count:
+            values["kind_section_count"] = text(finding.section_count)
+        row_moved = False
+        if updated["kind"][index] != values["kind"]:
+            kind_moved += 1
+        if _put(updated, index, values):
+            row_moved = True
+        if has_version_date and updated["version_date"][index] == "":
+            updated["version_date"][index] = None
+            version_date_cleaned += 1
+            row_moved = True
+        if row_moved:
+            rows_moved += 1
+    if rows_moved:
+        table = pq.read_table(versions)
+        for column, values_col in updated.items():
+            table = set_column(table, column, values_col)
+        write_in_place(table, versions)
+    return {
+        "rows": n,
+        "kind_moved": kind_moved,
+        "version_date_cleaned": version_date_cleaned,
+        "rows_moved": rows_moved,
+    }
+
+
+def clean_held_empty_strings(path: Path, columns: Sequence[str]) -> dict[str, int]:
+    """Normalize empty strings ``"" -> None`` on ``columns`` in ``path`` without altering any other column.
+
+    Preserves raw provenance columns such as ``sponsorship_withdrawn_date_status`` and ``source_xml``. Rewrites
+    ``path`` in place only when at least one empty string was normalized.
+    """
+    import pyarrow as pa
+    import pyarrow.compute as pc
+    import pyarrow.parquet as pq
+
+    compute: Any = pc
+    schema_names = set(pq.read_schema(path).names)
+    present = [col for col in columns if col in schema_names]
+    if not present:
+        return {"rows": pq.read_metadata(path).num_rows, **{f"{col}_cleaned": 0 for col in columns}, "rows_moved": 0}
+    subset = pq.read_table(path, columns=present)
+    n = subset.num_rows
+    cleaned: dict[str, int] = {col: 0 for col in columns}
+    replacements: dict[str, Any] = {}
+    row_mask = None
+    null_string = pa.scalar(None, type=pa.string())
+    for col in present:
+        arr = subset[col]
+        is_empty = compute.fill_null(compute.equal(arr, ""), False)
+        count = int(compute.sum(is_empty).as_py() or 0)
+        cleaned[col] = count
+        if count:
+            replacements[col] = compute.if_else(is_empty, null_string, arr)
+            row_mask = is_empty if row_mask is None else compute.or_(row_mask, is_empty)
+    rows_moved = int(compute.sum(row_mask).as_py() or 0) if row_mask is not None else 0
+    if rows_moved:
+        table = pq.read_table(path)
+        for col, replaced_col in replacements.items():
+            index = table.schema.get_field_index(col)
+            table = table.set_column(index, col, replaced_col)
+        write_in_place(table, path)
+    return {"rows": n, **{f"{col}_cleaned": cleaned[col] for col in columns}, "rows_moved": rows_moved}
+
+
 def _bill_type(bill_id: str) -> str | None:
     """The type a ``bill_id`` names, through its owner's grammar; None for a key it refuses."""
     try:
@@ -2721,6 +2889,28 @@ def build_bill_family(
         logger.info("Bill family: the running stage rule moves {:,} held bill rows and {:,} action rows", *restaged)
         if evidence is not None:
             evidence.event("held-rows-restaged", bills=restaged[0], actions=restaged[1])
+        reclassified = reclassify_held_bill_versions(merged["bill_versions"])
+        cleaned_diffs = clean_held_empty_strings(merged["section_diffs"], HELD_EMPTY_STRING_COLUMNS["section_diffs"])
+        cleaned_cosponsors = clean_held_empty_strings(
+            merged["bill_cosponsors"], HELD_EMPTY_STRING_COLUMNS["bill_cosponsors"]
+        )
+        if reclassified["rows_moved"] or cleaned_diffs["rows_moved"] or cleaned_cosponsors["rows_moved"]:
+            logger.info(
+                "Bill family: held-row cleanup moved {:,} bill_versions ({:,} kinds, {:,} dates), "
+                "{:,} section_diffs, {:,} bill_cosponsors",
+                reclassified["rows_moved"],
+                reclassified["kind_moved"],
+                reclassified["version_date_cleaned"],
+                cleaned_diffs["rows_moved"],
+                cleaned_cosponsors["rows_moved"],
+            )
+        if evidence is not None:
+            evidence.event(
+                "held-rows-cleaned",
+                bill_versions=reclassified,
+                section_diffs=cleaned_diffs,
+                bill_cosponsors=cleaned_cosponsors,
+            )
     paths.append(publish("public_activity_events", events))
     # The last two outputs are this repository's own tables, not contracts, so
     # they go through the same merge helper one level down.

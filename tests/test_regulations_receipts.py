@@ -525,19 +525,30 @@ def test_v1_fr_docket_links_pair_restores_and_rewrites_under_v2_with_its_candida
         list(read_internal(ReceiptInput("fr_docket_links", (subject,), receipts, "old")))
 
 
-def test_v1_unified_agenda_pair_restores_and_rewrites_under_v2_with_related_rins_null(tmp_path):
-    """A pair written before SpicyDocs 0.67.0 read RELATED_RIN_LIST stays readable; NULL there means never read."""
+@pytest.mark.parametrize("version", ["regulations-native-v2", "regulations-native-v1"])
+def test_earlier_unified_agenda_pair_restores_and_rewrites_under_v3_with_unread_fields_null(tmp_path, version):
+    """Pairs written under v1 or v2 stay readable under v3; SQL NULL marks fields predating the read."""
     from spicy_regs.policy_migrations import earlier_policies
     from spicy_regs.etl_receipts import write_dataset
     from spicy_regs.transforms.regulations_receipts import materialize_internal
     from spicy_regs.transforms.regulations_shape import shape_record
 
     current = policy("unified_agenda")
-    (prior,) = earlier_policies(current)
-    assert (prior.policy_version, current.policy_version) == ("regulations-native-v1", "regulations-native-v2")
-    assert set(current.subject_schema.names) - set(prior.subject_schema.names) == {"related_rins"}
-    assert current.subject_schema.names[:-1] == prior.subject_schema.names  # appended; earlier columns keep places
+    earlier = {p.policy_version: p for p in earlier_policies(current)}
+    assert (current.policy_version, list(earlier)) == (
+        "regulations-native-v3", ["regulations-native-v2", "regulations-native-v1"],
+    )
+    v2, v1 = earlier["regulations-native-v2"], earlier["regulations-native-v1"]
+    assert set(v2.subject_schema.names) - set(v1.subject_schema.names) == {"related_rins"}
+    assert v2.subject_schema.names[:-1] == v1.subject_schema.names
+    v3_added = ("legal_deadlines", "parent_rin", "child_rins")
+    assert set(current.subject_schema.names) - set(v2.subject_schema.names) == set(v3_added)
+    assert current.subject_schema.names == [*v2.subject_schema.names, *v3_added]
+
+    prior = earlier[version]
     raw = {"rin": "1000-AA00", "agenda_edition": "202510", "timetable_json": "[]"}
+    if version == "regulations-native-v2":
+        raw["related_rins_json"] = "null"
     shaped = shape_record("unified_agenda", raw)
     held = {name: shaped.get(name) for name in prior.input_fields}
     subject, receipts = write_dataset([(held, context("old"))], tmp_path / "old", prior)
@@ -548,15 +559,27 @@ def test_v1_unified_agenda_pair_restores_and_rewrites_under_v2_with_related_rins
     assert subject.read_bytes() == original
     # The incremental build's prior: SQL NULL, never the JSON text "null", so build_unified_agenda re-reads it.
     [prior_row] = pq.read_table(materialize_internal(selected, tmp_path / "_ua_prior.parquet")).to_pylist()
-    assert "related_rins_json" in prior_row and prior_row["related_rins_json"] is None
+    assert prior_row["related_rins_json"] == ("null" if version == "regulations-native-v2" else None)
+    assert prior_row["legal_deadlines_json"] is None
+    assert prior_row["parent_rin"] is None
+    assert prior_row["child_rins_json"] is None
     new = write(tmp_path, "unified_agenda", [restored], generation="new", label="new")
     [row] = pq.read_table(new.subjects[0]).to_pylist()
     assert row["related_rins"] is None
+    assert (row["legal_deadlines"], row["parent_rin"], row["child_rins"]) == (None, None, None)
     assert (row["rin"], row["agenda_edition"], row["timetable"]) == ("1000-AA00", "202510", [])
-    # A v2 row whose edition was read and states no list keeps the JSON text, so its edition counts as held.
-    read = write(tmp_path, "unified_agenda", [{**raw, "related_rins_json": "null"}], generation="read", label="read")
+    # A v3 row whose edition was read and states no lists keeps the JSON text, so its edition counts as held.
+    read = write(
+        tmp_path,
+        "unified_agenda",
+        [{**raw, "related_rins_json": "null", "legal_deadlines_json": "null", "child_rins_json": "null"}],
+        generation="read",
+        label="read",
+    )
     [read_prior] = pq.read_table(materialize_internal(read, tmp_path / "_ua_read_prior.parquet")).to_pylist()
     assert read_prior["related_rins_json"] == "null"
+    assert read_prior["legal_deadlines_json"] == "null"
+    assert read_prior["child_rins_json"] == "null"
 
 
 def test_unified_agenda_related_rins_refuse_an_unknown_member():

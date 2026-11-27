@@ -167,7 +167,8 @@ def native_regulations_views(available_tables):
             UNION ALL SELECT comment_id,docket_id,'regulations_object',comment_on_object_id
             FROM comments WHERE comment_on_object_id IS NOT NULL
             UNION ALL SELECT comment_id,docket_id,'regulations_original_document',original_document_id
-            FROM comments WHERE original_document_id IS NOT NULL"""
+            FROM comments WHERE original_document_id IS NOT NULL
+              AND trim(original_document_id, ' ' || chr(9) || chr(10) || chr(11) || chr(12) || chr(13)) <> ''"""
         add("comment_native_references", required, sql,
             "Publisher document references on each comment, distinguished by reference kind.",
             ("comment_id", "target_kind", "target_key"))

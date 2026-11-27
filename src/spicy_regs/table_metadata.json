@@ -41,7 +41,7 @@
       {
         "column_name": "rin",
         "column_type": "VARCHAR",
-        "description": "Regulation Identifier Number as reported by regulations.gov. Rarely populated: null, empty, or `Not Assigned` on more than 99% of dockets, and where set it holds a single RIN, often not the most recent one, even though a long-running docket can span several. Not a usable RIN join key; to link a RIN to a docket, use `fr_docket_links` (it carries both `regulation_id_numbers_json` and `docket_id`)."
+        "description": "Regulation Identifier Number as reported by regulations.gov, with publisher placeholders (`Not Assigned`, `0000-AA00`) and blank strings normalized to NULL while valid and historical RINs remain verbatim. Rarely populated (NULL on more than 99% of dockets), and where set it holds a single RIN, often not the most recent one, even though a long-running docket can span several. Not a usable RIN join key; to link a RIN to a docket, use `fr_docket_links` (it carries both `regulation_id_numbers` and `docket_id`)."
       }
     ],
     "subject": "rulemaking",
@@ -344,7 +344,7 @@
       {
         "column_name": "original_document_id",
         "column_type": "VARCHAR",
-        "description": "Literal originalDocumentId, retained as an unresolved legacy source reference."
+        "description": "Publisher `originalDocumentId` when non-blank; NULL when absent, null, or empty/whitespace (verbatim raw value preserved in `comment_reference_values_json`). Retained as an unresolved legacy source reference, not a current key."
       },
       {
         "column_name": "comment_reference_values_json",
@@ -1392,17 +1392,32 @@
       {
         "column_name": "first_action_date",
         "column_type": "VARCHAR",
-        "description": "Earliest distinct calendar date derived from the timetable, or NULL when none is derivable. Source month-only dates (MM/00/YYYY) use day 01 here; timetable retains their original precision."
+        "description": "Earliest distinct calendar date derived from the timetable within years 1900–2100, or NULL when none is derivable. Source month-only dates (MM/00/YYYY) use day 01 here, and out-of-range sentinel or typo years are excluded; timetable retains literal source dates."
       },
       {
         "column_name": "next_action_date",
         "column_type": "VARCHAR",
-        "description": "Second distinct calendar date derived from the timetable, or NULL when fewer than two dates are derivable. May be historical; it is not selected relative to today. Source month-only dates use day 01 here; timetable retains the literal dates."
+        "description": "Second distinct calendar date derived from the timetable within years 1900–2100, or NULL when fewer than two dates are derivable. May be historical; it is not selected relative to today. Source month-only dates use day 01 here, and out-of-range sentinel or typo years are excluded; timetable retains literal source dates."
       },
       {
         "column_name": "related_rins",
         "column_type": "STRUCT(rin VARCHAR, rin_relation VARCHAR)[]",
         "description": "Native list of the RINs the publisher lists as related to this entry, each a (`rin`, `rin_relation`) pair in source order; a RIN listed twice keeps both positions. Values are stripped of leading and trailing whitespace while internal whitespace is preserved verbatim, and otherwise kept as written: no RIN shape is checked, so self-references, malformed values such as `d as AF61` and the cut-off relations `Related t` and `Previously report` remain. The publisher documents `Merge with` but writes `Merged with`. NULL means the row states no related-RIN list only in a generation replayed from every retained edition; a row restored from a regulations-native-v1 generation, which predates this column, is also NULL because it was never read. Incremental builds re-read such editions through the bounded backfill (60 per run, covering the full series in a single run), so that ambiguity lasts only until every held edition has been read once, except for a restored row the re-read no longer lists, which stays NULL. `agenda_related_rins` resolves each pair against held agenda rows. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+      },
+      {
+        "column_name": "legal_deadlines",
+        "column_type": "STRUCT(dline_type VARCHAR, dline_action_stage VARCHAR, dline_date VARCHAR, dline_desc VARCHAR)[]",
+        "description": "Native list of statutory or judicial deadlines listed in the agenda entry's `LEGAL_DLINE_LIST`, each with `dline_type`, `dline_action_stage`, `dline_date`, and `dline_desc` in source order (edge-stripped, internal whitespace and literal values such as `nulldate` preserved). NULL when the edition states no legal-deadline list or predates reading it; `[]` when the list container is explicitly empty. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+      },
+      {
+        "column_name": "parent_rin",
+        "column_type": "VARCHAR",
+        "description": "Parent Regulation Identifier Number stated in `PARENT_RIN` (edge-stripped, verbatim otherwise), or NULL when absent or unread."
+      },
+      {
+        "column_name": "child_rins",
+        "column_type": "VARCHAR[]",
+        "description": "Native list of child Regulation Identifier Numbers stated in `CHILD_RIN_LIST` in source order (edge-stripped, blank entries omitted, duplicates preserved). NULL when the edition states no child-RIN list or predates reading it; `[]` when the list container is explicitly empty. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       }
     ],
     "subject": "rulemaking",
@@ -1412,7 +1427,10 @@
       "agenda_edition"
     ],
     "later_policy_columns": [
-      "related_rins"
+      "related_rins",
+      "legal_deadlines",
+      "parent_rin",
+      "child_rins"
     ],
     "documented_values": {
       "rule_stage": {
@@ -42901,7 +42919,7 @@
     "coverage": "True range: dated records published from 1994-01-03 on, the whole span the API serves.",
     "kind": "true_range",
     "measured_on": "2026-09-23",
-    "data_quality": "Document numbers are not globally unique: `00-111` names different records on 2000-01-14 and 2000-01-18. Current merging preserves both dates and replaces only the same dated record on a later successful fetch. This code correction does not restore historical records already lost from published files; those require a pinned historical replay and publication. A number-only source reference remains ambiguous when its input generation supplies multiple dated candidates. One RIN, docket and title can cover a rule and its later corrections, effective-date delays and confirmations, all typed `Rule` since 2008 with `subtype` NULL, so a RIN or title match picks a document family, not a document; `action` tells them apart (`Final rule; correction.`) where the Register states one. The API lists no RIN on a large share of `Rule` documents every year, some of which state one in the printed text or inside `docket_ids`. A row not read since the Register's regulations.gov link and `action` were first requested (2026-10-03) is NULL in all nine of those columns, which means not read: test `regulations_dot_gov_info_json`, which a row read since holds as `'{}'` at least. The scheduled run re-reads the last 120 days, so a relayed comment count follows the Register's own checks to about the comment period's close. `html_url`, `pdf_url`, `body_html_url` and `regulations_dot_gov_info_json` are the last columns: they were held beside the table until 2026-11 and are as the Register stated them, its nulls included: `pdf_url` is NULL on about 33,500 rows, mostly 1994, where it serves no PDF. `source_sha256` names the retained API page a row was last read from and is NULL on a row not read since it was added, which is every document published before the 120-day window of that first run. It changes nightly on every row in the window, so compare generations without it.",
+    "data_quality": "Document numbers are not globally unique: `00-111` names different records on 2000-01-14 and 2000-01-18. Current merging preserves both dates and replaces only the same dated record on a later successful fetch. This code correction does not restore historical records already lost from published files; those require a pinned historical replay and publication. A number-only source reference remains ambiguous when its input generation supplies multiple dated candidates. One RIN, docket and title can cover a rule and its later corrections, effective-date delays and confirmations, all typed `Rule` since 2008 with `subtype` NULL, so a RIN or title match picks a document family, not a document; `action` tells them apart (`Final rule; correction.`) where the Register states one. The API lists no RIN on a large share of `Rule` documents every year, some of which state one in the printed text or inside `docket_ids`. A row not read since the Register's regulations.gov link and `action` were first requested (2026-10-03) is NULL in all nine of those columns, which means not read: test `regulations_dot_gov_info_json`, which a row read since holds as `'{}'` at least. The scheduled run re-reads the last 120 days, so a relayed comment count follows the Register's own checks to about the comment period's close. `html_url`, `pdf_url`, `body_html_url` and `regulations_dot_gov_info_json` are the last columns: they were held beside the table until 2026-11 and are as the Register stated them, its nulls included: `pdf_url` is NULL on about 33,500 rows, mostly 1994, where it serves no PDF. `source_sha256` names the retained API page a row was last read from and is NULL on a row not read since it was added, which is every document published before the 120-day window of that first run. It changes nightly on every row in the window, so compare generations without it. The `agencies` array preserves one element per publisher `<SUBAGY>`/`<AGENCY>` entry (distinct `raw_name`), so canonical `name`, `id`, and `slug` can legitimately repeat across elements on the same document and are not deduplicated.",
     "columns": [
       {
         "column_name": "document_number",
@@ -42946,12 +42964,12 @@
       {
         "column_name": "agencies",
         "column_type": "STRUCT(id BIGINT, \"name\" VARCHAR, raw_name VARCHAR, parent_id BIGINT, slug VARCHAR)[]",
-        "description": "The issuing agencies as the Register's agency objects, a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        "description": "The issuing agencies as the Register's agency objects, a Native list preserved verbatim in publisher order. Each element corresponds to one publisher agency/subagency `<SUBAGY>`/`<AGENCY>` entry (`raw_name` distinct); canonical `name`, `id` and `slug` may legitimately repeat across elements and are intentionally not deduplicated. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
         "column_name": "agency_slugs",
         "column_type": "VARCHAR[]",
-        "description": "The issuing agencies' Register slugs, comma-separated; NULL when none. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        "description": "The issuing agencies' Register slugs, comma-separated in publisher order (repeating a slug when multiple `agencies` entries resolve to the same canonical agency); NULL when none. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
         "column_name": "docket_ids",

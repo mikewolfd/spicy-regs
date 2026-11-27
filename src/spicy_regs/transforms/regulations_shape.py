@@ -71,6 +71,16 @@ AGENCIES = pa.list_(
 CFR_REFERENCES = pa.list_(pa.struct([("title", pa.int64()), ("part", S), ("chapter", S)]))
 TIMETABLE = pa.list_(pa.struct([("action", S), ("date", S), ("fr_citation", S)]))
 RELATED_RINS = pa.list_(pa.struct([("rin", S), ("rin_relation", S)]))
+LEGAL_DEADLINES = pa.list_(
+    pa.struct(
+        [
+            ("dline_type", S),
+            ("dline_action_stage", S),
+            ("dline_date", S),
+            ("dline_desc", S),
+        ]
+    )
+)
 STAGE_EVENTS = pa.list_(
     pa.struct(
         [
@@ -140,6 +150,8 @@ NATIVE_FIELDS = {
         "cfr_references_json": ("cfr_references", STRINGS),
         "legal_authority_json": ("legal_authority", STRINGS),
         "related_rins_json": ("related_rins", RELATED_RINS),
+        "legal_deadlines_json": ("legal_deadlines", LEGAL_DEADLINES),
+        "child_rins_json": ("child_rins", STRINGS),
     },
 }
 TYPE_OVERRIDES = {
@@ -378,6 +390,9 @@ def _native(dataset, field, value):
         elif dataset == "unified_agenda" and field == "related_rins_json":
             # Arrow would drop an unknown member silently; refuse it instead.
             _object(item, RELATED_RINS.value_type.names, field)
+        elif dataset == "unified_agenda" and field == "legal_deadlines_json":
+            # Arrow would drop an unknown member silently; refuse it instead.
+            _object(item, LEGAL_DEADLINES.value_type.names, field)
         elif dataset == "proceedings" and field == "stage_events_json":
             _object(item, ("stage", "event_kind", "effective_date", "evidence_id", "joined_by", "source"), field)
             item = {k: item.get(k) for k in ("stage", "event_kind", "effective_date")} | {

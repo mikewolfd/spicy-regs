@@ -10,17 +10,26 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: 'prepare (counts only, no write) | pilot (one docket) | fill | undo'
+        description: 'prepare | pilot | fill | undo | prepare-empty-original-document-id | pilot-empty-original-document-id | fill-empty-original-document-id'
         required: true
         type: choice
-        options: [prepare, pilot, fill, undo]
+        options:
+          - prepare
+          - pilot
+          - fill
+          - undo
+          - prepare-empty-original-document-id
+          - pilot-empty-original-document-id
+          - fill-empty-original-document-id
       staging_key:
-        description: 'Data-bucket key of the staged reads.parquet (runbook); every operation needs it'
-        required: true
+        description: 'Data-bucket key of the staged reads.parquet (required for prepare/pilot/fill; leave blank for empty-original-document-id to use its default journal prefix, or pass the original reads.parquet staging_key when undoing a fill)'
+        required: false
+        default: ''
         type: string
       reads_sha256:
-        description: 'Its sha256, from the runbook; the run refuses any other bytes'
+        description: 'Its sha256, from the runbook; required for prepare/pilot/fill (unused by empty-original-document-id and undo)'
         required: false
+        default: ''
         type: string
       profile:
         description: 'The fill columns the staged read was built for: all | attachments (the 2026-10 re-read); prepare refuses a read lacking one'
@@ -29,21 +38,24 @@ on:
         type: choice
         options: [all, attachments]
       pilot_docket:
-        description: 'pilot: the docket to fill as one batch'
+        description: 'pilot / pilot-empty-original-document-id: the docket to update as one batch'
         required: false
         default: 'EPA-HQ-OW-2022-0114'
         type: string
       undo_run_id:
         description: 'undo: the run whose artifact holds the batch'
         required: false
+        default: ''
         type: string
       undo_batch:
         description: 'undo: the batch id from that run''s journal'
         required: false
+        default: ''
         type: string
       expected_snapshot:
         description: 'undo: the catalog snapshot id you reviewed; the undo refuses any other'
         required: false
+        default: ''
         type: string
 
 concurrency:
@@ -103,13 +115,14 @@ jobs:
           if [ "$free_gb" -lt 16 ]; then echo "::error::only ${free_gb} GB free under $WORKDIR"; exit 1; fi
 
       - name: Download and verify the staged read
-        if: inputs.operation != 'undo'
+        if: inputs.operation == 'prepare' || inputs.operation == 'pilot' || inputs.operation == 'fill'
         env:
           STAGING_KEY: ${{ inputs.staging_key }}
           READS_SHA256: ${{ inputs.reads_sha256 }}
         run: |
+          set -euo pipefail
           : "${STAGING_KEY:?staging_key is required}" "${READS_SHA256:?reads_sha256 is required}"
-          uv run fill-comment-fields fetch --workdir "$WORKDIR" --key "$STAGING_KEY" --sha256 "$READS_SHA256"
+          uv run --frozen fill-comment-fields fetch --workdir "$WORKDIR" --key "$STAGING_KEY" --sha256 "$READS_SHA256"
 
       - name: Download the pre-images to undo
         if: inputs.operation == 'undo'
@@ -122,15 +135,25 @@ jobs:
 
       - name: Earlier runs' journals (a committed failure in any of them stops this run)
         env:
+          OPERATION: ${{ inputs.operation }}
           STAGING_KEY: ${{ inputs.staging_key }}
         run: |
-          : "${STAGING_KEY:?staging_key is required: the journals live beside it}"
-          uv run fill-comment-fields journals --workdir "$WORKDIR" --prefix "$(dirname "$STAGING_KEY")/journals"
+          set -euo pipefail
+          if [ -n "$STAGING_KEY" ]; then
+            JOURNAL_PREFIX="$(dirname -- "$STAGING_KEY")/journals"
+          elif [ "$OPERATION" = "prepare-empty-original-document-id" ] || [ "$OPERATION" = "pilot-empty-original-document-id" ] || [ "$OPERATION" = "fill-empty-original-document-id" ] || [ "$OPERATION" = "undo" ]; then
+            JOURNAL_PREFIX="staging/comment-empty-original-document-id/journals"
+          else
+            echo "::error::staging_key is required: the journals live beside it"
+            exit 1
+          fi
+          uv run --frozen fill-comment-fields journals --workdir "$WORKDIR" --prefix "$JOURNAL_PREFIX"
 
       - name: Save and suspend maintenance on both selected native tables
-        if: inputs.operation != 'prepare'
+        if: inputs.operation != 'prepare' && inputs.operation != 'prepare-empty-original-document-id'
         run: |
-          uv run python -m spicy_regs.comments_maintenance suspend --state "$WORKDIR/maintenance-state.json"
+          set -euo pipefail
+          uv run --frozen python -m spicy_regs.comments_maintenance suspend --state "$WORKDIR/maintenance-state.json"
 
       - name: Prepare (reads the catalog at one snapshot; writes nothing)
         if: inputs.operation != 'undo'
@@ -139,19 +162,34 @@ jobs:
           PILOT_DOCKET: ${{ inputs.pilot_docket }}
           PROFILE: ${{ inputs.profile }}
         run: |
-          SCOPE=""
-          if [ "$OPERATION" = "pilot" ]; then SCOPE="--docket $PILOT_DOCKET"; fi
-          uv run fill-comment-fields prepare --workdir "$WORKDIR" --reads "$WORKDIR/reads.parquet" --profile "$PROFILE" $SCOPE
+          set -euo pipefail
+          SCOPE=()
+          if [ "$OPERATION" = "pilot" ] || [ "$OPERATION" = "pilot-empty-original-document-id" ]; then
+            : "${PILOT_DOCKET:?pilot_docket is required for pilot}"
+            SCOPE=(--docket "$PILOT_DOCKET")
+          fi
+          case "$OPERATION" in
+            prepare-empty-original-document-id|pilot-empty-original-document-id|fill-empty-original-document-id)
+              uv run --frozen python -m spicy_regs.pipelines.comment_fields_write \
+                prepare-empty-original-document-id --workdir "$WORKDIR" "${SCOPE[@]}"
+              ;;
+            *)
+              uv run --frozen fill-comment-fields prepare --workdir "$WORKDIR" --reads "$WORKDIR/reads.parquet" --profile "$PROFILE" "${SCOPE[@]}"
+              ;;
+          esac
 
       - name: Write, one verified batch at a time
-        if: inputs.operation == 'fill' || inputs.operation == 'pilot'
+        if: inputs.operation == 'fill' || inputs.operation == 'pilot' || inputs.operation == 'fill-empty-original-document-id' || inputs.operation == 'pilot-empty-original-document-id'
         env:
           OPERATION: ${{ inputs.operation }}
         run: |
-          uv run python -m spicy_regs.comments_maintenance verify --state "$WORKDIR/maintenance-state.json"
-          BY_FILE=""
-          if [ "$OPERATION" = "pilot" ]; then BY_FILE="--no-by-file"; fi
-          uv run fill-comment-fields write --workdir "$WORKDIR" $BY_FILE
+          set -euo pipefail
+          uv run --frozen python -m spicy_regs.comments_maintenance verify --state "$WORKDIR/maintenance-state.json"
+          BY_FILE=()
+          if [ "$OPERATION" = "pilot" ] || [ "$OPERATION" = "pilot-empty-original-document-id" ]; then
+            BY_FILE=(--no-by-file)
+          fi
+          uv run --frozen fill-comment-fields write --workdir "$WORKDIR" "${BY_FILE[@]}"
 
       - name: Undo one committed batch
         if: inputs.operation == 'undo'
@@ -159,20 +197,32 @@ jobs:
           UNDO_BATCH: ${{ inputs.undo_batch }}
           EXPECTED_SNAPSHOT: ${{ inputs.expected_snapshot }}
         run: |
+          set -euo pipefail
           : "${UNDO_BATCH:?undo_batch is required}" "${EXPECTED_SNAPSHOT:?expected_snapshot is required}"
-          uv run python -m spicy_regs.comments_maintenance verify --state "$WORKDIR/maintenance-state.json"
-          uv run fill-comment-fields undo --workdir "$WORKDIR" --batch "$UNDO_BATCH" --expected-snapshot "$EXPECTED_SNAPSHOT"
+          uv run --frozen python -m spicy_regs.comments_maintenance verify --state "$WORKDIR/maintenance-state.json"
+          uv run --frozen fill-comment-fields undo --workdir "$WORKDIR" --batch "$UNDO_BATCH" --expected-snapshot "$EXPECTED_SNAPSHOT"
 
       - name: Restore exact prior maintenance on both native tables
-        if: always() && inputs.operation != 'prepare'
+        if: always() && inputs.operation != 'prepare' && inputs.operation != 'prepare-empty-original-document-id'
         run: |
-          uv run python -m spicy_regs.comments_maintenance restore --state "$WORKDIR/maintenance-state.json"
+          set -euo pipefail
+          uv run --frozen python -m spicy_regs.comments_maintenance restore --state "$WORKDIR/maintenance-state.json"
 
       - name: Keep the journals beside the staged read
         if: always()
         env:
+          OPERATION: ${{ inputs.operation }}
           STAGING_KEY: ${{ inputs.staging_key }}
-        run: uv run fill-comment-fields journals --workdir "$WORKDIR" --prefix "$(dirname "$STAGING_KEY")/journals" --push
+        run: |
+          set -euo pipefail
+          if [ -n "$STAGING_KEY" ]; then
+            JOURNAL_PREFIX="$(dirname -- "$STAGING_KEY")/journals"
+          elif [ "$OPERATION" = "prepare-empty-original-document-id" ] || [ "$OPERATION" = "pilot-empty-original-document-id" ] || [ "$OPERATION" = "fill-empty-original-document-id" ] || [ "$OPERATION" = "undo" ]; then
+            JOURNAL_PREFIX="staging/comment-empty-original-document-id/journals"
+          else
+            exit 0
+          fi
+          uv run --frozen fill-comment-fields journals --workdir "$WORKDIR" --prefix "$JOURNAL_PREFIX" --push
 
       - name: Keep the journal, receipts and pre-images
         if: always()

@@ -1,0 +1,130 @@
+name: Repair dockets placeholder RINs (one-off)
+
+# Normalize evidenced placeholder RIN values ('Not Assigned', '0000-AA00', and
+# blank/whitespace strings) to NULL in the retired-receipt dockets family
+# (ss-eyhu). Because dockets sets receipts_retired: true, the base dockets
+# rollup raises Unchanged; this manual-dispatch workflow invokes
+# spicy_regs.pipelines.repair_regulations repair-docket-rins and seals via
+# finish_dataset(..., publish=True) only when skip_upload is false.
+on:
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Dry-run repair and verify candidate dockets.parquet without publishing to R2'
+        required: false
+        default: true
+        type: boolean
+      expect_prior:
+        description: 'Optional live dockets digest (8-64 lowercase hex chars, optional sha256: prefix) to pin before repairing'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repair-dockets-rins
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install pinned dependencies
+        run: uv sync --frozen
+
+      - name: Validate inputs
+        env:
+          EXPECT_PRIOR: ${{ inputs.expect_prior }}
+          SKIP_UPLOAD: ${{ inputs.skip_upload }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          WORK_DIR="$RUNNER_TEMP/dockets-rin-repair"
+          rm -rf "$WORK_DIR"
+          mkdir -p "$WORK_DIR"
+          python3 - <<'PY'
+          import os
+          import re
+
+          expect_prior = os.environ.get("EXPECT_PRIOR", "").strip()
+          if expect_prior and not re.fullmatch(r"(sha256:)?[0-9a-f]{8,64}", expect_prior):
+              raise SystemExit(
+                  f"expect_prior must be 8-64 lowercase hex chars (optional sha256: prefix), got {expect_prior!r}"
+              )
+          skip_upload = os.environ.get("SKIP_UPLOAD", "true").strip().lower()
+          if skip_upload not in {"true", "false"}:
+              raise SystemExit(f"skip_upload must be true or false, got {skip_upload!r}")
+          PY
+
+      - name: Repair dockets RINs (dry run)
+        if: inputs.skip_upload != false
+        env:
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
+          EXPECT_PRIOR: ${{ inputs.expect_prior }}
+          WORKFLOW_USER_AGENT: spicy-regs-repair-dockets-rins
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          WORK_DIR="$RUNNER_TEMP/dockets-rin-repair"
+          mkdir -p "$WORK_DIR"
+          curl -fsSL -H "User-Agent: $WORKFLOW_USER_AGENT" "${R2_PUBLIC_URL%/}/publication.v2.json" \
+            -o "$WORK_DIR/live-publication.v2.json"
+          ARGS=(--output-dir "$WORK_DIR" --skip-upload)
+          if [ -n "$EXPECT_PRIOR" ]; then
+            ARGS+=(--expect-prior "$EXPECT_PRIOR")
+          fi
+          uv run --frozen python -m spicy_regs.pipelines.repair_regulations repair-docket-rins "${ARGS[@]}"
+
+      - name: Repair and publish dockets RINs
+        if: inputs.skip_upload == false
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
+          EXPECT_PRIOR: ${{ inputs.expect_prior }}
+          WORKFLOW_USER_AGENT: spicy-regs-repair-dockets-rins
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          WORK_DIR="$RUNNER_TEMP/dockets-rin-repair"
+          mkdir -p "$WORK_DIR"
+          curl -fsSL -H "User-Agent: $WORKFLOW_USER_AGENT" "${R2_PUBLIC_URL%/}/publication.v2.json" \
+            -o "$WORK_DIR/prior-publication.v2.json"
+          ARGS=(--output-dir "$WORK_DIR" --no-skip-upload)
+          if [ -n "$EXPECT_PRIOR" ]; then
+            ARGS+=(--expect-prior "$EXPECT_PRIOR")
+          fi
+          uv run --frozen python -m spicy_regs.pipelines.repair_regulations repair-docket-rins "${ARGS[@]}"
+          curl -fsSL -H "User-Agent: $WORKFLOW_USER_AGENT" "${R2_PUBLIC_URL%/}/publication.v2.json" \
+            -o "$WORK_DIR/post-publication.v2.json"
+
+      - name: Upload repair receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dockets-rin-repair-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/dockets-rin-repair/dockets-rin-repair.json
+            ${{ runner.temp }}/dockets-rin-repair/*-publication.v2.json
+          if-no-files-found: warn
+          retention-days: 30

@@ -482,3 +482,571 @@ def test_record_issue_dry_run_uses_the_captured_native_selection(tmp_path, monke
     }
     assert seen == ["https://data.example.test"]
     assert not (work / "record_issues.parquet").exists()
+
+
+# --------------------------------------------------------------------------- #
+# ss-kj95: audited public_activity_events null-from repair & bill-family quality
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize("layout", ["processing", "native"])
+def test_repair_null_from_stage_events_drops_null_from_and_preserves_legitimate_transitions(tmp_path, layout):
+    """Drops NULL/empty-from stage_changed rows without duplicating bill_added while keeping real transitions."""
+    if layout == "processing":
+        columns = list(TABLE_CONTRACTS["public_activity_events"].columns)
+        rows = [
+            {
+                "bill_id": "119-hr-1",
+                "event_type": "bill_added",
+                "subject_id": "",
+                "occurred_at": "2025-01-03",
+                "detected_at": "2025-01-04T00:00:00Z",
+                "event_data_json": json_column({"title": "Bill 1", "stage": "introduced", "sponsor_bioguide_id": "A1"}),
+            },
+            # Bogus NULL-from stage_changed on a bill that ALREADY has bill_added (18,899 cohort)
+            {
+                "bill_id": "119-hr-1",
+                "event_type": "stage_changed",
+                "subject_id": "",
+                "occurred_at": "2025-01-05",
+                "detected_at": "2025-01-05T00:00:00Z",
+                "event_data_json": json_column({"from": None, "to": "introduced", "rule": "r", "matcher": "m"}),
+            },
+            # Legitimate stage_changed on same bill
+            {
+                "bill_id": "119-hr-1",
+                "event_type": "stage_changed",
+                "subject_id": "",
+                "occurred_at": "2025-01-10",
+                "detected_at": "2025-01-11T00:00:00Z",
+                "event_data_json": json_column({"from": "introduced", "to": "committee", "rule": "r", "matcher": "m"}),
+            },
+            # Bogus NULL-from stage_changed on a bill WITHOUT bill_added (136,201 cohort)
+            {
+                "bill_id": "119-hr-2",
+                "event_type": "stage_changed",
+                "subject_id": "",
+                "occurred_at": "2025-01-06",
+                "detected_at": "2025-01-06T00:00:00Z",
+                "event_data_json": json_column({"from": None, "to": "introduced", "rule": "r", "matcher": "m"}),
+            },
+            # Bogus empty-string from stage_changed
+            {
+                "bill_id": "119-hr-3",
+                "event_type": "stage_changed",
+                "subject_id": "",
+                "occurred_at": "2025-01-07",
+                "detected_at": "2025-01-07T00:00:00Z",
+                "event_data_json": json_column({"from": "", "to": "introduced", "rule": "r", "matcher": "m"}),
+            },
+            # Second legitimate transition
+            {
+                "bill_id": "119-hr-4",
+                "event_type": "stage_changed",
+                "subject_id": "",
+                "occurred_at": "2025-02-01",
+                "detected_at": "2025-02-02T00:00:00Z",
+                "event_data_json": json_column({"from": "committee", "to": "passed_chamber", "rule": "r", "matcher": "m"}),
+            },
+            # Other sealed event types remain untouched
+            {
+                "bill_id": "119-hr-1",
+                "event_type": "version_added",
+                "subject_id": "119-hr-1\x1fih\x1fgovinfo",
+                "occurred_at": "2025-01-03",
+                "detected_at": "2025-01-04T00:00:00Z",
+                "event_data_json": json_column({"version_code": "ih", "source": "govinfo", "kind": "full_text", "kind_rule": "full_text_slug"}),
+            },
+        ]
+        prior = _table(tmp_path / "events.parquet", rows, columns=columns, metadata={b"kept": b"yes"})
+    else:
+        from spicy_regs.congress_subjects import subject_schema
+
+        schema = subject_schema("public_activity_events").with_metadata({b"kept": b"yes"})
+        base = dict.fromkeys(schema.names)
+        rows = [
+            base | {"bill_id": "119-hr-1", "event_type": "bill_added", "subject_id": "", "occurred_at": "2025-01-03", "stage": "introduced"},
+            base | {"bill_id": "119-hr-1", "event_type": "stage_changed", "subject_id": "", "occurred_at": "2025-01-05", "from_stage": None, "to_stage": "introduced"},
+            base | {"bill_id": "119-hr-1", "event_type": "stage_changed", "subject_id": "", "occurred_at": "2025-01-10", "from_stage": "introduced", "to_stage": "committee"},
+            base | {"bill_id": "119-hr-2", "event_type": "stage_changed", "subject_id": "", "occurred_at": "2025-01-06", "from_stage": None, "to_stage": "introduced"},
+            base | {"bill_id": "119-hr-3", "event_type": "stage_changed", "subject_id": "", "occurred_at": "2025-01-07", "from_stage": "", "to_stage": "introduced"},
+            base | {"bill_id": "119-hr-4", "event_type": "stage_changed", "subject_id": "", "occurred_at": "2025-02-01", "from_stage": "committee", "to_stage": "passed_chamber"},
+            base | {"bill_id": "119-hr-1", "event_type": "version_added", "subject_id": "119-hr-1\x1fih\x1fgovinfo", "occurred_at": "2025-01-03", "version_code": "ih", "kind": "full_text"},
+        ]
+        prior = tmp_path / "events.parquet"
+        pq.write_table(pa.Table.from_pylist(rows, schema=schema), prior)
+
+    out = tmp_path / "repaired.parquet"
+    counts = repairs.repair_null_from_stage_events(prior, out)
+    assert counts == {
+        "rows": 4,
+        "rows_before": 7,
+        "rows_after": 4,
+        "stage_changed_before": 5,
+        "stage_changed_preserved": 2,
+        "stage_changed_null_from_dropped": 3,
+        "stage_changed_null_from_with_existing_bill_added": 1,
+        "stage_changed_null_from_without_bill_added": 2,
+        "bill_added_before": 1,
+        "bill_added_after": 1,
+        "bill_added_duplicate_bill_ids_after": 0,
+    }
+    assert pq.read_schema(out).metadata == {b"kept": b"yes"}
+    kept = pq.read_table(out).to_pylist()
+    assert [(r["bill_id"], r["event_type"], r["occurred_at"]) for r in kept] == [
+        ("119-hr-1", "bill_added", "2025-01-03"),
+        ("119-hr-1", "stage_changed", "2025-01-10"),
+        ("119-hr-4", "stage_changed", "2025-02-01"),
+        ("119-hr-1", "version_added", "2025-01-03"),
+    ]
+    again = tmp_path / "again.parquet"
+    second = repairs.repair_null_from_stage_events(out, again)
+    assert second["stage_changed_null_from_dropped"] == 0
+    assert second["rows_before"] == second["rows_after"] == 4
+    assert pq.read_table(again).equals(pq.read_table(out))
+
+
+def test_repair_null_from_stage_events_empty_output_preserves_schema(tmp_path):
+    columns = list(TABLE_CONTRACTS["public_activity_events"].columns)
+    prior = _table(
+        tmp_path / "only_null.parquet",
+        [
+            {
+                "bill_id": "119-hr-1",
+                "event_type": "stage_changed",
+                "subject_id": "",
+                "occurred_at": "2025-01-05",
+                "detected_at": "2025-01-05T00:00:00Z",
+                "event_data_json": json_column({"from": None, "to": "introduced"}),
+            }
+        ],
+        columns=columns,
+    )
+    out = tmp_path / "out.parquet"
+    counts = repairs.repair_null_from_stage_events(prior, out)
+    assert counts["rows_after"] == 0 and counts["stage_changed_null_from_dropped"] == 1
+    assert pq.read_schema(out).names == columns and pq.read_table(out).num_rows == 0
+
+
+def test_repair_bill_family_quality_dry_run_apply_and_idempotency(tmp_path):
+    priors = tmp_path / "priors"
+    priors.mkdir()
+    _table(
+        priors / "bill_versions.parquet",
+        [
+            {
+                "bill_id": "119-hr-1",
+                "version_code": "introduced-in-house",
+                "source": "govinfo",
+                "label": "Introduced in House",
+                "version_date": "",
+                "package_id": "BILLS-119hr1ih",
+                "section_count": "2",
+                "kind": "kind_uncertain",
+                "kind_rule": "full_text_slug_thin",
+                "kind_label": "Full bill text (short — verify)",
+                "kind_warning": "unusually short — may be incomplete",
+            },
+            {
+                "bill_id": "119-s-2",
+                "version_code": "private-law",
+                "source": "congress",
+                "label": "Private Law",
+                "version_date": "2025-03-01",
+                "kind": "unknown",
+                "kind_rule": "unknown",
+                "kind_label": "Unknown format",
+            },
+        ],
+        columns=list(TABLE_CONTRACTS["bill_versions"].columns),
+    )
+    _table(
+        priors / "section_diffs.parquet",
+        [
+            {
+                "bill_id": "119-hr-1",
+                "from_version_code": "ih",
+                "from_source": "govinfo",
+                "to_version_code": "enr",
+                "to_source": "govinfo",
+                "from_version_date": "",
+                "to_version_date": "",
+            }
+        ],
+        columns=list(TABLE_CONTRACTS["section_diffs"].columns),
+    )
+    _table(
+        priors / "bill_cosponsors.parquet",
+        [
+            {
+                "bill_id": "119-hr-1",
+                "input_sha256": f"sha256:{HEX}",
+                "cosponsor_index": "0",
+                "bioguide_id": "A000001",
+                "sponsorship_date": "2025-01-03",
+                "sponsorship_date_status": "valid",
+                "sponsorship_withdrawn_date": "",
+                "sponsorship_withdrawn_date_status": "empty",
+                "district": "",
+                "source_xml": "<item><sponsorshipWithdrawnDate/><district/></item>",
+            }
+        ],
+        columns=list(TABLE_CONTRACTS["bill_cosponsors"].columns),
+    )
+    _table(
+        priors / "public_activity_events.parquet",
+        [
+            {
+                "bill_id": "119-hr-1",
+                "event_type": "bill_added",
+                "subject_id": "",
+                "occurred_at": "2025-01-03",
+                "detected_at": "2025-01-04T00:00:00Z",
+                "event_data_json": json_column({"title": "T", "stage": "introduced", "sponsor_bioguide_id": None}),
+            },
+            {
+                "bill_id": "119-hr-1",
+                "event_type": "stage_changed",
+                "subject_id": "",
+                "occurred_at": "2025-01-05",
+                "detected_at": "2025-01-05T00:00:00Z",
+                "event_data_json": json_column({"from": None, "to": "introduced"}),
+            },
+            {
+                "bill_id": "119-hr-1",
+                "event_type": "stage_changed",
+                "subject_id": "",
+                "occurred_at": "2025-01-10",
+                "detected_at": "2025-01-10T00:00:00Z",
+                "event_data_json": json_column({"from": "introduced", "to": "committee"}),
+            },
+        ],
+        columns=list(TABLE_CONTRACTS["public_activity_events"].columns),
+    )
+
+    before_bytes = {p.name: p.read_bytes() for p in priors.iterdir()}
+    counts = repairs.dry_run("repair-bill-family-quality", prior_dir=priors)
+    assert counts["bill_versions"] == {"rows": 2, "kind_moved": 2, "version_date_cleaned": 1, "rows_moved": 2}
+    assert counts["section_diffs"] == {"rows": 1, "from_version_date_cleaned": 1, "to_version_date_cleaned": 1, "rows_moved": 1}
+    assert counts["bill_cosponsors"] == {
+        "rows": 1,
+        "sponsorship_date_cleaned": 0,
+        "sponsorship_withdrawn_date_cleaned": 1,
+        "district_cleaned": 1,
+        "rows_moved": 1,
+    }
+    assert counts["public_activity_events"]["stage_changed_null_from_dropped"] == 1
+    assert counts["public_activity_events"]["stage_changed_preserved"] == 1
+    assert counts["public_activity_events"]["bill_added_duplicate_bill_ids_after"] == 0
+    assert {p.name: p.read_bytes() for p in priors.iterdir()} == before_bytes, "dry run must not mutate priors"
+
+    out = tmp_path / "out"
+    out.mkdir()
+    repairs.apply_repair(repairs.REPAIRS["repair-bill-family-quality"], priors, out)
+    second = repairs.dry_run("repair-bill-family-quality", prior_dir=out)
+    assert second["bill_versions"]["rows_moved"] == 0
+    assert second["section_diffs"]["rows_moved"] == 0
+    assert second["bill_cosponsors"]["rows_moved"] == 0
+    assert second["public_activity_events"]["stage_changed_null_from_dropped"] == 0
+
+
+def _seed_native_bill_family_selection(root: Path, monkeypatch) -> Path:
+    """Create a complete receipt-admitted local native bill-family selection holding pre-repair ss-kj95 defects."""
+    from spicy_regs.pipelines.rollups import bill_family as bill_family_rollup
+    from spicy_regs.transforms.build_bill_family import (
+        ARCHIVE_COLUMNS,
+        ARCHIVES_TABLE,
+        BACKFILL_COLUMNS,
+        BACKFILL_WALK_COLUMNS,
+        BACKFILL_WALKS_TABLE,
+        BACKFILLS_TABLE,
+        FAMILY_TABLES,
+        VOTE_REFERENCE_COLUMNS,
+        VOTE_REFERENCES_TABLE,
+    )
+
+    own_columns = {
+        ARCHIVES_TABLE: ARCHIVE_COLUMNS,
+        VOTE_REFERENCES_TABLE: VOTE_REFERENCE_COLUMNS,
+        BACKFILLS_TABLE: BACKFILL_COLUMNS,
+        BACKFILL_WALKS_TABLE: BACKFILL_WALK_COLUMNS,
+    }
+    sample_rows: dict[str, list[dict]] = {
+        "congress_bills": [
+            {
+                "bill_id": "119-hr-1",
+                "congress": "119",
+                "bill_type": "hr",
+                "bill_number": "1",
+                "title": "Sample Bill",
+                "stage": "committee",
+            }
+        ],
+        "bill_versions": [
+            {
+                "bill_id": "119-hr-1",
+                "version_code": "introduced-in-house",
+                "source": "govinfo",
+                "label": "Introduced in House",
+                "version_date": "",
+                "package_id": "BILLS-119hr1ih",
+                "section_count": "1",
+                "kind": "kind_uncertain",
+                "kind_rule": "full_text_slug_thin",
+                "kind_label": "Full bill text (short — verify)",
+                "kind_warning": "unusually short — may be incomplete",
+                "kind_section_count": "1",
+                "kind_body_bytes": None,
+            },
+            {
+                "bill_id": "119-hr-1",
+                "version_code": "rfs",
+                "source": "govinfo",
+                "label": "Referred in Senate",
+                "version_date": "2025-02-01",
+                "package_id": "BILLS-119hr1rfs",
+                "section_count": "1",
+                "kind": "unknown",
+                "kind_rule": "unknown",
+                "kind_label": "Unknown format",
+                "kind_warning": None,
+                "kind_section_count": "1",
+                "kind_body_bytes": None,
+            },
+        ],
+        "section_diffs": [
+            {
+                "bill_id": "119-hr-1",
+                "from_version_code": "introduced-in-house",
+                "from_source": "govinfo",
+                "to_version_code": "rfs",
+                "to_source": "govinfo",
+                "from_version_date": "",
+                "to_version_date": "",
+                "added_count": "0",
+                "removed_count": "0",
+                "modified_count": "0",
+                "unchanged_count": "1",
+                "moved_count": "0",
+                "item_count": "1",
+            }
+        ],
+        "bill_cosponsors": [
+            {
+                "bill_id": "119-hr-1",
+                "input_sha256": f"sha256:{HEX}",
+                "cosponsor_index": "0",
+                "bioguide_id": "A000001",
+                "full_name": "Rep. Example",
+                "sponsorship_date": "2025-01-03",
+                "sponsorship_date_status": "valid",
+                "is_original_raw": "True",
+                "sponsorship_withdrawn_date": "",
+                "sponsorship_withdrawn_date_status": "empty",
+                "party": "D",
+                "state": "CA",
+                "district": "",
+                "source_path": "/bill/cosponsors/item[1]",
+                "source_xml": "<item><sponsorshipWithdrawnDate/><district/></item>",
+            }
+        ],
+        "public_activity_events": [
+            {
+                "bill_id": "119-hr-1",
+                "event_type": "bill_added",
+                "subject_id": "",
+                "occurred_at": "2025-01-03",
+                "detected_at": "2025-01-04T00:00:00Z",
+                "event_data_json": json_column({"title": "Sample Bill", "stage": "introduced", "sponsor_bioguide_id": None}),
+            },
+            {
+                "bill_id": "119-hr-1",
+                "event_type": "stage_changed",
+                "subject_id": "",
+                "occurred_at": "2025-01-05",
+                "detected_at": "2025-01-05T00:00:00Z",
+                "event_data_json": json_column({"from": None, "to": "introduced", "rule": "r", "matcher": "m"}),
+            },
+            {
+                "bill_id": "119-hr-1",
+                "event_type": "stage_changed",
+                "subject_id": "",
+                "occurred_at": "2025-01-10",
+                "detected_at": "2025-01-10T00:00:00Z",
+                "event_data_json": json_column({"from": "introduced", "to": "committee", "rule": "r", "matcher": "m"}),
+            },
+        ],
+    }
+
+    def fake_build(output_dir: Path, **_kwargs) -> tuple[Path, ...]:
+        written: list[Path] = []
+        for contract, _ in FAMILY_TABLES:
+            cols = TABLE_CONTRACTS[contract].columns
+            if contract == "bill_sections":
+                sec_dir = output_dir / "bill_sections" / "congress=119"
+                sec_dir.mkdir(parents=True, exist_ok=True)
+                _table(
+                    sec_dir / "part-000000.parquet",
+                    [
+                        {
+                            "bill_id": "119-hr-1",
+                            "version_code": "introduced-in-house",
+                            "source": "govinfo",
+                            "seq": "0",
+                            "match_path": "sec-1",
+                            "body": "Short title.",
+                            "body_chars": "12",
+                            "body_sha256": f"sha256:{HEX}",
+                            "congress": "119",
+                        }
+                    ],
+                    columns=list(cols),
+                )
+                written.append(output_dir / "bill_sections")
+            else:
+                written.append(_table(output_dir / f"{contract}.parquet", sample_rows.get(contract, []), columns=list(cols)))
+        written.append(
+            _table(
+                output_dir / "public_activity_events.parquet",
+                sample_rows["public_activity_events"],
+                columns=list(TABLE_CONTRACTS["public_activity_events"].columns),
+            )
+        )
+        for name, cols in own_columns.items():
+            written.append(_table(output_dir / f"{name}.parquet", [], columns=list(cols)))
+        return tuple(written)
+
+    work = root / "bill-family-work"
+    work.mkdir()
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    monkeypatch.setattr(bill_family_rollup, "build_bill_family", fake_build)
+    bill_family_rollup.BillFamilyRollup(output_dir=work, skip_upload=True).run()
+    return work
+
+
+def test_bill_family_quality_repair_rollup_repairs_native_generation_and_preserves_receipts(tmp_path, monkeypatch):
+    """End-to-end receipt-backed repair over a complete native bill-family selection, carrying bill_sections natively."""
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+    from spicy_regs.sources import r2
+
+    work = _seed_native_bill_family_selection(tmp_path, monkeypatch)
+    monkeypatch.setattr(r2, "download", lambda *_: pytest.fail("Repair must restore selected native priors"))
+
+    dry = repairs.dry_run("repair-bill-family-quality", prior_dir=work)
+    assert dry["bill_versions"] == {"rows": 2, "kind_moved": 2, "version_date_cleaned": 1, "rows_moved": 2}
+    assert dry["section_diffs"] == {"rows": 1, "from_version_date_cleaned": 1, "to_version_date_cleaned": 1, "rows_moved": 1}
+    assert dry["bill_cosponsors"]["sponsorship_withdrawn_date_cleaned"] == 1
+    assert dry["bill_cosponsors"]["district_cleaned"] == 1
+    assert dry["public_activity_events"]["stage_changed_null_from_dropped"] == 1
+    assert dry["public_activity_events"]["stage_changed_preserved"] == 1
+
+    rollup = repairs.repair_rollup("repair-bill-family-quality", repairs.REPAIRS["repair-bill-family-quality"])
+    rollup(output_dir=work, skip_upload=True).run()
+
+    versions = {r["version_code"]: r for r in pq.read_table(work / "bill_versions.parquet").to_pylist()}
+    assert versions["introduced-in-house"]["kind"] == "full_text"
+    assert versions["introduced-in-house"]["version_date"] is None
+    assert versions["rfs"]["kind"] == "full_text"
+    [diff] = pq.read_table(work / "section_diffs.parquet").to_pylist()
+    assert diff["from_version_date"] is None and diff["to_version_date"] is None
+    [cosponsor] = pq.read_table(work / "bill_cosponsors.parquet").to_pylist()
+    assert cosponsor["sponsorship_withdrawn_date"] is None and cosponsor["district"] is None
+    events = pq.read_table(work / "public_activity_events.parquet").to_pylist()
+    assert [(e["event_type"], e["from_stage"], e["to_stage"]) for e in events] == [
+        ("bill_added", None, None),
+        ("stage_changed", "introduced", "committee"),
+    ]
+    # Untouched partitioned bill_sections survives intact through native partition carry
+    section_parts = sorted((work / "bill_sections").rglob("*.parquet"))
+    assert len(section_parts) == 1 and pq.ParquetFile(section_parts[0]).read().num_rows == 1
+    # Raw XML and date-status provenance remain intact in restored receipts
+    restored_cosponsors = SelectedPriors(tmp_path / "readback", root=work, public_url="").get("bill_cosponsors")
+    assert restored_cosponsors is not None
+    [restored_row] = pq.read_table(restored_cosponsors).to_pylist()
+    assert restored_row["sponsorship_withdrawn_date"] is None
+    assert restored_row["sponsorship_withdrawn_date_status"] == "empty"
+    assert restored_row["source_xml"] == "<item><sponsorshipWithdrawnDate/><district/></item>"
+    # Audited prior-repair event recorded in source evidence journal
+    journals = sorted((work / "source-evidence").rglob("journal.jsonl"))
+    repair_events = [
+        json.loads(line)
+        for journal in journals
+        for line in journal.read_text().splitlines()
+        if json.loads(line).get("event") == "prior-repair"
+    ]
+    assert any(ev["repair"] == "repair-bill-family-quality" and ev["counts"]["public_activity_events"]["stage_changed_null_from_dropped"] == 1 for ev in repair_events)
+
+    # Idempotency check on native selection
+    again_dry = repairs.dry_run("repair-bill-family-quality", prior_dir=work)
+    assert again_dry["bill_versions"]["rows_moved"] == 0
+    assert again_dry["section_diffs"]["rows_moved"] == 0
+    assert again_dry["bill_cosponsors"]["rows_moved"] == 0
+    assert again_dry["public_activity_events"]["stage_changed_null_from_dropped"] == 0
+
+
+def test_repair_bill_family_quality_workflow_guards_permissions_concurrency_and_shell_safety(tmp_path):
+    """Verify repair-bill-family-quality.yml shares bill-family concurrency and guards shrink/shell/secrets."""
+    import os
+    import subprocess
+    import yaml
+
+    repo_root = Path(__file__).resolve().parents[1]
+    workflow_path = repo_root / ".github/workflows/repair-bill-family-quality.yml"
+    rollup_path = repo_root / ".github/workflows/rollup-bill-family.yml"
+
+    raw_text = workflow_path.read_text(encoding="utf-8")
+    doc = yaml.safe_load(raw_text)
+    rollup_doc = yaml.safe_load(rollup_path.read_text(encoding="utf-8"))
+
+    triggers = doc.get("on", doc.get(True, {}))
+    assert set(triggers) == {"workflow_dispatch"}
+    inputs = triggers["workflow_dispatch"]["inputs"]
+    assert inputs["skip_upload"]["type"] == "boolean"
+    assert inputs["skip_upload"]["default"] is True
+    assert inputs["allow_shrink_public_activity_events"]["type"] == "boolean"
+    assert inputs["allow_shrink_public_activity_events"]["default"] is False
+
+    assert doc["permissions"] == {"contents": "read"}
+    assert doc["concurrency"]["group"] == rollup_doc["concurrency"]["group"]
+    assert doc["concurrency"]["cancel-in-progress"] is False
+    assert not workflow_path.name.startswith("rollup-")
+    assert "run-rollup-" not in raw_text
+    assert "_rollup.yml" not in raw_text
+    assert "secrets.ZYTE_TOKEN" not in raw_text
+    assert "secrets.FIRECRAWL_API_KEY" not in raw_text
+
+    steps = {step["name"]: step for step in doc["jobs"]["repair"]["steps"] if "name" in step}
+    for name, step in steps.items():
+        if "run" in step:
+            assert "${{ inputs." not in step["run"], f"{name} interpolates raw inputs.* in run:"
+            subprocess.run(["bash", "-n"], input=step["run"], text=True, check=True)
+            if name not in {"Install pinned dependencies", "Free runner disk"}:
+                assert 'TMPDIR="$RUNNER_TEMP"' in step["run"]
+                assert "unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO" in step["run"]
+
+    dry_step = steps["Repair bill-family quality (dry run)"]
+    publish_step = steps["Repair and publish bill-family quality"]
+    assert dry_step["if"] == "inputs.skip_upload != false"
+    assert publish_step["if"] == "inputs.skip_upload == false"
+    assert "R2_ACCESS_KEY_ID" not in dry_step.get("env", {})
+    assert "R2_SECRET_ACCESS_KEY" not in dry_step.get("env", {})
+    assert "R2_ALLOW_SHRINK" not in dry_step["run"] or "unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK" in dry_step["run"]
+    assert "export R2_ALLOW_SHRINK=1" not in dry_step["run"]
+    assert "R2_ACCESS_KEY_ID" in publish_step["env"]
+    assert "R2_SECRET_ACCESS_KEY" in publish_step["env"]
+    assert 'if [ "$ALLOW_SHRINK_PUBLIC_ACTIVITY_EVENTS" = "true" ]; then' in publish_step["run"]
+    assert '-H "User-Agent: $WORKFLOW_USER_AGENT"' in dry_step["run"]
+    assert '-H "User-Agent: $WORKFLOW_USER_AGENT"' in publish_step["run"]
+    assert "repair-bill-family-quality" in dry_step["run"] and "--dry-run" in dry_step["run"]
+    assert "repair-bill-family-quality" in publish_step["run"] and "--no-skip-upload" in publish_step["run"]
+
+    validate = steps["Validate inputs"]
+    env = {k: v for k, v in os.environ.items() if k not in {"PYTEST_CURRENT_TEST", "SPICYGOV_RAW_ROOT"}}
+    env.update({
+        "RUNNER_TEMP": str(tmp_path.resolve()),
+        "SKIP_UPLOAD": "maybe",
+        "ALLOW_SHRINK_PUBLIC_ACTIVITY_EVENTS": "false",
+    })
+    bad = subprocess.run(["bash", "-c", validate["run"]], cwd=repo_root, env=env, capture_output=True, text=True, timeout=30)
+    assert bad.returncode != 0
+    assert "SKIP_UPLOAD" in (bad.stderr + bad.stdout)
