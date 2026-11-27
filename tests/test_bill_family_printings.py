@@ -243,3 +243,43 @@ def test_a_row_keyed_under_another_printings_code_alone_reopens_its_bill(tmp_pat
     assert index.xml_codes(bill) == {"introduced-in-house", "reported-in-house"}
     assert index.miskeyed_rows == {bill: {("reported-in-house", "congress", "rh2")}}
     assert bill in index.pending_bills
+
+
+def test_reclassify_held_bill_versions_handles_numbered_reprints_and_short_codes(tmp_path):
+    """Numbered reprints (eas2, rfs2, rh2) and census short codes (rfs, ats) reclassify deterministically with body_bytes=None."""
+    columns = TABLE_CONTRACTS["bill_versions"].columns
+    rows = [
+        dict.fromkeys(columns)
+        | {
+            "bill_id": bill,
+            "version_code": code,
+            "source": "govinfo",
+            "label": label,
+            "package_id": pkg,
+            "section_count": "2",
+            "kind": "unknown",
+            "kind_rule": "unknown",
+            "kind_label": "Unknown format",
+            "kind_warning": None,
+        }
+        for bill, code, label, pkg in (
+            ("119-hr-6644", "eas2", "Engrossed Amendment Senate", "BILLS-119hr6644eas2"),
+            ("119-hr-3426", "rfs", "Referred in Senate", "BILLS-119hr3426rfs"),
+            ("119-hr-3426", "rfs2", "Referred in Senate", "BILLS-119hr3426rfs2"),
+            ("118-hr-7643", "rh2", "Reported in House", "BILLS-118hr7643rh2"),
+            ("119-sres-10", "ats", "Agreed to Senate", "BILLS-119sres10ats"),
+        )
+    ]
+    path = tmp_path / "bill_versions.parquet"
+    pq.write_table(pa.Table.from_pylist(rows, schema=pa.schema([(c, pa.string()) for c in columns])), path)
+
+    counts = build.reclassify_held_bill_versions(path)
+    assert counts == {"rows": 5, "kind_moved": 5, "version_date_cleaned": 0, "rows_moved": 5}
+    by_code = {row["version_code"]: row for row in pq.read_table(path).to_pylist()}
+    assert by_code["eas2"]["kind"] == "procedural_amendments"
+    assert by_code["eas2"]["kind_rule"] == "procedural_amendments_slug"
+    assert by_code["eas2"]["kind_warning"] == "amendment instructions, not bill text"
+    for code in ("rfs", "rfs2", "rh2", "ats"):
+        assert by_code[code]["kind"] == "full_text"
+        assert by_code[code]["kind_rule"] == "full_text_slug"
+        assert by_code[code]["kind_warning"] is None

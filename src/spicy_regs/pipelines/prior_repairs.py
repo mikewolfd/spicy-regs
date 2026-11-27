@@ -24,6 +24,12 @@ values it names, and publishes a generation that carries every other table forwa
 * ``missing-bills BILL_ID ... --output-dir DIR``: add only absent, explicitly named bills from Congress.gov detail
   records. Existing rows and family siblings stay unchanged. Source responses are retained; unread history stays
   NULL. It verifies a local generation by default; ``--no-skip-upload`` publishes with the normal stale-base guard.
+* ``repair-null-from-stage-events``: drop ``public_activity_events`` ``stage_changed`` rows whose ``from`` /
+  ``from_stage`` is NULL (preserving every legitimate non-null ``stage_changed`` transition and never duplicating
+  ``bill_added``), recording exact before/after counts in the repair receipt.
+* ``repair-bill-family-quality``: run ``repair-null-from-stage-events`` together with deterministic held-row
+  ``bill_versions`` reclassification and empty-string date/district cleanup on ``bill_versions``, ``section_diffs``,
+  and ``bill_cosponsors`` over a selected receipt-backed ``bill-family`` generation without refetching bodies.
 
 ``--dry-run`` reads the tables (from the live generation, or ``--prior-dir``), prints the counts, and writes nothing.
 """
@@ -33,6 +39,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -242,6 +249,128 @@ def rebuild_record_issues(prior: Path, out: Path) -> dict[str, int]:
     return {"rows": len(rows), "package_id_moved": moved, "package_id_rule_moved": ruled}
 
 
+def _copy_if_distinct(prior: Path, out: Path) -> None:
+    if prior.resolve() != out.resolve():
+        shutil.copyfile(prior, out)
+
+
+def repair_bill_versions(prior: Path, out: Path) -> dict[str, int]:
+    """Reclassify held ``bill_versions`` rows under the running ``version_kind`` rule and clean empty ``version_date``."""
+    from spicy_regs.transforms.build_bill_family import reclassify_held_bill_versions
+
+    _copy_if_distinct(prior, out)
+    return reclassify_held_bill_versions(out)
+
+
+def repair_section_diffs(prior: Path, out: Path) -> dict[str, int]:
+    """Normalize empty strings ``"" -> None`` on held ``section_diffs`` date columns."""
+    from spicy_regs.transforms.build_bill_family import HELD_EMPTY_STRING_COLUMNS, clean_held_empty_strings
+
+    _copy_if_distinct(prior, out)
+    return clean_held_empty_strings(out, HELD_EMPTY_STRING_COLUMNS["section_diffs"])
+
+
+def repair_bill_cosponsors(prior: Path, out: Path) -> dict[str, int]:
+    """Normalize empty strings ``"" -> None`` on held ``bill_cosponsors`` date/district columns without altering provenance."""
+    from spicy_regs.transforms.build_bill_family import HELD_EMPTY_STRING_COLUMNS, clean_held_empty_strings
+
+    _copy_if_distinct(prior, out)
+    return clean_held_empty_strings(out, HELD_EMPTY_STRING_COLUMNS["bill_cosponsors"])
+
+
+def repair_null_from_stage_events(prior: Path, out: Path) -> dict[str, int]:
+    """Drop ``public_activity_events`` ``stage_changed`` rows whose ``from`` / ``from_stage`` is NULL or empty.
+
+    Preserves every legitimate ``stage_changed`` transition (non-null ``from``) and every ``bill_added``,
+    ``version_added``, and ``summary_generated`` row untouched, guaranteeing zero duplicate ``bill_added`` rows and
+    recording exact before/after counts. Works on both receipt-restored processing tables (``event_data_json``) and
+    native subject tables (``from_stage``), preserving the input Arrow schema and file metadata.
+    """
+    schema = pq.read_schema(prior)
+    names = set(schema.names)
+    if not {"bill_id", "event_type"} <= names:
+        raise ValueError("public_activity_events repair requires bill_id and event_type columns")
+    has_json = "event_data_json" in names
+    has_from_stage = "from_stage" in names
+    if not has_json and not has_from_stage:
+        raise ValueError("public_activity_events repair requires event_data_json or from_stage column")
+
+    bill_added_ids: set[str] = set()
+    bill_added_before = 0
+    with pq.ParquetFile(prior) as source:
+        for batch in source.iter_batches(batch_size=50_000, columns=["bill_id", "event_type"]):
+            bill_ids = batch.column("bill_id").to_pylist()
+            event_types = batch.column("event_type").to_pylist()
+            for bill_id, event_type in zip(bill_ids, event_types, strict=True):
+                if event_type == "bill_added":
+                    bill_added_before += 1
+                    if bill_id is not None:
+                        bill_added_ids.add(bill_id)
+
+    rows_before = rows_after = 0
+    stage_changed_before = stage_changed_preserved = 0
+    dropped_total = dropped_with_bill_added = dropped_without_bill_added = 0
+    staged = out.with_suffix(".tmp.parquet")
+    try:
+        with pq.ParquetFile(prior) as source, pq.ParquetWriter(staged, schema, compression="zstd") as writer:
+            for batch in source.iter_batches(batch_size=50_000):
+                batch_rows = batch.num_rows
+                rows_before += batch_rows
+                bill_ids = batch.column("bill_id").to_pylist()
+                event_types = batch.column("event_type").to_pylist()
+                json_values = batch.column("event_data_json").to_pylist() if has_json else None
+                from_values = batch.column("from_stage").to_pylist() if not has_json else None
+                keep_indices: list[int] = []
+                for idx in range(batch_rows):
+                    if event_types[idx] != "stage_changed":
+                        keep_indices.append(idx)
+                        continue
+                    stage_changed_before += 1
+                    if json_values is not None:
+                        raw = json_values[idx]
+                        if raw is None:
+                            from_stage = None
+                        else:
+                            parsed = json.loads(raw)
+                            from_stage = parsed.get("from") if isinstance(parsed, dict) else None
+                    else:
+                        assert from_values is not None
+                        from_stage = from_values[idx]
+                    if from_stage is None or from_stage == "":
+                        dropped_total += 1
+                        if bill_ids[idx] in bill_added_ids:
+                            dropped_with_bill_added += 1
+                        else:
+                            dropped_without_bill_added += 1
+                    else:
+                        stage_changed_preserved += 1
+                        keep_indices.append(idx)
+                if keep_indices:
+                    rows_after += len(keep_indices)
+                    filtered = batch if len(keep_indices) == batch_rows else batch.take(keep_indices)
+                    writer.write_table(pa.Table.from_batches([filtered], schema=schema))
+            if rows_after == 0:
+                writer.write_table(pa.Table.from_pylist([], schema=schema))
+        staged.replace(out)
+    except BaseException:
+        staged.unlink(missing_ok=True)
+        raise
+
+    return {
+        "rows": rows_after,
+        "rows_before": rows_before,
+        "rows_after": rows_after,
+        "stage_changed_before": stage_changed_before,
+        "stage_changed_preserved": stage_changed_preserved,
+        "stage_changed_null_from_dropped": dropped_total,
+        "stage_changed_null_from_with_existing_bill_added": dropped_with_bill_added,
+        "stage_changed_null_from_without_bill_added": dropped_without_bill_added,
+        "bill_added_before": bill_added_before,
+        "bill_added_after": bill_added_before,
+        "bill_added_duplicate_bill_ids_after": bill_added_before - len(bill_added_ids),
+    }
+
+
 # --------------------------------------------------------------------------- #
 # The repairs, their families, and the partial writer that publishes one.
 # --------------------------------------------------------------------------- #
@@ -282,7 +411,19 @@ REPAIRS: dict[str, Repair] = {
     )),
     "backfill-found-by": Repair("bill-family", {"cbo_cost_estimates": _found_by}, reads=("laws",)),
     "rebuild-record-issues": Repair("record-issues", {"record_issues": rebuild_record_issues}),
+    "repair-null-from-stage-events": Repair("bill-family", {
+        "public_activity_events": repair_null_from_stage_events,
+    }),
+    "repair-bill-family-quality": Repair("bill-family", {
+        "bill_versions": repair_bill_versions,
+        "section_diffs": repair_section_diffs,
+        "bill_cosponsors": repair_bill_cosponsors,
+        "public_activity_events": repair_null_from_stage_events,
+    }),
 }
+
+#: Receipt-backed ``bill-family`` repairs published as complete receipt-validated generations via ``SubjectReceiptRollup``.
+_RECEIPT_BILL_FAMILY_REPAIRS = frozenset({"repair-null-from-stage-events", "repair-bill-family-quality"})
 
 
 def apply_repair(repair: Repair, priors: Path, output_dir: Path,
@@ -325,6 +466,50 @@ def repair_rollup(name: str, repair: Repair) -> type[RollupPipeline]:
 
         RecordIssueRepairRollup.name = f"prior-repair-{name}"
         return RecordIssueRepairRollup
+
+    if name in _RECEIPT_BILL_FAMILY_REPAIRS:
+        from spicy_regs.pipelines.rollups.bill_family import BillFamilyRollup
+        from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup
+
+        class BillFamilyRepairRollup(SubjectReceiptRollup):
+            publication_family = repair.family
+            outputs = BillFamilyRollup.source_outputs
+            added_tables = BillFamilyRollup.added_tables
+            partitioned = BillFamilyRollup.partitioned
+            retain_source_evidence = True
+
+            def build(self, output_dir: Path) -> tuple[Path, ...]:
+                def builder(work: Path, *, download_prior, download_members):
+                    priors = work / ".priors"
+                    priors.mkdir()
+                    counts = apply_repair(repair, priors, work, download_prior)
+                    repaired_keys = {f"{table}.parquet" for table in repair.tables}
+                    returned: list[Path] = []
+                    for key in self.source_outputs:
+                        if key in repaired_keys:
+                            returned.append(work / key)
+                            continue
+                        if key in self.partitioned:
+                            download_members(key, work, partitions=frozenset())
+                            split_dir = work / key.removesuffix(".parquet")
+                            if split_dir.exists() or not (work / key).exists():
+                                split_dir.mkdir(parents=True, exist_ok=True)
+                                returned.append(split_dir)
+                            else:
+                                returned.append(work / key)
+                            continue
+                        if not download_prior(key, work / key):
+                            raise FileNotFoundError(f"{key} is not published")
+                        returned.append(work / key)
+                    logger.info("{}: {}", name, json.dumps(counts, sort_keys=True))
+                    if self.source_evidence is not None:
+                        self.source_evidence.event("prior-repair", repair=name, counts=counts)
+                    return tuple(returned)
+
+                return self.build_receipts(output_dir, builder)
+
+        BillFamilyRepairRollup.name = f"prior-repair-{name}"
+        return BillFamilyRepairRollup
 
     class PriorRepairRollup(RollupPipeline):
         publication_family: ClassVar[str | None] = repair.family
@@ -425,15 +610,16 @@ def missing_bills_rollup(bill_ids: Sequence[str]) -> type[RollupPipeline]:
 def dry_run(name: str, *, prior_dir: Path | None = None) -> dict[str, dict[str, int]]:
     """Count a repair over the live generation or local processing priors without changing the input.
 
-    Record issues also accepts a local saved native selection with its receipts.
+    Receipt-backed repairs also accept a local saved native selection with its receipts.
     """
     from spicy_regs.sources import publication, r2
 
     repair = REPAIRS[name]
+    uses_selected_priors = name == "rebuild-record-issues" or name in _RECEIPT_BILL_FAMILY_REPAIRS
     with TemporaryDirectory(prefix="prior-repair-") as scratch:
         work = Path(scratch)
         if prior_dir is not None:
-            if name == "rebuild-record-issues" and (prior_dir / ".native-state" / "selection.json").exists():
+            if uses_selected_priors and (prior_dir / ".native-state" / "selection.json").exists():
                 from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
 
                 selected = SelectedPriors(work / "selected", root=prior_dir, public_url="")
@@ -447,7 +633,7 @@ def dry_run(name: str, *, prior_dir: Path | None = None) -> dict[str, dict[str, 
         priors = work / "priors"
         priors.mkdir()
         with publication.snapshot(public_url) as index:
-            if name == "rebuild-record-issues":
+            if uses_selected_priors:
                 from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
 
                 selected = SelectedPriors(work / "selected", index=index, public_url=public_url)

@@ -204,3 +204,25 @@ def test_multi_publisher_target_rules_corroborating_links_and_explicit_refusals(
         ("hrc:118", "unresolved", "unresolved_member_or_roll_call", "○"),
     ]
     assert rows[0]["reference_id"] == "item:direct" and rows[0]["vote_id"] == "118-house-2-10"
+
+
+def test_active_cosponsor_with_normalized_null_withdrawn_date_resolves_cleanly():
+    """FINDING 6 (ss-kj95): normalized None sponsorship_withdrawn_date evaluates as active, whereas '' degrades."""
+    from tests.test_scorecard_historical_sponsorship import compare, historical_fixture
+
+    normalized = historical_fixture()
+    normalized[3][0].update(sponsorship_date="2022-08-26", sponsorship_withdrawn_date=None)
+    row = compare(normalized)[0]
+    assert (row["comparison_status"], row["official_position_normalized"], row["reason"]) == (
+        "same",
+        "cosponsor_at_cutoff",
+        "dated_official_cosponsorship_at_source_cutoff",
+    )
+
+    unnormalized = historical_fixture()
+    unnormalized[3][0].update(sponsorship_date="2022-08-26", sponsorship_withdrawn_date="")
+    degraded = compare(unnormalized)[0]
+    assert (degraded["comparison_status"], degraded["reason"]) == (
+        "unresolved",
+        "missing_or_invalid_official_sponsorship_dates",
+    )
