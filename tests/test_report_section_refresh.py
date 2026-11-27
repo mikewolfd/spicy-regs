@@ -206,8 +206,8 @@ def test_a_named_reread_reads_only_those_packages_and_carries_every_other_checkp
 
 #: (named ids, whether priors exist, a prior hearing without a checkpoint, the refusal)
 UNSAFE_REREADS = {
-    "a report would move the discovery watermark": ([REFUSED], True, (), "hearings only"),
-    "an id outside both collections": (["PLAW-119publ1"], True, (), "hearings only"),
+    "an id outside both collections": (["PLAW-119publ1"], True, (), "outside CRPT and CHRG"),
+    "a typo'd report": (["CRPT-119hrpt99999"], True, (), "no prior checkpoint"),
     "a typo'd hearing": (["CHRG-119hhrg99999"], True, (), "no prior checkpoint"),
     "no prior at all": ([CHRG_ID], False, (), "no prior checkpoint"),
     "a prior row without a checkpoint": ([CHRG_ID], True, ("CHRG-119hhrg63968",), "run discovery first"),
