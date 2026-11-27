@@ -35345,7 +35345,7 @@
       {
         "column_name": "round",
         "column_type": "VARCHAR",
-        "description": "Reported column, combined-party witness, explicit ranked-choice round (rcv_1 through rcv_8), or electoral_vote for Presidential electoral votes."
+        "description": "Reported column, combined-party witness, explicit ranked-choice round (rcv_1 through rcv_8; separate printed final-round summary excerpts in 2020 AK/KS Presidential primaries use rcv_8_final_summary / rcv_4_final_summary so single-round queries never double-count), or electoral_vote for Presidential electoral votes."
       },
       {
         "column_name": "vote_basis",
@@ -35355,7 +35355,7 @@
       {
         "column_name": "row_kind",
         "column_type": "VARCHAR",
-        "description": "Candidate, party_total, contest_total, state_total, or national_total; summary totals are not additional candidate votes."
+        "description": "Candidate, party_total, contest_total, state_total, or national_total; summary totals are not additional candidate votes. In 2024 Presidential matrix Total rows, national_total covers both grand national totals (candidate_name IS NULL, cols B and AE) and per-candidate national subtotals (candidate_name IS NOT NULL, cols C, D, and E-AD); filter candidate_name IS NULL for grand national totals."
       },
       {
         "column_name": "candidate_id",
@@ -35415,7 +35415,7 @@
       {
         "column_name": "overlap_note",
         "column_type": "VARCHAR",
-        "description": "Repeated combined-party totals, distinct rounds, electoral votes, and appendix overlap limits."
+        "description": "Repeated combined-party totals, distinct rounds (including rcv_N_final_summary excerpts), electoral votes, 2024 grand vs per-candidate national_total rows (filter candidate_name IS NULL for grand totals), and appendix overlap limits."
       },
       {
         "column_name": "source_row",

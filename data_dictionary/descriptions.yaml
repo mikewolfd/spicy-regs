@@ -14898,12 +14898,16 @@ tables:
       seat_term: Full or unexpired term for congressional seats, or not_applicable for Presidential and statewide House
         aggregate rows.
       stage: Primary, primary runoff, general, or general runoff, from separate source columns or worksheets.
-      round: Reported column, combined-party witness, explicit ranked-choice round (rcv_1 through rcv_8), or
-        electoral_vote for Presidential electoral votes.
+      round: Reported column, combined-party witness, explicit ranked-choice round (rcv_1 through rcv_8; separate
+        printed final-round summary excerpts in 2020 AK/KS Presidential primaries use rcv_8_final_summary /
+        rcv_4_final_summary so single-round queries never double-count), or electoral_vote for Presidential electoral
+        votes.
       vote_basis: Ballot line, combined-party witness, ranked-choice round, electoral_vote, or reported_total. These
         bases overlap or measure distinct quantities and must never be summed together.
       row_kind: Candidate, party_total, contest_total, state_total, or national_total; summary totals are not additional
-        candidate votes.
+        candidate votes. In 2024 Presidential matrix Total rows, national_total covers both grand national totals
+        (candidate_name IS NULL, cols B and AE) and per-candidate national subtotals (candidate_name IS NOT NULL, cols
+        C, D, and E-AD); filter candidate_name IS NULL for grand national totals.
       candidate_id: Native FEC candidate ID where supplied; trimmed when matching an office-specific FEC ID pattern.
       candidate_id_status: Office-matched source_id or not_resolved, including write-ins, aggregates, and 2024
         Presidential matrix rows lacking published IDs.
@@ -14918,7 +14922,9 @@ tables:
       primary_winner_raw: Literal primary winner indicator.
       general_winner_raw: Literal general winner indicator; not inferred from a single round.
       interpretation_version: Version of downstream federal election result interpretation.
-      overlap_note: Repeated combined-party totals, distinct rounds, electoral votes, and appendix overlap limits.
+      overlap_note: Repeated combined-party totals, distinct rounds (including rcv_N_final_summary excerpts), electoral
+        votes, 2024 grand vs per-candidate national_total rows (filter candidate_name IS NULL for grand totals), and
+        appendix overlap limits.
       source_row: One-based native worksheet row, including source totals, notes and blanks.
       source_cycle: Selected two-year FEC cycle or completed result edition.
       votes: Exact integer votes where supplied; zero survives and missing or annotated nonnumeric text stays null.

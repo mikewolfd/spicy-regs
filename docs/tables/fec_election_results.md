@@ -29,9 +29,9 @@ Official FEC Presidential, U.S. Senate, and U.S. House election results with exa
 | `district_raw` | `VARCHAR` | Literal seat or district label from the workbook, preserving full versus unexpired terms and blanks. |
 | `seat_term` | `VARCHAR` | Full or unexpired term for congressional seats, or not_applicable for Presidential and statewide House aggregate rows. |
 | `stage` | `VARCHAR` | Primary, primary runoff, general, or general runoff, from separate source columns or worksheets. |
-| `round` | `VARCHAR` | Reported column, combined-party witness, explicit ranked-choice round (rcv_1 through rcv_8), or electoral_vote for Presidential electoral votes. |
+| `round` | `VARCHAR` | Reported column, combined-party witness, explicit ranked-choice round (rcv_1 through rcv_8; separate printed final-round summary excerpts in 2020 AK/KS Presidential primaries use rcv_8_final_summary / rcv_4_final_summary so single-round queries never double-count), or electoral_vote for Presidential electoral votes. |
 | `vote_basis` | `VARCHAR` | Ballot line, combined-party witness, ranked-choice round, electoral_vote, or reported_total. These bases overlap or measure distinct quantities and must never be summed together. |
-| `row_kind` | `VARCHAR` | Candidate, party_total, contest_total, state_total, or national_total; summary totals are not additional candidate votes. |
+| `row_kind` | `VARCHAR` | Candidate, party_total, contest_total, state_total, or national_total; summary totals are not additional candidate votes. In 2024 Presidential matrix Total rows, national_total covers both grand national totals (candidate_name IS NULL, cols B and AE) and per-candidate national subtotals (candidate_name IS NOT NULL, cols C, D, and E-AD); filter candidate_name IS NULL for grand national totals. |
 | `candidate_id` | `VARCHAR` | Native FEC candidate ID where supplied; trimmed when matching an office-specific FEC ID pattern. |
 | `candidate_id_status` | `VARCHAR` | Office-matched source_id or not_resolved, including write-ins, aggregates, and 2024 Presidential matrix rows lacking published IDs. |
 | `candidate_name` | `VARCHAR` | Literal source candidate label, independent of identifier resolution. |
@@ -43,7 +43,7 @@ Official FEC Presidential, U.S. Senate, and U.S. House election results with exa
 | `primary_winner_raw` | `VARCHAR` | Literal primary winner indicator. |
 | `general_winner_raw` | `VARCHAR` | Literal general winner indicator; not inferred from a single round. |
 | `interpretation_version` | `VARCHAR` | Version of downstream federal election result interpretation. |
-| `overlap_note` | `VARCHAR` | Repeated combined-party totals, distinct rounds, electoral votes, and appendix overlap limits. |
+| `overlap_note` | `VARCHAR` | Repeated combined-party totals, distinct rounds (including rcv_N_final_summary excerpts), electoral votes, 2024 grand vs per-candidate national_total rows (filter candidate_name IS NULL for grand totals), and appendix overlap limits. |
 | `source_row` | `INTEGER` | One-based native worksheet row, including source totals, notes and blanks. |
 | `source_cycle` | `INTEGER` | Selected two-year FEC cycle or completed result edition. |
 | `votes` | `BIGINT` | Exact integer votes where supplied; zero survives and missing or annotated nonnumeric text stays null. |

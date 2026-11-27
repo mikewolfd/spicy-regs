@@ -41,8 +41,9 @@ SCHEMAS = {NATIVE: NATIVE_SCHEMA, RESULTS: RESULT_SCHEMA}
 
 OVERLAP_NOTE = (
     "Combined-party witnesses repeat across ballot lines; never add them. "
-    "Ranked-choice rounds, electoral votes, state/national totals, and appendix "
-    "observations overlap or measure different bases than popular ballot-line votes."
+    "Ranked-choice rounds (including separate rcv_N_final_summary excerpts), electoral votes, "
+    "state/national totals (filter candidate_name IS NULL for 2024 grand national totals), "
+    "and appendix observations overlap or measure different bases than popular ballot-line votes."
 )
 
 # Physical columns are licensed publisher facts, not analytical filters borrowed
@@ -257,12 +258,17 @@ def _interpret_congress(
             raise ValueError(f"Unreviewed {office} row kind at row {row['row']}")
 
         if office == "senate":
-            if d_clean in ("S", ""):
+            if d_clean == "S":
                 district, seat_term = "S", "full"
+                prior_term = seat_term
             elif d_clean.upper() in ("S-FULL TERM", "S - FULL TERM"):
                 district, seat_term = "S", "full"
+                prior_term = seat_term
             elif d_clean.upper() in ("S-UNEXPIRED TERM", "S - UNEXPIRED TERM"):
                 district, seat_term = "S", "unexpired"
+                prior_term = seat_term
+            elif not d_clean:
+                district, seat_term = "S", (prior_term or "full")
             else:
                 raise ValueError(f"Unreviewed Senate seat label: {d_raw!r}")
         else:
@@ -643,6 +649,7 @@ def _interpret_pres_primary(
     footnote_col = "T" if is_2020 else "M"
     current_state: str | None = None
     rcv_mode: str | None = None
+    rcv_party: str | None = None
 
     for row, common, key in sheet_rows:
         if row["row"] == 1:
@@ -657,6 +664,7 @@ def _interpret_pres_primary(
         if state_clean != current_state:
             current_state = state_clean
             rcv_mode = None
+            rcv_party = None
 
         k_val = fields.get("K")
         k_clean = k_val.strip() if isinstance(k_val, str) else ""
@@ -664,10 +672,14 @@ def _interpret_pres_primary(
             m = re.fullmatch(r"Final Round \(Round ([0-9]+)\)", k_clean)
             if not m:
                 raise ValueError(f"Unreviewed Presidential RCV header: {k_val!r}")
-            rcv_mode = f"rcv_{m.group(1)}"
+            # Distinct round label so the printed final-round excerpt never collides
+            # with the final column (e.g. col S / col O) of the full multi-round table.
+            rcv_mode = f"rcv_{m.group(1)}_final_summary"
+            rcv_party = None
             continue
         if is_2020 and k_clean == "First Round (Round 1)":
             rcv_mode = "multi_round"
+            rcv_party = None
             continue
 
         i_norm = (fields.get("I") or "").strip() if isinstance(fields.get("I"), str) else ""
@@ -684,7 +696,17 @@ def _interpret_pres_primary(
         cid, cid_status = _candidate_id_fields(fields.get("B"), "president")
         footnotes = fields.get(footnote_col)
         party = fields.get("J")
+        party_clean = party.strip() if isinstance(party, str) else ""
         cand_name = fields.get("H") if row_kind == "candidate" else None
+
+        # Reset RCV scope if a subsequent distinct party section begins in the same state
+        # without an explicit RCV header.
+        if rcv_mode is not None and party_clean:
+            if rcv_party is None:
+                rcv_party = party_clean
+            elif party_clean != rcv_party:
+                rcv_mode = None
+                rcv_party = None
 
         if rcv_mode is None:
             votes, votes_status = _parse_vote(k_val)
@@ -809,6 +831,10 @@ def _interpret_pres_primary(
                     general_winner_raw=None,
                 )
             )
+
+        if row_kind == "contest_total":
+            rcv_mode = None
+            rcv_party = None
     return results
 
 
