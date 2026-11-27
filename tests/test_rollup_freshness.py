@@ -464,3 +464,50 @@ def test_rulemaking_snapshot_pointer_freshness_and_lag_checks(tmp_path, monkeypa
     )
     assert freshness.main() == 1
     assert f"rulemaking snapshot ({publication.SNAPSHOT_POINTER}) is 9d old (budget 4d)" in capsys.readouterr().out
+
+
+def test_comments_pointer_freshness_catches_stagnant_live_pointer_and_preserves_history(
+    tmp_path, monkeypatch, capsys
+):
+    from contextlib import nullcontext
+
+    assert freshness.evaluate_comments_pointer_freshness({}, date(2026, 11, 26)) == []
+    assert freshness.evaluate_comments_pointer_freshness({"comments": _family(None)}, date(2026, 11, 26)) == [
+        "comments pointer (publication.v2.json families.comments): no parseable publishedAt"
+    ]
+    assert (
+        freshness.evaluate_comments_pointer_freshness(
+            {"comments": _family("2026-11-22T12:00:00Z")}, date(2026, 11, 26)
+        )
+        == []
+    )
+    assert freshness.evaluate_comments_pointer_freshness(
+        {"comments": _family("2026-11-21T12:00:00Z")}, date(2026, 11, 26)
+    ) == ["comments pointer (publication.v2.json families.comments) is 5d old (budget 4d)"]
+
+    # End-to-end: stagnant comments pointer fails main() even when counts didn't drop, while preserving state history.
+    state_file = tmp_path / "state.json"
+    state_file.write_text(json.dumps({"usaspending_recipients": {"count": 100, "last_changed": "2026-11-25"}}))
+    monkeypatch.setattr(freshness, "DATE_CHECKS", ())
+    monkeypatch.setattr(freshness, "ROW_CHANGE_BUDGETS", {"usaspending_recipients": 14})
+    monkeypatch.setattr(freshness, "read_freshness_rows", lambda *a, **k: [("usaspending_recipients", "row count", None, 101)])
+    monkeypatch.setattr(freshness, "read_comment_counts", lambda *a, **k: {"EPA": 1000})
+    monkeypatch.setattr(
+        freshness,
+        "read_rulemaking_snapshot",
+        lambda *a, **k: {"snapshot_id": "s1", "manifest": {"asserted_at": "2026-11-26T00:00:00Z"}},
+    )
+    index = publication.empty_index()
+    index["families"]["comments"] = _family("2026-11-18T12:00:00Z", "comments", "comments_index")
+    monkeypatch.setattr(publication, "snapshot", lambda _: nullcontext(index))
+    monkeypatch.setattr(freshness, "resolve_r2_base_url", lambda value: str(tmp_path))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["check-freshness", "--today", "2026-11-26", "--state-file", str(state_file)],
+    )
+    assert freshness.main() == 1
+    out = capsys.readouterr().out
+    assert "comments pointer (publication.v2.json families.comments) is 8d old (budget 4d)" in out
+    saved = json.loads(state_file.read_text())
+    assert saved["usaspending_recipients"] == {"count": 101, "last_changed": "2026-11-26"}
+    assert saved["comments_coverage"]["agencies"] == {"EPA": 1000}

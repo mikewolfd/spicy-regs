@@ -13,6 +13,11 @@ on:
         required: false
         default: false
         type: boolean
+      senate_paid_ladder:
+        description: 'Opt in to the paid Senate roster ladder (Zyte/Firecrawl; requires owner approval, never on schedule)'
+        required: false
+        default: false
+        type: boolean
 jobs:
   run:
     uses: ./.github/workflows/_rollup.yml
@@ -20,4 +25,5 @@ jobs:
     with:
       command: run-rollup-committee-rosters
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      senate_paid_ladder: ${{ github.event_name == 'workflow_dispatch' && inputs.senate_paid_ladder || false }}
       timeout_minutes: 30
