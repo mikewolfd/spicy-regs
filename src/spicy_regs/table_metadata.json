@@ -39532,7 +39532,7 @@
       {
         "column_name": "sponsorship_date",
         "column_type": "VARCHAR",
-        "description": "Literal sponsorshipDate; absent is NULL and present empty is an empty string."
+        "description": "Normalized sponsorshipDate; NULL when absent or present empty (see sponsorship_date_status and source_xml)."
       },
       {
         "column_name": "is_original",
@@ -39542,7 +39542,7 @@
       {
         "column_name": "sponsorship_withdrawn_date",
         "column_type": "VARCHAR",
-        "description": "Literal sponsorshipWithdrawnDate; retained BILLSTATUS source observations include positive dates."
+        "description": "Normalized sponsorshipWithdrawnDate; NULL when absent or present empty (see sponsorship_withdrawn_date_status and source_xml); retained BILLSTATUS source observations include positive dates."
       },
       {
         "column_name": "party",
@@ -39557,7 +39557,7 @@
       {
         "column_name": "district",
         "column_type": "VARCHAR",
-        "description": "District as the cosponsor entry states it."
+        "description": "District as the cosponsor entry states it; NULL when absent or present empty."
       }
     ],
     "subject": "congress",
@@ -39667,7 +39667,7 @@
       {
         "column_name": "version_date",
         "column_type": "VARCHAR",
-        "description": "Congress textVersions action-associated date for this printing, not its online publication time; the merge prefers the larger value. An enrolled printing's date is empty at the publisher (BILLSTATUS `<date/>` and the printing's own dc:date), so version_date is '' (not NULL) on enrolled rows, which sorts before every date: order printings with printing_order or NULLIF(version_date, '')."
+        "description": "Congress textVersions action-associated date for this printing, not its online publication time; the merge prefers the larger value. NULL when absent or when the publisher states an empty `<date/>` (as on enrolled printings, whose dc:date is also empty): order printings with printing_order."
       },
       {
         "column_name": "package_id",
@@ -39702,7 +39702,7 @@
       {
         "column_name": "kind",
         "column_type": "VARCHAR",
-        "description": "Interpreted document kind: `full_text`, `kind_uncertain` (a full-text slug whose document is too thin to be sure), `procedural_amendments`, `procedural_summary`, or `unknown`."
+        "description": "Interpreted document kind: `full_text`, `kind_uncertain` (a full-text slug whose measured body yielded zero sections or zero bytes), `procedural_amendments`, `procedural_summary`, or `unknown`."
       },
       {
         "column_name": "kind_label",
@@ -39717,7 +39717,7 @@
       {
         "column_name": "publication_dates",
         "column_type": "STRUCT(field VARCHAR, \"value\" VARCHAR, state VARCHAR, \"precision\" VARCHAR, locator VARCHAR, source_sha256 VARCHAR, source_url VARCHAR, observed_at VARCHAR, attributes STRUCT(\"name\" VARCHAR, \"value\" VARCHAR)[])[]",
-        "description": "Native SUMMARY/MODS date observations with original values, precision, attributes and exact evidence/capture locators."
+        "description": "Native SUMMARY and MODS date observations, preserving values, precision, attributes and exact evidence locators. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
         "column_name": "publication_evidence_status",

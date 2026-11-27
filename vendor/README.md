@@ -38,13 +38,12 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
-- **Selected combined CBO reader provider** `spicy_docs-0.85.0+readers.20261127.2` is built from
-  `2391bfcc323be7e9d759362c48e6de0760d83477` (tree `08aba094ce9afe93c3d377898e0557f586c3c1dc`,
-  branch `feat/cbo-swarm-20261127`). It combines `spicy_docs.sources.cbo_data` (`US-CBO/cbo-data`
-  catalog, schema, and CSV baseline acquisition), `spicy_docs.sources.cbo_eval_projections`
-  (`US-CBO/eval-projections` 1984–FY2025 acquisition and strict CSV validation), and the
-  `cbo.md` / `jct.gov` documentation updates on top of `.20261127.1`.
-  See [the receipt](spicy_docs-0.85.0+readers.20261127.2.json) for source, wheel and RECORD identity.
+- **Selected combined CBO + Wave 1 reader provider** `spicy_docs-0.85.0+readers.20261127.3` is built from
+  `481c6cac8ca0cc1f6e68f958fb6280f34b63c6cd` (tree `6a3bbbe7a252ea8fa046cc06ed79d8a7abc4495b`,
+  `mikewolfd/spicy-docs#52` on `fork/main`). It combines `spicy_docs.sources.cbo_data` (`US-CBO/cbo-data`),
+  `spicy_docs.sources.cbo_eval_projections` (`US-CBO/eval-projections`), CBO/JCT route research docs, and
+  all Wave 1 reader/schema updates merged on `spicy-docs` `fork/main` (including `#51` `.20261127.2`).
+  See [the receipt](spicy_docs-0.85.0+readers.20261127.3.json) for source, wheel and RECORD identity.
   The superseded `.20261125.3` wheel is recoverable from this adoption commit's parent;
   its receipt remains.
 

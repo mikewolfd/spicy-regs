@@ -21,16 +21,16 @@ One row per printing of a bill, per source that supplied it. The full text is de
 | `version_code` | `VARCHAR` | The printing's code: its stage's sealed slug, or a numbered reprint's own package suffix (eas2). |
 | `printing_id` | `VARCHAR` | Which acquisition path supplied this row (govinfo, congress, govinfo-pdf, upload). |
 | `label` | `VARCHAR` | The publisher's version-type string verbatim, which is not unique per printing. |
-| `version_date` | `VARCHAR` | Congress textVersions action-associated date for this printing, not its online publication time; the merge prefers the larger value. An enrolled printing's date is empty at the publisher (BILLSTATUS `<date/>` and the printing's own dc:date), so version_date is '' (not NULL) on enrolled rows, which sorts before every date: order printings with printing_order or NULLIF(version_date, ''). |
+| `version_date` | `VARCHAR` | Congress textVersions action-associated date for this printing, not its online publication time; the merge prefers the larger value. NULL when absent or when the publisher states an empty `<date/>` (as on enrolled printings, whose dc:date is also empty): order printings with printing_order. |
 | `package_id` | `VARCHAR` | The GovInfo BILLS package id, read from a stated format URL rather than derived by name. |
 | `version_code_is_reprint_ambiguous` | `BOOLEAN` | True when the publisher's version-type string also names a numbered reprint, so the slug alone cannot tell the two printings apart. |
 | `publisher_stage` | `VARCHAR` | The root's own bill-stage or resolution-stage attribute: the publisher's word for it. |
 | `section_count` | `BIGINT` | How many content-bearing nodes the flattening produced; the bill_sections row count. |
 | `equivalent_xml_version_code` | `VARCHAR` | For a PDF twin, the version_code of the XML row it stands in for. |
 | `equivalent_printing_id` | `VARCHAR` | That twin's source.  A version code is not unique across acquisition paths, which is why bill_versions keys on source too, so a twin reference needs both halves to resolve. |
-| `kind` | `VARCHAR` | Interpreted document kind: `full_text`, `kind_uncertain` (a full-text slug whose document is too thin to be sure), `procedural_amendments`, `procedural_summary`, or `unknown`. |
+| `kind` | `VARCHAR` | Interpreted document kind: `full_text`, `kind_uncertain` (a full-text slug whose measured body yielded zero sections or zero bytes), `procedural_amendments`, `procedural_summary`, or `unknown`. |
 | `kind_label` | `VARCHAR` | The display label for this kind, supplied by the caller that owns the vocabulary. |
 | `kind_warning` | `VARCHAR` | The inline warning this kind carries, for a version picker.  NULL for `full_text` and for `unknown`, which states none of its own. |
-| `publication_dates` | `STRUCT(field VARCHAR, "value" VARCHAR, state VARCHAR, "precision" VARCHAR, locator VARCHAR, source_sha256 VARCHAR, source_url VARCHAR, observed_at VARCHAR, attributes STRUCT("name" VARCHAR, "value" VARCHAR)[])[]` | Native SUMMARY/MODS date observations with original values, precision, attributes and exact evidence/capture locators. |
+| `publication_dates` | `STRUCT(field VARCHAR, "value" VARCHAR, state VARCHAR, "precision" VARCHAR, locator VARCHAR, source_sha256 VARCHAR, source_url VARCHAR, observed_at VARCHAR, attributes STRUCT("name" VARCHAR, "value" VARCHAR)[])[]` | Native SUMMARY and MODS date observations, preserving values, precision, attributes and exact evidence locators. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `publication_evidence_status` | `VARCHAR` | Whether SUMMARY was bracketed or changed; every status leaves the metadata/body version link unverified. |
 | `body_version_id` | `VARCHAR` | Stable identity of the substantive captured document body, independent of extraction processing. |
