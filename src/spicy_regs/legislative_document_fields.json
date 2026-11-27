@@ -3933,7 +3933,7 @@
       {
         "name": "selected_shapes_json",
         "source_type": "VARCHAR",
-        "meaning": "The source shapes this read selected, as a JSON array: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code.",
+        "meaning": "The source shapes this read selected, as a JSON array: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code; `href`, `ref` and `external-xref` for bills; `href` and `ref` for laws and Statutes at Large.",
         "decision": "native-list",
         "target": "selected_shapes",
         "target_type": "list<string>",

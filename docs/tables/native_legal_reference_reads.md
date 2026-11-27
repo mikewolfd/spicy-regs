@@ -24,7 +24,7 @@ Each input's latest completed read, including reads that found no observations. 
 | `source_bytes` | `BIGINT` | Exact retained XML byte count. |
 | `occurrence_count` | `BIGINT` | Number of observations produced by this completed selected-shape read, including zero. |
 | `read_status` | `VARCHAR` | `complete_selected_shapes`: the scanner finished the whole input for the selected shapes, which does not mean every legal-reference form in it was read. |
-| `selected_shapes` | `VARCHAR[]` | The source shapes this read selected, as a Native list: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `selected_shapes` | `VARCHAR[]` | The source shapes this read selected, as a Native list: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code; `href`, `ref` and `external-xref` for bills; `href` and `ref` for laws and Statutes at Large. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `unsupported_shapes` | `VARCHAR[]` | The shapes this read knowingly left out, as a Native list (`PARAUTH` and `SECAUTH` for eCFR); not a list of every form the scanner cannot read. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `manifest_sha256` | `VARCHAR` | `sha256:` digest of the selection manifest that named this input and any target pins. |
 | `rule_version` | `VARCHAR` | `native-legal-reference/004` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only. |

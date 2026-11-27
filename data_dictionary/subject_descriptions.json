@@ -2249,7 +2249,7 @@
       "source_bytes": "Exact retained XML byte count.",
       "occurrence_count": "Number of observations produced by this completed selected-shape read, including zero.",
       "read_status": "`complete_selected_shapes`: the scanner finished the whole input for the selected shapes, which does not mean every legal-reference form in it was read.",
-      "selected_shapes": "The source shapes this read selected, as a Native list: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
+      "selected_shapes": "The source shapes this read selected, as a Native list: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code; `href`, `ref` and `external-xref` for bills; `href` and `ref` for laws and Statutes at Large. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "unsupported_shapes": "The shapes this read knowingly left out, as a Native list (`PARAUTH` and `SECAUTH` for eCFR); not a list of every form the scanner cannot read. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "manifest_sha256": "`sha256:` digest of the selection manifest that named this input and any target pins.",
       "rule_version": "`native-legal-reference/004` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only.",

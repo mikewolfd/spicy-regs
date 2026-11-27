@@ -2,7 +2,7 @@
 
 `NativeLegalReferencesRollup` builds `native_legal_references.parquet` and
 `native_legal_reference_reads.parquet` from an explicit local manifest. It uses
-SpicyDocs' CFR, U.S. Code, bill and law scanners and the ordinary rollup generation and
+SpicyDocs' CFR, U.S. Code, bill, law and Statutes at Large scanners and the ordinary rollup generation and
 source-evidence lifecycle. It makes no acquisition requests.
 
 ```sh
@@ -24,8 +24,10 @@ row shapers, and the reading of each observation
 and reads a note's text with the shared citation rules). Its
 `docs/decisions.md` entry "The native legal-reference tables have contracts"
 states the reading, the measurements and what an importer changes. Both tables
-name that rule, `native-legal-reference/003`; rows this repository read before
-the reading moved name `/002`.
+currently name rule `native-legal-reference/004` (adding named readable-text
+renditions, `unicode_code_points` character-offset spans beside positional
+XPaths, and `statute` extraction); prior builds read before `ss-tdf4` name
+`/003`, and rows this repository read before the reading moved name `/002`.
 
 This repository keeps the manifest, the input pins, the source evidence, the
 qualification of complete inputs, the scan loop and the target lookup. The
@@ -38,7 +40,7 @@ their contracts, replacing each scope a complete read covers.
 ## Input selection and evidence
 
 Each `sources` entry requires a local `path`, exact `sha256:` digest,
-`source_family` (`ecfr`, `uscode`, `bill` or `law`), `source_record_key`, `source_locator`, and
+`source_family` (`ecfr`, `uscode`, `bill`, `law` or `statute`), `source_record_key`, `source_locator`, and
 `edition` (a literal or explicit JSON null). Relative paths resolve against the
 manifest directory. The manifest, exact XML bytes and optional target bytes
 enter the existing `CaptureEvidence` blob store and journal. Events say

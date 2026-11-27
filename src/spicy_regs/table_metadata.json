@@ -47487,7 +47487,7 @@
       {
         "column_name": "selected_shapes",
         "column_type": "VARCHAR[]",
-        "description": "The source shapes this read selected, as a Native list: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        "description": "The source shapes this read selected, as a Native list: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code; `href`, `ref` and `external-xref` for bills; `href` and `ref` for laws and Statutes at Large. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
         "column_name": "unsupported_shapes",
