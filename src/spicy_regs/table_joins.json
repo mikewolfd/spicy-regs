@@ -5753,12 +5753,12 @@
       "parent_columns": [
         "filing_id"
       ],
-      "kind": "unmeasured",
-      "reason": "Cohort-scoped executive disclosure filing identity. Local candidate resolution is checked by unit and dry-run verification; the shared publication has no measured multi-table baseline yet.",
+      "kind": "complete",
+      "reason": "Each executive disclosure fact row belongs to its parent filing_id in the same generation (live Harris-2024 pilot baseline: 1/1 filing_id = 100%).",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 1,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
       "measurement": null
     },
@@ -5772,7 +5772,7 @@
         "filing_id"
       ],
       "kind": "unmeasured",
-      "reason": "Cohort-scoped executive disclosure filing identity. Local candidate resolution is checked by unit and dry-run verification; the shared publication has no measured multi-table baseline yet.",
+      "reason": "Each executive disclosure transaction row belongs to its parent filing_id in the same generation; public baseline pending initial v2 publication.",
       "measured_via": null,
       "baseline_keys": 0,
       "baseline_missing": 0,
@@ -5789,12 +5789,12 @@
       "parent_columns": [
         "filing_id"
       ],
-      "kind": "unmeasured",
-      "reason": "Cohort-scoped executive disclosure filing identity. Local candidate resolution is checked by unit and dry-run verification; the shared publication has no measured multi-table baseline yet.",
+      "kind": "complete",
+      "reason": "Each executive disclosure page row belongs to its parent filing_id in the same generation (live Harris-2024 pilot baseline: 1/1 filing_id = 100%).",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 1,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
       "measurement": null
     }

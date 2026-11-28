@@ -1126,24 +1126,41 @@ JOINS += tuple(
     )
 )
 
-JOINS += tuple(
+JOINS += (
     _join(
-        child,
+        "executive_disclosure_facts",
+        "filing_id",
+        "executive_disclosure_filings",
+        "filing_id",
+        1,
+        0,
+        reason="Each executive disclosure fact row belongs to its parent filing_id in the same generation "
+        "(live Harris-2024 pilot baseline: 1/1 filing_id = 100%).",
+        expected_cardinality="one",
+    ),
+    _join(
+        "executive_disclosure_transactions",
         "filing_id",
         "executive_disclosure_filings",
         "filing_id",
         0,
         0,
         "unmeasured",
-        "Cohort-scoped executive disclosure filing identity. Local candidate resolution is checked by unit "
-        "and dry-run verification; the shared publication has no measured multi-table baseline yet.",
+        "Each executive disclosure transaction row belongs to its parent filing_id in the same generation; "
+        "public baseline pending initial v2 publication.",
         expected_cardinality="one",
-    )
-    for child in (
-        "executive_disclosure_facts",
-        "executive_disclosure_transactions",
+    ),
+    _join(
         "executive_disclosure_pages",
-    )
+        "filing_id",
+        "executive_disclosure_filings",
+        "filing_id",
+        1,
+        0,
+        reason="Each executive disclosure page row belongs to its parent filing_id in the same generation "
+        "(live Harris-2024 pilot baseline: 1/1 filing_id = 100%).",
+        expected_cardinality="one",
+    ),
 )
 
 # New full-key/attribute baselines include raw-row cardinality and immutable input
