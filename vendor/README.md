@@ -45,7 +45,19 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
   598,325 bytes). Pinned only under the optional `ddk-bridge` extra and dependency group so base
   CLI/MCP installs and `source-readers` remain untouched.
 
-- **Selected IRS Form 990 streaming reader provider** `spicy_docs-0.85.0+readers.20261128.2` is built from
+- **Selected Deflate64 IRS 990 & multi-part OGE 278e reader provider** `spicy_docs-0.85.0+readers.20261128.3` is built from
+  `703c56c9804a95ee4a3e8386043974a3d9c5b594` (tree `e4f93d9a2a791e6814ea9f3423bddb3737ecde8c`,
+  `mikewolfd/spicy-docs#62` and `mikewolfd/spicy-docs#63` on `fork/main`). It adds fail-closed streaming
+  PKZIP method-9 (Deflate64 / Enhanced Deflate) ZIP support via `inflate64>=1.0.4` for May 2026+ IRS TEOS
+  archives (`ss-umeo`) plus multi-part OGE Form 278e extraction (Parts 2/5/6/7 + Endnotes), cover reader,
+  and Route A/B acquirer (`ss-rhsd`) atop `.20261128.2` (with wheel metadata version bumped to
+  `0.85.0+readers.20261128.3` in clean `git archive` staging). Two clean `git archive` builds are byte-identical
+  (`sha256:b348259b...`).
+  See [the receipt](spicy_docs-0.85.0+readers.20261128.3.json) for source, wheel and RECORD identity.
+  The superseded `.20261128.2` wheel is recoverable from this adoption commit's parent;
+  its receipt remains.
+
+- **Prior IRS Form 990 streaming reader provider** `spicy_docs-0.85.0+readers.20261128.2` is built from
   `96e6a824675d1e58fe36980f22df96db0ec44d45` (tree `83a9d62b6cc631e3dba0815a8a439e36d04022ca`,
   `mikewolfd/spicy-docs#61` on `fork/main`). It adds the single-pass Expat streaming IRS Form 990
   reader (`scan_form990_return`, `iter_archive_returns`, `load_index_map`, `parse_downloads_page`),
