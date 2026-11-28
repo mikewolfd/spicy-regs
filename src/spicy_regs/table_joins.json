@@ -1192,6 +1192,66 @@
       "measurement": null
     },
     {
+      "child": "federal_register_agencies",
+      "child_columns": [
+        "document_number",
+        "publication_date"
+      ],
+      "parent": "federal_register_documents",
+      "parent_columns": [
+        "document_number",
+        "publication_date"
+      ],
+      "kind": "unmeasured",
+      "reason": "Each typed agency child row belongs to exactly one dated Federal Register document in the same federal-register-typed generation; public baseline pending initial bootstrap.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "federal_register_cfr_references",
+      "child_columns": [
+        "document_number",
+        "publication_date"
+      ],
+      "parent": "federal_register_documents",
+      "parent_columns": [
+        "document_number",
+        "publication_date"
+      ],
+      "kind": "unmeasured",
+      "reason": "Each typed CFR-reference child row belongs to exactly one dated Federal Register document in the same federal-register-typed generation; public baseline pending initial bootstrap.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "federal_register_docket_candidates",
+      "child_columns": [
+        "document_number",
+        "publication_date"
+      ],
+      "parent": "federal_register_documents",
+      "parent_columns": [
+        "document_number",
+        "publication_date"
+      ],
+      "kind": "unmeasured",
+      "reason": "Each normalized docket-candidate row belongs to exactly one dated Federal Register document in the same federal-register-typed generation; public baseline pending initial bootstrap.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
       "child": "documents",
       "child_columns": [
         "fr_doc_num"
@@ -9945,6 +10005,45 @@
         "parent_columns": [
           "title",
           "part"
+        ]
+      }
+    ],
+    "federal_register_agencies": [
+      {
+        "child_columns": [
+          "document_number",
+          "publication_date"
+        ],
+        "parent_table": "federal_register_documents",
+        "parent_columns": [
+          "document_number",
+          "publication_date"
+        ]
+      }
+    ],
+    "federal_register_cfr_references": [
+      {
+        "child_columns": [
+          "document_number",
+          "publication_date"
+        ],
+        "parent_table": "federal_register_documents",
+        "parent_columns": [
+          "document_number",
+          "publication_date"
+        ]
+      }
+    ],
+    "federal_register_docket_candidates": [
+      {
+        "child_columns": [
+          "document_number",
+          "publication_date"
+        ],
+        "parent_table": "federal_register_documents",
+        "parent_columns": [
+          "document_number",
+          "publication_date"
         ]
       }
     ],

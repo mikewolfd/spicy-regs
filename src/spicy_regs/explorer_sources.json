@@ -523,6 +523,16 @@
         "register"
       ]
     },
+    "federal-register-typed": {
+      "sources": [
+        "register"
+      ],
+      "inputs": [
+        "federal_register"
+      ],
+      "transformation": "Streams immutable 31-field Federal Register API JSON pages from R2 source-evidence blobs selected by federal_register into typed document, agency, CFR-reference, and docket-candidate Parquet tables with native DATE/BIGINT columns, zero-based child ordinals, and member_names presence tracking.",
+      "evidence": "src/spicy_regs/transforms/federal_register_layer1.py"
+    },
     "executive-orders": {
       "sources": [
         "register"

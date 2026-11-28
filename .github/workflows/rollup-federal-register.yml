@@ -56,3 +56,14 @@ jobs:
       producer_ref: main
       # Rebuilt whole from the pinned Register table in DuckDB, no receipts (ss-vse3 step 3).
       timeout_minutes: 30
+
+  typed-layer1:
+    needs: run
+    if: ${{ !inputs.skip_upload }}
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-federal-register-typed
+      producer_ref: main
+      # Streams immutable 31-field R2 source-evidence blobs (zero external FR API calls), no receipts.
+      timeout_minutes: 60

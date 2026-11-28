@@ -324,6 +324,21 @@ JOINS: tuple[Join, ...] = (
           "federal_register", ("document_number", "publication_date"), 603_935, 0,
           reason="Measured 2026-09-27 on the live fork. A document number can occur on distinct publication dates; "
                  "both fields identify the referenced record. Receipt 01-fr-composite-baseline.json."),
+    _join("federal_register_agencies", ("document_number", "publication_date"),
+          "federal_register_documents", ("document_number", "publication_date"), 0, 0, "unmeasured",
+          reason="Each typed agency child row belongs to exactly one dated Federal Register document in the same "
+                 "federal-register-typed generation; public baseline pending initial bootstrap.",
+          expected_cardinality="one"),
+    _join("federal_register_cfr_references", ("document_number", "publication_date"),
+          "federal_register_documents", ("document_number", "publication_date"), 0, 0, "unmeasured",
+          reason="Each typed CFR-reference child row belongs to exactly one dated Federal Register document in the "
+                 "same federal-register-typed generation; public baseline pending initial bootstrap.",
+          expected_cardinality="one"),
+    _join("federal_register_docket_candidates", ("document_number", "publication_date"),
+          "federal_register_documents", ("document_number", "publication_date"), 0, 0, "unmeasured",
+          reason="Each normalized docket-candidate row belongs to exactly one dated Federal Register document in the "
+                 "same federal-register-typed generation; public baseline pending initial bootstrap.",
+          expected_cardinality="one"),
     _join("documents", "fr_doc_num", "federal_register", "document_number", 454_231, 64_761, "design",
           "fr_doc_num is Regulations.gov's spelling, which zero-pads where the Register did not (every "
           "2010-2012 number: 2011-01234 is the Register's 2011-1234) and carries errata prefixes, en dashes "

@@ -87,6 +87,10 @@ TABLES = (
     "oira_meetings",
     "federal_register",
     "federal_register_document_bodies",
+    "federal_register_documents",
+    "federal_register_agencies",
+    "federal_register_cfr_references",
+    "federal_register_docket_candidates",
     # The materialized rulemaking dataset, read through its own snapshot pointer
     # (publication.SNAPSHOT_POINTER), not the publication index.
     "rule_targets",
@@ -1197,6 +1201,8 @@ def _build_connection_inputs(con, publication):
         "administration_policy_bill_links", "administration_policy_statements",
         "white_house_action_versions",
         "ecfr_snapshot_sections", "ecfr_snapshots", "federal_register_issues",
+        "federal_register_documents", "federal_register_agencies",
+        "federal_register_cfr_references", "federal_register_docket_candidates",
         "table3_historical_records", "uscode_edition_structure", "uscode_editions", "uscode_edition_sections",
         "senate_disclosure_reports",
         "senate_disclosure_transactions",
