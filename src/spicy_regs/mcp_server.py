@@ -59,7 +59,7 @@ from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.duckdb_settings import INTERACTIVE_HTTP_RETRIES, load_public_http, memory_limit
 from spicy_regs.fec_release import QUERY_RELEASE_FIELDS, RELEASE_INVENTORIES, release_summary
 from spicy_regs.public_url import resolve_r2_base_url, service_url
-from spicy_regs.fec_receipt_adapter import qualified_views, selected_qualified_views
+from spicy_regs.fec_receipt_adapter import is_v2_fec_query_family, qualified_views, selected_qualified_views
 from spicy_regs.mcp_rule_tools import (
     RULE_TEXT_DEFAULT_CHARS,
     RULE_TEXT_MAX_CHARS,
@@ -254,13 +254,9 @@ TABLES = (
     "fec_registration_statements",
     "fec_report_metrics",
     "fec_reported_financial_summaries",
-    "fec_research_context_dispositions",
-    "fec_research_document_observations",
-    "fec_research_filing_feed_items",
+    "fec_reference_filing_feed_items",
     "fec_research_meeting_observations",
-    "fec_research_response_outcomes",
-    "fec_research_source_pages",
-    "fec_retained_csv_observations",
+    "fec_reference_source_pages",
     "org_committee_links",
     "gao_reports",
     "gao_decisions",
@@ -2288,7 +2284,7 @@ def _legacy_column_meanings(cursor: duckdb.DuckDBPyConnection, table: str, entry
     if local is not None and table in local.get("native", {}):
         return {}
     owner = table_owner(_connection_index(cursor), f"{table}.parquet")
-    if owner is None or "etlReceipts" in owner[1]:
+    if owner is None or "etlReceipts" in owner[1] or is_v2_fec_query_family(owner[1]):
         return {}
     return dict(entry.get("legacy_column_descriptions", {}))
 

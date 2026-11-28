@@ -21,12 +21,8 @@ One native statistical worksheet row with its stated row grain, read from the re
 | `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
 | `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
 | `source_sha256` | `VARCHAR` | SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness. |
-| `context_sha256` | `VARCHAR` | Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output. |
-| `source_context_pointer` | `VARCHAR` | Exact JSON pointer into the retained collection context to the native fact represented by this observation. |
 | `observed_at_json` | `VARCHAR` | Acquisition time from the original's acquisition receipt in the raw archive, as JSON. |
 | `worksheet_name` | `VARCHAR` | Literal worksheet title that supplies this historical statistical observation. |
-| `worksheet_member` | `VARCHAR` | Exact ZIP member name of the worksheet source, preserving its address within the workbook. |
-| `worksheet_sha256` | `VARCHAR` | Digest of the retained worksheet member bytes. |
 | `row_grain` | `VARCHAR` | Source-defined statistical row meaning, such as a detail row, subtotal or group heading; controls whether values are additive. |
 | `population` | `VARCHAR` | Source-described population covered by the statistical worksheet or summary, preserving its historical scope. |
 | `methodology_text` | `VARCHAR` | Retained source methodology or explanatory text used to interpret the statistical population. |
@@ -44,7 +40,6 @@ One native statistical worksheet row with its stated row grain, read from the re
 | `amount_formula` | `VARCHAR` | Source workbook formula associated with the amount cell, retained separately from its cached value. |
 | `unit` | `VARCHAR` | Unit established by the source-specific definition, such as USD, count or days; unknown units must remain explicit. |
 | `reported_date_status` | `VARCHAR` | Source-presence or conversion state for reported_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `native_cells_json` | `VARCHAR` | Exact retained source cells and addresses supporting this row; includes literal text and available worksheet/formula context. |
 | `worksheet_ordinal` | `INTEGER` | Zero-based worksheet ordinal supplied by the native workbook context. |
 | `worksheet_row` | `INTEGER` | Native worksheet row number retained with worksheet identity; not a financial transaction identifier. |
 | `amount` | `DECIMAL(38,9)` | Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |

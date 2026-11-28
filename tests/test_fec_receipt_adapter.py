@@ -450,3 +450,251 @@ def test_no_other_kind_of_view_reads_a_returned_field():
     from spicy_regs.relationship_views import FEC_QUERY_VIEWS, SQL_RELATIONSHIP_VIEWS
 
     assert not _reading({view.name: view for view in (*FEC_QUERY_VIEWS, *SQL_RELATIONSHIP_VIEWS)})
+
+
+# --- FINDING 3: Decoupled /2 SQL selection vs receipt restoration on receipts-free 50-table fec-query -------
+
+
+def _receiptless_v2_index():
+    from spicy_regs import data_dictionary as dd
+
+    schemas = dd.fec_typed_schemas()
+    return {
+        "format": "spicy-regs-publication",
+        "version": 2,
+        "families": {
+            "fec-query": {
+                "prefix": "generations/fec-query/" + "2" * 64,
+                "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:" + "2" * 64,
+                "artifactDigest": "sha256:" + "2" * 64,
+                "tables": {
+                    table + ".parquet": {
+                        "sha256": "sha256:" + f"{i:064x}",
+                        "byteSize": 100,
+                        "rows": 1,
+                        "columns": [[c, t] for c, t in cols],
+                    }
+                    for i, (table, cols) in enumerate(sorted(schemas.items()), start=1)
+                },
+            }
+        },
+    }
+
+
+def _legacy_oct3_index():
+    import json
+    from spicy_regs import data_dictionary as dd
+
+    historical = json.loads((dd.DICTIONARY_INPUTS / "fec_historical_definitions.json").read_text())["tables"]
+    legacy_tables = sorted(
+        t for t in historical if t not in {"fec_collections", "fec_relationships", "fec_source_records"}
+    )
+    assert len(legacy_tables) == 54
+    return {
+        "format": "spicy-regs-publication",
+        "version": 2,
+        "families": {
+            "fec-query": {
+                "prefix": "generations/fec-query/" + "1" * 64,
+                "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:" + "1" * 64,
+                "artifactDigest": "sha256:" + "1" * 64,
+                "tables": {
+                    table + ".parquet": {
+                        "sha256": "sha256:" + f"{i:064x}",
+                        "byteSize": 100,
+                        "rows": 1,
+                        "columns": historical[table]["columns"],
+                    }
+                    for i, table in enumerate(legacy_tables, start=1)
+                },
+            }
+        },
+    }
+
+
+def test_receiptless_v2_fec_query_selects_v2_sql_without_receipt_restoration(monkeypatch):
+    from spicy_regs import mcp_server
+    from spicy_regs.fec_receipt_adapter import is_v2_fec_query_family, selected_qualified_views
+    from spicy_regs.transforms.fec_filing_associations import ASSOCIATION_SCHEMA
+    from tests.test_fec_filing_associations import financial, headers
+
+    v2_index = _receiptless_v2_index()
+    assert "etlReceipts" not in v2_index["families"]["fec-query"]
+    assert is_v2_fec_query_family(v2_index["families"]["fec-query"]) is True
+
+    selected = selected_qualified_views(
+        mcp_server.FEC_QUALIFIED_VIEWS, mcp_server.FEC_LEGACY_QUALIFIED_VIEWS, v2_index
+    )
+    assert selected == mcp_server.FEC_QUALIFIED_VIEWS
+    header_spec = next(s for s in selected if s.view.name == "fec_receipts_filing_associations")
+    number_spec = next(s for s in selected if s.view.name == "fec_receipts_native_filing_associations")
+    assert "fec-retained-filing-association/2" in header_spec.view.query({})
+    assert "official-archive-member-file-number" in header_spec.view.query({})
+    assert "fec-identity-observations/2" in number_spec.view.query({})
+
+    # prepare_qualified must serve receipts-free /2 tables directly without calling restore().
+    monkeypatch.setattr(ReceiptAdapter, "restore", lambda *a, **k: pytest.fail("unexpected receipt restoration"))
+    with duckdb.connect() as con:
+        archive_header = {
+            **headers()[0],
+            "policy_version": "fec-retained-filing-association/2",
+            "association_basis": "official-archive-member-file-number",
+            "association_status": "resolved_native_filing_key",
+            "source_generation_pin": mcp_server.FEC_QUERY_SCOPE["source_generation_pin"],
+        }
+        obs = {
+            **financial(),
+            "filing_header_record_id": archive_header["header_record_id"],
+            "filing_header_locator_json": archive_header["header_locator_json"],
+        }
+        con.register("fec_receipts", pa.Table.from_pylist([obs]))
+        con.register("fec_filing_header_associations", pa.Table.from_pylist([archive_header], schema=ASSOCIATION_SCHEMA))
+        adapter = ReceiptAdapter(con, v2_index, "unused")
+        prepared = adapter.prepare_qualified(header_spec.view, header_spec.view.query({}))
+        assert prepared is header_spec.view
+        row = con.sql(prepared.query({})).to_arrow_table().to_pylist()[0]
+        assert row["association_policy_version"] == "fec-retained-filing-association/2"
+        assert row["association_status"] == "resolved_native_filing_key"
+        assert row["filing_key"] == archive_header["filing_key"]
+        assert not any(
+            name.startswith(("_spicy_fec_processing_", "_spicy_fec_current_"))
+            for (name,) in con.execute("SHOW TABLES").fetchall()
+        )
+
+
+def test_legacy_oct3_54_table_index_retains_legacy_v1_sql_fallback():
+    from spicy_regs import mcp_server
+    from spicy_regs.fec_receipt_adapter import is_v2_fec_query_family, selected_qualified_views
+
+    legacy_index = _legacy_oct3_index()
+    assert is_v2_fec_query_family(legacy_index["families"]["fec-query"]) is False
+    selected = selected_qualified_views(
+        mcp_server.FEC_QUALIFIED_VIEWS, mcp_server.FEC_LEGACY_QUALIFIED_VIEWS, legacy_index
+    )
+    assert selected == mcp_server.FEC_LEGACY_QUALIFIED_VIEWS
+    header_spec = next(s for s in selected if s.view.name == "fec_receipts_filing_associations")
+    assert "fec-retained-filing-association/1" in header_spec.view.query({})
+    assert "official-archive-member-file-number" not in header_spec.view.query({})
+
+
+def test_partial_receiptless_v2_schema_marker_selects_v2_sql():
+    from spicy_regs import mcp_server
+    from spicy_regs.fec_receipt_adapter import is_v2_fec_query_family, selected_qualified_views
+
+    partial_v2 = {
+        "families": {
+            "fec-query": {
+                "tables": {
+                    "fec_filing_links.parquet": {
+                        "columns": [["record_id", "VARCHAR"], ["source_representation_role", "VARCHAR"]],
+                    },
+                    "fec_filings.parquet": {
+                        "columns": [["record_id", "VARCHAR"], ["source_representation_role", "VARCHAR"]],
+                    },
+                }
+            }
+        }
+    }
+    assert is_v2_fec_query_family(partial_v2["families"]["fec-query"]) is True
+    selected = selected_qualified_views(
+        mcp_server.FEC_QUALIFIED_VIEWS, mcp_server.FEC_LEGACY_QUALIFIED_VIEWS, partial_v2
+    )
+    ref_spec = next(s for s in selected if s.view.name == "fec_filing_reference_resolution")
+    assert "source_representation_role" in ref_spec.view.required["fec_filing_links"]
+
+
+@pytest.mark.parametrize("mode", ["mixed_tables", "mixed_columns", "mixed_receipt_and_receiptless"])
+def test_mixed_or_malformed_fec_query_states_fail_closed(mode):
+    from spicy_regs import mcp_server
+    from spicy_regs.fec_receipt_adapter import selected_qualified_views
+
+    if mode == "mixed_tables":
+        bad_index = _receiptless_v2_index()
+        bad_index["families"]["fec-query"]["tables"]["fec_research_source_pages.parquet"] = {
+            "columns": [["record_id", "VARCHAR"]],
+        }
+        with pytest.raises(ValueError, match="mixes legacy /1 and /2"):
+            selected_qualified_views(
+                mcp_server.FEC_QUALIFIED_VIEWS, mcp_server.FEC_LEGACY_QUALIFIED_VIEWS, bad_index
+            )
+        with duckdb.connect() as con:
+            adapter = ReceiptAdapter(con, bad_index, "unused")
+            spec = mcp_server.FEC_QUALIFIED_VIEWS[0].view
+            with pytest.raises(ValueError, match="mixes legacy /1 and /2"):
+                adapter.prepare_qualified(spec, spec.query({}))
+    elif mode == "mixed_columns":
+        bad_index = _receiptless_v2_index()
+        bad_index["families"]["fec-query"]["tables"]["fec_filing_links.parquet"]["columns"] = [
+            ["record_id", "VARCHAR"],
+            ["native_field_states_json", "VARCHAR"],
+        ]
+        with pytest.raises(ValueError, match="mixes legacy /1 and /2"):
+            selected_qualified_views(
+                mcp_server.FEC_QUALIFIED_VIEWS, mcp_server.FEC_LEGACY_QUALIFIED_VIEWS, bad_index
+            )
+    else:
+        mixed_index = {
+            "families": {
+                "fec-query": {
+                    "tables": {
+                        "fec_receipts.parquet": {"columns": [["record_id", "VARCHAR"]]},
+                        "fec_reference_source_pages.parquet": {"columns": [["record_id", "VARCHAR"]]},
+                    },
+                },
+                "other-receipts": {
+                    "tables": {"fec_filings.parquet": {"columns": [["record_id", "VARCHAR"]]}},
+                    "etlReceipts": {"datasets": ["fec_filings"], "generationId": "g-other"},
+                },
+            }
+        }
+        spec = SQLView(
+            "mixed_dep_view",
+            {"fec_receipts": ("record_id",), "fec_filings": ("record_id",)},
+            lambda _: "SELECT r.record_id FROM fec_receipts r JOIN fec_filings f ON r.record_id = f.record_id",
+            "test",
+            ("record_id",),
+        )
+        with duckdb.connect() as con:
+            adapter = ReceiptAdapter(con, mixed_index, "unused")
+            with pytest.raises(ValueError, match="require selected native receipts: fec_receipts"):
+                adapter.prepare_qualified(spec, spec.query({}))
+
+
+@pytest.mark.parametrize(
+    ("table_key", "legacy_column"),
+    [
+        ("fec_registration_statements.parquet", "native_field_states_json"),
+        ("fec_lobbyist_registrations.parquet", "native_field_states_json"),
+        ("fec_quality_notices.parquet", "native_field_states_json"),
+        ("fec_legal_matters.parquet", "pending_status"),
+        ("fec_legal_matters.parquet", "published_status"),
+        ("fec_agency_report_text.parquet", "native_location_json"),
+    ],
+)
+def test_mixed_legacy_column_markers_across_all_v2_marker_tables_fail_closed(table_key, legacy_column):
+    from spicy_regs import mcp_server
+    from spicy_regs.fec_receipt_adapter import is_v2_fec_query_family, selected_qualified_views
+
+    bad_index = _receiptless_v2_index()
+    bad_index["families"]["fec-query"]["tables"][table_key]["columns"] = [
+        ["record_id", "VARCHAR"],
+        [legacy_column, "VARCHAR"],
+    ]
+    with pytest.raises(ValueError, match="mixes legacy /1 and /2"):
+        is_v2_fec_query_family(bad_index["families"]["fec-query"])
+    with pytest.raises(ValueError, match="mixes legacy /1 and /2"):
+        selected_qualified_views(
+            mcp_server.FEC_QUALIFIED_VIEWS, mcp_server.FEC_LEGACY_QUALIFIED_VIEWS, bad_index
+        )
+
+
+def test_mcp_describe_table_uses_current_v2_descriptions_for_receiptless_v2_fec_query(monkeypatch):
+    from spicy_regs import mcp_server
+
+    v2_index = _receiptless_v2_index()
+    entry = mcp_server._table_metadata()["fec_receipts"]
+    assert entry.get("legacy_column_descriptions")
+    with duckdb.connect() as con:
+        monkeypatch.setattr(mcp_server, "_connection_index", lambda _: v2_index)
+        monkeypatch.setattr(mcp_server, "_connection_local_selection", lambda _: None)
+        assert mcp_server._legacy_column_meanings(con, "fec_receipts", entry) == {}

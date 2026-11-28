@@ -30,4 +30,8 @@ One supported text observation at a native agency-report location. Read literal 
 | `report_id` | `VARCHAR` | Key of the associated agency report edition. It does not merge different captures or schema editions by title. |
 | `text_kind` | `VARCHAR` | Kind of retained source text, such as a Word paragraph or source narrative; not a metric classification. |
 | `text` | `VARCHAR` | Literal supported source text at the stated locator, without inferring a legal conclusion or numerical measure. |
-| `native_location_json` | `VARCHAR` | Native XML, HTML or Word coordinates for the emitted text or link, retaining row, cell or element addresses. |
+| `text_status` | `VARCHAR` | Build-time text classification: source_null, blank or reported. Blank and null observations remain available for diagnosis. |
+| `source_ordinal` | `BIGINT` | Zero-based fragment position within this source report; use with parent record and selected generation. |
+| `native_element` | `BIGINT` | Source document element position stated by the retained location evidence; NULL when unavailable. |
+| `native_line` | `BIGINT` | Source document line position stated by retained evidence; NULL when unavailable. |
+| `native_column` | `BIGINT` | Source document column position stated by retained evidence; NULL when unavailable. |

@@ -108,12 +108,9 @@ def test_retired_fec_discovery_metadata_requires_exact_selection(monkeypatch, se
             }
             assert described["publication"]["coverage"] == "sampled"
         else:
-            # fec_research_filing_feed_items is now aligned into table_metadata.json, so
-            # mismatched selections fall back to current catalog metadata rather than the
-            # compact fec_retained_discovery_metadata.json override.
-            assert group["subject"] == "campaign_finance"
-            assert "grain" in described["metadata"] and "summary" in described["metadata"]
-            assert described["publication"]["coverage"] == "sampled"
+            assert group["subject"] == "unassigned"
+            assert described["metadata"] == {}
+            assert described["publication"]["coverage"] is None
 
 
 def schemas():
@@ -212,7 +209,7 @@ def test_dictionary_retains_observation_grains_financial_limits_and_exact_eviden
     assert "value_operator and bound_value" in metadata["fec_report_metrics"]["summary"]
     assert "cancellation status" in metadata["fec_research_meeting_observations"]["summary"]
     receipt_only = {d["dataset"] for d in metadata["etl_receipts"]["datasets"] if d["receipt_only"]}
-    logical_main = {"fec_record_evidence", "fec_source_records", "fec_research_source_pages"}
+    logical_main = {"fec_record_evidence", "fec_source_records", "fec_reference_source_pages"}
     assert not logical_main & receipt_only
     assert logical_main <= metadata.keys()
     assert receipt_only.isdisjoint(dd.TABLES)
@@ -273,5 +270,7 @@ def test_general_committee_profile_descriptions_preserve_source_grain():
     entry = dd.load_curated_descriptions()["fec_committee_observations"]
     columns = entry["columns"]
     assert "capture-time" in entry["grain"]
+    assert "affiliated committee or connected organization" in columns["affiliated_committee_name"]
+    assert "substitute for bulk CONNECTED_ORG_NM" in columns["affiliated_committee_name"]
     assert "activity cycles" in columns["cycles_json"]
     assert "NULL for general committee API profiles" in columns["source_cycle"]

@@ -954,12 +954,38 @@ def test_retained_fec_historical_definitions_keep_native_and_strict_drift(monkey
         prose, selected = dd.selected_dictionary_definitions(routed, live, dd.DEFAULT_DESCRIPTIONS)
         assert selected == native_schemas
         assert prose == native_prose
-        # All 54 live fec-query tables (including fec_research_* / fec_retained_*) now match
-        # the current schema-mode dictionary declarations with zero unaligned tables.
-        assert live.keys() - selected.keys() == set()
-        assert dd.check_schema_drift({table: selected[table] for table in live}, live)
+        # Retired (B10, Q2) or renamed (Q1) since that generation (ss-j4vz).
+        retired = {
+            "fec_research_document_observations",
+            "fec_retained_csv_observations",
+            "fec_research_response_outcomes",
+            "fec_research_context_dispositions",
+            "fec_research_filing_feed_items",
+            "fec_research_source_pages",
+        }
+        assert live.keys() - selected.keys() == retired
+        current = {table: columns for table, columns in live.items() if table not in retired}
+        assert dd.check_schema_drift({table: selected[table] for table in current}, current)
     prose, selected = dd.selected_dictionary_definitions({"families": {}}, live, dd.DEFAULT_DESCRIPTIONS)
     assert selected == native_schemas and prose == native_prose
+
+    # A receipts-free 50-table /2 fec-query generation stays on native 50-table schemas (never Oct-3 fallback).
+    v2_live = {table: native_schemas[table] for table in dd.FEC_TYPED_TABLES}
+    v2_index = {
+        "families": {
+            "fec-query": {
+                "artifactDigest": "sha256:" + "d" * 64,
+                "tables": {
+                    table + ".parquet": {"columns": [[c, t] for c, t in cols]}
+                    for table, cols in v2_live.items()
+                },
+            }
+        }
+    }
+    v2_prose, v2_selected = dd.selected_dictionary_definitions(v2_index, v2_live, dd.DEFAULT_DESCRIPTIONS)
+    assert {table: v2_selected[table] for table in v2_live} == v2_live
+    assert dd.check_schema_drift({table: v2_selected[table] for table in v2_live}, v2_live) == []
+    assert v2_prose["fec_reference_source_pages"] == native_prose["fec_reference_source_pages"]
 
 
 @pytest.mark.parametrize("native", [True, False])
