@@ -16,6 +16,8 @@ from spicy_regs.generations import build_generation
 from spicy_regs.pipelines.raw_releases import READ_INDEX_HELP, inherit_read_index, open_raw
 from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.transforms.build_executive_disclosures import (
+    ACCESS_BASES,
+    ACCESS_STATES,
     DEFAULT_BATCH_SIZE,
     SCHEMAS,
     TABLES,
@@ -203,6 +205,22 @@ def acquire_manifest(
     if not isinstance(filings, list) or not filings:
         raise ValueError("manifest requires a nonempty filings list")
 
+    # Pre-validate filing identity, access_basis, and access_status up front before any HTTP request.
+    seen_filing_ids: set[str] = set()
+    for item in filings:
+        if not isinstance(item, dict) or not isinstance(item.get("filing_id"), str) or not item["filing_id"].strip():
+            raise ValueError("each manifest filing requires a nonempty filing_id")
+        filing_id = item["filing_id"]
+        if filing_id in seen_filing_ids:
+            raise ValueError(f"duplicate filing_id in manifest: {filing_id!r}")
+        seen_filing_ids.add(filing_id)
+        access_basis = item.get("access_basis")
+        if access_basis not in ACCESS_BASES:
+            raise ValueError(f"unknown access_basis {access_basis!r} for filing {filing_id!r}")
+        access_status = item.get("access_status")
+        if access_status is not None and access_status not in ACCESS_STATES:
+            raise ValueError(f"unknown access_status {access_status!r} for filing {filing_id!r}")
+
     updated = deepcopy(manifest)
     output_dir = Path(output_dir)
     evidence = CaptureEvidence(output_dir, FAMILY, archive_root=archive_root)
@@ -218,9 +236,7 @@ def acquire_manifest(
             transport=transport,
         ) as reader:
             for item in updated["filings"]:
-                if not isinstance(item, dict) or not item.get("filing_id"):
-                    raise ValueError("each manifest filing requires a filing_id")
-                access_basis = item.get("access_basis")
+                access_basis = item["access_basis"]
                 access_status = item.get("access_status")
                 source_url = item.get("source_url")
 
@@ -240,6 +256,11 @@ def acquire_manifest(
 
                 held = _try_reuse_retained(store, item, max_bytes=MAX_BYTES)
                 if held is not None:
+                    acquired_at = item.get("acquired_at")
+                    if not isinstance(acquired_at, str) or not acquired_at.strip():
+                        raise ValueError(
+                            f"reused retained filing {item['filing_id']!r} requires its original acquired_at receipt timestamp"
+                        )
                     sha256, byte_size = held
                     item["source_sha256"] = sha256
                     item["byte_size"] = byte_size

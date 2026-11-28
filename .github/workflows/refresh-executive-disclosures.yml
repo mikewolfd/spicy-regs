@@ -11,7 +11,7 @@ on:
       manifest_path:
         description: 'Repository-relative path to a v1 selection or v2 executive-disclosures cohort manifest JSON'
         required: false
-        default: 'tests/fixtures/executive_disclosures/selection.json'
+        default: 'tests/fixtures/executive_disclosures/cohort-manifest.v2.json'
         type: string
       max_requests:
         description: 'Bounded HTTP request cap (1-128) passed to executive_disclosures acquire-manifest'

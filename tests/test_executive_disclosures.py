@@ -16,12 +16,18 @@ from types import SimpleNamespace
 from typing import Any
 
 import httpx
+import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 import yaml
 
 from spicy_docs.sources import executive_disclosures as source_mod
-from spicy_docs.sources.executive_disclosures import CoverMetadata, ExecutiveDisclosureError, ExecutiveDisclosureResult
+from spicy_docs.sources.executive_disclosures import (
+    CoverMetadata,
+    ExecutiveDisclosureError,
+    ExecutiveDisclosureResult,
+    UnsupportedDisclosure,
+)
 from spicy_docs.storage.raw_archive import CentralRawArchiveStore
 from spicy_regs import local_publication, mcp_server, table_joins
 from spicy_regs.pipelines import executive_disclosures as pipeline
@@ -30,6 +36,7 @@ from spicy_regs.sources import publication
 from spicy_regs.transforms.build_executive_disclosures import (
     SCHEMAS,
     TABLES,
+    _StreamingParquetTable,
     amount_range,
     build_tables,
     parse_transaction_date,
@@ -412,18 +419,27 @@ def _synthetic_multipart_result(sha256: str) -> ExecutiveDisclosureResult:
         ("None (or less than\n$201)", ("below_threshold", 0, 200, None)),
         ("None (or less than $1,001)", ("below_threshold", 0, 1000, None)),
         ("$15,001 - $50,000", ("range", 15001, 50000, None)),
+        ("$15,001 \u2013 $50,000", ("range", 15001, 50000, None)),
         ("$50,001 - $100,000", ("range", 50001, 100000, None)),
         ("Over $50,000,000", ("over_threshold", 50000000, None, None)),
         ("over $1,000,000", ("over_threshold", 1000000, None, None)),
+        ("$0", ("exact_amount", None, None, "0")),
+        ("$0.00", ("exact_amount", None, None, "0.00")),
         ("$234.13", ("exact_amount", None, None, "234.13")),
         ("$8,254", ("exact_amount", None, None, "8254")),
         ("$321,500.00", ("exact_amount", None, None, "321500.00")),
+        ("$1,000,000.50", ("exact_amount", None, None, "1000000.50")),
         ("$1655.92", ("exact_amount", None, None, "1655.92")),
+        ("-$500", ("unrecognized", None, None, None)),
+        ("$-500", ("unrecognized", None, None, None)),
+        ("($500)", ("unrecognized", None, None, None)),
         ("$100,000 - $50,001", ("unrecognized", None, None, None)),
         ("None (or less than $500)", ("unrecognized", None, None, None)),
         ("Over $0", ("unrecognized", None, None, None)),
         ("$12.3", ("unrecognized", None, None, None)),
         ("Not disclosed", ("unrecognized", None, None, None)),
+        (None, ("unrecognized", None, None, None)),
+        (123, ("unrecognized", None, None, None)),
     ],
 )
 def test_amount_range_classifies_all_six_statuses_without_truncating_cents(raw, expected):
@@ -437,6 +453,10 @@ def test_resolve_income_amount_handles_july_2020_nov_2021_and_refuses_conflicts(
     assert resolve_income_amount("$234.13", "$234.13") == ("$234.13", "exact_amount", None, None, "234.13")
     # Nov 2021 uncoalesced split: income_amount_raw blank, exact in income_exact_raw
     assert resolve_income_amount("", "$234.13") == ("$234.13", "exact_amount", None, None, "234.13")
+    # Defensive handling when either input is None
+    assert resolve_income_amount("$234.13", None) == ("$234.13", "exact_amount", None, None, "234.13")
+    assert resolve_income_amount(None, "$8,254") == ("$8,254", "exact_amount", None, None, "8254")
+    assert resolve_income_amount(None, None) == ("", "blank", None, None, None)
     # Conflicting non-empty values MUST fail closed
     with pytest.raises(ValueError, match="conflicting income_amount_raw"):
         resolve_income_amount("$201 - $1,000", "$234.13")
@@ -449,9 +469,14 @@ def test_resolve_income_amount_handles_july_2020_nov_2021_and_refuses_conflicts(
         ("02/23/2023", (date(2023, 2, 23), "parsed")),
         ("2/5/2023", (date(2023, 2, 5), "parsed")),
         ("2023-02-23", (date(2023, 2, 23), "parsed")),
+        ("02/29/2024", (date(2024, 2, 29), "parsed")),
+        ("02/29/2023", (None, "unparsed")),
         ("02/30/2023", (None, "unparsed")),
+        ("13/01/2024", (None, "unparsed")),
+        ("1899-12-31", (None, "unparsed")),
         ("02/23/23", (None, "unparsed")),
         ("Various", (None, "unparsed")),
+        (None, (None, "unparsed")),
     ],
 )
 def test_parse_transaction_date(raw, expected):
@@ -944,6 +969,373 @@ def test_acquire_manifest_reuses_retained_originals_and_refuses_route_b_by_defau
             transport=httpx.MockTransport(handler),
         )
 
+    # Form 201 request URL MUST fail closed even when accepted_terms=True.
+    form201_manifest = deepcopy(manifest)
+    form201_manifest["filings"] = [
+        {
+            **manifest["filings"][1],
+            "filing_id": "form201-attempt",
+            "source_url": "https://extapps2.oge.gov/201/Presiden.nsf/201+Request?OpenForm",
+        }
+    ]
+    with pytest.raises(ExecutiveDisclosureError, match="Form 201"):
+        pipeline.acquire_manifest(
+            form201_manifest,
+            tmp_path / "acq-form201-refused",
+            archive_root=raw_root,
+            accepted_terms=True,
+            transport=httpx.MockTransport(handler),
+        )
+
+    # Reusing a retained digest without its original acquired_at receipt timestamp MUST fail closed.
+    missing_ts_manifest = deepcopy(manifest)
+    missing_ts_manifest["filings"] = [{**manifest["filings"][0], "acquired_at": None}]
+    with pytest.raises(ValueError, match="requires its original acquired_at receipt timestamp"):
+        pipeline.acquire_manifest(
+            missing_ts_manifest,
+            tmp_path / "acq-missing-ts",
+            archive_root=raw_root,
+            transport=httpx.MockTransport(handler),
+        )
+
+    # Duplicate filing_id MUST fail closed before any HTTP request.
+    dup_id_manifest = deepcopy(manifest)
+    dup_id_manifest["filings"] = [manifest["filings"][0], deepcopy(manifest["filings"][0])]
+    with pytest.raises(ValueError, match="duplicate filing_id"):
+        pipeline.acquire_manifest(
+            dup_id_manifest,
+            tmp_path / "acq-dup-id",
+            archive_root=raw_root,
+            transport=httpx.MockTransport(handler),
+        )
+
+    # Unrecognized access_status typo MUST fail closed before any HTTP request.
+    bad_status_manifest = deepcopy(manifest)
+    bad_status_manifest["filings"] = [{**manifest["filings"][0], "access_status": "unavailable "}]
+    with pytest.raises(ValueError, match="unknown access_status"):
+        pipeline.acquire_manifest(
+            bad_status_manifest,
+            tmp_path / "acq-bad-status",
+            archive_root=raw_root,
+            transport=httpx.MockTransport(handler),
+        )
+
+
+def test_v2_nominee_and_candidate_blank_period_and_partial_override_validation(tmp_path, monkeypatch):
+    body = MINIMAL_PDF
+    digest = "sha256:" + hashlib.sha256(body).hexdigest()
+    store = _seed_store(tmp_path / "raw", [body])
+
+    nominee_cover = CoverMetadata(
+        status="readable",
+        reason=None,
+        cover_page=1,
+        filer_last="Nominee",
+        filer_first="Jane",
+        filer_mi="Q.",
+        filer_name="Jane Q. Nominee",
+        position_raw="Secretary of Example",
+        agency_raw="Department of Example",
+        report_type="Nominee",
+        report_year=None,
+        report_period_raw=None,
+        appointment_or_termination_date_raw=None,
+        form_revision="OGE Form 278e (Updated Nov. 2021)",
+        oge_digital_sig_date="2025-01-10",
+        cover_fields=(),
+    )
+    monkeypatch.setattr(source_mod, "read_form278e_cover", lambda _b, *, cover_page=1: nominee_cover)
+    monkeypatch.setattr(source_mod, "read_excel_278e", lambda _b, **kw: _synthetic_multipart_result(digest))
+
+    base_entry: dict[str, Any] = {
+        "filing_id": "oge-nominee-2025",
+        "official_id": "cohort:jane-q-nominee",
+        "official_name": "Jane Q. Nominee",
+        "source_url": SELECTION["filings"][0]["source_url"],
+        "source_sha256": digest,
+        "byte_size": len(body),
+        "acquired_at": "2026-11-28T00:00:00Z",
+        "access_status": "available",
+        "access_basis": "public_posting",
+        "access_reason": "Direct official public posting",
+        "access_evidence_ref": "access.md",
+    }
+
+    # 1. Readable Nominee cover with blank Date of Appointment/Termination builds cleanly without override.
+    manifest_no_override: dict[str, Any] = {
+        "format": "executive-disclosures-cohort",
+        "version": 2,
+        "cohort_id": "nominee-blank-period",
+        "coverage_note": "Nominee blank period test.",
+        "filings": [base_entry],
+    }
+    paths = build_tables(manifest_no_override, tmp_path / "nominee-no-ov", evidence=EvidenceStub(), store=store)
+    row = pq.read_table(paths[0]).to_pylist()[0]
+    assert row["report_type"] == "Nominee"
+    assert row["report_period_raw"] == ""
+    assert row["report_year"] is None
+    assert row["facts_status"] == "qualified_parts_2_5_6_7"
+
+    # 2. Supplying a non-conflicting cover_override for blank native report_period_raw/report_year succeeds.
+    manifest_with_ov = deepcopy(manifest_no_override)
+    manifest_with_ov["filings"][0]["cover_override"] = {"report_period_raw": "2025-01-10", "report_year": 2025}
+    paths_ov = build_tables(manifest_with_ov, tmp_path / "nominee-with-ov", evidence=EvidenceStub(), store=store)
+    row_ov = pq.read_table(paths_ov[0]).to_pylist()[0]
+    assert row_ov["report_period_raw"] == "2025-01-10"
+    assert row_ov["report_year"] == 2025
+
+    # 3. Contradicting a non-empty native cover value MUST still fail closed.
+    manifest_conflict = deepcopy(manifest_no_override)
+    manifest_conflict["filings"][0]["cover_override"] = {"report_type": "Candidate"}
+    with pytest.raises(ValueError, match="conflicts with readable native cover"):
+        build_tables(manifest_conflict, tmp_path / "nominee-conflict", evidence=EvidenceStub(), store=store)
+
+    # 4. Partial cover_override with invalid field types fails up front in validate_selection().
+    for bad_override in (
+        {"report_year": "2025"},
+        {"form_type": "201"},
+        {"position_raw": ""},
+        {"report_type": "UnknownType"},
+        {"report_type": "Annual", "report_year": 2024, "report_period_raw": "2023"},
+    ):
+        bad_manifest = deepcopy(manifest_no_override)
+        bad_manifest["filings"][0]["cover_override"] = bad_override
+        with pytest.raises(ValueError):
+            validate_selection(bad_manifest)
+
+
+def test_duplicate_page_fact_id_and_transaction_id_all_fail_closed(tmp_path, monkeypatch):
+    body = MINIMAL_PDF
+    digest = "sha256:" + hashlib.sha256(body).hexdigest()
+    store = _seed_store(tmp_path / "raw", [body])
+
+    selected = deepcopy(SELECTION)
+    selected["filings"] = [{**SELECTION["filings"][0], "source_sha256": digest, "byte_size": len(body)}]
+    base = _synthetic_multipart_result(digest)
+
+    # Duplicate page within one filing
+    dup_page = ExecutiveDisclosureResult(
+        source_sha256=base.source_sha256,
+        parser_revision=base.parser_revision,
+        backend_version=base.backend_version,
+        layout_profile=base.layout_profile,
+        form_revision=base.form_revision,
+        cover=base.cover,
+        pages=(base.pages[0], base.pages[0]),
+        rows=base.rows,
+        transactions=base.transactions,
+        endnotes=base.endnotes,
+    )
+    monkeypatch.setattr(source_mod, "read_excel_278e", lambda _b, **kw: dup_page)
+    out_page = tmp_path / "dup-page"
+    with pytest.raises(ValueError, match="duplicate page within filing"):
+        build_tables(selected, out_page, evidence=EvidenceStub(), store=store)
+    assert not list(out_page.glob("*.parquet"))
+
+    # Duplicate fact_id within one filing
+    dup_fact = ExecutiveDisclosureResult(
+        source_sha256=base.source_sha256,
+        parser_revision=base.parser_revision,
+        backend_version=base.backend_version,
+        layout_profile=base.layout_profile,
+        form_revision=base.form_revision,
+        cover=base.cover,
+        pages=base.pages,
+        rows=(base.rows[0], base.rows[0]),
+        transactions=base.transactions,
+        endnotes=base.endnotes,
+    )
+    monkeypatch.setattr(source_mod, "read_excel_278e", lambda _b, **kw: dup_fact)
+    out_fact = tmp_path / "dup-fact"
+    with pytest.raises(ValueError, match="duplicate fact_id within filing"):
+        build_tables(selected, out_fact, evidence=EvidenceStub(), store=store)
+    assert not list(out_fact.glob("*.parquet"))
+
+    # Duplicate transaction_id within one filing
+    dup_txn = ExecutiveDisclosureResult(
+        source_sha256=base.source_sha256,
+        parser_revision=base.parser_revision,
+        backend_version=base.backend_version,
+        layout_profile=base.layout_profile,
+        form_revision=base.form_revision,
+        cover=base.cover,
+        pages=base.pages,
+        rows=base.rows,
+        transactions=(base.transactions[0], base.transactions[0]),
+        endnotes=base.endnotes,
+    )
+    monkeypatch.setattr(source_mod, "read_excel_278e", lambda _b, **kw: dup_txn)
+    out_txn = tmp_path / "dup-txn"
+    with pytest.raises(ValueError, match="duplicate transaction_id within filing"):
+        build_tables(selected, out_txn, evidence=EvidenceStub(), store=store)
+    assert not list(out_txn.glob("*.parquet"))
+
+
+def test_streaming_writer_abort_does_not_reflush_failing_buffer(tmp_path, monkeypatch):
+    # Direct unit test: failing flush followed by abort() must clear buffer and raise no secondary error.
+    writer = _StreamingParquetTable(
+        tmp_path / "tmp.parquet",
+        tmp_path / "final.parquet",
+        SCHEMAS["executive_disclosure_pages"],
+        batch_size=1,
+    )
+    bad_row = {name: "bad-int" if name == "page" else None for name in SCHEMAS["executive_disclosure_pages"].names}
+    with pytest.raises((pa.ArrowInvalid, pa.ArrowTypeError)):
+        writer.append(bad_row)
+    assert len(writer._buffer) == 1
+    writer.abort()
+    assert writer._buffer == []
+    assert writer._closed is True
+    assert not (tmp_path / "final.parquet").exists()
+
+    # End-to-end build_tables teardown check: bad row in page raises original Arrow error cleanly without secondary exception.
+    body = MINIMAL_PDF
+    digest = "sha256:" + hashlib.sha256(body).hexdigest()
+    store = _seed_store(tmp_path / "raw", [body])
+    selected = deepcopy(SELECTION)
+    selected["filings"] = [{**SELECTION["filings"][0], "source_sha256": digest, "byte_size": len(body)}]
+    base = _synthetic_multipart_result(digest)
+    bad_page = {**base.pages[0], "source_slot_count": "not-an-integer"}
+    bad_result = ExecutiveDisclosureResult(
+        source_sha256=base.source_sha256,
+        parser_revision=base.parser_revision,
+        backend_version=base.backend_version,
+        layout_profile=base.layout_profile,
+        form_revision=base.form_revision,
+        cover=base.cover,
+        pages=(bad_page,),
+        rows=(),
+        transactions=(),
+        endnotes=(),
+    )
+    monkeypatch.setattr(source_mod, "read_excel_278e", lambda _b, **kw: bad_result)
+    out_dir = tmp_path / "bad-flush-out"
+    with pytest.raises((pa.ArrowInvalid, pa.ArrowTypeError)) as exc_info:
+        build_tables(selected, out_dir, evidence=EvidenceStub(), store=store, batch_size=1)
+    assert exc_info.value.__context__ is None
+    assert not list(out_dir.glob("*.parquet"))
+
+
+def test_all_unsupported_cohort_writes_four_valid_zero_row_child_tables(tmp_path):
+    body = MINIMAL_PDF
+    digest = "sha256:" + hashlib.sha256(body).hexdigest()
+    store = _seed_store(tmp_path / "raw", [body])
+    selected = deepcopy(SELECTION)
+    selected["filings"] = [{**SELECTION["filings"][1], "source_sha256": digest, "byte_size": len(body)}]
+
+    paths = build_tables(selected, tmp_path / "all-unsupported", evidence=EvidenceStub(), store=store)
+    assert len(paths) == 4
+    for path in paths:
+        assert path.read_bytes()[:4] == b"PAR1"
+        tbl = pq.read_table(path)
+        assert tbl.schema == SCHEMAS[path.stem]
+    filings = pq.read_table(paths[0]).to_pylist()
+    assert len(filings) == 1
+    assert filings[0]["facts_status"] == "unsupported"
+    assert filings[0]["qualified_sections_json"] == "[]"
+    assert pq.read_table(paths[1]).num_rows == 0
+    assert pq.read_table(paths[2]).num_rows == 0
+    assert pq.read_table(paths[3]).num_rows == 0
+
+
+def test_cover_page_gt_1_forwards_only_readable_native_cover_to_read_excel_278e(tmp_path, monkeypatch):
+    body = MINIMAL_PDF
+    digest = "sha256:" + hashlib.sha256(body).hexdigest()
+    store = _seed_store(tmp_path / "raw", [body])
+
+    readable_p2 = CoverMetadata(
+        status="readable",
+        reason=None,
+        cover_page=2,
+        filer_last="Harris",
+        filer_first="Kamala",
+        filer_mi="D.",
+        filer_name="Kamala D. Harris",
+        position_raw="Vice President of the United States of America",
+        agency_raw="",
+        report_type="Annual",
+        report_year=2023,
+        report_period_raw="2023",
+        appointment_or_termination_date_raw="January 20, 2021",
+        form_revision="OGE Form 278e (Updated Nov. 2021)",
+        oge_digital_sig_date="2024-05-15",
+        cover_fields=(),
+    )
+    unreadable_p2 = CoverMetadata(
+        status="unreadable",
+        reason="image_only_or_missing_cover_text",
+        cover_page=2,
+        filer_last=None,
+        filer_first=None,
+        filer_mi=None,
+        filer_name=None,
+        position_raw=None,
+        agency_raw=None,
+        report_type=None,
+        report_year=None,
+        report_period_raw=None,
+        appointment_or_termination_date_raw=None,
+        form_revision=None,
+        oge_digital_sig_date=None,
+        cover_fields=(),
+    )
+    seen_overrides: list[CoverMetadata | None] = []
+
+    def fake_read(_body, **kwargs):
+        seen_overrides.append(kwargs.get("cover_override"))
+        if kwargs.get("cover_override") is None:
+            raise UnsupportedDisclosure("scanned_or_unreadable_text_layer_ocr_paused")
+        return _synthetic_multipart_result(digest)
+
+    monkeypatch.setattr(source_mod, "read_excel_278e", fake_read)
+
+    # Case 1: v2 manifest with transmittal page 1 and readable native cover on page 2 -> forwards native CoverMetadata.
+    monkeypatch.setattr(source_mod, "read_form278e_cover", lambda _b, *, cover_page=1: readable_p2 if cover_page == 2 else unreadable_p2)
+    manifest_p2: dict[str, Any] = {
+        "format": "executive-disclosures-cohort",
+        "version": 2,
+        "cohort_id": "p2-readable",
+        "coverage_note": "Transmittal page 1 with readable cover on page 2.",
+        "filings": [
+            {
+                "filing_id": "transmittal-p2-readable",
+                "official_id": "cohort:kamala-d-harris",
+                "official_name": "Kamala D. Harris",
+                "source_url": SELECTION["filings"][0]["source_url"],
+                "source_sha256": digest,
+                "byte_size": len(body),
+                "acquired_at": "2026-11-28T00:00:00Z",
+                "access_status": "available",
+                "access_basis": "public_posting",
+                "access_reason": "Direct official public posting",
+                "access_evidence_ref": "access.md",
+                "cover_page": 2,
+            }
+        ],
+    }
+    paths_p2 = build_tables(manifest_p2, tmp_path / "p2-readable", evidence=EvidenceStub(), store=store)
+    assert seen_overrides == [readable_p2]
+    assert pq.read_table(paths_p2[0]).to_pylist()[0]["facts_status"] == "qualified_parts_2_5_6_7"
+
+    # Case 2: scanned/unreadable cover on page 2 with human cover_override -> MUST pass cover_override=None (stay unsupported).
+    seen_overrides.clear()
+    monkeypatch.setattr(source_mod, "read_form278e_cover", lambda _b, *, cover_page=1: unreadable_p2)
+    manifest_scanned = deepcopy(manifest_p2)
+    manifest_scanned["filings"][0]["filing_id"] = "scanned-p2"
+    manifest_scanned["filings"][0]["metadata_review_ref"] = "raw-visual-review.md#scanned"
+    manifest_scanned["filings"][0]["cover_override"] = {
+        "position_raw": "Vice President of the United States of America",
+        "agency_raw": "",
+        "report_type": "Annual",
+        "report_period_raw": "2023",
+        "report_year": 2023,
+        "form_type": "278e",
+    }
+    paths_scanned = build_tables(manifest_scanned, tmp_path / "p2-scanned", evidence=EvidenceStub(), store=store)
+    assert seen_overrides == [None]
+    assert pq.read_table(paths_scanned[0]).to_pylist()[0]["facts_status"] == "unsupported"
+    assert pq.read_table(paths_scanned[1]).num_rows == 0
+
 
 @pytest.mark.skipif(not HAS_REAL_HARRIS_ORIGINALS, reason="Real retained Harris-2024/2021 PDFs absent from local archive")
 def test_real_harris_2024_and_2021_v1_and_v2_builds(tmp_path):
@@ -1065,6 +1457,15 @@ def test_refresh_executive_disclosures_workflow_structure_hygiene_and_cli_flags(
     assert inputs["skip_upload"]["type"] == "boolean"
     assert inputs["skip_upload"]["default"] is True
     assert inputs["evidence_policy"]["default"] == "hash_only"
+
+    default_manifest_path = REPO_ROOT / inputs["manifest_path"]["default"]
+    assert default_manifest_path.is_file()
+    default_manifest = json.loads(default_manifest_path.read_text(encoding="utf-8"))
+    validate_selection(default_manifest)
+    assert default_manifest.get("format") == "executive-disclosures-cohort"
+    assert default_manifest.get("version") == 2
+    assert "No public publication selected" not in default_manifest["coverage_note"]
+    assert "Part 6 qualified for the 2024 package only" not in default_manifest["coverage_note"]
 
     assert doc["permissions"] == {"contents": "read", "actions": "read"}
     assert doc["concurrency"] == {"group": "refresh-executive-disclosures", "cancel-in-progress": False}

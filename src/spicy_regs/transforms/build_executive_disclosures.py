@@ -198,7 +198,7 @@ def amount_range(raw: str) -> tuple[str, int | None, int | None, str | None]:
 
 
 def resolve_income_amount(
-    income_amount_raw: str, income_exact_raw: str = ""
+    income_amount_raw: str | None, income_exact_raw: str | None = ""
 ) -> tuple[str, str, int | None, int | None, str | None]:
     """Resolve income amount across Updated July 2020 and Updated Nov. 2021 layouts, failing closed on conflict.
 
@@ -207,13 +207,17 @@ def resolve_income_amount(
     forms, exact amounts live in ``income_amount_raw`` with ``income_exact_raw == ""``. If both are
     non-empty and differ, raise ``ValueError`` rather than guessing which cell is authoritative.
     """
-    amount_norm = _collapse_ws(income_amount_raw)
-    exact_norm = _collapse_ws(income_exact_raw)
+    amount_str = "" if income_amount_raw is None else income_amount_raw
+    exact_str = "" if income_exact_raw is None else income_exact_raw
+    if not isinstance(amount_str, str) or not isinstance(exact_str, str):
+        return "", "unrecognized", None, None, None
+    amount_norm = _collapse_ws(amount_str)
+    exact_norm = _collapse_ws(exact_str)
     if amount_norm and exact_norm and amount_norm != exact_norm:
         raise ValueError(
             f"conflicting income_amount_raw ({income_amount_raw!r}) and income_exact_raw ({income_exact_raw!r})"
         )
-    canonical = income_exact_raw if exact_norm and not amount_norm else income_amount_raw
+    canonical = exact_str if exact_norm and not amount_norm else amount_str
     status, lower, upper, exact_usd = amount_range(canonical)
     return canonical, status, lower, upper, exact_usd
 
@@ -263,9 +267,11 @@ def _validate_report_identity(
         raise ValueError(f"unsupported form_type {form_type!r}; expected one of {sorted(FORM_TYPES)}")
     if not isinstance(report_type, str) or report_type not in ALLOWED_REPORT_TYPES:
         raise ValueError(f"unsupported report_type {report_type!r}")
-    if not isinstance(report_period_raw, str) or not report_period_raw.strip():
-        raise ValueError("each filing needs a nonempty report_period_raw")
+    if not isinstance(report_period_raw, str):
+        raise ValueError("report_period_raw must be a string (empty string for blank non-annual cover cell)")
     if report_type == "Annual":
+        if not report_period_raw.strip():
+            raise ValueError("annual filing needs a nonempty report_period_raw")
         if type(report_year) is not int or not 1900 <= report_year <= 9999:
             raise ValueError("native report year must be an explicit calendar year")
         if report_period_raw != str(report_year):
@@ -274,6 +280,53 @@ def _validate_report_identity(
         raise ValueError("native report year must be an explicit calendar year or null")
     if type(cover_page) is not int or cover_page < 1:
         raise ValueError("cover page must be a one-based original locator")
+
+
+def _validate_partial_cover_override(override: Mapping[str, Any], *, official_id: str, default_cover_page: Any) -> None:
+    """Validate field types and constraints on partial or complete cover_override mappings up front."""
+    if "cover_page" in override and (type(override["cover_page"]) is not int or override["cover_page"] < 1):
+        raise ValueError("cover_override.cover_page must be a positive integer")
+    if "position_raw" in override:
+        if not isinstance(override["position_raw"], str) or not override["position_raw"].strip():
+            raise ValueError("cover_override.position_raw must be a nonempty string")
+        if override["position_raw"] == official_id:
+            raise ValueError("person identity cannot be an office")
+    if "agency_raw" in override and not isinstance(override["agency_raw"], str):
+        raise ValueError("cover_override.agency_raw must be a string")
+    if "form_type" in override and (not isinstance(override["form_type"], str) or override["form_type"] not in FORM_TYPES):
+        raise ValueError(f"unsupported cover_override.form_type {override['form_type']!r}")
+    if "report_type" in override and (
+        not isinstance(override["report_type"], str) or override["report_type"] not in ALLOWED_REPORT_TYPES
+    ):
+        raise ValueError(f"unsupported cover_override.report_type {override['report_type']!r}")
+    if "report_period_raw" in override and not isinstance(override["report_period_raw"], str):
+        raise ValueError("cover_override.report_period_raw must be a string")
+    if "report_year" in override and override["report_year"] is not None:
+        if type(override["report_year"]) is not int or not 1900 <= override["report_year"] <= 9999:
+            raise ValueError("cover_override.report_year must be an explicit calendar year or null")
+    if COVER_OVERRIDE_REQUIRED_FIELDS <= set(override):
+        _validate_report_identity(
+            position_raw=override["position_raw"],
+            agency_raw=override["agency_raw"],
+            report_type=override["report_type"],
+            report_period_raw=override["report_period_raw"],
+            report_year=override["report_year"],
+            form_type=override["form_type"],
+            cover_page=override.get("cover_page", default_cover_page),
+        )
+    elif override.get("report_type") == "Annual":
+        if "report_year" in override and (
+            type(override["report_year"]) is not int or not 1900 <= override["report_year"] <= 9999
+        ):
+            raise ValueError("annual cover_override.report_year must be an explicit calendar year")
+        if "report_period_raw" in override and not override["report_period_raw"].strip():
+            raise ValueError("annual cover_override.report_period_raw must be nonempty")
+        if (
+            "report_year" in override
+            and "report_period_raw" in override
+            and override["report_period_raw"] != str(override["report_year"])
+        ):
+            raise ValueError("annual cover_override.report_period_raw must match report_year")
 
 
 def _validate_optional_dates(container: Mapping[str, Any]) -> None:
@@ -322,7 +375,6 @@ def _validate_v1_filing(item: Any, seen: set[str]) -> None:
             "position_raw",
             "report_type",
             "form_type",
-            "report_period_raw",
             "metadata_review_ref",
             "access_evidence_ref",
         )
@@ -374,20 +426,11 @@ def _validate_v2_filing(item: Any, seen: set[str]) -> None:
         if extra_ov:
             raise ValueError(f"unknown cover_override fields: {sorted(extra_ov)}")
         _validate_optional_dates(override)
-        if "cover_page" in override and (type(override["cover_page"]) is not int or override["cover_page"] < 1):
-            raise ValueError("cover_override.cover_page must be a positive integer")
-        if "position_raw" in override and override["position_raw"] == item["official_id"]:
-            raise ValueError("person identity cannot be an office")
-        if COVER_OVERRIDE_REQUIRED_FIELDS <= set(override):
-            _validate_report_identity(
-                position_raw=override["position_raw"],
-                agency_raw=override["agency_raw"],
-                report_type=override["report_type"],
-                report_period_raw=override["report_period_raw"],
-                report_year=override["report_year"],
-                form_type=override["form_type"],
-                cover_page=override.get("cover_page", item.get("cover_page", 1)),
-            )
+        _validate_partial_cover_override(
+            override,
+            official_id=item["official_id"],
+            default_cover_page=item.get("cover_page", 1),
+        )
 
     if item["access_status"] != "available":
         if not isinstance(override, dict) or not (COVER_OVERRIDE_REQUIRED_FIELDS <= set(override)):
@@ -416,8 +459,13 @@ def validate_selection(selection: dict) -> None:
             _validate_v1_filing(item, seen)
 
 
-def _resolve_v2_filing_metadata(item: Mapping[str, Any], body: bytes | None) -> dict[str, Any]:
-    """Derive cover metadata deterministically from readable native covers or reviewed cover_override."""
+def _resolve_v2_filing_metadata(item: Mapping[str, Any], body: bytes | None) -> tuple[dict[str, Any], Any]:
+    """Derive cover metadata deterministically from readable native covers or reviewed cover_override.
+
+    Returns ``(resolved_metadata, native_cover)`` where ``native_cover`` is the verified
+    ``CoverMetadata`` object only when the PDF's cover page was natively ``readable`` (never a
+    human-supplied dict override for scanned covers).
+    """
     override = item.get("cover_override") or {}
     cover_page = override.get("cover_page", item.get("cover_page", 1))
     amendment_status = item.get("amendment_status", "none_observed_in_retained_document")
@@ -451,7 +499,7 @@ def _resolve_v2_filing_metadata(item: Mapping[str, Any], body: bytes | None) -> 
             "amendment_details_json": amendment_details_json,
             "cover_page": cover_page,
         }
-        return resolved
+        return resolved, None
 
     from spicy_docs.sources.executive_disclosures import UnsupportedDisclosure, read_form278e_cover
 
@@ -470,19 +518,34 @@ def _resolve_v2_filing_metadata(item: Mapping[str, Any], body: bytes | None) -> 
                 f"declared official_name ({item['official_name']!r}) differs from native cover filer_name ({cover.filer_name!r})"
             )
 
-        native_values: dict[str, Any] = {
-            "position_raw": cover.position_raw or "",
-            "agency_raw": cover.agency_raw if cover.agency_raw is not None else "",
+        raw_native: dict[str, Any] = {
+            "position_raw": cover.position_raw,
+            "agency_raw": cover.agency_raw,
             "report_type": cover.report_type,
             "report_period_raw": cover.report_period_raw,
             "report_year": cover.report_year,
             "form_type": "278e",
         }
-        for key, native_val in native_values.items():
-            if key in override and override[key] != native_val:
-                raise ValueError(
-                    f"cover_override.{key} ({override[key]!r}) conflicts with readable native cover ({native_val!r})"
-                )
+        resolved_cover: dict[str, Any] = {}
+        for key, native_val in raw_native.items():
+            native_blank = native_val is None or native_val == ""
+            if key in override:
+                ov_val = override[key]
+                if not native_blank and ov_val != native_val:
+                    raise ValueError(
+                        f"cover_override.{key} ({ov_val!r}) conflicts with readable native cover ({native_val!r})"
+                    )
+                if native_blank and ov_val is not None:
+                    resolved_cover[key] = ov_val
+                elif key in ("position_raw", "agency_raw", "report_period_raw"):
+                    resolved_cover[key] = native_val if native_val is not None else ""
+                else:
+                    resolved_cover[key] = native_val
+            elif key in ("position_raw", "agency_raw", "report_period_raw"):
+                resolved_cover[key] = native_val if native_val is not None else ""
+            else:
+                resolved_cover[key] = native_val
+
         if (
             "oge_certification_date" in override
             and override["oge_certification_date"] is not None
@@ -494,16 +557,16 @@ def _resolve_v2_filing_metadata(item: Mapping[str, Any], body: bytes | None) -> 
                 f"with native cover digital signature date ({cover.oge_digital_sig_date!r})"
             )
 
-        position_raw = native_values["position_raw"]
+        position_raw = resolved_cover["position_raw"]
         if item["official_id"] == position_raw:
             raise ValueError("person identity cannot be an office")
         _validate_report_identity(
             position_raw=position_raw,
-            agency_raw=native_values["agency_raw"],
-            report_type=native_values["report_type"],
-            report_period_raw=native_values["report_period_raw"],
-            report_year=native_values["report_year"],
-            form_type=native_values["form_type"],
+            agency_raw=resolved_cover["agency_raw"],
+            report_type=resolved_cover["report_type"],
+            report_period_raw=resolved_cover["report_period_raw"],
+            report_year=resolved_cover["report_year"],
+            form_type=resolved_cover["form_type"],
             cover_page=cover.cover_page,
         )
         review_ref = item.get("metadata_review_ref") or f"native-cover:p{cover.cover_page}:{item['source_sha256']}"
@@ -512,11 +575,11 @@ def _resolve_v2_filing_metadata(item: Mapping[str, Any], body: bytes | None) -> 
             "official_id": item["official_id"],
             "official_name": item["official_name"],
             "position_raw": position_raw,
-            "agency_raw": native_values["agency_raw"],
-            "report_type": native_values["report_type"],
-            "report_period_raw": native_values["report_period_raw"],
-            "report_year": native_values["report_year"],
-            "form_type": native_values["form_type"],
+            "agency_raw": resolved_cover["agency_raw"],
+            "report_type": resolved_cover["report_type"],
+            "report_period_raw": resolved_cover["report_period_raw"],
+            "report_year": resolved_cover["report_year"],
+            "form_type": resolved_cover["form_type"],
             "filing_date": override.get("filing_date"),
             "filer_signed_date": override.get("filer_signed_date"),
             "agency_certification_date": override.get("agency_certification_date"),
@@ -533,7 +596,7 @@ def _resolve_v2_filing_metadata(item: Mapping[str, Any], body: bytes | None) -> 
             "amendment_status": amendment_status,
             "amendment_details_json": amendment_details_json,
             "cover_page": cover.cover_page,
-        }
+        }, cover
 
     # Unreadable, partial, or unsupported cover (e.g. scanned/amended cover or Form 278-T):
     # require explicit human-reviewed cover_override + metadata_review_ref rather than guessing or running OCR.
@@ -583,7 +646,7 @@ def _resolve_v2_filing_metadata(item: Mapping[str, Any], body: bytes | None) -> 
         "amendment_status": amendment_status,
         "amendment_details_json": amendment_details_json,
         "cover_page": cover_page,
-    }
+    }, None
 
 
 class _StreamingParquetTable:
@@ -617,16 +680,22 @@ class _StreamingParquetTable:
         self._writer.write_table(pa.Table.from_pylist(self._buffer, schema=self.schema))
         self._buffer.clear()
 
-    def close(self) -> None:
+    def abort(self) -> None:
+        """Drop any unflushed rows and close the writer without re-flushing on teardown."""
+        self._buffer.clear()
+        if not self._closed:
+            try:
+                self._writer.close()
+            finally:
+                self._closed = True
+
+    def commit(self) -> Path:
         if not self._closed:
             try:
                 self.flush()
             finally:
                 self._writer.close()
                 self._closed = True
-
-    def commit(self) -> Path:
-        self.close()
         self.temp_path.replace(self.destination)
         return self.destination
 
@@ -656,6 +725,7 @@ def build_tables(
         REPORT_TYPES,
         UnsupportedDisclosure,
         read_excel_278e,
+        read_form278e_cover,
     )
 
     if type(batch_size) is not int or batch_size <= 0:
@@ -677,7 +747,7 @@ def build_tables(
                     batch_size=batch_size,
                 )
                 writers[name] = writer
-                stack.callback(writer.close)
+                stack.callback(writer.abort)
 
             filings_writer = writers[TABLES[0]]
             facts_writer = writers[TABLES[1]]
@@ -696,7 +766,11 @@ def build_tables(
                         filing_id=item["filing_id"],
                     )
 
-                resolved = _resolve_v2_filing_metadata(item, body) if v2 else dict(item)
+                native_cover = None
+                if v2:
+                    resolved, native_cover = _resolve_v2_filing_metadata(item, body)
+                else:
+                    resolved = dict(item)
                 filing: dict[str, Any] = {
                     **resolved,
                     "cohort_id": selection["cohort_id"],
@@ -724,12 +798,24 @@ def build_tables(
                         raise UnsupportedDisclosure(
                             f"report_type {resolved['report_type']!r} is unsupported for Form 278e extraction"
                         )
+                    effective_cover_override = None
+                    if resolved["cover_page"] != 1:
+                        if not v2:
+                            try:
+                                probed_cover = read_form278e_cover(body, cover_page=resolved["cover_page"])
+                            except UnsupportedDisclosure:
+                                probed_cover = None
+                            if probed_cover is not None and probed_cover.status == "readable":
+                                native_cover = probed_cover
+                        if native_cover is not None and native_cover.status == "readable":
+                            effective_cover_override = native_cover
                     result = read_excel_278e(
                         body,
                         filer_name=resolved["official_name"],
                         report_year=resolved["report_year"],
                         sections=DEFAULT_SECTIONS,
                         report_types=REPORT_TYPES,
+                        cover_override=effective_cover_override,
                     )
                 except UnsupportedDisclosure as error:
                     filing.update(
@@ -768,7 +854,12 @@ def build_tables(
                     "backend_version": result.backend_version,
                 }
 
+                seen_pages: set[int] = set()
                 for page in result.pages:
+                    page_num = page["page"]
+                    if page_num in seen_pages:
+                        raise ValueError(f"duplicate page within filing {resolved['filing_id']!r}: {page_num}")
+                    seen_pages.add(page_num)
                     pages_writer.append(
                         {
                             **shared,
@@ -776,7 +867,7 @@ def build_tables(
                             "page_text": page["page_text"],
                             "filer_identity_json": page["filer_identity_json"],
                             "table_bbox_json": page["table_bbox_json"],
-                            "page": page["page"],
+                            "page": page_num,
                             "source_slot_count": page["source_slot_count"],
                             "blank_slot_count": page["blank_slot_count"],
                             "section": page["section"],
@@ -797,7 +888,7 @@ def build_tables(
 
                     value_status, value_lower, value_upper, value_exact_usd = amount_range(raw["value_raw"])
                     income_amount_raw, income_status, income_lower, income_upper, income_exact_usd = (
-                        resolve_income_amount(raw["income_amount_raw"], raw.get("income_exact_raw", ""))
+                        resolve_income_amount(raw["income_amount_raw"], raw.get("income_exact_raw") or "")
                     )
                     facts_writer.append(
                         {
