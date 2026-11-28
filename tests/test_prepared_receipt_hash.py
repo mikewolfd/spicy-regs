@@ -162,6 +162,10 @@ def test_sealed_and_full_paths_reach_identical_entries_and_proofs(tmp_path, monk
     if family == "court-opinion-clusters":
         from tests.test_court_prepared_conversion import unretire_clusters
         unretire_clusters(monkeypatch)
+    elif family == "documents":
+        from spicy_regs import subject_catalog
+        retired = subject_catalog.retired_receipt_datasets() - {"documents"}
+        monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
     table, rows = _family_rows(family)
     old = publish_old(bucket, monkeypatch, tmp_path, family, {table: rows})
     done = convert(family, tmp_path / "work")

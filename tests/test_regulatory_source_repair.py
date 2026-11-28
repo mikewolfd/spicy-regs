@@ -97,7 +97,11 @@ def test_source_recency_equal_date_correction_and_enrichment(tmp_path, prior_dat
     rows = {r["document_id"]: r for r in processing_rows(path)}
     winner = rows[expected["document_id"]]
     assert winner["fr_doc_num"] == ("06-04731" if fresh_wins else None)
-    assert winner["attachments_json"] == (expected["attachments_json"] if fresh_wins else None)
+    if fresh_wins:
+        assert winner["attachments_json"] is not None
+        assert json.loads(winner["attachments_json"]) == json.loads(expected["attachments_json"])
+    else:
+        assert winner["attachments_json"] is None
     for c in ("text_content", "text_extraction_status", "pdf_extraction_results_json",
               "publisher_status", "removed_observed_at"):
         assert winner[c] == prior[c]
@@ -126,9 +130,15 @@ def test_undated_source_does_not_replace_dated_prior(tmp_path):
     value = raw()
     prior = shaped(value)
     write(tmp_path / "documents.parquet", [prior])
+    before = processing_rows(tmp_path / "documents.parquet")
+    assert len(before) == 1
+    assert json.loads(before[0]["attachments_json"]) == json.loads(prior["attachments_json"])
+    assert {k: v for k, v in before[0].items() if k != "attachments_json"} == {
+        k: v for k, v in prior.items() if k != "attachments_json"
+    }
     value["data"]["attributes"].update(modifyDate=None, title="undated changed title")
     repair_records([value], table="documents", output_dir=tmp_path)
-    assert processing_rows(tmp_path / "documents.parquet") == [prior]
+    assert processing_rows(tmp_path / "documents.parquet") == before
 
 
 @pytest.mark.parametrize("source_correction", [False, True])
@@ -162,14 +172,15 @@ def test_body_reread_preserves_independent_publisher_status(tmp_path, source_cor
 
 @pytest.mark.parametrize("fault", ["date", "duplicate", "late_failure", "corrupt_prior"])
 def test_failed_input_preserves_prior_and_can_retry(tmp_path, fault):
+    import pyarrow as pa
+
     value = raw()
     path = tmp_path / "documents.parquet"
     prior = {**shaped(value), "fr_doc_num": None}
     write(path, [prior])
     if fault == "corrupt_prior":
-        selection = json.loads((tmp_path / ".native-state" / "selection.json").read_text())
-        selected_path = Path(selection["documents"]["subjects"][0]["path"])
-        selected_path.write_bytes(b"damaged retained file")
+        # Documents receipts are retired, so the local prior is the pinned public table itself.
+        path.write_bytes(b"damaged retained file")
     selection_path = tmp_path / ".native-state" / "selection.json"
     selected_before = selection_path.read_bytes()
     before = path.read_bytes()
@@ -184,28 +195,22 @@ def test_failed_input_preserves_prior_and_can_retry(tmp_path, fault):
         if fault == "late_failure":
             raise ValueError("source read unresolved")
 
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, pa.ArrowInvalid)):
         repair_records(records(), table="documents", output_dir=tmp_path)
     assert path.read_bytes() == before
     assert not (tmp_path / "manifest.parquet").exists()
     assert selection_path.read_bytes() == selected_before
     if fault == "corrupt_prior":
-        # A fresh source record cannot bypass admission of the selected prior.
-        with pytest.raises(ValueError, match="Selected local native member changed"):
+        # A fresh source record cannot bypass reading the selected prior.
+        with pytest.raises((ValueError, pa.ArrowInvalid)):
             repair_records([value], table="documents", output_dir=tmp_path)
         assert path.read_bytes() == before
         assert selection_path.read_bytes() == selected_before
 
-        # Recover by explicitly selecting a separately qualified generation;
-        # never repair bytes inside the damaged immutable generation.
-        from spicy_regs.selected_generations import SelectedInputs, remember_selection
-
+        # Recover by restoring a separately qualified generation table.
         recovery_root = tmp_path / "recovered"
         write(recovery_root / "documents.parquet", [prior])
-        recovered = SelectedInputs(recovery_root, tmp_path / "recovery-input", public_url="").select("documents")
-        assert recovered is not None
-        remember_selection(tmp_path, [recovered])
-        assert selected_path.read_bytes() == b"damaged retained file"
+        path.write_bytes((recovery_root / "documents.parquet").read_bytes())
     repair_records([value], table="documents", output_dir=tmp_path)
     assert processing_rows(path)[0]["fr_doc_num"] == "06-04731"
 
