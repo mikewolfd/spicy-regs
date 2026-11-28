@@ -28,7 +28,7 @@ Credentials are read from the environment, alongside the existing ``R2_*`` vars:
 import json
 import re
 import time
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from os import getenv
@@ -248,6 +248,8 @@ def _scope_predicate(record_type: RecordType, scope: Mapping[str, str] | None, a
 def replace_rows(
     con, record_type: RecordType, source: str, *, expected_prior: str | None = None,
     scope: Mapping[str, str] | None = None, expected_snapshot: "CatalogSnapshot | None" = None,
+    source_files: Sequence[str] | None = None, before_files: Collection[str] | None = None,
+    file_column: str = "filename",
 ) -> None:
     """Atomically replace selected unique keys, validating values before commit.
 
@@ -274,7 +276,9 @@ def replace_rows(
     from .regulatory_catalog import replace_native
     _warn_unlocked_write(record_type, "replace rows")
     return replace_native(con, record_type, source, expected_prior=expected_prior,
-                          scope=scope, expected_snapshot=expected_snapshot)
+                          scope=scope, expected_snapshot=expected_snapshot,
+                          source_files=source_files, before_files=before_files,
+                          file_column=file_column)
 
 
 def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:

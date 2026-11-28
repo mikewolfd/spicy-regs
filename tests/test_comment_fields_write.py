@@ -377,6 +377,14 @@ def test_a_replacement_is_written_only_over_the_value_it_replaces(tmp_path, cata
     assert (table(catalog)["A"]["attachments_json"], table(catalog)["B"]["attachments_json"]) == (LISTED, "[]")
 
 
+def _is_filled_copy(sql: str) -> bool:
+    return sql.lstrip().startswith("COPY (") and "-filled.parquet" in sql
+
+
+def _strip_filled_where(sql: str) -> str:
+    return re.sub(r" WHERE .+?\) TO ", ") TO ", sql, count=1)
+
+
 def test_a_merge_that_replaces_without_the_held_guard_is_rolled_back(tmp_path, catalog):
     seed(catalog, [row("A", attachments_json=HELD), row("B", attachments_json="[]")])
     reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED}])
@@ -387,7 +395,7 @@ def test_a_merge_that_replaces_without_the_held_guard_is_rolled_back(tmp_path, c
     _restamp(tmp_path)
     unguarded = lambda sql: re.sub(  # noqa: E731
         r'WHEN p\."attachments_json" = b\."_held_attachments_json" THEN', "WHEN TRUE THEN",
-        sql.split(" WHERE ")[0]) if "CREATE OR REPLACE TEMP TABLE _filled" in sql else sql
+        _strip_filled_where(sql)) if _is_filled_copy(sql) else sql
     with catalog() as con, pytest.raises(cfw.FillVerificationError):
         cfw.write(tmp_path, con=Proxy(con, rewrite=unguarded))
     assert (table(catalog)["A"]["attachments_json"], table(catalog)["B"]["attachments_json"]) == (HELD, "[]")
@@ -422,7 +430,7 @@ def test_an_overwriting_merge_is_rolled_back(tmp_path, catalog):
     seed(catalog, [row("A", subtype="Kept")])
     reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "Read", "duplicate_comments": 1}])
     cfw.prepare(tmp_path)
-    overwrite = lambda sql: sql.replace('COALESCE(p."subtype", CAST(b."subtype" AS VARCHAR))', 'b."subtype"') if 'CREATE OR REPLACE TEMP TABLE _filled' in sql else sql  # noqa: E731
+    overwrite = lambda sql: sql.replace('COALESCE(p."subtype", CAST(b."subtype" AS VARCHAR))', 'b."subtype"') if _is_filled_copy(sql) else sql  # noqa: E731
     with catalog() as con, pytest.raises(cfw.FillVerificationError):
         cfw.write(tmp_path, con=Proxy(con, rewrite=overwrite))
     assert table(catalog)["A"]["subtype"] == "Kept"
@@ -438,7 +446,7 @@ def test_a_merge_that_rewrites_rows_needing_nothing_is_refused_by_the_count(tmp_
     stale = extra.with_columns(pl.lit("B").alias("comment_id"), pl.lit(None, pl.Utf8).alias("subtype"))
     pl.concat([extra, stale]).write_parquet(fill_file)  # B needs nothing: a stale fill row
     _restamp(tmp_path)
-    unguarded = lambda sql: sql.split(' WHERE ')[0] if 'CREATE OR REPLACE TEMP TABLE _filled' in sql else sql  # noqa: E731
+    unguarded = lambda sql: _strip_filled_where(sql) if _is_filled_copy(sql) else sql  # noqa: E731
     with catalog() as con, pytest.raises(cfw.FillVerificationError, match="planned"):
         cfw.write(tmp_path, con=Proxy(con, rewrite=unguarded))
 
@@ -465,7 +473,7 @@ def test_a_merge_that_ignores_modify_date_is_refused(tmp_path, catalog):
     rows = pl.read_parquet(fill_file)
     pl.concat([rows, rows.with_columns(pl.lit("B").alias("comment_id"))]).write_parquet(fill_file)  # B at T0: stale
     _restamp(tmp_path)
-    loose = lambda sql: sql.replace(' AND p.modify_date IS NOT DISTINCT FROM b.modify_date', '') if 'CREATE OR REPLACE TEMP TABLE _filled' in sql else sql  # noqa: E731
+    loose = lambda sql: sql.replace(' AND p.modify_date IS NOT DISTINCT FROM b.modify_date', '') if _is_filled_copy(sql) else sql  # noqa: E731
     with catalog() as con, pytest.raises(cfw.FillVerificationError):
         cfw.write(tmp_path, con=Proxy(con, rewrite=loose))
     with catalog() as con:
@@ -1613,3 +1621,98 @@ def test_prepare_stays_spill_free_on_large_catalog_under_tight_budget(tmp_path, 
     assert prepared["rows_to_fill"] == 14_200
     assert not (workdir / "fill" / "work").exists()
     assert n_reads == 15_000
+
+
+def test_write_batch_and_undo_scope_processing_replace_and_check_by_file(tmp_path, catalog, monkeypatch):
+    """All wide catalog reads and MERGE in _write_batch, _check, and undo stay scoped to the batch files."""
+    from spicy_regs.sources import regulatory_catalog as native
+
+    seed(catalog, [row("A", agency="EPA"), row("B", agency="CMS")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "Public Comment", "attachments_json": LISTED}])
+    # Corrupt CMS's receipt: any unscoped read over non-batch files would fail receipt admission.
+    with catalog() as con:
+        con.execute(
+            f"UPDATE {native.receipts_table()} SET subject_version='corrupted-outside-batch' "
+            "WHERE json_extract_string(identity_json, '$[1][0][1][1][1]')='B'"
+        )
+    cfw.prepare(tmp_path)
+
+    wheres: list[str] = []
+    original_processing = native.processing_table
+
+    def spy_processing(con, record_type, **options):
+        wheres.append(options.get("where") or "")
+        return original_processing(con, record_type, **options)
+
+    monkeypatch.setattr(native, "processing_table", spy_processing)
+
+    merges: list[str] = []
+    with catalog() as con:
+        written = cfw.write(
+            tmp_path,
+            con=Proxy(con, after=lambda sql: merges.append(sql) if _merge(sql) else None),
+        )
+    assert written["rows_changed"] == 1
+    assert len(wheres) == 4  # preimage, replace_native prior, replace_native verified, _check
+    assert "agency_code IN ('EPA')" in wheres[0]
+    assert '"agency_code" IN (\'EPA\')' in wheres[1]
+    assert "(\"agency_code\" IN ('EPA') OR \"agency_code\" NOT IN ('CMS', 'EPA'))" in wheres[2]
+    assert "(agency_code IN ('EPA') OR agency_code NOT IN ('CMS', 'EPA')) AND comment_id IN (SELECT comment_id FROM _prior)" == wheres[3]
+    assert len(merges) == 1
+    assert 'AND t."agency_code" IN (\'EPA\')' in merges[0]
+
+    # Undo also stays file-scoped (CMS's damaged receipt remains untouched).
+    wheres.clear()
+    merges.clear()
+    verified_line = [line for line in journal(tmp_path) if line["state"] == "verified"][-1]
+    expected = _current(catalog)
+    with catalog() as con:
+        undone = cfw.undo(
+            tmp_path,
+            verified_line["batch"],
+            expected_snapshot=expected,
+            con=Proxy(con, after=lambda sql: merges.append(sql) if _merge(sql) else None),
+        )
+    assert undone["rows_restored"] == 1
+    assert len(wheres) == 3  # undo_now, replace_native prior, replace_native verified
+    assert "agency_code IN ('EPA')" in wheres[0]
+    assert '"agency_code" IN (\'EPA\')' in wheres[1]
+    assert "(\"agency_code\" IN ('EPA') OR \"agency_code\" NOT IN ('CMS', 'EPA'))" in wheres[2]
+    assert len(merges) == 1 and 'AND t."agency_code" IN (\'EPA\')' in merges[0]
+
+
+def test_write_batch_streams_filled_via_temp_parquet_and_cleans_up_on_success_and_failure(tmp_path, catalog):
+    """_filled streams through a temporary Parquet-backed TEMP VIEW and is removed on both success and failure."""
+    seed(catalog, [row("A", agency="EPA")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "Public Comment"}])
+    cfw.prepare(tmp_path)
+
+    captured_paths: list[Path] = []
+    seen_sql: list[str] = []
+
+    def record(sql: str) -> None:
+        seen_sql.append(sql)
+        if _is_filled_copy(sql):
+            match = re.search(r" TO '([^']+)'", sql)
+            assert match is not None
+            captured_paths.append(Path(match.group(1)))
+
+    # 1. Failure path: rolled-back write cleans up the temp _filled Parquet file.
+    blank = lambda sql: sql.replace('"comment"=s."comment"', '"comment"=NULL') if _merge(sql) else sql  # noqa: E731
+    with catalog() as con, pytest.raises(cfw.FillVerificationError):
+        cfw.write(tmp_path, con=Proxy(con, rewrite=blank, after=record))
+    assert len(captured_paths) == 1
+    assert not captured_paths[0].exists()
+    assert not any("CREATE OR REPLACE TEMP TABLE _filled" in sql for sql in seen_sql)
+    assert any("CREATE OR REPLACE TEMP VIEW _filled" in sql for sql in seen_sql)
+
+    # 2. Success path: verified write also cleans up the temp _filled Parquet file and leaves only preimage/postimage.
+    captured_paths.clear()
+    seen_sql.clear()
+    with catalog() as con:
+        written = cfw.write(tmp_path, con=Proxy(con, after=record), clear_failure=True)
+    assert written["rows_changed"] == 1
+    assert len(captured_paths) == 1
+    assert not captured_paths[0].exists()
+    assert not list((tmp_path / "fill" / "preimage").glob("*-filled.parquet"))
+    assert table(catalog)["A"]["subtype"] == "Public Comment"

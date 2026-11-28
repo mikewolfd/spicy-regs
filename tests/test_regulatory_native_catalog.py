@@ -837,3 +837,223 @@ def test_comments_processing_and_rejected_copies_use_bounded_layout_and_ordinal_
             f"ROW_GROUP_SIZE {layout.row_group_rows}, ROW_GROUP_SIZE_BYTES '{layout.row_group_bytes}')")
     assert fallback_kwargs == [{'generation_id': fallback_kwargs[0]['generation_id'], 'processing_by_ordinal': True}]
 
+
+def test_file_scoped_replace_native_scopes_wide_reads_merge_and_uses_temp_views(con, monkeypatch):
+    import re
+    import pyarrow.parquet as pq
+
+    epa = source(con, identity='c1', text='epa-v1')
+    iceberg.replace_rows(con, COMMENT, 'source')
+    cms_row = epa | {'comment_id': 'c2', 'agency_code': 'CMS', 'text_content': 'cms-v1'}
+    con.register('cms_seed', pl.DataFrame([cms_row], schema=COMMENT.schema).to_arrow())
+    iceberg.replace_rows(con, COMMENT, 'cms_seed')
+    con.unregister('cms_seed')
+
+    # Corrupt CMS's receipt: any unscoped read over non-batch files would fail receipt admission.
+    con.execute(
+        f"UPDATE {native.receipts_table()} SET subject_version='damaged-cms' "
+        "WHERE json_extract_string(identity_json, '$[1][0][1][1][1]')='c2'"
+    )
+
+    # Build expected_prior without any virtual filename column and source with updated EPA row.
+    prior_tbl = native.processing_table(con, COMMENT, where="agency_code='EPA'")
+    updated = source(con, identity='c1', text='epa-v2')
+
+    wheres: list[str] = []
+    real_processing = native.processing_table
+
+    def spy_processing(connection, record_type, **kwargs):
+        wheres.append(kwargs.get('where') or '')
+        return real_processing(connection, record_type, **kwargs)
+
+    monkeypatch.setattr(native, 'processing_table', spy_processing)
+
+    sql_log: list[str] = []
+    copied_subject_counts: list[int] = []
+
+    class Observe:
+        def execute(self, sql, *args):
+            sql_log.append(sql)
+            result = con.execute(sql, *args)
+            if sql.startswith(f'COPY (SELECT * FROM {native.qualified(COMMENT)}'):
+                match = re.search(r" TO '([^']+)'", sql)
+                assert match is not None
+                copied_subject_counts.append(pq.ParquetFile(match.group(1)).metadata.num_rows)
+            return result
+
+    native.replace_native(
+        Observe(),
+        COMMENT,
+        'source',
+        expected_prior=prior_tbl,
+        source_files=['EPA'],
+        before_files={'CMS', 'EPA'},
+        file_column='agency_code',
+    )
+
+    assert len(wheres) == 2
+    assert wheres[0].startswith('"agency_code" IN (\'EPA\') AND (')
+    assert wheres[1].startswith('("agency_code" IN (\'EPA\') OR "agency_code" NOT IN (\'CMS\', \'EPA\')) AND ')
+    assert copied_subject_counts == [1, 1]  # Non-batch CMS row was never copied.
+    assert any('CREATE TEMP VIEW _native_replacement_' in sql for sql in sql_log)
+    assert any('CREATE TEMP VIEW _receipt_replacement_' in sql for sql in sql_log)
+    assert not any('CREATE TEMP TABLE _native_replacement_' in sql for sql in sql_log)
+    assert not any('CREATE TEMP TABLE _receipt_replacement_' in sql for sql in sql_log)
+    merges = [sql for sql in sql_log if sql.lstrip().startswith('MERGE INTO')]
+    assert len(merges) == 1 and 'AND t."agency_code" IN (\'EPA\')' in merges[0]
+    assert any('AND ("agency_code" NOT IN (\'EPA\') OR "agency_code" IS NULL) LIMIT 1' in sql for sql in sql_log)
+
+    restored = real_processing(con, COMMENT, where="agency_code='EPA'")
+    assert con.execute(f'SELECT * FROM {restored}').to_arrow_table().to_pylist() == [updated]
+    assert con.execute(f"SELECT text_content FROM {native.qualified(COMMENT)} WHERE comment_id='c2'").fetchone() == ('cms-v1',)
+
+
+def test_file_scoped_replace_native_fails_closed_on_out_of_file_identity_and_bad_args(con):
+    source(con, identity='c1', text='epa-v1')
+    iceberg.replace_rows(con, COMMENT, 'source')
+    cms = source(con, identity='c2', text='cms-v1')
+    con.execute("UPDATE source SET agency_code='CMS'")
+    iceberg.replace_rows(con, COMMENT, 'source')
+
+    before_subjects = con.execute(f'SELECT comment_id, agency_code, text_content FROM {native.qualified(COMMENT)} ORDER BY 1, 2').fetchall()
+    before_receipts = con.execute(f'SELECT * FROM {native.receipts_table()} ORDER BY receipt_id').fetchall()
+
+    # 1. Target identity exists only outside source_files -> ValueError, zero writes.
+    source(con, identity='c2', text='should-not-write')
+    with pytest.raises(ValueError, match='outside source_files'):
+        native.replace_native(con, COMMENT, 'source', source_files=['EPA'], before_files={'CMS', 'EPA'}, file_column='agency_code')
+    assert con.execute(f'SELECT comment_id, agency_code, text_content FROM {native.qualified(COMMENT)} ORDER BY 1, 2').fetchall() == before_subjects
+    assert con.execute(f'SELECT * FROM {native.receipts_table()} ORDER BY receipt_id').fetchall() == before_receipts
+
+    # 2. Target identity has a duplicate outside source_files -> fails closed with zero writes.
+    con.execute(
+        f"INSERT INTO {native.qualified(COMMENT)} SELECT * REPLACE ('CMS' AS agency_code) "
+        f"FROM {native.qualified(COMMENT)} WHERE comment_id='c1'"
+    )
+    dup_subjects = con.execute(f'SELECT comment_id, agency_code, text_content FROM {native.qualified(COMMENT)} ORDER BY 1, 2').fetchall()
+    source(con, identity='c1', text='should-rollback')
+    with pytest.raises(ValueError, match='outside source_files'):
+        native.replace_native(con, COMMENT, 'source', source_files=['EPA'], before_files={'CMS', 'EPA'}, file_column='agency_code')
+    assert con.execute(f'SELECT comment_id, agency_code, text_content FROM {native.qualified(COMMENT)} ORDER BY 1, 2').fetchall() == dup_subjects
+    assert con.execute(f'SELECT * FROM {native.receipts_table()} ORDER BY receipt_id').fetchall() == before_receipts
+
+    # 3. Invalid argument combinations refuse immediately.
+    with pytest.raises(ValueError, match='non-empty'):
+        native.replace_native(con, COMMENT, 'source', source_files=[], before_files={'EPA'}, file_column='agency_code')
+    with pytest.raises(ValueError, match='non-empty'):
+        native.replace_native(con, COMMENT, 'source', source_files='EPA', before_files={'EPA'}, file_column='agency_code')
+    with pytest.raises(ValueError, match='before_files'):
+        native.replace_native(con, COMMENT, 'source', source_files=['EPA'], before_files=None, file_column='agency_code')
+    with pytest.raises(ValueError, match='delete_scope'):
+        native.replace_native(
+            con, COMMENT, 'source', scope={'agency_code': 'EPA'}, delete_scope=True,
+            source_files=['EPA'], before_files={'EPA'}, file_column='agency_code',
+        )
+    with pytest.raises(ValueError, match='source_files'):
+        native.replace_native(con, COMMENT, 'source', before_files={'EPA'})
+    assert cms['comment_id'] == 'c2'
+
+
+def test_duckdb_merge_temp_view_and_quoted_virtual_filename(tmp_path):
+    """DuckDB 1.5.5 supports MERGE/DELETE/INSERT from read_parquet TEMP VIEWs and quoted virtual \"filename\"."""
+    data = tmp_path / 'part.parquet'
+    stage = tmp_path / 'stage.parquet'
+    with duckdb.connect() as con:
+        con.execute("CREATE TABLE target (comment_id VARCHAR, agency_code VARCHAR, body VARCHAR)")
+        con.execute("INSERT INTO target VALUES ('c1', 'EPA', 'old'), ('c2', 'CMS', 'untouched')")
+        con.execute(f"COPY (SELECT 'c1' AS comment_id, 'EPA' AS agency_code, 'new' AS body) TO '{stage}' (FORMAT PARQUET)")
+        con.execute(f"CREATE TEMP VIEW v_stage AS SELECT * FROM read_parquet('{stage}')")
+        changed = con.execute("""
+            MERGE INTO target t USING v_stage s ON t."comment_id"=s."comment_id" AND t."agency_code" IN ('EPA')
+            WHEN MATCHED THEN UPDATE SET comment_id=s.comment_id, agency_code=s.agency_code, body=s.body
+            WHEN NOT MATCHED THEN INSERT (comment_id, agency_code, body) VALUES (s.comment_id, s.agency_code, s.body)
+        """).fetchone()[0]
+        assert changed == 1
+        assert con.execute("SELECT * FROM target ORDER BY 1").fetchall() == [('c1', 'EPA', 'new'), ('c2', 'CMS', 'untouched')]
+        con.execute(f"COPY (SELECT * FROM target) TO '{data}' (FORMAT PARQUET)")
+        matched = con.execute(
+            f'SELECT comment_id FROM read_parquet(\'{data}\', filename=true) WHERE "filename" IN (\'{data}\') ORDER BY 1'
+        ).fetchall()
+        assert matched == [('c1',), ('c2',)]
+        con.execute("DROP VIEW v_stage")
+
+
+def test_file_scoped_replace_native_streams_wide_rows_under_tight_memory_budget(tmp_path):
+    """A wide-row file-scoped replacement stays inside a tight 256MB RAM / 64MB spill cap without OOM."""
+    from spicy_regs.duckdb_settings import ExportResources
+
+    batch_rows = 2_000
+    other_rows = 12_000
+    catalog_path = tmp_path / 'catalog.duckdb'
+
+    # Seed a large wide non-batch file ('CMS', ~192 MiB uncompressed) and a wide batch file ('EPA') on disk first.
+    with duckdb.connect() as setup_con:
+        setup_con.execute(f"ATTACH '{catalog_path}' AS reg_catalog")
+        native.ensure_native(setup_con, COMMENT)
+        setup_con.execute(f"""
+            CREATE TEMP TABLE seed_rows AS
+            SELECT
+                'EPA-' || i::VARCHAR AS comment_id,
+                'EPA-D1' AS docket_id,
+                NULL::VARCHAR AS comment_on_document_id,
+                NULL::VARCHAR AS comment_on_object_id,
+                NULL::VARCHAR AS original_document_id,
+                NULL::VARCHAR AS comment_reference_values_json,
+                'EPA' AS agency_code,
+                NULL::VARCHAR AS first_name,
+                NULL::VARCHAR AS last_name,
+                NULL::VARCHAR AS organization,
+                NULL::VARCHAR AS category,
+                'title' AS title,
+                repeat('b' || (i % 13)::VARCHAR, 1200) AS comment,
+                'Public Submission' AS document_type,
+                '2026-10-03' AS posted_date,
+                '2026-10-03' AS modify_date,
+                NULL::VARCHAR AS receive_date,
+                '[]' AS attachments_json,
+                repeat('t' || (i % 17)::VARCHAR, 1200) AS text_content,
+                'complete' AS text_extraction_status,
+                NULL::VARCHAR AS pdf_extraction_results_json,
+                NULL::VARCHAR AS subtype,
+                NULL::INTEGER AS duplicate_comments
+            FROM range({batch_rows}) t(i)
+        """)
+        iceberg.replace_rows(setup_con, COMMENT, 'seed_rows')
+        setup_con.execute(f"""
+            INSERT INTO {native.qualified(COMMENT)} (comment_id, agency_code, comment, text_content)
+            SELECT 'CMS-' || i::VARCHAR, 'CMS', repeat('x', 8000), repeat('y', 8000)
+            FROM range({other_rows}) t(i)
+        """)
+
+    with duckdb.connect() as limited:
+        limited.execute(f"ATTACH '{catalog_path}' AS reg_catalog")
+        ExportResources(memory='256MB', threads=1).configure(limited, tmp_path / 'spill')
+        limited.execute("SET max_temp_directory_size='64MB'")
+
+        prior_dir = tmp_path / 'prior'
+        prior = native.processing_table(limited, COMMENT, where="agency_code='EPA'", output_dir=prior_dir)
+        filled_pq = tmp_path / 'filled.parquet'
+        native._copy(
+            limited,
+            f"SELECT * REPLACE ('Public Comment' AS subtype) FROM {prior}",
+            filled_pq,
+            resources=native._layout('comments'),
+            ordered=False,
+        )
+        limited.execute(f"CREATE TEMP VIEW filled_view AS SELECT * FROM read_parquet('{iceberg._sql_str(str(filled_pq))}')")
+        native.replace_native(
+            limited,
+            COMMENT,
+            'filled_view',
+            expected_prior=prior,
+            source_files=['EPA'],
+            before_files={'CMS', 'EPA'},
+            file_column='agency_code',
+        )
+        assert limited.execute(
+            f"SELECT count(*) FROM {native.qualified(COMMENT)} WHERE agency_code='EPA' AND subtype='Public Comment'"
+        ).fetchone() == (batch_rows,)
+        assert limited.execute(
+            f"SELECT count(*) FROM {native.qualified(COMMENT)} WHERE agency_code='CMS'"
+        ).fetchone() == (other_rows,)
+

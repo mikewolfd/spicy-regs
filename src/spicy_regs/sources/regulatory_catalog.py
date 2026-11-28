@@ -6,9 +6,11 @@ current native subject joins; they never reconstruct an older storage format.
 """
 from __future__ import annotations
 
+from collections.abc import Collection, Sequence
 from contextlib import contextmanager
 from hashlib import sha256
 from pathlib import Path
+import shutil
 from tempfile import TemporaryDirectory, NamedTemporaryFile
 from uuid import uuid4
 
@@ -28,7 +30,6 @@ DATASETS = frozenset({'dockets', 'documents', 'comments'})
 class CatalogConversionRefused(ValueError):
     """Conversion failed; the separately staged attempts survive transaction rollback."""
     def __init__(self, receipt_path):
-        import shutil
         with NamedTemporaryFile(prefix='catalog-refusal-', suffix='.parquet', delete=False) as retained:
             self.receipt_path = Path(retained.name)
         shutil.copyfile(receipt_path, self.receipt_path)
@@ -249,7 +250,9 @@ def _stage(con, source, dataset, work, generation, *, prior_receipts=None, bulk=
     if subject is None:
         subject, receipts = write_records(dataset, records, work / 'mapped', project=normalized)
     if pq.ParquetFile(subject).metadata.num_rows != pq.ParquetFile(source_path).metadata.num_rows:
+        source_path.unlink(missing_ok=True)
         raise CatalogConversionRefused(receipts)
+    source_path.unlink(missing_ok=True)
     return subject, receipts
 
 
@@ -482,14 +485,32 @@ def _restore_comments_catalog(con, subject, receipts, work, generation):
     return result
 
 
+def _drop_relation(con, name: str) -> None:
+    """Drop a temporary table or view without aborting an active transaction on kind mismatch."""
+    unquoted = name[1:-1].replace('""', '"') if name.startswith('"') and name.endswith('"') else name
+    is_view = con.execute(
+        'SELECT 1 FROM duckdb_views() WHERE temporary AND view_name = ? LIMIT 1', [unquoted]
+    ).fetchone() is not None
+    con.execute(f'DROP {"VIEW" if is_view else "TABLE"} {name}')
+
+
+def _row_digest_sql(dataset: str, key_sql: str) -> str:
+    """Narrow exact-value multiset key for ``EXCEPT ALL`` comparisons without wide-row hash spills."""
+    packed = ', '.join(f'"{name}" := "{name}"' for name, _ in SOURCE_COLUMNS[dataset])
+    return f'{key_sql}, sha256(to_json(struct_pack({packed}))) AS _row_sha256'
+
+
 def processing_table(con, record_type, *, where: str | None = None, in_transaction=False,
-                     selected_receipts: Path | None = None, include_comment_promotion=False):
+                     selected_receipts: Path | None = None, include_comment_promotion=False,
+                     output_dir: Path | None = None):
     """Return exact retained mapper observations after checking native subject joins.
 
     The receipt owns the original processing input. Native business columns are
     not converted back into strings or JSON to manufacture an older table shape.
     A caller-owned ``selected_receipts`` file retains the original accepted
     receipts from this same read for history inheritance, before rebinding.
+    When ``output_dir`` is supplied, restored Parquet file(s) are kept there and
+    exposed as a temporary view so wide rows are not materialized in DuckDB RAM.
     """
     from . import iceberg
     from contextlib import nullcontext
@@ -565,8 +586,7 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
                      if has_comments_promotion_ancestor(row['receipt'])),
                     ancestor_ids, pa.schema([('comment_id', pa.string())]),
                 )
-                con.execute(f"""
-                    CREATE TEMP TABLE "{temporary_name}" AS
+                promotion_sql = """
                     SELECT p.*, r.comment_id IS NOT NULL AS _promoted_v2
                     FROM read_parquet(?) p
                     LEFT JOIN (
@@ -576,16 +596,63 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
                         UNION ALL
                         SELECT comment_id FROM read_parquet(?)
                     ) r USING (comment_id)
-                """, [paths, str(raw_receipts), COMMENTS_PROMOTION_PROCESSOR, str(ancestor_ids)])
+                """
+                promotion_params = [paths, str(raw_receipts), COMMENTS_PROMOTION_PROCESSOR, str(ancestor_ids)]
+                if output_dir is not None:
+                    dest_dir = Path(output_dir)
+                    dest_dir.mkdir(parents=True, exist_ok=True)
+                    out_path = dest_dir / f'{temporary_name}.parquet'
+                    _copy(con, promotion_sql, out_path, resources=_layout(dataset),
+                          parameters=promotion_params, ordered=False)
+                    con.execute(
+                        f'CREATE TEMP VIEW "{temporary_name}" AS SELECT * FROM '
+                        f"read_parquet('{iceberg._sql_str(str(out_path))}')"
+                    )
+                else:
+                    con.execute(f'CREATE TEMP TABLE "{temporary_name}" AS {promotion_sql}', promotion_params)
+            elif output_dir is not None:
+                dest_dir = Path(output_dir)
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                kept: list[Path] = []
+                for index, path in enumerate(restored):
+                    dest = dest_dir / f'{temporary_name}-{index}.parquet'
+                    shutil.move(str(path), str(dest))
+                    kept.append(dest)
+                quoted = ', '.join(f"'{iceberg._sql_str(str(path))}'" for path in kept)
+                con.execute(f'CREATE TEMP VIEW "{temporary_name}" AS SELECT * FROM read_parquet([{quoted}])')
             else:
                 con.execute(f'CREATE TEMP TABLE "{temporary_name}" AS SELECT * FROM read_parquet(?)', [paths])
     return '"' + temporary_name + '"'
 
 
-def replace_native(con, record_type, source, *, expected_prior=None, scope=None, expected_snapshot=None, in_transaction=False, delete_scope=False, rejected_source=None):
+def replace_native(con, record_type, source, *, expected_prior=None, scope=None, expected_snapshot=None,
+                   in_transaction=False, delete_scope=False, rejected_source=None,
+                   source_files: Sequence[str] | None = None, before_files: Collection[str] | None = None,
+                   file_column: str = 'filename'):
     """Replace selected rows and current receipts in one multi-table catalog commit."""
     from . import iceberg
     from contextlib import nullcontext
+    if source_files is None:
+        if before_files is not None:
+            raise ValueError('before_files requires source_files')
+        file_col_sql = source_files_sql = verified_file_scope = None
+    else:
+        if isinstance(source_files, (str, bytes)) or not source_files:
+            raise ValueError('File-scoped catalog replacement requires a non-empty sequence of source_files')
+        if before_files is None or isinstance(before_files, (str, bytes)):
+            raise ValueError('File-scoped catalog replacement requires before_files')
+        if delete_scope:
+            raise ValueError('File-scoped catalog replacement cannot be combined with delete_scope')
+        if not isinstance(file_column, str) or not file_column.strip():
+            raise ValueError('File-scoped catalog replacement requires a nonblank file_column')
+        file_col_sql = '"' + file_column.replace('"', '""') + '"'
+        unique_source_files = list(dict.fromkeys(source_files))
+        source_files_sql = ', '.join(f"'{iceberg._sql_str(path)}'" for path in unique_source_files)
+        if before_files:
+            before_files_sql = ', '.join(f"'{iceberg._sql_str(path)}'" for path in sorted(set(before_files)))
+            verified_file_scope = f'({file_col_sql} IN ({source_files_sql}) OR {file_col_sql} NOT IN ({before_files_sql}))'
+        else:
+            verified_file_scope = None
     if not in_transaction:
         ensure_native(con, record_type)
     key = record_type.dedup_key
@@ -606,15 +673,31 @@ def replace_native(con, record_type, source, *, expected_prior=None, scope=None,
         with (nullcontext() if in_transaction else _transaction(con, retain_failed=True)):
             if expected_snapshot is not None and iceberg._read_snapshot(con, record_type) != expected_snapshot:
                 raise RuntimeError('Catalog snapshot changed after preparation; rerun the operation')
+            if source_files_sql is not None:
+                if con.execute(
+                    f'SELECT 1 FROM {qualified(record_type)} '
+                    f'WHERE {key_sql} IN (SELECT {key_sql} FROM {source}) '
+                    f'AND ({file_col_sql} NOT IN ({source_files_sql}) OR {file_col_sql} IS NULL) LIMIT 1'
+                ).fetchone():
+                    raise ValueError('Catalog replacement identity exists outside source_files')
             prior_where = scope_sql if delete_scope else f'{key_sql} IN (SELECT {key_sql} FROM {source}) AND {scope_sql}'
+            table_prior_where = (
+                f'{file_col_sql} IN ({source_files_sql}) AND ({prior_where})'
+                if source_files_sql is not None else prior_where
+            )
             selected_receipts = work / 'prior-receipts.parquet'
-            prior = processing_table(con, record_type, where=prior_where, in_transaction=True,
-                                     selected_receipts=selected_receipts)
+            prior_dir = work / 'prior-processing'
+            prior = processing_table(con, record_type, where=table_prior_where, in_transaction=True,
+                                     selected_receipts=selected_receipts, output_dir=prior_dir)
+            row_digest = _row_digest_sql(record_type.name, key_sql)
             if expected_prior is not None:
                 expected_columns = _validate_source_columns(con, expected_prior, record_type.name)
                 expected_prior = f'(SELECT {expected_columns} FROM {expected_prior} WHERE {prior_where})'
-                delta = con.execute(f'''SELECT count(*) FROM ((SELECT * FROM {prior} EXCEPT ALL SELECT * FROM {expected_prior})
-                    UNION ALL (SELECT * FROM {expected_prior} EXCEPT ALL SELECT * FROM {prior}))''').fetchone()[0]
+                delta = con.execute(f'''SELECT count(*) FROM (
+                    (SELECT {row_digest} FROM {prior} EXCEPT ALL SELECT {row_digest} FROM {expected_prior})
+                    UNION ALL
+                    (SELECT {row_digest} FROM {expected_prior} EXCEPT ALL SELECT {row_digest} FROM {prior})
+                )''').fetchone()[0]
                 if delta:
                     raise RuntimeError('Catalog changed after preparation; rerun the operation')
             if scope and con.execute(f'SELECT 1 FROM {qualified(record_type)} WHERE {key_sql} IN '
@@ -626,19 +709,20 @@ def replace_native(con, record_type, source, *, expected_prior=None, scope=None,
                         for batch in reader for row in batch.to_pylist()), identities,
                        pa.schema([('record_id', pa.string()), (key, pa.string())]))
             prior_receipts = '_prior_receipts_' + uuid4().hex
-            # Reuse the exact originals already selected and admitted above.
-            # Rebound read receipts would manufacture an extra history entry.
-            con.execute(f'CREATE TEMP TABLE {prior_receipts} AS SELECT i."{key}", r AS receipt '
-                        'FROM read_parquet(?) r JOIN read_parquet(?) i USING (record_id) '
-                        "WHERE r.dataset=? AND r.outcome='accepted'",
-                        [str(selected_receipts), str(identities), record_type.name])
-            selected_receipts.unlink()  # The local table now owns these prior values.
+            # Reuse the exact originals already selected and admitted above without materializing wide
+            # receipts in RAM. Rebound read receipts would manufacture an extra history entry.
+            con.execute(
+                f'CREATE TEMP VIEW {prior_receipts} AS SELECT i.{key_sql}, r AS receipt '
+                f"FROM read_parquet('{iceberg._sql_str(str(selected_receipts))}') r "
+                f"JOIN read_parquet('{iceberg._sql_str(str(identities))}') i USING (record_id) "
+                f"WHERE r.dataset='{iceberg._sql_str(record_type.name)}' AND r.outcome='accepted'"
+            )
             subject, receipts = _stage(con, source, record_type.name, work, generation,
                                       prior_receipts=prior_receipts)
             native = '_native_replacement_' + uuid4().hex
             pending = '_receipt_replacement_' + uuid4().hex
-            con.execute(f'CREATE TEMP TABLE {native} AS SELECT * FROM read_parquet(?)', [str(subject)])
-            con.execute(f'CREATE TEMP TABLE {pending} AS SELECT * FROM read_parquet(?)', [str(receipts)])
+            con.execute(f"CREATE TEMP VIEW {native} AS SELECT * FROM read_parquet('{iceberg._sql_str(str(subject))}')")
+            con.execute(f"CREATE TEMP VIEW {pending} AS SELECT * FROM read_parquet('{iceberg._sql_str(str(receipts))}')")
             if delete_scope:
                 removed = work / 'removed-identities.parquet'
                 from spicy_regs.transforms.regulations_shape import shape_record
@@ -659,34 +743,49 @@ def replace_native(con, record_type, source, *, expected_prior=None, scope=None,
                             '(SELECT record_id FROM read_parquet(?))', [record_type.name, str(removed)])
                 con.execute(f'DELETE FROM {qualified(record_type)} WHERE {scope_sql} AND {key_sql} NOT IN '
                             f'(SELECT {key_sql} FROM {source})')
-            con.execute(f'DROP TABLE {prior}')
-            con.execute(f'DROP TABLE {prior_receipts}')
+            _drop_relation(con, prior)
+            shutil.rmtree(prior_dir, ignore_errors=True)
+            con.execute(f'DROP VIEW {prior_receipts}')
+            selected_receipts.unlink(missing_ok=True)
             columns = policy(record_type.name).subject_schema.names
             assignments = ', '.join(f'"{c}"=s."{c}"' for c in columns)
             names = ', '.join(f'"{c}"' for c in columns)
             values = ', '.join(f's."{c}"' for c in columns)
-            changed = con.execute(f'''MERGE INTO {qualified(record_type)} t USING {native} s ON t.{key_sql}=s.{key_sql}
+            merge_on = f't.{key_sql}=s.{key_sql}'
+            if source_files_sql is not None:
+                merge_on += f' AND t.{file_col_sql} IN ({source_files_sql})'
+            changed = con.execute(f'''MERGE INTO {qualified(record_type)} t USING {native} s ON {merge_on}
                 WHEN MATCHED THEN UPDATE SET {assignments}
                 WHEN NOT MATCHED THEN INSERT ({names}) VALUES ({values})''').fetchone()[0]
             if changed != count:
                 raise RuntimeError('Catalog replacement changed an unexpected number of rows')
-            con.execute(f'DROP TABLE {native}')
+            con.execute(f'DROP VIEW {native}')
+            subject.unlink(missing_ok=True)
             con.execute(f'''DELETE FROM {receipts_table()} WHERE dataset=? AND outcome='accepted'
                 AND record_id IN (SELECT record_id FROM {pending})''', [record_type.name])
             con.execute(f'INSERT INTO {receipts_table()} SELECT * FROM {pending}')
-            con.execute(f'DROP TABLE {pending}')
+            con.execute(f'DROP VIEW {pending}')
+            receipts.unlink(missing_ok=True)
             if rejected_source is not None:
                 rejected_attempts(con, rejected_source, record_type.name, work, generation,
                                   reason='not selected: duplicate or not newer than current subject')
-            verified = processing_table(con, record_type, where=f'{key_sql} IN (SELECT {key_sql} FROM {source})',
-                                        in_transaction=True)
+            verified_where = f'{key_sql} IN (SELECT {key_sql} FROM {source})'
+            if verified_file_scope is not None:
+                verified_where = f'{verified_file_scope} AND {verified_where}'
+            verified_dir = work / 'verified-processing'
+            verified = processing_table(con, record_type, where=verified_where, in_transaction=True,
+                                        output_dir=verified_dir)
             source_columns = _validate_source_columns(con, source, record_type.name)
             comparison = f'(SELECT {source_columns} FROM {source})'
-            delta = con.execute(f'''SELECT count(*) FROM ((SELECT * FROM {verified} EXCEPT ALL SELECT * FROM {comparison})
-                UNION ALL (SELECT * FROM {comparison} EXCEPT ALL SELECT * FROM {verified}))''').fetchone()[0]
+            delta = con.execute(f'''SELECT count(*) FROM (
+                (SELECT {row_digest} FROM {verified} EXCEPT ALL SELECT {row_digest} FROM {comparison})
+                UNION ALL
+                (SELECT {row_digest} FROM {comparison} EXCEPT ALL SELECT {row_digest} FROM {verified})
+            )''').fetchone()[0]
             if delta:
                 raise RuntimeError('Catalog replacement changed source values')
-            con.execute(f'DROP TABLE {verified}')
+            _drop_relation(con, verified)
+            shutil.rmtree(verified_dir, ignore_errors=True)
 
 
 #: Columns regulations-native-v2 inserted into the v1 comments table (6th, 20th, 21st of 24).
