@@ -190,6 +190,7 @@ FAMILY_CADENCE: dict[str, Cadence] = {
     "court-citations": Cadence("quarterly export, scheduled run", months=3, release_lag=1, grace=22),
     "court-opinions": Cadence("quarterly export, run by hand where a copy is retained", months=3, release_lag=1,
                               grace=30),
+    "courtlistener-bankruptcy-dockets": Cadence("one-off archival 2022-09-19 CourtListener export, retained locally"),
 }
 
 

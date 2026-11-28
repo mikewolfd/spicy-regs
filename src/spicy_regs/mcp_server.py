@@ -269,6 +269,7 @@ TABLES = (
     "court_citation_map",
     "court_parentheticals",
     "court_opinions",
+    "courtlistener_bankruptcy_dockets",
     "usaspending_recipients",
     "usaspending_transactions",
     "usaspending_awards",
@@ -1179,6 +1180,7 @@ def _build_connection_inputs(con, publication):
         "senate_disclosure_reports",
         "senate_disclosure_transactions",
         "court_opinion_texts",
+        "courtlistener_bankruptcy_dockets",
         "crs_report_files",
     }
     managed_names = [

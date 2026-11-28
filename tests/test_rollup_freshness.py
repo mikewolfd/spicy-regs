@@ -373,7 +373,11 @@ def test_declared_families_are_the_verified_ones():
     """Finite families are declared from their docs; families meant to track their publisher are not."""
     finite = {name for name, cadence in freshness.FAMILY_CADENCE.items()
               if cadence.months is None and cadence.input_pin is None}
-    assert finite == {"native-legal-references", "court-opinion-pdf-extractions"}
+    assert finite == {
+        "native-legal-references",
+        "court-opinion-pdf-extractions",
+        "courtlistener-bankruptcy-dockets",
+    }
     assert not {"uscode-editions", "executive-orders"} & freshness.FAMILY_CADENCE.keys()
 
 
