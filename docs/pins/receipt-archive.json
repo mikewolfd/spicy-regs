@@ -99,17 +99,41 @@
    "publishedAt": "2026-11-11T18:18:39Z",
    "receipts": "generations/fcc-proceedings/e9fe4002523a19eefc60cdb4348bff6f75c4143d2d87af58cab69678e98a02ba/etl_receipts.parquet"
   },
+  "fec_candidate_history": {
+   "family": "fec-candidate-history",
+   "artifactDigest": "sha256:8ecb40f2bbcda8f9f6f6fa97fdb6476dfcf4777be943ee3663827a7f55007b8d",
+   "publishedAt": "2026-11-27T20:17:26Z",
+   "receipts": "generations/fec-candidate-history/8ecb40f2bbcda8f9f6f6fa97fdb6476dfcf4777be943ee3663827a7f55007b8d/etl_receipts.parquet"
+  },
   "fec_collections": {
    "family": "fec-observations",
    "artifactDigest": "sha256:4cb0dffa91c278eb4e7a6048e266a5e4389748666428a82bc58c35ee3fe77f2f",
    "publishedAt": "2026-10-16T17:48:37Z",
    "receipts": "generations/fec-observations/4cb0dffa91c278eb4e7a6048e266a5e4389748666428a82bc58c35ee3fe77f2f/etl_receipts.parquet"
   },
+  "fec_committee_history": {
+   "family": "fec-committee-history",
+   "artifactDigest": "sha256:31cc542518dd06b88fe5d1b732b7b392357b383178eceff82d4e9a1d38c6a264",
+   "publishedAt": "2026-11-27T19:48:49Z",
+   "receipts": "generations/fec-committee-history/31cc542518dd06b88fe5d1b732b7b392357b383178eceff82d4e9a1d38c6a264/etl_receipts.parquet"
+  },
+  "fec_committees": {
+   "family": "fec-committees",
+   "artifactDigest": "sha256:8fbb076a407b2ebafab4da111f93c58dfb80d0d997f92b8dc48f9b67c3600c35",
+   "publishedAt": "2026-11-27T19:41:46Z",
+   "receipts": "generations/fec-committees/8fbb076a407b2ebafab4da111f93c58dfb80d0d997f92b8dc48f9b67c3600c35/etl_receipts.parquet"
+  },
   "fec_relationships": {
    "family": "fec-observations",
    "artifactDigest": "sha256:4cb0dffa91c278eb4e7a6048e266a5e4389748666428a82bc58c35ee3fe77f2f",
    "publishedAt": "2026-10-16T17:48:37Z",
    "receipts": "generations/fec-observations/4cb0dffa91c278eb4e7a6048e266a5e4389748666428a82bc58c35ee3fe77f2f/etl_receipts.parquet"
+  },
+  "fec_source_catalog": {
+   "family": "fec-source-catalog",
+   "artifactDigest": "sha256:237c6d5e26688af613f698268b0ae7f0c70cf91be62cf060be13ff270baa0e8a",
+   "publishedAt": "2026-10-10T18:26:53Z",
+   "receipts": "generations/fec-source-catalog/237c6d5e26688af613f698268b0ae7f0c70cf91be62cf060be13ff270baa0e8a/etl_receipts.parquet"
   },
   "fec_source_records": {
    "family": "fec-observations",
@@ -206,6 +230,12 @@
    "artifactDigest": "sha256:26d652e10178f3b079c0af1c3ca50dbce318868541c8b3e28af6a40e4223e780",
    "publishedAt": "2026-11-11T03:15:15Z",
    "receipts": "generations/members/26d652e10178f3b079c0af1c3ca50dbce318868541c8b3e28af6a40e4223e780/etl_receipts.parquet"
+  },
+  "org_committee_links": {
+   "family": "org-committee-links",
+   "artifactDigest": "sha256:c1afb2a8680ae8ea0c9e388edebb1822df92d3a06d1c650ca147b894c9c32da0",
+   "publishedAt": "2026-11-27T09:27:29Z",
+   "receipts": "generations/org-committee-links/c1afb2a8680ae8ea0c9e388edebb1822df92d3a06d1c650ca147b894c9c32da0/etl_receipts.parquet"
   },
   "roll_call_votes": {
    "family": "roll-call-votes",

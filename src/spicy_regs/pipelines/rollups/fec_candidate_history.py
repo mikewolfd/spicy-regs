@@ -9,11 +9,11 @@ from pathlib import Path
 from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import make_rollup_app
-from spicy_regs.pipelines.rollups.fec_receipts import FecReceiptRollup as RollupPipeline
+from spicy_regs.pipelines.rollups.fec_tables import FecTableRollup
 from spicy_regs.transforms.build_fec_candidate_history import OUTPUT
 
 
-class FecCandidateHistoryRollup(RollupPipeline):
+class FecCandidateHistoryRollup(FecTableRollup):
     """FEC candidates per cycle, 1980 through the current cycle, from the bulk candidate master."""
 
     name: ClassVar[str] = "fec-candidate-history"
@@ -22,7 +22,7 @@ class FecCandidateHistoryRollup(RollupPipeline):
     output: ClassVar[str] = OUTPUT
 
     def build(self, output_dir: Path) -> Path:
-        return self.build_receipts(output_dir, evidence=self.source_evidence)
+        return self.build_table(output_dir, evidence=self.source_evidence)
 
 
 app = make_rollup_app(FecCandidateHistoryRollup)

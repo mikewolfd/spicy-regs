@@ -12,10 +12,10 @@ from typing import ClassVar
 
 from spicy_regs.env_values import flag_env
 from spicy_regs.pipelines.rollups.base import make_rollup_app
-from spicy_regs.pipelines.rollups.fec_receipts import FecReceiptRollup as RollupPipeline
+from spicy_regs.pipelines.rollups.fec_tables import FecTableRollup
 
 
-class FecCommitteesRollup(RollupPipeline):
+class FecCommitteesRollup(FecTableRollup):
     """FEC committees/PACs ingested from the OpenFEC API (api.data.gov key)."""
 
     name: ClassVar[str] = "fec-committees"
@@ -23,7 +23,7 @@ class FecCommitteesRollup(RollupPipeline):
     output: ClassVar[str] = "fec_committees.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return self.build_receipts(output_dir, full_walk=flag_env("FEC_COMMITTEES_FULL_WALK"))
+        return self.build_table(output_dir, full_walk=flag_env("FEC_COMMITTEES_FULL_WALK"))
 
 
 app = make_rollup_app(FecCommitteesRollup)
