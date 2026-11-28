@@ -38,7 +38,18 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
-- **Selected CBO PDF-only reader provider** `spicy_docs-0.85.0+readers.20261127.6` is built from
+- **Selected Senate PTR reader provider** `spicy_docs-0.85.0+readers.20261127.7` is built from
+  `b66be93001801226705f174683ec9256750ca518` (tree `50962df1fb7ec7a0ee07148c85273ef7e83202b1`,
+  `mikewolfd/spicy-docs#59` on `fork/main`). It handles the two authentic 2025 Senate eFD publisher
+  formats observed across all 146 electronic PTRs (`ss-iw09`): strictly directional `+1 day`
+  evening UTC-vs-US/Eastern listing-title date offsets and Former Senator role parentheticals
+  (e.g. Carper `f9489b59`), atop `.20261127.6`. Two clean `git archive` builds are byte-identical
+  (`sha256:a423b527...`).
+  See [the receipt](spicy_docs-0.85.0+readers.20261127.7.json) for source, wheel and RECORD identity.
+  The superseded `.20261127.6` wheel is recoverable from this adoption commit's parent;
+  its receipt remains.
+
+- **Prior CBO PDF-only reader provider** `spicy_docs-0.85.0+readers.20261127.6` is built from
   `de0cbb34143942ed9d0f0f6d736b9c4ecc7a9181` (tree `26d851eda87565229f567907ba68cdc05dc2f6b7`,
   `mikewolfd/spicy-docs#58` on `fork/main`). It adds `FEED_CONTENT_CORROBORATED_RULE` and
   `identity_from_feed_pdf` for PDF-only CBO cost cards (`ss-938z`), optional `generation` passthrough on

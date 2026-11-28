@@ -366,6 +366,13 @@
       "kind": "government",
       "note": "Selected annual filing index snapshots and explicitly selected Periodic Transaction Report (PTR) PDFs. Other categories remain discovery entries; image-form extraction and source-wide completeness remain outside qualified scope."
     },
+    "senate-disclosures": {
+      "id": "senate-disclosures",
+      "name": "Office of Public Records, U.S. Senate Financial Disclosures (eFD)",
+      "url": "https://efdsearch.senate.gov/",
+      "kind": "government",
+      "note": "Selected annual Periodic Transaction Report (PTR) filing listings and parsed electronic PTR HTML tables. Paper filings remain explicit unparsed rows; dollar values remain publisher ranges."
+    },
     "executive-disclosures": {
       "id": "executive-disclosures",
       "name": "Archived White House / OGE Public Financial Disclosures (Form 278e)",
@@ -428,6 +435,13 @@
       "sources": [
         "congress"
       ]
+    },
+    "crs-report-files": {
+      "sources": [
+        "congress"
+      ],
+      "transformation": "Retains receipt-verified CRS numbered PDF and offered HTML file observations with embedded pypdf text extraction bound to exact crs_reports metadata revisions without OCR or inferred versions.",
+      "evidence": "src/spicy_regs/transforms/build_crs_report_files.py"
     },
     "committee-reports": {
       "sources": [
@@ -868,6 +882,13 @@
       ],
       "transformation": "Retains selected annual House Clerk filing index snapshots and qualified native Periodic Transaction Report (PTR) PDF readings, keeping refused readings, source pages, and reviewed amendment references separate.",
       "evidence": "src/spicy_regs/pipelines/house_disclosures.py"
+    },
+    "senate-disclosures": {
+      "sources": [
+        "senate-disclosures"
+      ],
+      "transformation": "Retains complete declared-year Senate eFD Periodic Transaction Report listings, parsed electronic transaction rows with exact printed dollar bounds, explicit unsupported paper observations, and candidate amendment links.",
+      "evidence": "src/spicy_regs/pipelines/senate_disclosures.py"
     },
     "executive-disclosures": {
       "sources": [

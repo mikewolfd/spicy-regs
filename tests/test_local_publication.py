@@ -520,6 +520,24 @@ def test_cms_drug_spending_families_are_registered_and_dry_run_accepted(tmp_path
     assert receipt["artifactDigest"] == "sha256:" + digest
 
 
+@pytest.mark.parametrize(
+    ("family", "expected_tables"),
+    [
+        ("crs-report-files", {"crs_report_files"}),
+        ("senate-disclosures", {"senate_disclosure_reports", "senate_disclosure_transactions"}),
+    ],
+)
+def test_crs_report_files_and_senate_disclosures_registered_in_local_families(family, expected_tables):
+    assert family in command.LOCAL_FAMILIES
+    schemas = command._family_schemas(family)
+    assert schemas is not None and set(schemas) == expected_tables
+    explorer_sources = json.loads(
+        (Path(__file__).resolve().parents[1] / "src/spicy_regs/explorer_sources.json").read_text()
+    )
+    assert family in explorer_sources["families"]
+    assert all(src in explorer_sources["sources"] for src in explorer_sources["families"][family]["sources"])
+
+
 def test_dry_run_refuses_before_writing_when_projected_free_space_falls_below_40_gib(tmp_path, monkeypatch):
     """Upfront 40 GiB floor refuses before creating parent dirs or .dry-run-store-* scratch."""
     directory, _, evidence = generation(tmp_path, "guarded", {"irs990_filings": ["a", "b"]})
