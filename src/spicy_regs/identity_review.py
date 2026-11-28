@@ -748,9 +748,21 @@ def render_person_batch_sheet(
         else:
             dec_cell = f"**{_cell(dec.get('answer'))}** ({_cell(dec.get('date'))}, {_cell(dec.get('channel'))})"
 
+        hearing_date = item.get("hearing_date")
+        if hearing_date:
+            hearing_label = str(hearing_date)
+        elif item.get("hearing_congress") is not None:
+            win = item.get("hearing_year_window")
+            if isinstance(win, list | tuple) and len(win) == 2:
+                hearing_label = f"undated (Cong. {item['hearing_congress']}: {win[0]}–{win[1]})"
+            else:
+                hearing_label = f"undated (Cong. {item['hearing_congress']})"
+        else:
+            hearing_label = "undated"
+
         ct_desc = (
             f"`{_cell(item['witness_key'])}` — {_cell(item['stated_name'])} "
-            f"({_cell(item['stated_org'])}; hearing: {_cell(item.get('hearing_date') or 'undated')}; "
+            f"({_cell(item['stated_org'])}; hearing: {_cell(hearing_label)}; "
             f"source: `{_cell(item.get('source'))}`, `{_cell(item.get('page_or_offset'))}`)"
         )
         years = item.get("lda_filing_years") or []
@@ -761,13 +773,21 @@ def render_person_batch_sheet(
             f"years: {year_span}, filings: {item.get('lda_filing_count', 0)})"
         )
         gap_val = item.get("min_abs_days_gap")
-        gap_str = f"{gap_val}d" if gap_val is not None else "n/a"
+        gap_years = item.get("temporal_gap_years")
+        if gap_val is not None:
+            gap_str = f"{gap_val}d"
+        elif gap_years is not None:
+            gap_str = f"{gap_years}y"
+        else:
+            gap_str = "n/a"
         overlap_desc = (
             f"`{_cell(item.get('date_overlap_status'))}` "
             f"(score={item.get('date_overlap_score')}, gap={gap_str})"
         )
+        corrob = item.get("undated_corroboration") or []
+        corrob_suffix = f", corrob=`{_cell('+'.join(str(c) for c in corrob))}`" if corrob else ""
         guards_desc = (
-            f"mid=`{_cell(item.get('middle_guard'))}`, suf=`{_cell(item.get('suffix_guard'))}`"
+            f"mid=`{_cell(item.get('middle_guard'))}`, suf=`{_cell(item.get('suffix_guard'))}`{corrob_suffix}"
         )
         kind_label = "**PLANTED WRONG CONTROL**" if item.get("is_planted_control") else "real"
         lines.append(

@@ -27,16 +27,30 @@ from spicy_regs.pipelines.rollups.person_identity_decisions import (
     verify_decisions_parquet,
 )
 from spicy_regs.transforms.person_identity_candidates import (
+    DISPOSITION_MANUAL_REVIEW_QUARANTINE,
+    DISPOSITION_QUALIFIED,
     HYPHEN_POLICY,
+    QUARANTINE_INITIAL_ONLY_FIRST_NAME,
+    QUARANTINE_NO_LDA_DATES,
+    QUARANTINE_TEMPORAL_GAP_EXCEEDS_5Y,
+    QUARANTINE_UNDATED_UNCORROBORATED,
     build_precision_read_batch,
+    check_first_name_guard,
     check_middle_initial_guard,
     check_suffix_guard,
     compute_date_overlap,
+    compute_temporal_gap_years,
+    congress_year_window,
+    extract_hearing_congress,
+    is_auto_publish_qualified,
+    is_eponymous_firm_match,
     match_lda_witness_candidates,
     normalize_lda_lobbyist_name,
     normalize_organization,
     normalize_person_name,
+    partition_lda_witness_candidates,
     query_prefiltered_lda_rows,
+    require_auto_publish_qualified,
 )
 
 
@@ -849,3 +863,407 @@ def test_duckdb_sql_prefilter_handles_honorifics_parentheticals_credentials_and_
     assert {r["lobbyist_id"] for r in filtered} == {"101", "102", "103", "104"}
     cands, _ = match_lda_witness_candidates(witnesses, filtered)
     assert {c["witness_key"] for c in cands} == {"w_soren", "w_jose", "w_pat", "w_major"}
+
+
+# ---------------------------------------------------------------------------
+# Blind Neon audit precision guardrails (ss-39zl tightening)
+# ---------------------------------------------------------------------------
+
+
+def _mk_witness(
+    witness_key: str,
+    name: str,
+    organization: str,
+    *,
+    hearing_date: date | None = date(2024, 5, 10),
+    hearing_congress: int | None = None,
+    package_id: str | None = None,
+    source: str = "mods",
+) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "witness_key": witness_key,
+        "source": source,
+        "record_sha": bytes.fromhex("33" * 32),
+        "source_locator": f"{source}:witness[1]",
+        "name": name,
+        "organization": organization,
+        "witness_type": "Non-Governmental",
+        "bioguide_id": None,
+        "matched_bioguide_id": None,
+        "superseded_by": None,
+        "hearing_date": hearing_date,
+        "package_id": package_id,
+    }
+    if hearing_congress is not None:
+        row["hearing_congress"] = hearing_congress
+    return row
+
+
+def _mk_lda(
+    lobbyist_id: str,
+    first_name: str,
+    last_name: str,
+    registrant_name: str,
+    *,
+    middle_name: str | None = None,
+    suffix: str | None = None,
+    prefix: str | None = None,
+    client_name: str | None = None,
+    filing_year: int | None = 2024,
+    filing_period: str = "second_quarter",
+    filing_uuid: str = "uuid-g",
+) -> dict[str, Any]:
+    return {
+        "filing_uuid": f"{filing_uuid}-{lobbyist_id}-{filing_year}",
+        "lobbyist_id": lobbyist_id,
+        "prefix": prefix,
+        "first_name": first_name,
+        "middle_name": middle_name,
+        "last_name": last_name,
+        "suffix": suffix,
+        "covered_position": None,
+        "filing_year": filing_year,
+        "filing_period": filing_period,
+        "registrant_name": registrant_name,
+        "client_name": client_name if client_name is not None else registrant_name,
+    }
+
+
+def test_guardrail_1_rejects_initial_only_first_names_and_allows_two_letter_names():
+    # Direct helper checks on both CT witness and LDA sides.
+    assert check_first_name_guard("j", {"j"}) == (False, "quarantine_both_initial_only")
+    assert check_first_name_guard("j", {"david"}) == (False, "quarantine_witness_initial_only")
+    assert check_first_name_guard("david", {"j"}) == (False, "quarantine_lda_initial_only")
+    assert check_first_name_guard("al", {"al"}) == (True, "both_full")
+
+    witnesses = [
+        # Pair #37 shape: initial-only first name AND 17-year gap.
+        _mk_witness(
+            "w_j_grossman",
+            "J. Grossman",
+            "Consumer Technology Association",
+            hearing_date=date(2026, 6, 4),
+            source="congress_gov",
+        ),
+        # Initial-only with honorific and zero temporal gap (still quarantined by Guardrail 1 alone!).
+        _mk_witness(
+            "w_dr_j",
+            "Dr. J. Grossman",
+            "Consumer Technology Association",
+            hearing_date=date(2008, 6, 4),
+        ),
+        # Surname-first initial-only ("Grossman, J.").
+        _mk_witness(
+            "w_sf_j",
+            "Grossman, J.",
+            "Consumer Technology Association",
+            hearing_date=date(2008, 6, 4),
+        ),
+        # Leading initial followed by middle name ("H. Frederick Dylla").
+        _mk_witness(
+            "w_h_dylla",
+            "H. Frederick Dylla",
+            "American Institute of Physics",
+            hearing_date=date(2008, 5, 1),
+        ),
+        # Genuine 2-letter first name ("Al Gore", "Ed Markey") MUST pass.
+        _mk_witness(
+            "w_al",
+            "Al Example",
+            "Clean Grid Association",
+            hearing_date=date(2024, 5, 1),
+        ),
+    ]
+    lda_rows = [
+        _mk_lda("7816", "J", "GROSSMAN", "CONSUMER TECHNOLOGY ASSOCIATION", middle_name="DAVID", filing_year=2006),
+        _mk_lda("7816", "J", "GROSSMAN", "CONSUMER TECHNOLOGY ASSOCIATION", middle_name="DAVID", filing_year=2009),
+        _mk_lda("7817", "H FREDERICK", "DYLLA", "AMERICAN INSTITUTE OF PHYSICS", prefix="mr", filing_year=2008),
+        _mk_lda("7818", "AL", "EXAMPLE", "CLEAN GRID ASSOCIATION", filing_year=2024),
+    ]
+
+    qualified, quarantined, stats = partition_lda_witness_candidates(
+        witnesses,
+        lda_rows,
+        ct_release_id="453351a3" + "0" * 56,
+        lobbying_generation_digest="sha256:" + "a" * 64,
+    )
+    assert [c["witness_key"] for c in qualified] == ["w_al"]
+    assert is_auto_publish_qualified(qualified[0]) is True
+    require_auto_publish_qualified(qualified[0])
+
+    by_wk = {c["witness_key"]: c for c in quarantined}
+    assert set(by_wk) == {"w_j_grossman", "w_dr_j", "w_sf_j", "w_h_dylla"}
+
+    # #37 triggers BOTH Guardrail 1 (initial-only first name) AND Guardrail 2 (17y gap).
+    j_grossman = by_wk["w_j_grossman"]
+    assert j_grossman["auto_publish_disposition"] == DISPOSITION_MANUAL_REVIEW_QUARANTINE
+    assert j_grossman["quarantine_reasons"] == [
+        QUARANTINE_INITIAL_ONLY_FIRST_NAME,
+        QUARANTINE_TEMPORAL_GAP_EXCEEDS_5Y,
+    ]
+    assert j_grossman["temporal_gap_years"] == 17
+    assert is_auto_publish_qualified(j_grossman) is False
+
+    # Same-year initial-only cases still fail Guardrail 1 alone.
+    for wk in ("w_dr_j", "w_sf_j", "w_h_dylla"):
+        assert by_wk[wk]["quarantine_reasons"] == [QUARANTINE_INITIAL_ONLY_FIRST_NAME]
+        assert by_wk[wk]["auto_publish_disposition"] == DISPOSITION_MANUAL_REVIEW_QUARANTINE
+
+    assert stats["quarantined_total"] == 4
+    assert stats[f"quarantined_{QUARANTINE_INITIAL_ONLY_FIRST_NAME}"] == 4
+    assert stats[f"quarantined_{QUARANTINE_TEMPORAL_GAP_EXCEEDS_5Y}"] == 1
+    assert stats["quarantined_multiple_reasons"] == 1
+
+    # Quarantined pair retains valid content-only digest invariant across release_id, is refused for
+    # auto-publish / batch inclusion, and can still enter manual identity_review adjudication.
+    with pytest.raises(ValueError, match="refused for auto-publish"):
+        require_auto_publish_qualified(j_grossman)
+    with pytest.raises(ValueError, match="refused for auto-publish"):
+        build_precision_read_batch([qualified[0], j_grossman], total_pairs=2, planted_wrong_count=1)
+    j_grossman_r2 = {**j_grossman, "release_id": "f" * 64, "source_generation_digest": "sha256:" + "f" * 64}
+    assert j_grossman["content_digest"] == person_candidate_digest(j_grossman) == person_candidate_digest(j_grossman_r2)
+    replayed = replay([], [j_grossman])[0]
+    assert replayed["status"] == "pending" and replayed["in_review_queue"] is True
+
+    # match_lda_witness_candidates preserves backward-compatible (qualified, stats) return and populates quarantined_out.
+    q_out: list[dict[str, Any]] = []
+    matched, matched_stats = match_lda_witness_candidates(witnesses, lda_rows, quarantined_out=q_out)
+    assert [c["witness_key"] for c in matched] == ["w_al"]
+    assert {c["witness_key"] for c in q_out} == set(by_wk)
+    assert matched_stats["quarantined_total"] == 4
+
+
+def test_guardrail_2_temporal_gap_cap_at_5_years():
+    # Direct interval gap math checks.
+    assert compute_temporal_gap_years((2024, 2024), [2019, 2020]) == 4
+    assert compute_temporal_gap_years((2024, 2024), [2019]) == 5
+    assert compute_temporal_gap_years((2014, 2014), [2019]) == 5
+    assert compute_temporal_gap_years((2024, 2024), [2018]) == 6
+    assert compute_temporal_gap_years((2014, 2014), [2007, 2008]) == 6
+    assert compute_temporal_gap_years((2024, 2024), [2015, 2016]) == 8
+    assert compute_temporal_gap_years((2026, 2026), [2006, 2009]) == 17
+    assert compute_temporal_gap_years((2019, 2019), [2013, 2024]) == 0
+    assert compute_temporal_gap_years((2024, 2024), []) is None
+
+    witnesses = [
+        # 3-year gap (even > 1095d like #47 Anthony F. Earley Jr.): ACCEPTED.
+        _mk_witness("w_3y", "Anthony F. Earley Jr.", "DTE Energy", hearing_date=date(2011, 4, 15)),
+        # Exact 5-year gap (hearing after LDA): ACCEPTED.
+        _mk_witness("w_5y_after", "Taylor FiveAfter", "Policy Forum", hearing_date=date(2024, 9, 1)),
+        # Exact 5-year gap (hearing before LDA): ACCEPTED.
+        _mk_witness("w_5y_before", "Morgan FiveBefore", "Policy Forum", hearing_date=date(2014, 2, 1)),
+        # 6-year gap (#25 / #50 boundary): QUARANTINED.
+        _mk_witness("w_6y", "Dean Brenner", "Qualcomm Incorporated", hearing_date=date(2013, 6, 27)),
+        # 6-year gap (hearing before LDA): QUARANTINED.
+        _mk_witness("w_6y_before", "Casey SixBefore", "Policy Forum", hearing_date=date(2013, 1, 15)),
+        # 8-year gap (#17 Emily Martin): QUARANTINED.
+        _mk_witness("w_8y", "Emily Martin", "National Women's Law Center, Washington, DC", hearing_date=date(2024, 7, 23)),
+        # 17-year gap with full first name: QUARANTINED by Guardrail 2 only.
+        _mk_witness("w_17y", "Jordan Seventeen", "Policy Forum", hearing_date=date(2026, 6, 4)),
+        # Missing LDA filing years: QUARANTINED fail-closed.
+        _mk_witness("w_no_lda_yr", "Robin NoYears", "Policy Forum", hearing_date=date(2024, 5, 1)),
+    ]
+    lda_rows = [
+        _mk_lda("41428", "ANTHONY", "EARLEY", "DTE ENERGY", suffix="jr", filing_year=2008),
+        _mk_lda("5001", "TAYLOR", "FIVEAFTER", "POLICY FORUM", filing_year=2019),
+        _mk_lda("5002", "MORGAN", "FIVEBEFORE", "POLICY FORUM", filing_year=2019),
+        _mk_lda("17271", "DEAN", "BRENNER", "QUALCOMM, INCORPORATED", filing_year=2004),
+        _mk_lda("17271", "DEAN", "BRENNER", "QUALCOMM, INCORPORATED", filing_year=2007),
+        _mk_lda("5003", "CASEY", "SIXBEFORE", "POLICY FORUM", filing_year=2019),
+        _mk_lda("62416", "EMILY", "MARTIN", "NATIONAL WOMEN'S LAW CENTER", filing_year=2015),
+        _mk_lda("62416", "EMILY", "MARTIN", "NATIONAL WOMEN'S LAW CENTER", filing_year=2016),
+        _mk_lda("5004", "JORDAN", "SEVENTEEN", "POLICY FORUM", filing_year=2009),
+        _mk_lda("5005", "ROBIN", "NOYEARS", "POLICY FORUM", filing_year=None),
+    ]
+
+    qualified, quarantined, stats = partition_lda_witness_candidates(witnesses, lda_rows)
+    assert {c["witness_key"] for c in qualified} == {"w_3y", "w_5y_after", "w_5y_before"}
+    q_by_wk = {c["witness_key"]: c for c in quarantined}
+    assert set(q_by_wk) == {"w_6y", "w_6y_before", "w_8y", "w_17y", "w_no_lda_yr"}
+    assert q_by_wk["w_6y"]["temporal_gap_years"] == 6
+    assert q_by_wk["w_6y_before"]["temporal_gap_years"] == 6
+    assert q_by_wk["w_8y"]["temporal_gap_years"] == 8
+    assert q_by_wk["w_17y"]["temporal_gap_years"] == 17
+    for wk in ("w_6y", "w_6y_before", "w_8y", "w_17y"):
+        assert q_by_wk[wk]["quarantine_reasons"] == [QUARANTINE_TEMPORAL_GAP_EXCEEDS_5Y]
+    assert q_by_wk["w_no_lda_yr"]["quarantine_reasons"] == [QUARANTINE_NO_LDA_DATES]
+    assert stats[f"quarantined_{QUARANTINE_TEMPORAL_GAP_EXCEEDS_5Y}"] == 4
+    assert stats[f"quarantined_{QUARANTINE_NO_LDA_DATES}"] == 1
+
+
+def test_guardrail_3_undated_congress_window_and_unbounded_corroboration():
+    # Congress window conversion and metadata extraction checks.
+    assert congress_year_window(107) == (2001, 2002)
+    assert congress_year_window(116) == (2019, 2020)
+    assert congress_year_window(119) == (2025, 2026)
+    assert extract_hearing_congress({"hearing_congress": 116}) == 116
+    assert extract_hearing_congress({"congress": "118"}) == 118
+    assert extract_hearing_congress({"package_id": "CHRG-107shrg87708"}) == 107
+    assert extract_hearing_congress({"package_id": None}) is None
+    assert extract_hearing_congress({"hearing_congress": True}) is None
+
+    # Eponymous firm matching checks (registrant firms vs universities/foundations/generic words/client-only).
+    assert is_eponymous_firm_match(("schwartz",), "schwartz ballen llp", matched_roles={"registrant"}) is True
+    assert is_eponymous_firm_match(("greenwood",), "greenwood environmental counsel pllc", matched_roles={"registrant"}) is True
+    assert is_eponymous_firm_match(("holtz", "eakin"), "holtz eakin policy group llc", matched_roles={"registrant"}) is True
+    assert is_eponymous_firm_match(("brown",), "brown university", matched_roles={"client", "registrant"}) is False
+    assert is_eponymous_firm_match(("ford",), "ford foundation", matched_roles={"client", "registrant"}) is False
+    assert is_eponymous_firm_match(("law",), "national law center", matched_roles={"registrant"}) is False
+    assert is_eponymous_firm_match(("schwartz",), "schwartz ballen llp", matched_roles={"client"}) is False
+    assert is_eponymous_firm_match(("li",), "li associates llc", matched_roles={"registrant"}) is False
+
+    witnesses = [
+        # 1. Undated with CHRG package_id -> 107th Congress (2001-2002), LDA 1999-2001 (gap=0): ACCEPTED.
+        _mk_witness(
+            "w_cong_ok",
+            "Howard Metzenbaum",
+            "Consumer Federation of America",
+            hearing_date=None,
+            package_id="CHRG-107shrg87708",
+        ),
+        # 2. Undated with explicit hearing_congress=107 (2001-2002), LDA 2007 (gap=5): ACCEPTED.
+        _mk_witness(
+            "w_cong_5y",
+            "Dana Boundary",
+            "Civic Forum",
+            hearing_date=None,
+            hearing_congress=107,
+        ),
+        # 3. Undated with hearing_congress=107 (2001-2002), LDA 2008 (gap=6) EVEN WITH matching middle initial: QUARANTINED!
+        _mk_witness(
+            "w_cong_6y",
+            "Andrew J. Imparato",
+            "American Association of People with Disabilities",
+            hearing_date=None,
+            package_id="CHRG-107shrg99999",
+        ),
+        # 4. Completely unbounded undated, corroborated by matching middle initial: ACCEPTED.
+        _mk_witness(
+            "w_unb_mid",
+            "Alan P. Larson",
+            "Covington & Burling LLP",
+            hearing_date=None,
+            source="senate_page",
+        ),
+        # 5. Completely unbounded undated, corroborated by matching multi-letter middle name: ACCEPTED.
+        _mk_witness(
+            "w_unb_midname",
+            "Otto Juan Reich",
+            "Foreign Policy Partners",
+            hearing_date=None,
+            source="senate_page",
+        ),
+        # 6. Completely unbounded undated, corroborated by matching generational suffix: ACCEPTED.
+        _mk_witness(
+            "w_unb_suf",
+            "Ernest Stevens Jr.",
+            "National Indian Gaming Association",
+            hearing_date=None,
+            source="senate_page",
+        ),
+        # 7. Completely unbounded undated, corroborated by eponymous registrant firm: ACCEPTED.
+        _mk_witness(
+            "w_unb_epon",
+            "Gilbert T. Schwartz",
+            "Schwartz & Ballen LLP",
+            hearing_date=None,
+            source="senate_page",
+        ),
+        # 8. Completely unbounded undated at university matching surname (NOT eponymous): QUARANTINED.
+        _mk_witness(
+            "w_unb_univ",
+            "Sarah Brown",
+            "Brown University",
+            hearing_date=None,
+            source="senate_page",
+        ),
+        # 9. Completely unbounded undated without corroboration (#31 James Stansel shape): QUARANTINED.
+        _mk_witness(
+            "w_unb_none",
+            "James Stansel",
+            "Pharmaceutical Research and Manufacturers of America",
+            hearing_date=None,
+            source="senate_page",
+        ),
+    ]
+    lda_rows = [
+        _mk_lda("17653", "HOWARD", "METZENBAUM", "CONSUMER FEDERATION OF AMERICA", filing_year=2001),
+        _mk_lda("6001", "DANA", "BOUNDARY", "CIVIC FORUM", filing_year=2007),
+        _mk_lda(
+            "6002",
+            "ANDREW",
+            "IMPARATO",
+            "AMERICAN ASSOCIATION OF PEOPLE WITH DISABILITIES",
+            middle_name="J",
+            filing_year=2008,
+        ),
+        _mk_lda("6003", "ALAN", "LARSON", "COVINGTON & BURLING LLP", middle_name="P", filing_year=2015),
+        _mk_lda("6004", "OTTO JUAN", "REICH", "FOREIGN POLICY PARTNERS", filing_year=2014),
+        _mk_lda("6005", "ERNEST", "STEVENS", "NATIONAL INDIAN GAMING ASSOCIATION", suffix="JR", filing_year=2018),
+        _mk_lda(
+            "42801",
+            "GILBERT",
+            "SCHWARTZ",
+            "SCHWARTZ & BALLEN LLP",
+            client_name="OTHER CLIENT CORP",
+            filing_year=2007,
+        ),
+        _mk_lda("6006", "SARAH", "BROWN", "BROWN UNIVERSITY", filing_year=2019),
+        _mk_lda(
+            "66469",
+            "JAMES",
+            "STANSEL",
+            "PHARMACEUTICAL RESEARCH AND MANUFACTURERS OF AMERICA",
+            middle_name="C.",
+            filing_year=2019,
+        ),
+    ]
+
+    qualified, quarantined, stats = partition_lda_witness_candidates(witnesses, lda_rows)
+    qual_by_wk = {c["witness_key"]: c for c in qualified}
+    quar_by_wk = {c["witness_key"]: c for c in quarantined}
+
+    assert set(qual_by_wk) == {"w_cong_ok", "w_cong_5y", "w_unb_mid", "w_unb_midname", "w_unb_suf", "w_unb_epon"}
+    assert set(quar_by_wk) == {"w_cong_6y", "w_unb_univ", "w_unb_none"}
+
+    # Verify Congress-window diagnostics.
+    assert qual_by_wk["w_cong_ok"]["temporal_bound_source"] == "congress_window"
+    assert qual_by_wk["w_cong_ok"]["hearing_congress"] == 107
+    assert qual_by_wk["w_cong_ok"]["hearing_year_window"] == [2001, 2002]
+    assert qual_by_wk["w_cong_ok"]["temporal_gap_years"] == 0
+    assert qual_by_wk["w_cong_5y"]["temporal_gap_years"] == 5
+
+    # Congress-bounded >5y gap is quarantined even with matching middle initial.
+    assert quar_by_wk["w_cong_6y"]["temporal_bound_source"] == "congress_window"
+    assert quar_by_wk["w_cong_6y"]["temporal_gap_years"] == 6
+    assert quar_by_wk["w_cong_6y"]["quarantine_reasons"] == [QUARANTINE_TEMPORAL_GAP_EXCEEDS_5Y]
+
+    # Verify unbounded corroboration diagnostics.
+    assert qual_by_wk["w_unb_mid"]["undated_corroboration"] == ["middle_match"]
+    assert qual_by_wk["w_unb_midname"]["undated_corroboration"] == ["middle_match"]
+    assert qual_by_wk["w_unb_suf"]["undated_corroboration"] == ["suffix_match"]
+    assert qual_by_wk["w_unb_epon"]["undated_corroboration"] == ["eponymous_firm"]
+
+    # Verify uncorroborated unbounded quarantines.
+    assert quar_by_wk["w_unb_univ"]["quarantine_reasons"] == [QUARANTINE_UNDATED_UNCORROBORATED]
+    assert quar_by_wk["w_unb_none"]["quarantine_reasons"] == [QUARANTINE_UNDATED_UNCORROBORATED]
+    assert stats["qualified_undated_congress_bounded"] == 2
+    assert stats["qualified_undated_corroborated"] == 4
+    assert stats[f"quarantined_{QUARANTINE_UNDATED_UNCORROBORATED}"] == 2
+
+    # Verify batch-sheet rendering handles Congress-bounded and corroborated undated rows cleanly.
+    batch = build_precision_read_batch(
+        qualified,
+        seed=20261127,
+        total_pairs=5,
+        planted_wrong_count=1,
+        ct_release_id="453351a3" + "0" * 56,
+        lobbying_generation_digest="sha256:" + "a" * 64,
+        stats=stats,
+    )
+    rendered = render_person_batch_sheet(batch)
+    check_person_batch_sheet(batch, rendered)
+    assert "population_quarantined_total" in rendered
+    assert "Cong. 107: 2001–2002" in rendered or "corrob=" in rendered
+    for c in qualified:
+        assert c["auto_publish_disposition"] == DISPOSITION_QUALIFIED
