@@ -86,6 +86,7 @@ TABLES = (
     "oira_reviews",
     "oira_meetings",
     "federal_register",
+    "federal_register_document_bodies",
     # The materialized rulemaking dataset, read through its own snapshot pointer
     # (publication.SNAPSHOT_POINTER), not the publication index.
     "rule_targets",
@@ -1169,6 +1170,7 @@ def _build_connection_inputs(con, publication):
         "sam_opportunity_observations",
         "sam_opportunity_snapshots",
         "executive_order_observations",
+        "federal_register_document_bodies",
         "executive_disclosure_filings",
         "executive_disclosure_facts",
         "executive_disclosure_pages",
@@ -2923,7 +2925,15 @@ def _tools() -> list[Tool]:
                         elif name == 'prepare_comment':
                             requested_token = _requested_relations.set({'dockets', 'documents', 'document_attributes'})
                         elif name == 'get_rule_text':
-                            requested_token = _requested_relations.set({'documents', 'federal_register', 'document_attributes'})
+                            requested_token = _requested_relations.set(
+                                {
+                                    'documents',
+                                    'federal_register',
+                                    'document_attributes',
+                                    'federal_register_document_bodies',
+                                    'executive_order_observations',
+                                }
+                            )
                         return _run_observed_tool(fn, arguments)
                 finally:
                     if requested_token is not None:

@@ -633,6 +633,7 @@ TABLES: tuple[str, ...] = (
     "sam_opportunity_observations",
     "sam_opportunity_snapshots",
     "executive_order_observations",
+    "federal_register_document_bodies",
     "executive_disclosure_filings",
     "executive_disclosure_facts",
     "executive_disclosure_pages",
@@ -805,6 +806,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "sam_opportunity_observations",
         "sam_opportunity_snapshots",
         "executive_order_observations",
+    "federal_register_document_bodies",
         "executive_disclosure_filings",
         "executive_disclosure_facts",
         "executive_disclosure_pages",
@@ -1089,6 +1091,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.pipelines.white_house import TABLE as WHITE_HOUSE_TABLE, SCHEMA as WHITE_HOUSE_SCHEMA
     from spicy_regs.transforms.build_sam_sources import SCHEMAS as SAM_SOURCE_SCHEMAS
     from spicy_regs.transforms.build_executive_orders import SCHEMA as EXECUTIVE_ORDER_SCHEMA
+    from spicy_regs.transforms.build_federal_register_bodies import SCHEMA as FEDERAL_REGISTER_BODIES_SCHEMA
     from spicy_regs.transforms.build_executive_disclosures import SCHEMAS as EXECUTIVE_DISCLOSURE_SCHEMAS
     from spicy_regs.schemas.house_disbursements import SCHEMAS as HOUSE_DISBURSEMENT_SCHEMAS
     from spicy_regs.schemas.senate_disclosures import SCHEMAS as SENATE_DISCLOSURE_SCHEMAS
@@ -1233,6 +1236,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         WHITE_HOUSE_TABLE: WHITE_HOUSE_SCHEMA,
         **SAM_SOURCE_SCHEMAS,
         "executive_order_observations": EXECUTIVE_ORDER_SCHEMA,
+        "federal_register_document_bodies": FEDERAL_REGISTER_BODIES_SCHEMA,
         **EXECUTIVE_DISCLOSURE_SCHEMAS,
         **HOUSE_DISBURSEMENT_SCHEMAS,
         **SENATE_DISCLOSURE_SCHEMAS,

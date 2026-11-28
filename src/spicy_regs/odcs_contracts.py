@@ -231,6 +231,7 @@ FAMILY_TABLES: dict[str, tuple[str, ...]] = {
     ),
     "fec-source-catalog": ("fec_source_catalog",),
     "federal-register": ("federal_register",),
+    "federal-register-bodies": ("federal_register_document_bodies",),
     "feed-summary": ("feed_summary",),
     "fjc-judicial-careers": ("fjc_appointments", "fjc_courts", "fjc_judges", "fjc_service_terms", "fjc_snapshots"),
     "foreign-assistance": ("foreign_assistance_observations", "foreign_assistance_snapshots"),
@@ -437,6 +438,7 @@ FAMILY_DOMAIN_ASSIGNMENTS: dict[str, tuple[str, tuple[str, ...]]] = {
     "fec-research-profiles": ("spicygov", ("SpicyEntities",)),
     "fec-source-catalog": ("spicygov", ()),
     "federal-register": ("spicygov", ("RefSpec",)),
+    "federal-register-bodies": ("spicygov", ("RefSpec",)),
     "feed-summary": ("spicygov", ()),
     "fjc-judicial-careers": ("spicygov", ("SpicyEntities",)),
     "foreign-assistance": ("spicygov", ()),
@@ -856,7 +858,9 @@ def resolve_refspec_mapping(
             documented,
         )
     if column_name == "document_number" and (
-        table_name in ("federal_register", "fr_docket_links", "executive_order_observations") or subject == "rulemaking"
+        table_name
+        in ("federal_register", "federal_register_document_bodies", "fr_docket_links", "executive_order_observations")
+        or subject == "rulemaking"
     ):
         return (
             RefSpecMapping(

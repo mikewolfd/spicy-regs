@@ -1,0 +1,47 @@
+name: Rollup — federal_register_document_bodies
+# Weekdays at 21:37 UTC, after rollup-federal-register.yml (21:00 UTC) refreshes federal_register.parquet.
+# Acquires official XML (with bounded GovInfo HTML fallback) for EO 12866 significant Rules and Proposed Rules
+# published from 2021-01-01 on, carrying forward previously acquired bodies without re-fetching. Use max_new
+# (e.g. 1000) for resumable multi-batch bootstrap dispatches; daily runs acquire only new significant rules and
+# exit green (Unchanged) on quiet days.
+on:
+  schedule:
+    - cron: '37 21 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      max_new:
+        description: 'Optional cap on newly attempted documents this run (e.g. 1000 for resumable bootstrap batches; blank acquires all remaining)'
+        required: false
+        default: ''
+        type: string
+      since:
+        description: 'Optional publication-date floor (YYYY-MM-DD); blank uses 2021-01-01'
+        required: false
+        default: ''
+        type: string
+      retry_failed:
+        description: 'Re-attempt previously refused rows'
+        required: false
+        default: false
+        type: boolean
+      skip_upload:
+        description: 'Skip R2 upload (dry run)'
+        required: false
+        default: false
+        type: boolean
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  run:
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-federal-register-bodies
+      producer_ref: main
+      skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      fr_bodies_max_new: ${{ inputs.max_new || '' }}
+      fr_bodies_since: ${{ inputs.since || '' }}
+      fr_bodies_retry_failed: ${{ inputs.retry_failed || false }}
+      timeout_minutes: 45

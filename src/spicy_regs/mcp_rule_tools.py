@@ -46,6 +46,7 @@ RULE_TEXT_MAX_REDIRECTS = 5
 RULE_TYPE_PRIORITY = ("Proposed Rule", "Rule", "Interim Final Rule", "Direct Final Rule")
 
 _SECTION_HEADING = re.compile(r"^(?:Sec\.|§+)\s+(\d+[A-Za-z]?\.\d+[A-Za-z0-9-]*)\s+(\S.*)$")
+_SECTION_MARKER_ONLY = re.compile(r"^(?:Sec\.|§+)\s+(\d+[A-Za-z]?\.\d+[A-Za-z0-9-]*)$")
 _PART_HEADING = re.compile(r"^PART\s+(\d+[A-Za-z]?)\s*(?:--|\u2014|\u2013)\s*(.*)$")
 _PAGE_MARKER = re.compile(r"^\s*\[\[Page \d+\]\]\s*$")
 _SECTION_ARG = re.compile(r"^(?:§+|sec(?:tion)?\.?)?\s*(\d+[A-Za-z]?\.\d+[A-Za-z0-9-]*)$", re.IGNORECASE)
@@ -554,29 +555,37 @@ def _fetch_rule_text_with_source(
 
 def _rule_structure(text: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     lines = text.splitlines()
+    has_blank_paragraphs = "\n\n" in text
     parts: list[dict[str, Any]] = []
     sections: list[dict[str, Any]] = []
     current_part: str | None = None
     for i, line in enumerate(lines):
-        if i > 0 and lines[i - 1].strip():
+        if has_blank_paragraphs and i > 0 and lines[i - 1].strip():
             continue
         following = lines[i + 1].strip() if i + 1 < len(lines) else ""
         part = _PART_HEADING.match(line)
         if part:
             current_part = part.group(1)
             title = part.group(2).strip()
-            if following and following.isupper():
+            if has_blank_paragraphs and following and following.isupper():
                 title = f"{title} {following}"
             parts.append({"part": current_part, "title": " ".join(title.split()), "line": i})
             continue
         section = _SECTION_HEADING.match(line)
         if section:
             title = section.group(2).strip()
-            if following and not title.endswith("."):
+            if has_blank_paragraphs and following and not title.endswith("."):
                 title = f"{title} {following}"
             sections.append(
                 {"section": section.group(1), "title": " ".join(title.split()), "part": current_part, "line": i}
             )
+            continue
+        if not has_blank_paragraphs:
+            marker = _SECTION_MARKER_ONLY.match(line.strip())
+            if marker and following:
+                sections.append(
+                    {"section": marker.group(1), "title": " ".join(following.split()), "part": current_part, "line": i}
+                )
     return parts, sections
 
 
@@ -594,7 +603,7 @@ def _slice_lines(text: str, start: int, stops: list[int], stop_at_instructions: 
 
 def _labeled_paragraph(text: str, label: str) -> str | None:
     match = re.search(
-        rf"^{re.escape(label)}:[ \t]*(?:\n+[ \t]*)?(.*?)(?:\n\s*\n|\Z)",
+        rf"^{re.escape(label)}:[ \t]*(?:\n+[ \t]*)?(.*?)(?:\n\s*\n|\n[A-Z][A-Z ]+:|\Z)",
         text,
         re.MULTILINE | re.DOTALL,
     )
@@ -604,6 +613,53 @@ def _labeled_paragraph(text: str, label: str) -> str | None:
     if not value or re.match(r"^[A-Z][A-Z ]+:$", value):
         return None
     return value[:1500]
+
+
+def _lookup_offline_body(
+    cursor: duckdb.DuckDBPyConnection,
+    document_number: str,
+    publication_date: str,
+    document_type: str | None,
+) -> tuple[str, str | None, str | None, str | None] | None:
+    """Return ``(body_text, body_url, body_sha256, text_sha256)`` from local/R2 offline body tables when acquired."""
+    candidates = (
+        ("executive_order_observations", "federal_register_document_bodies")
+        if document_type == "Presidential Document"
+        else ("federal_register_document_bodies", "executive_order_observations")
+    )
+    for relation in candidates:
+        checkpoint()
+        if not _has_relation(cursor, relation):
+            continue
+        cols = _relation_columns(cursor, relation)
+        if not {"document_number", "publication_date", "body_status", "body_text"} <= set(cols):
+            continue
+        doc_col = _qident(cols["document_number"])
+        date_col = _qident(cols["publication_date"])
+        status_col = _qident(cols["body_status"])
+        text_col = _qident(cols["body_text"])
+        url_col = _qident(cols["body_url"]) if "body_url" in cols else "NULL"
+        body_sha_col = _qident(cols["body_sha256"]) if "body_sha256" in cols else "NULL"
+        text_sha_col = _qident(cols["text_sha256"]) if "text_sha256" in cols else "NULL"
+        row = cursor.execute(
+            f"SELECT {text_col}, {url_col}, {body_sha_col}, {text_sha_col} "
+            f"FROM {_qident(relation)} "
+            f"WHERE {doc_col} = ? "
+            f"  AND TRY_CAST({date_col} AS DATE) = CAST(? AS DATE) "
+            f"  AND {status_col} = 'acquired' "
+            f"  AND {text_col} IS NOT NULL "
+            f"  AND trim({text_col}) <> '' "
+            "LIMIT 1",
+            [document_number, publication_date],
+        ).fetchone()
+        if row is not None and isinstance(row[0], str) and row[0].strip():
+            return (
+                row[0],
+                str(row[1]) if isinstance(row[1], str) and row[1].strip() else None,
+                str(row[2]) if isinstance(row[2], str) and row[2].strip() else None,
+                str(row[3]) if isinstance(row[3], str) and row[3].strip() else None,
+            )
+    return None
 
 
 def _page_of(text: str, offset: int, max_chars: int) -> dict[str, Any]:
@@ -817,22 +873,43 @@ def get_rule_text(
         result["other_notices_in_docket"] = others
 
     checkpoint()
+    offline_body_sha256: str | None = None
+    offline_text_sha256: str | None = None
+    source_mode: str | None = None
     try:
         if fetch is not None:
             text = fetch(str(fr_number), published)
             source_url = govinfo_url
             source_fallback: str | None = None
         else:
-            text, source_url, source_fallback = _fetch_rule_text_with_source(
+            offline = _lookup_offline_body(
+                cursor,
                 str(fr_number),
                 published,
-                body_html_url if isinstance(body_html_url, str) else None,
+                str(doc_type) if doc_type is not None else None,
             )
+            if offline is not None:
+                text, offline_url, offline_body_sha256, offline_text_sha256 = offline
+                source_url = offline_url or govinfo_url
+                source_fallback = None
+                source_mode = "offline_table"
+            else:
+                text, source_url, source_fallback = _fetch_rule_text_with_source(
+                    str(fr_number),
+                    published,
+                    body_html_url if isinstance(body_html_url, str) else None,
+                )
     except (RuleTextError, httpx.HTTPError) as exc:
         result["error"] = f"Could not fetch the text from govinfo: {exc}. Read it at federal_register_url."
         return result
 
     result["source"] = source_url
+    if source_mode is not None:
+        result["source_mode"] = source_mode
+    if offline_body_sha256 is not None:
+        result["body_sha256"] = offline_body_sha256
+    if offline_text_sha256 is not None:
+        result["text_sha256"] = offline_text_sha256
     if source_fallback is not None:
         result["source_fallback"] = source_fallback
 
