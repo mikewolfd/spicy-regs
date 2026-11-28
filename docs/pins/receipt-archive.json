@@ -231,5 +231,11 @@
    "publishedAt": "2026-10-14T02:17:42Z",
    "receipts": "generations/uscode-editions/792cbaa7f8ea134201736db8e98ed9a5630408ab8465164fb894cc44147dd5b0/etl_receipts.parquet"
   }
+ },
+ "never_published_with_receipts": {
+  "court_opinion_texts": {
+   "family": "court-opinion-texts",
+   "reason": "Receipts retired in courts/2 prior to initial R2 publication (ss-bb8c); no receipted R2 generation exists to archive."
+  }
  }
 }

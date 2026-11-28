@@ -29,7 +29,33 @@ def _document(archives):
 
 def test_every_retired_table_has_an_archive_pin_and_every_pin_a_retired_table():
     subject_catalog.retired_receipt_datasets.cache_clear()
-    assert set(retention.receipt_archive_pins()) == subject_catalog.retired_receipt_datasets()
+    pins = retention.receipt_archive_pins()
+    never = retention.receipt_archive_never_published()
+    assert set(pins).isdisjoint(never)
+    assert set(pins) | set(never) == subject_catalog.retired_receipt_datasets()
+
+
+def test_never_published_with_receipts_refuses_overlap_or_blank_reason():
+    overlap = json.dumps({
+        "format": retention.RECEIPT_ARCHIVE_FORMAT,
+        "version": 1,
+        "archives": {"federal_register": _pin()},
+        "never_published_with_receipts": {
+            "federal_register": {"family": "federal-register", "reason": "duplicate"},
+        },
+    }).encode()
+    with pytest.raises(ValueError, match="both archives"):
+        retention.receipt_archive_never_published(overlap)
+    blank = json.dumps({
+        "format": retention.RECEIPT_ARCHIVE_FORMAT,
+        "version": 1,
+        "archives": {},
+        "never_published_with_receipts": {
+            "court_opinion_texts": {"family": "court-opinion-texts", "reason": "   "},
+        },
+    }).encode()
+    with pytest.raises(ValueError, match="Invalid never_published_with_receipts"):
+        retention.receipt_archive_never_published(blank)
 
 
 #: Each pinned generation's own root (artifact.json, gzipped, fetched once from the public bucket when it was pinned).

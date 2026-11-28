@@ -248,6 +248,8 @@ SUBJECT_SCHEMAS = {
     # One opinion's body as Markdown (CommonMark + GFM tables + footnotes; citations as ``[text](opinion:ID)``),
     # converted by spicy_docs.sources.courtlistener.opinion_markdown from the first filled rendering; NULL when the
     # export holds none (text_source 'none'). opinion_block (opinion_id // 150000, decimal text) names the member.
+    # Receipts retired (ss-vse3 / ss-bb8c): source_column, source_text_sha256 (per-rendering digest), dump_date, and
+    # source_sha256 (export file digest, matching court_opinions) are stored directly as columns.
     'court_opinion_texts': pa.schema([
         ('opinion_id', pa.string()),
         ('cluster_id', pa.string()),
@@ -256,6 +258,10 @@ SUBJECT_SCHEMAS = {
         ('text_source', pa.string()),
         ('markdown', pa.string()),
         ('converter_version', pa.string()),
+        ('source_column', pa.string()),
+        ('source_text_sha256', pa.string()),
+        ('dump_date', pa.string()),
+        ('source_sha256', pa.string()),
     ]),
     'court_parentheticals': pa.schema([
         ('parenthetical_id', pa.string()),
@@ -279,7 +285,7 @@ POLICY_VERSIONS = {
     'court_opinion_clusters': 'courts/2',
     'court_opinion_pdf_extractions': 'courts/2',
     'court_opinions': 'courts/3',
-    'court_opinion_texts': 'courts/1',
+    'court_opinion_texts': 'courts/2',
     'court_parentheticals': 'courts/2',
 }
 
@@ -303,9 +309,7 @@ RECEIPT_FIELDS = {
     'court_opinion_clusters': ('conversion_inputs', 'raw_source_record', 'source_observation'),
     'court_opinion_pdf_extractions': ('conversion_inputs', 'raw_source_record', 'source_observation'),
     'court_opinions': ('conversion_inputs', 'raw_source_record', 'source_observation'),
-    # A pointer to the converted value, never a copy of it: the export is the receipt's witness, the identity the
-    # opinion id, source_column the rendering converted and source_sha256 that rendering's digest (owner, 2026-10-31).
-    'court_opinion_texts': ('source_column', 'source_sha256', 'dump_date', 'conversion_inputs', 'raw_source_record', 'source_observation'),
+    'court_opinion_texts': ('conversion_inputs', 'raw_source_record', 'source_observation'),
     'court_parentheticals': ('conversion_inputs', 'raw_source_record', 'source_observation'),
 }
 

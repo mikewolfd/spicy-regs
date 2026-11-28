@@ -159,6 +159,27 @@ def receipt_archive_pins(raw: bytes | None = None) -> dict[str, dict]:
     return pins
 
 
+def receipt_archive_never_published(raw: bytes | None = None) -> dict[str, dict]:
+    """Retired datasets whose receipts were retired before any R2 publication existed to archive."""
+    document = json.loads(RECEIPT_ARCHIVE.read_bytes() if raw is None else raw)
+    if document.get("format") != RECEIPT_ARCHIVE_FORMAT or document.get("version") != 1:
+        raise ValueError(f"{RECEIPT_ARCHIVE.name} is not a {RECEIPT_ARCHIVE_FORMAT} v1 document")
+    archives = document.get("archives", {})
+    entries = document.get("never_published_with_receipts", {})
+    if not isinstance(entries, dict):
+        raise ValueError("never_published_with_receipts must be a mapping")
+    for dataset, entry in entries.items():
+        if dataset in archives:
+            raise ValueError(f"Retired dataset {dataset} cannot appear in both archives and never_published_with_receipts")
+        family = entry.get("family") if isinstance(entry, dict) else None
+        reason = entry.get("reason") if isinstance(entry, dict) else None
+        if (not isinstance(entry, dict) or set(entry) != {"family", "reason"}
+                or not isinstance(family, str) or not _NAME.fullmatch(family)
+                or not isinstance(reason, str) or not reason.strip()):
+            raise ValueError(f"Invalid never_published_with_receipts entry for {dataset}: {entry}")
+    return entries
+
+
 def docspec_pins(raw: bytes, *, label: str = "DocSpec") -> dict[str, str]:
     """Pinned digests and why each is held; a document outside the stated shape refuses."""
     try:
