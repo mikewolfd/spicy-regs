@@ -949,8 +949,28 @@ def test_federal_register_typed_rollup_and_workflows_wiring(tmp_path, monkeypatc
     manual_workflow = yaml.safe_load((repo_root / ".github/workflows/rollup-federal-register-typed.yml").read_text())
     triggers = manual_workflow.get("on", manual_workflow.get(True))
     assert set(triggers) == {"workflow_dispatch"}
+    dispatch_inputs = triggers["workflow_dispatch"]["inputs"]
+    assert dispatch_inputs["force_rebuild"]["type"] == "boolean"
+    assert dispatch_inputs["force_rebuild"]["default"] is False
     assert manual_workflow["permissions"] == {"contents": "read", "actions": "read"}
     assert manual_workflow["jobs"]["run"]["with"]["command"] == "run-rollup-federal-register-typed"
+    assert "inputs.force_rebuild" in manual_workflow["jobs"]["run"]["with"]["fr_typed_force_rebuild"]
+
+    reusable_workflow = yaml.safe_load((repo_root / ".github/workflows/_rollup.yml").read_text())
+    reusable_inputs = reusable_workflow.get("on", reusable_workflow.get(True))["workflow_call"]["inputs"]
+    assert reusable_inputs["fr_typed_force_rebuild"]["type"] == "boolean"
+    assert reusable_inputs["fr_typed_force_rebuild"]["default"] is False
+    run_step = next(
+        step for step in reusable_workflow["jobs"]["rollup"]["steps"] if step.get("name") == "Run rollup"
+    )
+    assert run_step["env"]["FR_TYPED_FORCE_REBUILD"] == "${{ inputs.fr_typed_force_rebuild }}"
+
+    from spicy_regs.env_values import flag_env
+
+    for raw_val, expected in (("", False), ("false", False), ("true", True)):
+        monkeypatch.setenv("FR_TYPED_FORCE_REBUILD", raw_val)
+        assert flag_env("FR_TYPED_FORCE_REBUILD") is expected
+    monkeypatch.delenv("FR_TYPED_FORCE_REBUILD", raising=False)
 
     # Hermetic build execution through FederalRegisterTypedRollup.build
     raw, sha = _page_blob([document()])
@@ -1046,3 +1066,212 @@ def test_odcs_ddk_relationships_finding5_and_legacy_federal_register_unchanged(t
     agencies_doc = (repo_root / "docs/tables/federal_register_agencies.md").read_text()
     assert "federal_register_agencies_occurrences" in agencies_doc
     assert "federal_register_agencies_pairs" in agencies_doc
+
+
+def test_prior_null_sha_is_refused_reconcile_guards_null_and_force_rebuild_repairs(tmp_path):
+    """BLOCKER 1 regression: prior source_sha256=NULL is refused (never silently published), reconcile uses IS DISTINCT FROM."""
+    import pyarrow as pa
+
+    from spicy_regs.transforms import federal_register_layer1 as layer1
+
+    rec = document()
+    raw, sha = _page_blob([rec])
+    out_dir = tmp_path / "run"
+    out_dir.mkdir()
+    fr_path = out_dir / "federal_register.parquet"
+    _write_pinned_fr(fr_path, [{"document_number": "2024-00001", "publication_date": "2024-03-01", "source_sha256": sha}])
+    layer1.build_federal_register_typed_from_r2(out_dir, fr_path=fr_path, fetch_blob=lambda _: raw)
+
+    # Corrupt prior documents table by setting source_sha256 = None
+    docs_path = out_dir / "federal_register_documents.parquet"
+    rows = pq.read_table(docs_path).to_pylist()
+    rows[0]["source_sha256"] = None
+    pq.write_table(
+        pa.Table.from_pylist(rows, schema=layer1.document_schema().with_metadata({"layer1.version": layer1.VERSION})),
+        docs_path,
+    )
+
+    # 1. Incremental merge refuses corrupted prior fail-closed (never carries forward NULL source_sha256)
+    with pytest.raises(ValueError, match="NULL or invalid"):
+        layer1.merge_federal_register_typed(
+            out_dir, fr_path=fr_path, fetch_blob=lambda _: raw, download_prior=lambda *_: False
+        )
+
+    # 2. Defense-in-depth: _reconcile_merged_tables uses IS DISTINCT FROM so NULL source_sha256 never passes SQL <>
+    with duckdb.connect() as con:
+        layer1._validate_and_load_target_keys(con, fr_path)
+        merged_paths = {name: out_dir / f"{name}.parquet" for name in layer1.TABLES}
+        with pytest.raises(ValueError, match="source_sha256 differs"):
+            layer1._reconcile_merged_tables(con, merged_paths, 1)
+
+    # 3. force_rebuild=True repairs the corrupted prior cleanly
+    docs_out, *_ = layer1.merge_federal_register_typed(
+        out_dir,
+        fr_path=fr_path,
+        fetch_blob=lambda _: raw,
+        download_prior=lambda *_: False,
+        force_rebuild=True,
+    )
+    repaired = pq.read_table(docs_out).to_pylist()
+    assert len(repaired) == 1 and repaired[0]["source_sha256"] == sha
+
+
+def test_incremental_update_drops_children_to_zero_without_stale_rows(tmp_path):
+    """WARNING 5 regression: when an updated document drops agencies/CFR/dockets to empty, all stale child rows vanish."""
+    from spicy_regs.transforms import federal_register_layer1 as layer1
+
+    v1 = document(
+        document_number="2025-30001",
+        publication_date="2025-05-01",
+        cfr_references=[{"title": 40, "part": 60, "chapter": "I", "citation_url": None}],
+        docket_ids=["EPA-HQ-OAR-2025-0001"],
+    )
+    raw1, sha1 = _page_blob([v1])
+    out_dir = tmp_path / "run"
+    out_dir.mkdir()
+    fr_path = out_dir / "federal_register.parquet"
+    _write_pinned_fr(fr_path, [{"document_number": "2025-30001", "publication_date": "2025-05-01", "source_sha256": sha1}])
+    docs_p, ag_p, cfr_p, dkt_p = layer1.merge_federal_register_typed(
+        out_dir, fetch_blob=lambda _: raw1, download_prior=lambda *_: False
+    )
+    assert pq.read_table(ag_p).num_rows == 2
+    assert pq.read_table(cfr_p).num_rows == 1
+    assert pq.read_table(dkt_p).num_rows == 1
+
+    # Updated version drops all three child arrays to empty [].
+    v2 = document(
+        document_number="2025-30001",
+        publication_date="2025-05-01",
+        title="Childless Update",
+        agencies=[],
+        cfr_references=[],
+        docket_ids=[],
+    )
+    raw2, sha2 = _page_blob([v2])
+    _write_pinned_fr(fr_path, [{"document_number": "2025-30001", "publication_date": "2025-05-01", "source_sha256": sha2}])
+    docs_p, ag_p, cfr_p, dkt_p = layer1.merge_federal_register_typed(
+        out_dir, fetch_blob=lambda d: {sha2: raw2}[d], download_prior=lambda *_: False
+    )
+    assert pq.read_table(docs_p).to_pylist()[0]["title"] == "Childless Update"
+    assert pq.read_table(ag_p).num_rows == 0
+    assert pq.read_table(cfr_p).num_rows == 0
+    assert pq.read_table(dkt_p).num_rows == 0
+
+
+def test_incremental_delete_only_merge_fetches_zero_blobs_and_cleans_children(tmp_path):
+    """WARNING 5 regression: delete-only incremental merge performs zero blob fetches and removes parent + child rows."""
+    from spicy_regs.transforms import federal_register_layer1 as layer1
+
+    doc_keep = document(
+        document_number="2025-40001",
+        publication_date="2025-06-01",
+        cfr_references=[{"title": 40, "part": 60, "chapter": "I", "citation_url": None}],
+        docket_ids=["EPA-HQ-OAR-2025-0010"],
+    )
+    doc_drop = document(
+        document_number="2025-40002",
+        publication_date="2025-06-02",
+        cfr_references=[{"title": 14, "part": 39, "chapter": "I", "citation_url": None}],
+        docket_ids=["FAA-2025-0020"],
+    )
+    raw, sha = _page_blob([doc_keep, doc_drop])
+    out_dir = tmp_path / "run"
+    out_dir.mkdir()
+    fr_path = out_dir / "federal_register.parquet"
+    _write_pinned_fr(
+        fr_path,
+        [
+            {"document_number": "2025-40001", "publication_date": "2025-06-01", "source_sha256": sha},
+            {"document_number": "2025-40002", "publication_date": "2025-06-02", "source_sha256": sha},
+        ],
+    )
+    layer1.merge_federal_register_typed(out_dir, fetch_blob=lambda _: raw, download_prior=lambda *_: False)
+
+    # Remove doc_drop while leaving doc_keep pinned to the exact same sha.
+    _write_pinned_fr(fr_path, [{"document_number": "2025-40001", "publication_date": "2025-06-01", "source_sha256": sha}])
+    fetched: list[str] = []
+
+    def fail_if_called(digest: str) -> bytes:
+        fetched.append(digest)
+        raise AssertionError(f"Delete-only merge should not fetch blob {digest}")
+
+    docs_p, ag_p, cfr_p, dkt_p = layer1.merge_federal_register_typed(
+        out_dir, fetch_blob=fail_if_called, download_prior=lambda *_: False
+    )
+    assert fetched == []
+    assert [r["document_number"] for r in pq.read_table(docs_p).to_pylist()] == ["2025-40001"]
+    assert {r["document_number"] for r in pq.read_table(ag_p).to_pylist()} == {"2025-40001"}
+    assert {r["document_number"] for r in pq.read_table(cfr_p).to_pylist()} == {"2025-40001"}
+    assert {r["document_number"] for r in pq.read_table(dkt_p).to_pylist()} == {"2025-40001"}
+
+
+def test_incremental_shared_sha_addition_merges_new_sibling_without_duplicating_existing(tmp_path):
+    """WARNING 5 regression: adding a new key sharing an existing prior source_sha256 fetches and merges cleanly."""
+    from spicy_regs.transforms import federal_register_layer1 as layer1
+
+    doc_existing = document(
+        document_number="2025-50001",
+        publication_date="2025-07-01",
+        title="Existing Sibling",
+        cfr_references=[{"title": 40, "part": 60, "chapter": "I", "citation_url": None}],
+        docket_ids=["EPA-HQ-OAR-2025-0101"],
+    )
+    doc_added = document(
+        document_number="2025-50002",
+        publication_date="2025-07-01",
+        title="Newly Pinned Sibling In Same Blob",
+        cfr_references=[{"title": 21, "part": 101, "chapter": "I", "citation_url": None}],
+        docket_ids=["FDA-2025-0202"],
+    )
+    raw, sha = _page_blob([doc_existing, doc_added])
+    out_dir = tmp_path / "run"
+    out_dir.mkdir()
+    fr_path = out_dir / "federal_register.parquet"
+
+    # Initial pin includes only doc_existing from shared blob `sha`.
+    _write_pinned_fr(fr_path, [{"document_number": "2025-50001", "publication_date": "2025-07-01", "source_sha256": sha}])
+    layer1.merge_federal_register_typed(out_dir, fetch_blob=lambda _: raw, download_prior=lambda *_: False)
+
+    # Next pin adds doc_added pointing to the SAME `sha` alongside doc_existing.
+    _write_pinned_fr(
+        fr_path,
+        [
+            {"document_number": "2025-50001", "publication_date": "2025-07-01", "source_sha256": sha},
+            {"document_number": "2025-50002", "publication_date": "2025-07-01", "source_sha256": sha},
+        ],
+    )
+    fetched: list[str] = []
+
+    def tracking_fetch(digest: str) -> bytes:
+        fetched.append(digest)
+        return raw
+
+    docs_p, ag_p, cfr_p, dkt_p = layer1.merge_federal_register_typed(
+        out_dir, fetch_blob=tracking_fetch, download_prior=lambda *_: False
+    )
+    assert fetched == [sha]
+    docs = {r["document_number"]: r["title"] for r in pq.read_table(docs_p).to_pylist()}
+    assert docs == {
+        "2025-50001": "Existing Sibling",
+        "2025-50002": "Newly Pinned Sibling In Same Blob",
+    }
+    assert pq.read_table(ag_p).num_rows == 4
+    assert {r["document_number"]: r["title"] for r in pq.read_table(cfr_p).to_pylist()} == {
+        "2025-50001": 40,
+        "2025-50002": 21,
+    }
+    assert {r["document_number"]: r["docket_id"] for r in pq.read_table(dkt_p).to_pylist()} == {
+        "2025-50001": "EPA-HQ-OAR-2025-0101",
+        "2025-50002": "FDA-2025-0202",
+    }
+
+
+@pytest.mark.parametrize("bad_rins", ["2060-AA01", [12345], ["2060-AA01", None]])
+def test_malformed_regulation_id_numbers_refused_with_contextual_error(bad_rins):
+    """WARNING 4 regression: bare string or non-string items in regulation_id_numbers refuse instead of splitting chars."""
+    from spicy_regs.transforms import federal_register_layer1 as layer1
+
+    rec = document(regulation_id_numbers=bad_rins)
+    raw, sha = _page_blob([rec])
+    with pytest.raises(ValueError, match="regulation_id_numbers"):
+        list(layer1.iter_typed_page_records(raw, sha))

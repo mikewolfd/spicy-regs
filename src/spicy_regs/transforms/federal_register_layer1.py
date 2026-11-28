@@ -183,6 +183,19 @@ def normalized_document(record: dict, sha256: str, locator: str) -> dict:
         if not number.isascii() or not number.isdecimal():
             raise ValueError(f"Unsupported Federal Register executive_order_number: {number!r}")
         row["executive_order_number"] = int(number)
+    rins = record.get("regulation_id_numbers")
+    if rins is not None:
+        if not isinstance(rins, list):
+            raise ValueError(
+                f"Unsupported Federal Register regulation_id_numbers at {locator}: "
+                f"expected list of strings or null, got {type(rins).__name__}"
+            )
+        for idx, item in enumerate(rins):
+            if not isinstance(item, str):
+                raise ValueError(
+                    f"Unsupported Federal Register regulation_id_numbers[{idx}] at {locator}: "
+                    f"expected string, got {type(item).__name__}"
+                )
     for name in JSON_LISTS:
         values = record.get(name)
         row[name] = None if values is None else [None if item is None else _json(item) for item in values]
@@ -469,6 +482,18 @@ def _validate_priors(con: Any, prior_paths: Mapping[str, Path], schemas: Mapping
             return False
 
     docs_sql = _sql_quote(str(prior_paths[DOCUMENTS_TABLE]))
+    bad_prior = con.execute(
+        f"""SELECT count(*), min(document_number) FROM read_parquet({docs_sql})
+            WHERE document_number IS NULL OR trim(document_number) = ''
+               OR publication_date IS NULL
+               OR source_sha256 IS NULL
+               OR NOT regexp_full_match(source_sha256, '^sha256:[0-9a-f]{{64}}$')"""
+    ).fetchone()
+    if bad_prior is not None and bad_prior[0] > 0:
+        raise ValueError(
+            f"Prior {DOCUMENTS_TABLE}.parquet contains {bad_prior[0]:,} row(s) with NULL or invalid "
+            f"document_number, publication_date, or source_sha256 (e.g. {bad_prior[1]!r})"
+        )
     total, distinct_keys = con.execute(
         f"SELECT count(*), count(DISTINCT (document_number, publication_date)) FROM read_parquet({docs_sql})"
     ).fetchone()
@@ -544,33 +569,38 @@ def _stream_blobs_to_staging(
                     in_flight[executor.submit(fetch_blob, digest)] = digest
                     return True
 
-                for _ in range(max_in_flight):
-                    if not submit_next():
-                        break
+                try:
+                    for _ in range(max_in_flight):
+                        if not submit_next():
+                            break
 
-                while in_flight:
-                    done, _ = wait(in_flight, return_when=FIRST_COMPLETED)
-                    for future in done:
-                        digest = in_flight.pop(future)
-                        raw_bytes = future.result()
-                        for doc_row, ag_rows, cfr_rows, dkt_rows in iter_typed_page_records(
-                            raw_bytes,
-                            digest,
-                            selected_keys=needed_keys_by_sha[digest],
-                            require_full_field_set=require_full_field_set,
-                        ):
-                            buffers[DOCUMENTS_TABLE].append(doc_row)
-                            if ag_rows:
-                                buffers[AGENCIES_TABLE].extend(ag_rows)
-                            if cfr_rows:
-                                buffers[CFR_REFERENCES_TABLE].extend(cfr_rows)
-                            if dkt_rows:
-                                buffers[DOCKET_CANDIDATES_TABLE].extend(dkt_rows)
-                        del raw_bytes
-                        for name in TABLES:
-                            if len(buffers[name]) >= flush_rows:
-                                flush(name)
-                        submit_next()
+                    while in_flight:
+                        done, _ = wait(in_flight, return_when=FIRST_COMPLETED)
+                        for future in done:
+                            digest = in_flight.pop(future)
+                            raw_bytes = future.result()
+                            for doc_row, ag_rows, cfr_rows, dkt_rows in iter_typed_page_records(
+                                raw_bytes,
+                                digest,
+                                selected_keys=needed_keys_by_sha[digest],
+                                require_full_field_set=require_full_field_set,
+                            ):
+                                buffers[DOCUMENTS_TABLE].append(doc_row)
+                                if ag_rows:
+                                    buffers[AGENCIES_TABLE].extend(ag_rows)
+                                if cfr_rows:
+                                    buffers[CFR_REFERENCES_TABLE].extend(cfr_rows)
+                                if dkt_rows:
+                                    buffers[DOCKET_CANDIDATES_TABLE].extend(dkt_rows)
+                            del raw_bytes
+                            for name in TABLES:
+                                if len(buffers[name]) >= flush_rows:
+                                    flush(name)
+                            submit_next()
+                except BaseException:
+                    for pending in in_flight:
+                        pending.cancel()
+                    raise
 
         for name in TABLES:
             flush(name, force_empty=True)
@@ -668,7 +698,7 @@ def _reconcile_merged_tables(con: Any, merged_paths: Mapping[str, Path], expecte
         f"""SELECT count(*) FROM read_parquet({docs_sql}) d
             JOIN _target_keys t
               ON d.document_number = t.document_number AND d.publication_date = t.publication_date
-            WHERE d.source_sha256 <> t.source_sha256"""
+            WHERE d.source_sha256 IS DISTINCT FROM t.source_sha256"""
     ).fetchone()
     if sha_mismatches:
         raise ValueError(
@@ -753,12 +783,14 @@ def _build_or_merge_typed(
                         FROM read_parquet({prior_docs_sql})
                     ) p
                       ON t.document_number = p.document_number AND t.publication_date = p.publication_date
-                    WHERE p.document_number IS NULL OR p.source_sha256 <> t.source_sha256"""
+                    WHERE p.document_number IS NULL OR p.source_sha256 IS DISTINCT FROM t.source_sha256"""
             )
-            for doc_num, pub_date_str, sha256 in con.execute(
+            cursor = con.execute(
                 "SELECT document_number, publication_date_str, source_sha256 FROM _needed_rows"
-            ).fetchall():
-                needed_keys_by_sha.setdefault(sha256, set()).add((doc_num, pub_date_str))
+            )
+            while batch := cursor.fetchmany(STREAM_FLUSH_ROWS):
+                for doc_num, pub_date_str, sha256 in batch:
+                    needed_keys_by_sha.setdefault(sha256, set()).add((doc_num, pub_date_str))
             removed_row = con.execute(
                 f"""SELECT count(*) FROM read_parquet({prior_docs_sql}) p
                     ANTI JOIN _target_keys t
@@ -773,10 +805,12 @@ def _build_or_merge_typed(
                 removed_count,
             )
         else:
-            for doc_num, pub_date_str, sha256 in con.execute(
+            cursor = con.execute(
                 "SELECT document_number, publication_date_str, source_sha256 FROM _target_keys"
-            ).fetchall():
-                needed_keys_by_sha.setdefault(sha256, set()).add((doc_num, pub_date_str))
+            )
+            while batch := cursor.fetchmany(STREAM_FLUSH_ROWS):
+                for doc_num, pub_date_str, sha256 in batch:
+                    needed_keys_by_sha.setdefault(sha256, set()).add((doc_num, pub_date_str))
             logger.info(
                 "FR typed bootstrap: {:,} target rows across {:,} distinct R2 blob(s)",
                 target_count,
@@ -825,6 +859,8 @@ def _build_or_merge_typed(
                     max_workers=max_workers,
                     require_full_field_set=require_full_field_set,
                 )
+        # Release the key index before the four DuckDB ORDER BY merge/sort passes.
+        needed_keys_by_sha.clear()
 
         if use_prior:
             fresh_docs_sql = _sql_quote(str(fresh_paths[DOCUMENTS_TABLE]))

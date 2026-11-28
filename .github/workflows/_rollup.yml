@@ -175,6 +175,8 @@ on:
         type: string
       fr_bodies_retry_failed:
         description: 'Re-attempt prior refused rows in federal-register-bodies'
+      fr_typed_force_rebuild:
+        description: 'federal-register-typed: rebuild all four typed tables from every pinned R2 blob instead of incremental merge'
         required: false
         default: false
         type: boolean
@@ -675,6 +677,7 @@ jobs:
           FR_BODIES_SINCE: ${{ inputs.fr_bodies_since }}
           FR_BODIES_MAX_NEW: ${{ inputs.fr_bodies_max_new }}
           FR_BODIES_RETRY_FAILED: ${{ inputs.fr_bodies_retry_failed }}
+          FR_TYPED_FORCE_REBUILD: ${{ inputs.fr_typed_force_rebuild }}
           USASPENDING_EVERY_FUNDED: ${{ inputs.usaspending_every_funded }}
           LDA_FILING_YEAR: ${{ inputs.lda_filing_year }}
           FEC_COMMITTEES_FULL_WALK: ${{ inputs.fec_committees_full_walk }}
