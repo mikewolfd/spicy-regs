@@ -1117,7 +1117,7 @@ def _build_connection_inputs(con, publication):
                         "receipt_members": {name: str(path) for name, path in local.receipts.items()},
                         "native": {name: {"subjects": [str(p) for p in value.subjects],
                                            "receipts": str(value.receipts), "generation_id": value.generation_id}
-                                   for name, value in local.native.items()},
+                                   for name, value in local.native.items() if value.receipts is not None},
                     }
                 )
             ],
@@ -1350,7 +1350,8 @@ def _build_connection_inputs(con, publication):
             if local is not None and local.native:
                 groups = {}
                 for name, value in local.native.items():
-                    groups.setdefault(str(value.receipts), []).append(name)
+                    if value.receipts is not None:
+                        groups.setdefault(str(value.receipts), []).append(name)
                 scans = [f"SELECT * FROM {parquet_scan([path])} WHERE dataset IN (" +
                          ",".join("'" + name.replace("'", "''") + "'" for name in names) + ")"
                          for path, names in groups.items()]

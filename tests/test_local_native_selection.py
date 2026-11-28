@@ -1,13 +1,17 @@
 """Local consumers read the captured native selection, never candidate copies."""
 from argparse import Namespace
+import shutil
 
 import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs import cli, mcp_server
 from spicy_regs.congress_receipts import write_congress_dataset
+from spicy_regs.legislative_documents import field_registry
+from spicy_regs.legislative_rollups import LegislativeTableRollup
 from spicy_regs.local_data import local_selection
-from spicy_regs.selected_generations import SelectedDataset, remember_selection
+from spicy_regs.selected_generations import SelectedDataset, SelectedInputs, remember_selection
+from spicy_regs.transforms.table_merge import Partitioning, merge_partitioned_table, published_members
 from tests.test_congress_receipts import shaped
 from tests.test_subject_receipt_rollups import MixedRollup, mixed_builder
 
@@ -117,6 +121,56 @@ def test_native_multipart_selection_reads_all_members(tmp_path, monkeypatch):
         assert con.execute("SELECT bioguide_id FROM members ORDER BY bioguide_id").fetchall() == [("A",), ("B",)]
     finally:
         con.close()
+
+
+def test_receipt_free_partitioned_legislative_rollup_carries_its_local_generation(tmp_path, monkeypatch):
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    root = tmp_path / "output"
+    key = "laws.parquet"
+    columns = tuple(field["name"] for field in field_registry()["laws"]["fields"])
+    carried = []
+
+    class PartitionedLaws(LegislativeTableRollup):
+        name = "partitioned-laws"
+        output = key
+        partitioned = {key: ("congress",)}
+
+        def build(self, output_dir):
+            return self.build_tables(output_dir, self.build_partitioned_laws)
+
+        def build_partitioned_laws(self, work, *, download_members):
+            prior = published_members(work, "laws", download_members)
+            carried.append([path.relative_to(work / "_laws_prior").as_posix() for path in prior or ()])
+            return merge_partitioned_table(
+                work, name="laws", columns=columns, identity=("law_id",), version_column=None,
+                rows=() if prior else (
+                    {"law_id": "119-public-1", "law_type": "public", "number": "1"},
+                    {"law_id": "118-public-2", "law_type": "public", "number": "2"},
+                ),
+                partitioning=Partitioning("congress", "law_id", lambda law_id: law_id.split("-", 1)[0]),
+                prior=prior,
+            )
+
+    PartitionedLaws(output_dir=root, skip_upload=True).run()
+    (generation,) = (root / "generations").iterdir()
+    expected = [f"laws/congress={congress}/part-000000.parquet" for congress in (118, 119)]
+    selected = local_selection(root)
+    assert selected.paths("laws") == tuple(generation / path for path in expected)
+    assert selected.receipts == {}
+
+    unregistered = tmp_path / "unregistered"
+    shutil.copytree(root / "laws", unregistered / "laws")
+    loose = SelectedInputs(unregistered, tmp_path / "select-loose", public_url="").select("laws")
+    assert loose.subjects == tuple(unregistered / path for path in expected)
+
+    shutil.rmtree(root / "laws")
+    PartitionedLaws(output_dir=root, skip_upload=True).run()
+    assert carried == [[], expected]
+    assert tuple((root / "generations").iterdir()) == (generation,)
+    assert [pq.ParquetFile(root / path).read()["law_id"].to_pylist() for path in expected] == [
+        ["118-public-2"], ["119-public-1"],
+    ]
+    assert not list(root.rglob("etl_receipts.parquet"))
 
 
 @pytest.mark.parametrize("surface", ["current", "download.json"])

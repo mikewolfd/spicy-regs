@@ -38,7 +38,7 @@ class LocalSelection:
     @property
     def receipts(self) -> dict[str, Path]:
         if self.native:
-            return {str(value.receipts): value.receipts for value in self.native.values()}
+            return {str(value.receipts): value.receipts for value in self.native.values() if value.receipts is not None}
         return {member.path: self.directory / receipt_local_key(member)
                 for member in selected_receipt_members(self.publication, self.files)}
 
@@ -166,13 +166,17 @@ def _native_selection(root: Path, *, admit_rows=True) -> LocalSelection:
         for name in inputs.local:
             if name not in policies:
                 raise ValueError(f"Selected native dataset has no installed policy: {name}")
-            selected = inputs.select(name)
-            validate_publisher_generation(selected.generation_id)
+            selected = inputs.select(name, last_receipts=True)
             native[name] = selected
-            paths = (*selected.subjects, selected.receipts)
-            for path in paths:
+            for path in selected.subjects:
                 signatures[str(path)] = file_signature(path)
             checkpoint()
+            if selected.receipts is None:
+                visible[name] = (selected.subjects[0] if selected.subjects else root, "native-selected")
+                parts[name] = selected.subjects
+                continue
+            validate_publisher_generation(selected.generation_id)
+            signatures[str(selected.receipts)] = file_signature(selected.receipts)
             policy = selected_subject_policy(policies[name], selected.subjects)
             if not selected.subjects:
                 from spicy_regs.etl_receipts import receipt_policies
@@ -212,7 +216,7 @@ def _native_selection(root: Path, *, admit_rows=True) -> LocalSelection:
         # Recheck pins against the same captured pointer after validation.
         inputs.cache.clear()
         for name in native:
-            inputs.select(name)
+            inputs.select(name, last_receipts=True)
         assert_local_members_unchanged(signatures)
     return LocalSelection(root, visible, empty_index(), False, parts, native, signatures)
 

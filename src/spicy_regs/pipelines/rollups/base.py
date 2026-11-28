@@ -1149,9 +1149,9 @@ class RollupPipeline(Pipeline):
                     return
             if destination.exists():
                 if read_operation is None:
-                    verify_generation(destination, expected_pin=artifact.pin)
+                    artifact = verify_generation(destination, expected_pin=artifact.pin)
                 else:
-                    read_operation.admit_generation(destination, expected_pin=artifact.pin)
+                    artifact, _, _ = read_operation.admit_generation(destination, expected_pin=artifact.pin)
             else:
                 publish_directory_no_replace(directory, destination)
         from spicy_regs.source_catalog.input_proof import save_input_proof

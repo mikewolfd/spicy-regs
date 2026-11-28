@@ -71,6 +71,9 @@ FILE_TABLE_FOR_DATASET: Mapping[str, str] = {
     "senate_expenditures": "senate_expenditures_document_file_outcomes",
 }
 
+# These builders seed their checkpoints from processing columns held only in receipt-era priors.
+RECEIPT_CHECKPOINT_DATASETS = frozenset({"laws", "law_sections", "hearing_transcripts"})
+
 #: Bounded batch size matching ``legislative_receipts`` (keeps wide text tables such as ``hearing_transcripts`` small).
 _BATCH = 2_000
 
@@ -492,6 +495,9 @@ def _as_committee_report_reads(tables: Sequence[Path], destination: Path) -> Pat
         with pq.ParquetWriter(staged, schema, compression="zstd") as writer:
             for table_path in tables:
                 with pq.ParquetFile(table_path) as reader:
+                    missing = sorted(set(COMMITTEE_REPORT_READ_COLUMNS) - set(reader.schema_arrow.names))
+                    if missing:
+                        raise ValueError(f"committee_report_read_outcomes lacks required columns: {', '.join(missing)}")
                     for batch in reader.iter_batches(batch_size=_BATCH, columns=list(COMMITTEE_REPORT_READ_COLUMNS)):
                         rows = batch.to_pylist()
                         for row in rows:

@@ -72,7 +72,7 @@ def dataset_policy(name):
 class SelectedPriors:
     """Capture one publication index and fetch only its pinned subject/receipt pairs."""
 
-    def __init__(self, directory, *, index=None, public_url=None, root=None, ranged=frozenset()):
+    def __init__(self, directory, *, index=None, public_url=None, root=None, ranged=frozenset(), last_receipts=frozenset()):
         """``ranged`` names the Congress datasets whose receipts may be read by row group (``SelectedInputs.select``):
         another family's soft inputs, each read for its own rows. A family's own priors read many datasets of one
         member, so they fetch it whole once, verify its SHA-256, and then read each dataset's row groups alone."""
@@ -86,10 +86,8 @@ class SelectedPriors:
         from spicy_regs.congress_subjects import PROMOTED
         from spicy_regs.subject_catalog import retired_receipt_datasets
 
-        #: Retired Congress tables with fields their receipts alone held: while their live generation still lists
-        #: those receipts (its first receipts-free night), the prior is restored through them, by row group, which
-        #: back-fills the promoted columns (``congress_tables``).
-        self.last_receipts = frozenset(PROMOTED) & retired_receipt_datasets()
+        # Restore receipt-era fields once to seed promoted Congress columns and legislative checkpoints.
+        self.last_receipts = (frozenset(PROMOTED) | last_receipts) & retired_receipt_datasets()
         self.ranged = (frozenset(ranged) | self.last_receipts) & set(CONGRESS)
         self.restored = {}
         self.selections = {}
@@ -105,6 +103,8 @@ class SelectedPriors:
         from spicy_regs.subject_catalog import retired_receipt_datasets
 
         if dataset in READ_TABLES and dataset in retired_receipt_datasets():
+            if dataset in self.selected.local:
+                return self.selected.select(dataset, last_receipts=True)
             return self.selected.select(READ_TABLES[dataset])
         return self.selected.select(dataset, ranged=dataset in self.ranged, last_receipts=dataset in self.last_receipts)
 
@@ -265,12 +265,23 @@ class SelectedPriors:
                     outcome_selection = self.selected.select(file_table)
                     if outcome_selection is not None:
                         file_outcomes = outcome_selection.subjects
-                legislative_tables.as_builder_input(dataset, subjects, output, file_outcomes=file_outcomes)
+                # Keep the member layout for builders that merge and carry partitions independently.
+                if subjects and subjects[0].name != output.name and any(
+                    parent.name == dataset for parent in subjects[0].parents
+                ):
+                    output = output.with_suffix("")
+                    for subject in subjects:
+                        root = next(parent for parent in subject.parents if parent.name == dataset)
+                        legislative_tables.as_builder_input(
+                            dataset, [subject], output / subject.relative_to(root), file_outcomes=file_outcomes
+                        )
+                else:
+                    legislative_tables.as_builder_input(dataset, subjects, output, file_outcomes=file_outcomes)
             else:
                 published_as_source(dataset, subjects, output)
         self.selections[dataset] = (subjects, None, None)
         self.restored[dataset] = output
-        self.processing_members[dataset] = (output,)
+        self.processing_members[dataset] = tuple(sorted(output.rglob("*.parquet"))) if output.is_dir() else (output,)
         self._check_processing(dataset)
         return output
 
@@ -542,16 +553,18 @@ class NativeReceiptLifecycle(RollupPipeline):
     inputs: ClassVar[tuple[str, ...]]
 
     def _new_receipt_work(self, output_dir, snapshot=None):
+        from spicy_regs.legislative_tables import RECEIPT_CHECKPOINT_DATASETS
         from spicy_regs.selected_generations import unique_build_directory
 
+        outputs = self.outputs or (self.output,)
         private = unique_build_directory(output_dir)
         prior = SelectedPriors(
             private / "selected-priors",
             root=self.output_dir or output_dir,
             index=snapshot if os.getenv("R2_PUBLIC_URL") else None,
             # Another family's soft inputs (votes' bill_vote_references); never this family's own priors.
-            ranged=frozenset(key.removesuffix(".parquet") for key in self.soft_inputs
-                             if key not in (self.outputs or (self.output,))),
+            ranged=frozenset(key.removesuffix(".parquet") for key in self.soft_inputs if key not in outputs),
+            last_receipts=RECEIPT_CHECKPOINT_DATASETS.intersection(key.removesuffix(".parquet") for key in outputs),
         )
         return private, prior
 

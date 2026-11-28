@@ -25,6 +25,7 @@ from spicy_regs.navigation_read_outcomes import FILE_POLICIES, POLICIES as OUTCO
 from spicy_regs.pipelines.rollups import committee_reports, laws, native_legal_references, senate_expenditures
 from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
 from spicy_regs.receipt_switch import receipt_files, receipt_free_prior, table_differences
+from spicy_regs.selected_generations import SelectedInputs
 from spicy_regs.sources.publication import PublicationError, empty_index
 from tests.test_receipts_retired import pin_archive
 
@@ -96,7 +97,7 @@ def test_all_18_slice_3a_policies_are_retired_and_all_4_rollups_are_plain():
 
 
 def test_laws_parity_and_night1_night2_checkpoint_carry_without_receipts(tmp_path, monkeypatch):
-    """Old receipt route vs plain LawsRollup match bit-for-bit; Night-1 file-outcome & Night-2 KV checkpoints work."""
+    """Night 1 skips unchanged XML using receipt-era rows, then Night 2 uses only public Parquet."""
     from spicy_regs.transforms.build_laws import build_laws
     from tests.test_laws import LISTED_119, StubListingReader, StubOlrc, StubUslm
 
@@ -120,7 +121,14 @@ def test_laws_parity_and_night1_night2_checkpoint_carry_without_receipts(tmp_pat
         outputs = ("laws.parquet", "law_code_sections.parquet", "table3_records.parquet", "law_sections.parquet")
 
         def build(self, output_dir: Path):
-            return self.build_receipts(output_dir, _make_builder([], []), evidence=self.source_evidence)
+            def receipt_era_builder(directory: Path, **kwargs: Any):
+                paths = _make_builder([], [])(directory, **kwargs)
+                for path in paths:
+                    if path.stem in {"laws", "law_sections"}:
+                        _strip_kv_metadata(path)
+                return paths
+
+            return self.build_receipts(output_dir, receipt_era_builder, evidence=self.source_evidence)
 
     old_dir = tmp_path / "old"
     retired = subject_catalog.retired_receipt_datasets()
@@ -150,24 +158,38 @@ def test_laws_parity_and_night1_night2_checkpoint_carry_without_receipts(tmp_pat
     assert sorted(new_fo["source_dataset"].to_pylist()) == sorted(old_fo["source_dataset"].to_pylist())
     assert sum(new_fo["row_count"].to_pylist()) == sum(old_fo["row_count"].to_pylist())
 
-    # 3. Simulate Night-1 live prior (receipt-free, empty KV metadata on table3_records.parquet):
-    #    SelectedPriors recovers laws-table3 checkpoint from laws_document_file_outcomes.parquet.
-    night1_prior = receipt_free_prior(new_dir, tmp_path / "night1-prior")
-    _strip_kv_metadata(night1_prior / "table3_records.parquet")
-    assert not legislative_tables.has_checkpoint_metadata(night1_prior / "table3_records.parquet")
-    restored_t3 = SelectedPriors(tmp_path / "probe-t3", root=night1_prior, public_url="").get("table3_records")
+    (old_generation,) = (old_dir / "generations").iterdir()
+    assert (old_generation / "etl_receipts.parquet").is_file()
+    receipt_only = {
+        "laws": {"uslm_reader_version", "law_text_reader_version", "uslm_sha256"},
+        "law_sections": {"source_sha256"},
+    }
+    for dataset, fields in receipt_only.items():
+        prior_schema = pq.read_schema(old_generation / f"{dataset}.parquet")
+        assert not prior_schema.metadata and fields.isdisjoint(prior_schema.names)
+    inputs = SelectedInputs(old_dir, tmp_path / "select-laws", public_url="")
+    assert inputs.select("laws").receipts is None
+    assert inputs.select("laws", last_receipts=True).receipts == old_generation / "etl_receipts.parquet"
+    assert not legislative_tables.has_checkpoint_metadata(old_dir / "table3_records.parquet")
+    restored_t3 = SelectedPriors(tmp_path / "probe-t3", root=old_dir, public_url="").get("table3_records")
     assert legislative_tables.has_checkpoint_metadata(restored_t3)
 
-    # 4. Night-2 incremental run on receipt-free prior skips re-fetching settled USLM law 1 and preserves tables.
-    laws.LawsRollup(output_dir=night1_prior, skip_upload=True).run()
-    assert receipt_files(night1_prior) == []
+    laws.LawsRollup(output_dir=old_dir, skip_upload=True).run()
+    (night1_generation,) = set((old_dir / "generations").iterdir()) - {old_generation}
+    assert receipt_files(night1_generation) == []
+    night2 = receipt_free_prior(night1_generation, tmp_path / "night2")
+    laws.LawsRollup(output_dir=night2, skip_upload=True).run()
+    assert receipt_files(night2) == []
+
     assert 1 in [s.number for s in uslm_calls[0].selections]
-    assert 1 not in [s.number for s in uslm_calls[1].selections]
-    assert legislative_tables.has_checkpoint_metadata(night1_prior / "table3_records.parquet")
-    for dataset in ("laws", "law_code_sections", "table3_records", "law_sections"):
-        assert table_differences(
-            night1_prior / f"{dataset}.parquet", new_dir / f"{dataset}.parquet", key=_identities(dataset)
-        ) == [], dataset
+    for calls, directory in zip(uslm_calls[1:], (night1_generation, night2), strict=True):
+        assert 1 not in [s.number for s in calls.selections]
+        for dataset in ("laws", "law_sections", "table3_records"):
+            assert legislative_tables.has_checkpoint_metadata(directory / f"{dataset}.parquet")
+        for dataset in ("laws", "law_code_sections", "table3_records", "law_sections"):
+            assert table_differences(
+                directory / f"{dataset}.parquet", new_dir / f"{dataset}.parquet", key=_identities(dataset)
+            ) == [], dataset
 
 
 def test_senate_expenditures_parity_and_night1_night2_without_receipts(tmp_path, monkeypatch):
@@ -331,9 +353,15 @@ def test_committee_reports_parity_read_checkpoints_and_hearing_body_reuse_withou
             "committee_report_reads.parquet",
         )
         added_tables = ("committee_report_cbo_letters.parquet",)
+        builder = staticmethod(_make_builder([]))
 
         def build(self, output_dir: Path):
-            return self.build_receipts(output_dir, _make_builder([]), evidence=self.source_evidence)
+            def receipt_era_builder(directory: Path, **kwargs: Any):
+                paths = self.builder(directory, **kwargs)
+                _strip_kv_metadata(directory / "hearing_transcripts.parquet")
+                return paths
+
+            return self.build_receipts(output_dir, receipt_era_builder, evidence=self.source_evidence)
 
     old_dir = tmp_path / "old"
     retired = subject_catalog.retired_receipt_datasets()
@@ -399,9 +427,7 @@ def test_committee_reports_parity_read_checkpoints_and_hearing_body_reuse_withou
             run2 / f"{dataset}.parquet", new_dir / f"{dataset}.parquet", key=_identities(dataset)
         ) == [], dataset
 
-    # 3. PR #330 detail_refused retry + hearing-body-reuse KV checkpoint without receipts:
-    #    Run A hits HTTP 500 on hearing-detail -> publishes transcript + detail_refused outcome.
-    #    Run B retries hearing-detail and reuses stored transcript body without calling acquirer again!
+    # The receipt-era run publishes a transcript and records detail_refused after an HTTP 500.
     class _Detail500(StubHearings):
         def records(self, route, url: str, *, max_pages: int = 1):
             raise PagedJsonSourceError("stub: HTTP 500")
@@ -409,37 +435,51 @@ def test_committee_reports_parity_read_checkpoints_and_hearing_body_reuse_withou
 
     retry_dir = tmp_path / "retry"
     retry_acquirers: list[StubBodyAcquirer] = []
+    with monkeypatch.context() as patch:
+        patch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired - crpt_datasets)
+        patch.setattr(_CrptReceiptRoute, "builder", staticmethod(_make_builder(retry_acquirers, _Detail500)))
+        _CrptReceiptRoute(output_dir=retry_dir, skip_upload=True).run()
+    assert CHRG_ID in retry_acquirers[0].requested
+    (old_generation,) = (retry_dir / "generations").iterdir()
+    assert (old_generation / "etl_receipts.parquet").is_file()
+    prior_schema = pq.read_schema(old_generation / "hearing_transcripts.parquet")
+    assert not prior_schema.metadata and "sha256" not in prior_schema.names
+
+    # Night 1 still gets HTTP 500, so Night 2 retries the same hearing after migrating the reuse checkpoint.
     monkeypatch.setattr(committee_reports, "build_committee_reports", _make_builder(retry_acquirers, _Detail500))
     committee_reports.CommitteeReportsRollup(output_dir=retry_dir, skip_upload=True).run()
-    outcomes_a = {
-        r["package_id"]: r["outcome"]
-        for r in pq.read_table(retry_dir / "committee_report_read_outcomes.parquet").to_pylist()
-    }
-    assert outcomes_a[CHRG_ID] == DETAIL_REFUSED
-    assert CHRG_ID in retry_acquirers[0].requested
+    (night1_generation,) = set((retry_dir / "generations").iterdir()) - {old_generation}
+    assert receipt_files(night1_generation) == []
+    assert legislative_tables.has_checkpoint_metadata(night1_generation / "hearing_transcripts.parquet")
+    checkpoint = SelectedPriors(tmp_path / "probe-reads", root=retry_dir, public_url="").select("committee_report_reads")
+    assert checkpoint.receipts is None and checkpoint.dataset == "committee_report_read_outcomes"
 
-    # Run B succeeds on hearing-detail: CRPT stays settled, CHRG retries detail and reuses stored body text
-    # via the hearing-body-reuse Parquet KV checkpoint (proving body-text-reused without receipts).
+    night2 = receipt_free_prior(night1_generation, tmp_path / "retry-night2")
     monkeypatch.setattr(committee_reports, "build_committee_reports", _make_builder(retry_acquirers, StubHearings))
-    committee_reports.CommitteeReportsRollup(output_dir=retry_dir, skip_upload=True).run()
-    assert receipt_files(retry_dir) == []
-    assert retry_acquirers[1].requested == [CHRG_ID]
-    import json
+    committee_reports.CommitteeReportsRollup(output_dir=night2, skip_upload=True).run()
+    assert receipt_files(night2) == []
 
-    reused_events = [
-        json.loads(line)
-        for journal in sorted((retry_dir / "source-evidence").rglob("journal.jsonl"))
-        for line in journal.read_text().splitlines()
-        if '"body-text-reused"' in line
-    ]
-    assert any(ev.get("package_id") == CHRG_ID for ev in reused_events), (
-        "hearing-body-reuse KV checkpoint must fire body-text-reused on detail_refused retry without receipts"
-    )
-    outcomes_b = {
-        r["package_id"]: r["outcome"]
-        for r in pq.read_table(retry_dir / "committee_report_read_outcomes.parquet").to_pylist()
-    }
-    assert outcomes_b[CHRG_ID] == "complete"
+    # Each retry acquires the hearing body once. The body-text-reused event confirms extraction was skipped.
+    for directory, acquirer, outcome in zip(
+        (retry_dir, night2), retry_acquirers[1:], (DETAIL_REFUSED, "complete"), strict=True
+    ):
+        assert acquirer.requested == [CHRG_ID]
+        assert any(
+            '"body-text-reused"' in line and CHRG_ID in line
+            for journal in (directory / "source-evidence").rglob("journal.jsonl")
+            for line in journal.read_text().splitlines()
+        )
+        outcomes = pq.read_table(directory / "committee_report_read_outcomes.parquet").to_pylist()
+        assert {row["package_id"]: row["outcome"] for row in outcomes}[CHRG_ID] == outcome
+
+
+def test_committee_report_reads_refuse_missing_rule_version(tmp_path):
+    outcomes = tmp_path / "committee_report_read_outcomes.parquet"
+    schema = OUTCOME_POLICIES["committee_report_read_outcomes"].subject_schema
+    pq.write_table(schema.empty_table().drop_columns(["rule_version"]), outcomes)
+    priors = SelectedPriors(tmp_path / "prior", root=tmp_path, public_url="")
+    with pytest.raises(ValueError, match="lacks required columns: rule_version"):
+        priors.get("committee_report_reads")
 
 
 def test_bill_family_still_on_receipts_reads_retired_laws_table_cleanly(tmp_path, monkeypatch):

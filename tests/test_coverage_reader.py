@@ -18,6 +18,7 @@ from spicy_regs import etl_bulk, regulations_bulk
 from spicy_regs.etl_receipts import RECEIPT_SCHEMA, _digest, decode_exact_json, exact_json, selected_subject_policy
 from spicy_regs.legislative_documents import field_registry
 from spicy_regs.legislative_receipts import write_legislative_outputs
+from spicy_regs.legislative_tables import write_read_outcomes
 from spicy_regs.pipelines.rollups import subject_receipts
 from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
 from spicy_regs.sources.publication import empty_index
@@ -81,6 +82,29 @@ def test_restores_receipt_only_reads_without_a_public_subject(tmp_path):
     result = bridge.restore(request)
     assert result["receiptOnly"] and result["nativeSchema"] == []
     assert pq.read_table(result["urls"][0]).to_pylist() == [raw]
+
+
+def test_committee_report_reads_restore_from_archive_and_from_incremental_outcomes(tmp_path):
+    dataset = "committee_report_reads"
+    raw, request = fixture(tmp_path, dataset, {
+        "package_id": "CRPT-119hrpt1",
+        "last_modified": "2025-01-03T00:00:00Z",
+        "outcome": "complete",
+        "rule_version": "test-rule",
+        "observed_at": "2025-01-04T00:00:00Z",
+    })
+    assert request["subjects"] == []
+    result = bridge.restore(request)
+    assert result["receiptOnly"] and result["selection"]["receipts"] == request["receipts"]
+    assert pq.read_table(result["urls"][0]).to_pylist() == [raw]
+
+    published = tmp_path / "published"
+    outcomes = published / "committee_report_read_outcomes.parquet"
+    write_read_outcomes(dataset, tmp_path / f"{dataset}.parquet", outcomes, generation_id="receipt-free")
+    priors = SelectedPriors(tmp_path / "incremental", root=published, public_url="")
+    selected = priors.select(dataset)
+    assert selected.subjects == (outcomes,) and selected.receipts is None
+    assert pq.read_table(priors.get(dataset)).to_pylist() == [raw]
 
 
 def empty_legislative_request(tmp_path, dataset):
