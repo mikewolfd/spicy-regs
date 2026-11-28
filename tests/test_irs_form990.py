@@ -146,6 +146,16 @@ def test_money_reconciliation_repetitions_and_missing_are_distinct(tmp_path, str
 @pytest.mark.parametrize(
     "version",
     [
+        "2016v3.0",
+        "2016v3.1",
+        "2017v2.2",
+        "2017v2.3",
+        "2018v3.0",
+        "2018v3.1",
+        "2018v3.2",
+        "2018v3.3",
+        "2019v5.0",
+        "2019v5.1",
         "2020v4.0",
         "2020v4.1",
         "2020v4.2",
@@ -154,6 +164,7 @@ def test_money_reconciliation_repetitions_and_missing_are_distinct(tmp_path, str
         "2021v4.2",
         "2022v4.1",
         "2022v5.0",
+        "2023v4.0",
         "2023v5.0",
         "2023v5.1",
         "2023v6.0",
@@ -171,7 +182,7 @@ def test_qualified_version_specs_admit_all_visually_reviewed_cohorts(version):
     assert len(officers) == 2 and len(grants) == 2
 
 
-@pytest.mark.parametrize("unqualified", ["2018v3.0", "2019v4.0", "2025v5.0", "2026v1.0", "2026v4.0", "2023v6.bad", ""])
+@pytest.mark.parametrize("unqualified", ["2015v2.0", "2019v4.0", "2025v5.0", "2026v1.0", "2026v4.0", "2023v6.bad", ""])
 def test_unqualified_versions_refuse_in_interpret(unqualified):
     assert not transform.is_qualified_version(unqualified)
     rec = record(_make_xml(return_version=unqualified or "2026v1.0"))
@@ -1264,4 +1275,318 @@ def test_fatal_anomalies_quarantine_row_ceiling_and_zero_row_child_tables(tmp_pa
         assert part.is_file()
         assert pq.read_schema(part).equals(expected_schema)
         assert pq.read_metadata(part).num_rows == summary["rows"][name]
+
+
+def test_discover_head_omitted_content_length_and_fail_closed_validation():
+    url_idx = source.BASE_URL + "2020/index_2020.csv"
+    url_zip = source.BASE_URL + "2020/2020_TEOS_XML_CT1.zip"
+    html = f'<html><body><a href="{url_idx}">idx</a><a href="{url_zip}">zip</a></body></html>'.encode()
+
+    # 1. Akamai/Apache HEAD omits Content-Length while providing ETag -> accepted with content_length=None
+    def omitted_cl_handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == source.DOWNLOADS_PAGE_URL:
+            return httpx.Response(200, content=html)
+        if str(request.url) == url_idx:
+            return httpx.Response(
+                200,
+                headers={"etag": '"idx2020-akamai"', "last-modified": "Wed, 12 Jul 2023 04:01:25 GMT"},
+            )
+        return httpx.Response(
+            200,
+            headers={"etag": '"zip2020-akamai"', "last-modified": "Wed, 12 Jul 2023 04:01:25 GMT"},
+        )
+
+    manifest = pipeline.discover([2020], transport=httpx.MockTransport(omitted_cl_handler), min_interval=0)
+    idx_entry = manifest["years"]["2020"]["index"]
+    zip_entry = manifest["years"]["2020"]["archives"][0]
+    assert idx_entry["content_length"] is None and idx_entry["etag"] == '"idx2020-akamai"'
+    assert zip_entry["content_length"] is None and zip_entry["etag"] == '"zip2020-akamai"'
+
+    # 2. Malformed Content-Length refuses even when ETag is present
+    for bad_cl in ("not-a-number", "", "-123", "12.34"):
+        def malformed_handler(request: httpx.Request, cl=bad_cl) -> httpx.Response:
+            if str(request.url) == source.DOWNLOADS_PAGE_URL:
+                return httpx.Response(200, content=html)
+            return httpx.Response(200, headers={"content-length": cl, "etag": '"idx2020"'})
+
+        with pytest.raises(source.IRS990Error, match="malformed Content-Length"):
+            pipeline.discover([2020], transport=httpx.MockTransport(malformed_handler), min_interval=0)
+
+    # 3. Zero or oversized Content-Length refuses for both index and archive
+    for target_url, bad_size in (
+        (url_idx, "0"),
+        (url_idx, str(source.MAX_INDEX_BYTES + 1)),
+        (url_zip, str(source.MAX_ARCHIVE_BYTES + 1)),
+    ):
+        def bound_handler(request: httpx.Request, target=target_url, size=bad_size) -> httpx.Response:
+            if str(request.url) == source.DOWNLOADS_PAGE_URL:
+                return httpx.Response(200, content=html)
+            if str(request.url) == target:
+                return httpx.Response(200, headers={"content-length": size, "etag": '"pin"'})
+            return httpx.Response(200, headers={"content-length": "1024", "etag": '"ok"'})
+
+        with pytest.raises(source.IRS990Error, match="outside allowed .* bound"):
+            pipeline.discover([2020], transport=httpx.MockTransport(bound_handler), min_interval=0)
+
+    # 4. Missing BOTH Content-Length and ETag (or whitespace-only ETag) refuses
+    for bad_headers in ({}, {"etag": ""}, {"etag": "   "}):
+        def missing_both_handler(request: httpx.Request, hdrs=bad_headers) -> httpx.Response:
+            if str(request.url) == source.DOWNLOADS_PAGE_URL:
+                return httpx.Response(200, content=html)
+            return httpx.Response(200, headers=hdrs)
+
+        with pytest.raises(source.IRS990Error, match="omitted both Content-Length and ETag"):
+            pipeline.discover([2020], transport=httpx.MockTransport(missing_both_handler), min_interval=0)
+
+
+class _ChunkedByteStream(httpx.SyncByteStream):
+    """Streaming HTTPX body without a Content-Length header."""
+
+    def __init__(self, payload: bytes, *, chunk_size: int = 16) -> None:
+        self._payload = payload
+        self._chunk_size = chunk_size
+
+    def __iter__(self):
+        for offset in range(0, len(self._payload), self._chunk_size):
+            yield self._payload[offset : offset + self._chunk_size]
+
+
+def test_sync_build_omitted_content_length_bounds_and_local_reuse(tmp_path, monkeypatch):
+    from spicy_regs.source_evidence import SourceEvidenceError
+
+    shared_raw = tmp_path / "shared-raw"
+    monkeypatch.delenv("SPICYGOV_RAW_ROOT", raising=False)
+    monkeypatch.setattr("spicy_docs.storage.raw_archive.default_raw_archive_root", lambda: shared_raw)
+
+    idx_url, idx_bytes, zips = _year_fixture(2020, return_version="2019v5.1")
+    zip_url, zip_bytes = next(iter(zips.items()))
+    html = f'<html><body><a href="{idx_url}">idx</a><a href="{zip_url}">zip</a></body></html>'.encode()
+
+    def akamai_handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url == source.DOWNLOADS_PAGE_URL:
+            return httpx.Response(200, content=html)
+        if request.method == "HEAD":
+            etag = '"idx2020"' if url == idx_url else '"zip2020"'
+            return httpx.Response(200, headers={"etag": etag, "last-modified": "Wed, 12 Jul 2023 04:01:25 GMT"})
+        if url == idx_url:
+            return httpx.Response(200, headers={"etag": '"idx2020"'}, stream=_ChunkedByteStream(idx_bytes))
+        return httpx.Response(200, headers={"etag": '"zip2020"'}, stream=_ChunkedByteStream(zip_bytes))
+
+    manifest = pipeline.discover([2020], transport=httpx.MockTransport(akamai_handler), min_interval=0)
+    assert manifest["years"]["2020"]["index"]["content_length"] is None
+    assert manifest["years"]["2020"]["archives"][0]["content_length"] is None
+
+    # 1. sync_build downloads chunked bodies without Content-Length and records exact verified byte_size
+    out1 = tmp_path / "run1"
+    _art1, ev1, sum1 = pipeline.sync_build(
+        manifest, out1, archive_root=shared_raw, min_interval=0, transport=httpx.MockTransport(akamai_handler)
+    )
+    assert sum1["rows"]["irs990_filings"] == 1
+    assert sum1["years"]["2020"]["return_version_counts"] == {"2019v5.1": 1}
+    assert sum1["years"]["2020"]["source_index"]["byte_size"] == len(idx_bytes)
+    assert sum1["years"]["2020"]["source_index"]["content_length"] == len(idx_bytes)
+    assert sum1["years"]["2020"]["source_archives"][0]["byte_size"] == len(zip_bytes)
+    assert sum1["years"]["2020"]["source_archives"][0]["content_length"] == len(zip_bytes)
+    chk = json.loads((out1 / "checkpoints/2020.json").read_text(encoding="utf-8"))
+    assert chk["index"]["byte_size"] == len(idx_bytes)
+    assert chk["completed_zips"][0]["byte_size"] == len(zip_bytes)
+    assert not list(out1.glob(".zip-spool-*"))
+
+    # 2. CentralRawArchiveStore offline reuse works cleanly when manifest has content_length=None + matching ETag
+    store = CentralRawArchiveStore(shared_raw)
+    zip_sha = "sha256:" + hashlib.sha256(zip_bytes).hexdigest()
+    store.put_blob(zip_sha, len(zip_bytes), [zip_bytes])
+    zip_hex = zip_sha.removeprefix("sha256:")
+    receipt_path = shared_raw / "acquisitions/sha256" / zip_hex[:2] / zip_hex
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+    receipt_path.write_text(
+        json.dumps({
+            "format": "spicygov-acquisition-1",
+            "receipt": {
+                "event": "capture",
+                "requested_url": zip_url,
+                "byte_size": len(zip_bytes),
+                "sha256": zip_sha,
+                "response_headers": [["etag", '"zip2020"']],
+                "observed_at": "2026-11-28T00:00:00+00:00",
+            },
+        }),
+        encoding="utf-8",
+    )
+    out_offline = tmp_path / "run-offline"
+    _art_off, _ev_off, sum_off = pipeline.sync_build(manifest, out_offline, archive_root=shared_raw, offline=True)
+    assert sum_off["rows"]["irs990_filings"] == 1
+    assert sum_off["years"]["2020"]["source_index"]["byte_size"] == len(idx_bytes)
+    assert sum_off["years"]["2020"]["source_archives"][0]["evidence_mode"] == "hash_only_local_reuse"
+
+    # 3. Carry-forward with omitted HEAD Content-Length matches prior summary on (url, etag) with ZERO HTTP calls!
+    cf_calls: list[str] = []
+
+    def fail_if_called(request: httpx.Request) -> httpx.Response:
+        cf_calls.append(str(request.url))
+        raise AssertionError(f"Unexpected HTTP call during carry-forward: {request.url}")
+
+    out_cf = tmp_path / "run-cf"
+    _art_cf, _ev_cf, sum_cf = pipeline.sync_build(
+        manifest,
+        out_cf,
+        archive_root=shared_raw,
+        carry_forward_generation=out1 / "generation",
+        carry_forward_summary=out1 / "irs990-population-summary.json",
+        min_interval=0,
+        transport=httpx.MockTransport(fail_if_called),
+    )
+    assert cf_calls == []
+    assert sum_cf["years"]["2020"]["mode"] == "carried_forward"
+
+    # 4. Enforce MAX_INDEX_BYTES / MAX_ARCHIVE_BYTES even when manifest content_length is None (both chunked and declared)
+    with monkeypatch.context() as mp:
+        mp.setattr(source, "MAX_INDEX_BYTES", len(idx_bytes) - 1)
+        out_idx_bound = tmp_path / "fail-idx-chunked"
+        with pytest.raises(SourceEvidenceError, match="exceeds its retention byte bound"):
+            pipeline.sync_build(
+                manifest,
+                out_idx_bound,
+                archive_root=tmp_path / "raw-idx-bound",
+                min_interval=0,
+                transport=httpx.MockTransport(akamai_handler),
+            )
+        assert not (out_idx_bound / "generation").exists()
+
+        def declared_cl_handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, content=idx_bytes, headers={"etag": '"idx2020"'})
+
+        with pytest.raises(source.IRS990Error, match="GET Content-Length .* outside allowed bound"):
+            pipeline.sync_build(
+                manifest,
+                tmp_path / "fail-idx-declared",
+                archive_root=tmp_path / "raw-idx-declared",
+                min_interval=0,
+                transport=httpx.MockTransport(declared_cl_handler),
+            )
+
+    with monkeypatch.context() as mp:
+        mp.setattr(source, "MAX_ARCHIVE_BYTES", len(zip_bytes) - 1)
+        out_zip_bound = tmp_path / "fail-zip-chunked"
+        with pytest.raises(SourceEvidenceError, match="exceeds its retention byte bound"):
+            pipeline.sync_build(
+                manifest,
+                out_zip_bound,
+                archive_root=tmp_path / "raw-zip-bound",
+                min_interval=0,
+                transport=httpx.MockTransport(akamai_handler),
+            )
+        assert not list(out_zip_bound.glob(".zip-spool-*"))
+        assert not (out_zip_bound / "generation").exists()
+
+    # 5. Ambiguous (url, etag) receipts in CentralRawArchiveStore fail closed when content_length is None
+    alt_zip = zip_bytes + b"\x00"
+    alt_sha = "sha256:" + hashlib.sha256(alt_zip).hexdigest()
+    store.put_blob(alt_sha, len(alt_zip), [alt_zip])
+    alt_hex = alt_sha.removeprefix("sha256:")
+    alt_receipt = shared_raw / "acquisitions/sha256" / alt_hex[:2] / alt_hex
+    alt_receipt.parent.mkdir(parents=True, exist_ok=True)
+    alt_receipt.write_text(
+        json.dumps({
+            "format": "spicygov-acquisition-1",
+            "receipt": {
+                "event": "capture",
+                "requested_url": zip_url,
+                "byte_size": len(alt_zip),
+                "sha256": alt_sha,
+                "response_headers": [["etag", '"zip2020"']],
+                "observed_at": "2026-11-28T00:00:01+00:00",
+            },
+        }),
+        encoding="utf-8",
+    )
+    with pytest.raises(FileNotFoundError, match="missing retained archive"):
+        pipeline.sync_build(manifest, tmp_path / "fail-ambiguous-reuse", archive_root=shared_raw, offline=True)
+
+    # 6. Empty 0-byte 200 OK body refuses when content_length is None
+    def empty_index_handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, headers={"etag": '"idx2020"'}, stream=_ChunkedByteStream(b""))
+
+    with pytest.raises(source.IRS990Error, match="empty body"):
+        pipeline.sync_build(
+            manifest,
+            tmp_path / "fail-empty",
+            archive_root=tmp_path / "raw-empty",
+            min_interval=0,
+            transport=httpx.MockTransport(empty_index_handler),
+        )
+
+
+def test_year_fingerprint_matches_handles_omitted_content_length_strictly():
+    idx_url = source.BASE_URL + "2020/index_2020.csv"
+    zip_url = source.BASE_URL + "2020/2020_TEOS_XML_CT1.zip"
+    prior_summary = {
+        "source_index": {"url": idx_url, "byte_size": 1000, "content_length": 1000, "etag": '"idx-etag"'},
+        "source_archives": [{"url": zip_url, "byte_size": 5000, "content_length": 5000, "etag": '"zip-etag"'}],
+    }
+
+    # Exact (url, etag, size) match
+    assert pipeline._year_fingerprint_matches(
+        {
+            "index": {"url": idx_url, "content_length": 1000, "etag": '"idx-etag"'},
+            "archives": [{"url": zip_url, "content_length": 5000, "etag": '"zip-etag"'}],
+        },
+        prior_summary,
+    )
+
+    # HEAD omitted content_length on index and/or archive -> matches on non-empty (url, etag)
+    assert pipeline._year_fingerprint_matches(
+        {
+            "index": {"url": idx_url, "content_length": None, "etag": '"idx-etag"'},
+            "archives": [{"url": zip_url, "content_length": None, "etag": '"zip-etag"'}],
+        },
+        prior_summary,
+    )
+
+    # Mismatching ETag refuses even when content_length is None
+    assert not pipeline._year_fingerprint_matches(
+        {
+            "index": {"url": idx_url, "content_length": None, "etag": '"idx-changed"'},
+            "archives": [{"url": zip_url, "content_length": None, "etag": '"zip-etag"'}],
+        },
+        prior_summary,
+    )
+
+    # Missing or empty ETag refuses when content_length is None
+    assert not pipeline._year_fingerprint_matches(
+        {
+            "index": {"url": idx_url, "content_length": None, "etag": None},
+            "archives": [{"url": zip_url, "content_length": None, "etag": '"zip-etag"'}],
+        },
+        prior_summary,
+    )
+
+    # Present content_length that differs from prior byte_size refuses even when ETag matches
+    assert not pipeline._year_fingerprint_matches(
+        {
+            "index": {"url": idx_url, "content_length": 1001, "etag": '"idx-etag"'},
+            "archives": [{"url": zip_url, "content_length": 5000, "etag": '"zip-etag"'}],
+        },
+        prior_summary,
+    )
+    assert not pipeline._year_fingerprint_matches(
+        {
+            "index": {"url": idx_url, "content_length": None, "etag": '"idx-etag"'},
+            "archives": [{"url": zip_url, "content_length": 5001, "etag": '"zip-etag"'}],
+        },
+        prior_summary,
+    )
+
+    # Missing prior byte_size refuses
+    assert not pipeline._year_fingerprint_matches(
+        {
+            "index": {"url": idx_url, "content_length": None, "etag": '"idx-etag"'},
+            "archives": [{"url": zip_url, "content_length": None, "etag": '"zip-etag"'}],
+        },
+        {
+            "source_index": {"url": idx_url, "byte_size": None, "etag": '"idx-etag"'},
+            "source_archives": prior_summary["source_archives"],
+        },
+    )
 

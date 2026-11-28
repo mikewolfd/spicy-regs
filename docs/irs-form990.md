@@ -10,10 +10,11 @@ R2/MCP publication.
 ## Scope & Explicit Form-Type Boundaries
 
 - **Form 990 (`RETURN_TYPE = "990"`, `<IRS990>`):** Interpreted across all visually qualified
-  schema families in `QUALIFIED_VERSION_SPECS` (`2020v4.*`, `2021v4.*`, `2022v4.*`, `2022v5.*`,
-  `2023v5.*`, `2023v6.*`, `2024v5.*`, `2025v4.*`). Pre-2020 cohorts (`2018v3.*`, `2019v4.*`) and
-  future schema releases (`2025v5.*`, `2026v*`) stay unqualified until raw visual review of
-  rendered original XMLs; unrecognized versions are quarantined and fail the build above `0.1%`
+  schema families in `QUALIFIED_VERSION_SPECS` (`2016v3.*`, `2017v2.*`, `2018v3.*`, `2019v5.*`,
+  `2020v4.*`, `2021v4.*`, `2022v4.*`, `2022v5.*`, `2023v4.*`, `2023v5.*`, `2023v6.*`, `2024v5.*`,
+  `2025v4.*`). Unreviewed older/other cohorts (`2015v2.*`, `2019v4.*`) and future schema releases
+  (`2025v5.*`, `2026v*`) stay unqualified until raw visual review of rendered original XMLs;
+  unrecognized versions are quarantined and fail the build above `0.1%`
   (`max_quarantined_ratio=0.001`) or `500` rows.
 - **Form 990-EZ (`990EZ`), Form 990-PF (`990PF`), and Form 990-T (`990T`):** Present in the
   same IRS TEOS annual indexes and ZIP archives; explicitly recognized, fast-skipped without XML

@@ -49,8 +49,32 @@ class VersionSpec:
 
 
 # Qualify each major schema family against rendered original publisher XML before extending this registry.
-# Pre-2020 (2018v3.*, 2019v4.*) and future (2025v5.*, 2026v*) cohorts stay unqualified until visual review.
+# Unreviewed older/other cohorts (e.g. 2015v2.*, 2019v4.*) and future (2025v5.*, 2026v*) cohorts stay unqualified until visual review.
 QUALIFIED_VERSION_SPECS: dict[str, VersionSpec] = {
+    "2016v3": VersionSpec(
+        family="2016v3",
+        profile="mef-990-standard-v1",
+        visually_reviewed=("2016v3.0", "2016v3.1"),
+        notes="Visually reviewed 2026-11-28 (2016v3.0, 2016v3.1; 204/204 identical tags in download990xml_2019_4.zip).",
+    ),
+    "2017v2": VersionSpec(
+        family="2017v2",
+        profile="mef-990-standard-v1",
+        visually_reviewed=("2017v2.2", "2017v2.3"),
+        notes="Visually reviewed 2026-11-28 (2017v2.2, 2017v2.3; 15,454/15,454 identical tags in download990xml_2019_4.zip).",
+    ),
+    "2018v3": VersionSpec(
+        family="2018v3",
+        profile="mef-990-standard-v1",
+        visually_reviewed=("2018v3.0", "2018v3.1", "2018v3.2", "2018v3.3"),
+        notes="Visually reviewed 2026-11-28 (2018v3.0, 2018v3.1, 2018v3.2, 2018v3.3; 19,460/19,460 identical tags across download990xml_2019_4.zip and 2020_TEOS_XML_CT1.zip).",
+    ),
+    "2019v5": VersionSpec(
+        family="2019v5",
+        profile="mef-990-standard-v1",
+        visually_reviewed=("2019v5.0", "2019v5.1"),
+        notes="Visually reviewed 2026-11-28 (2019v5.0, 2019v5.1; 11,945/11,945 identical tags in 2020_TEOS_XML_CT1.zip).",
+    ),
     "2020v4": VersionSpec(
         family="2020v4",
         profile="mef-990-standard-v1",
@@ -74,6 +98,12 @@ QUALIFIED_VERSION_SPECS: dict[str, VersionSpec] = {
         profile="mef-990-standard-v1",
         visually_reviewed=("2022v5.0",),
         notes="Visually reviewed 2026-11-28 (2022v5.0 from official 2025_TEOS_XML_01A.zip).",
+    ),
+    "2023v4": VersionSpec(
+        family="2023v4",
+        profile="mef-990-standard-v1",
+        visually_reviewed=("2023v4.0",),
+        notes="Visually reviewed 2026-11-28 (2023v4.0; 169/169 identical tags in 2024_TEOS_XML_01A.zip).",
     ),
     "2023v5": VersionSpec(
         family="2023v5",
