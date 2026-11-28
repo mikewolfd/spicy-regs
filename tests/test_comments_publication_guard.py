@@ -272,3 +272,18 @@ print(json.dumps({'fatal': faulthandler.is_enabled(), 'core': resource.getrlimit
     result = subprocess.run([sys.executable, "-B", "-c", code, guard.__file__], env=env,
                             text=True, capture_output=True, timeout=15, check=True)
     assert json.loads(result.stdout.splitlines()[-1]) == {"fatal": True, "core": [0, 0]}
+
+
+def test_workflow_frees_preinstalled_linux_toolchains_before_placement():
+    import yaml
+
+    root = Path(__file__).parents[1]
+    workflow = yaml.safe_load((root / ".github/workflows/_comments-mirror.yml").read_text())
+    steps = workflow["jobs"]["publish"]["steps"]
+    free_step = next(step for step in steps if step.get("name") == "Free preinstalled toolchains on Linux runners")
+    placement = next(step for step in steps if step.get("name") == "Record actual export placement")
+    publish = next(step for step in steps if step.get("name") == "Publish comments mirror from the catalog")
+    assert free_step["if"] == "runner.os == 'Linux'"
+    assert "/usr/share/dotnet" in free_step["run"] and "/usr/local/lib/android" in free_step["run"]
+    assert "secrets." not in json.dumps(free_step) and "R2_" not in json.dumps(free_step)
+    assert steps.index(free_step) < steps.index(placement) < steps.index(publish)
