@@ -4569,7 +4569,7 @@ tables:
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
       filing_key: &filing_key_association_pointer "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
-      filing_link_status: &map_time_filing_link_status "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+      filing_link_status: &resolved_filing_link_status "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -4933,7 +4933,7 @@ tables:
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
       filing_key: *filing_key_association_pointer
-      filing_link_status: *map_time_filing_link_status
+      filing_link_status: *resolved_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -5147,7 +5147,7 @@ tables:
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
       filing_key: *filing_key_association_pointer
-      filing_link_status: *map_time_filing_link_status
+      filing_link_status: *resolved_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -5495,7 +5495,7 @@ tables:
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
       filing_key: *filing_key_association_pointer
-      filing_link_status: *map_time_filing_link_status
+      filing_link_status: *resolved_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -5983,7 +5983,7 @@ tables:
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
       filing_key: *filing_key_association_pointer
-      filing_link_status: *map_time_filing_link_status
+      filing_link_status: *resolved_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -6086,7 +6086,7 @@ tables:
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
       filing_key: *filing_key_association_pointer
-      filing_link_status: *map_time_filing_link_status
+      filing_link_status: &map_time_filing_link_status "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       aggregate_type: Source-defined aggregation class, such as geographic bucket, contribution-size band or inaugural
         contributor group.
       candidate_native_id: Literal candidate-like reference as reported. Aggregate codes or unresolved references
@@ -6172,7 +6172,7 @@ tables:
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
       filing_key: *filing_key_association_pointer
-      filing_link_status: *map_time_filing_link_status
+      filing_link_status: *resolved_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -6355,7 +6355,7 @@ tables:
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
       filing_key: *filing_key_association_pointer
-      filing_link_status: *map_time_filing_link_status
+      filing_link_status: *resolved_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -6529,7 +6529,7 @@ tables:
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
       filing_key: *filing_key_association_pointer
-      filing_link_status: *map_time_filing_link_status
+      filing_link_status: *resolved_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -7020,7 +7020,7 @@ tables:
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
       filing_key: *filing_key_association_pointer
-      filing_link_status: *map_time_filing_link_status
+      filing_link_status: *resolved_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -7147,7 +7147,7 @@ tables:
         across namespaces are not equivalent.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+      filing_link_status: *resolved_filing_link_status
       definition_set_id: Key of the pinned source layout in fec_filing_definitions. Join its definition evidence for
         exact workbook cells; the layout does not validate the submission.
       declared_format_version: Format version declared by the filing header, retained separately from the reviewed
@@ -7453,7 +7453,7 @@ tables:
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
       filing_key: *filing_key_association_pointer
-      filing_link_status: *map_time_filing_link_status
+      filing_link_status: *resolved_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -7582,7 +7582,7 @@ tables:
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
       filing_key: *filing_key_association_pointer
-      filing_link_status: *map_time_filing_link_status
+      filing_link_status: *resolved_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -7759,7 +7759,7 @@ tables:
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
       filing_key: *filing_key_association_pointer
-      filing_link_status: *map_time_filing_link_status
+      filing_link_status: *resolved_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -8219,7 +8219,7 @@ tables:
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
       filing_key: *filing_key_association_pointer
-      filing_link_status: *map_time_filing_link_status
+      filing_link_status: *resolved_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -8322,7 +8322,7 @@ tables:
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
       filing_key: *filing_key_association_pointer
-      filing_link_status: *map_time_filing_link_status
+      filing_link_status: *resolved_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -8513,7 +8513,7 @@ tables:
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
       filing_key: *filing_key_association_pointer
-      filing_link_status: *map_time_filing_link_status
+      filing_link_status: *resolved_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -9077,7 +9077,7 @@ tables:
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
       filing_key: *filing_key_association_pointer
-      filing_link_status: *map_time_filing_link_status
+      filing_link_status: *resolved_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.

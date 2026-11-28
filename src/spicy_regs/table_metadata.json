@@ -5666,7 +5666,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+        "description": "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       },
       {
         "column_name": "currency",
@@ -6648,7 +6648,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+        "description": "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       },
       {
         "column_name": "currency",
@@ -7355,7 +7355,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+        "description": "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       },
       {
         "column_name": "currency",
@@ -8306,7 +8306,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+        "description": "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       },
       {
         "column_name": "currency",
@@ -9877,7 +9877,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+        "description": "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       },
       {
         "column_name": "currency",
@@ -10462,7 +10462,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+        "description": "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       },
       {
         "column_name": "currency",
@@ -11123,7 +11123,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+        "description": "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       },
       {
         "column_name": "currency",
@@ -11680,7 +11680,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+        "description": "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       },
       {
         "column_name": "currency",
@@ -13195,7 +13195,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+        "description": "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       },
       {
         "column_name": "currency",
@@ -13566,7 +13566,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+        "description": "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       },
       {
         "column_name": "definition_set_id",
@@ -14508,7 +14508,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+        "description": "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       },
       {
         "column_name": "currency",
@@ -14868,7 +14868,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+        "description": "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       },
       {
         "column_name": "currency",
@@ -15481,7 +15481,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+        "description": "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       },
       {
         "column_name": "currency",
@@ -16792,7 +16792,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+        "description": "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       },
       {
         "column_name": "currency",
@@ -17112,7 +17112,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+        "description": "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       },
       {
         "column_name": "currency",
@@ -17706,7 +17706,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+        "description": "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       },
       {
         "column_name": "currency",
@@ -19561,7 +19561,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
+        "description": "Outcome of native filing-key resolution against retained `fec_filings`: `resolved_native_filing_key` populates `filing_key` when the row's native FEC file number uniquely matches a retained official filing version; otherwise `filing_key` is NULL and a typed `unresolved_*` reason is recorded (e.g. `unresolved_target_not_retained`, `unresolved_no_file_number`, `unresolved_no_native_url_witness`, `unresolved_source_authority`). Where this table also has a filing association view (`<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist), that view provides full association details."
       },
       {
         "column_name": "source_cycle",

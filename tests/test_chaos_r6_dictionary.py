@@ -157,16 +157,20 @@ def test_the_header_states_the_writing_rule_for_pinned_sentences():
 # --------------------------------------------------------------------------- #
 # Map-time status columns: one honest template, naming where the value is decided.
 # --------------------------------------------------------------------------- #
-#: The tables whose stored filing_link_status is `unresolved` on every row (footer sweep, 2026-10-03).
+#: The tables whose stored filing_link_status remains `unresolved` on every row in `/2` (footer sweep, 2026-11-28).
 MAP_TIME_FILING_LINK = (
-    "fec_account_transfers", "fec_allocated_disbursements", "fec_allocation_bases", "fec_api_response_controls",
-    "fec_bundled_contributions", "fec_candidate_api_observations", "fec_committee_master_observations",
-    "fec_committee_observations", "fec_communication_costs", "fec_contribution_aggregates",
-    "fec_coordinated_party_expenditures", "fec_debts", "fec_disbursements", "fec_electioneering_communications",
+    "fec_contribution_aggregates",
+    "fec_electioneering_communications",
+    "fec_reported_financial_summaries",
+)
+
+#: The tables whose `/2` build runs native filing-key resolution against retained `fec_filings` (footer sweep, 2026-11-28).
+RESOLVED_FILING_LINK = (
+    "fec_account_transfers", "fec_allocated_disbursements", "fec_allocation_bases", "fec_bundled_contributions",
+    "fec_communication_costs", "fec_coordinated_party_expenditures", "fec_debts", "fec_disbursements",
     "fec_filing_report_observations", "fec_filing_text_observations", "fec_inaugural_donations",
     "fec_independent_expenditures", "fec_intercommittee_transactions", "fec_loan_guarantors", "fec_loan_terms",
-    "fec_loans", "fec_lobbyist_registrations", "fec_postgres_committee_history_observations", "fec_quality_notices",
-    "fec_receipts", "fec_reported_financial_summaries",
+    "fec_loans", "fec_receipts",
 )
 
 
@@ -176,10 +180,19 @@ def test_filing_link_status_reads_from_one_template_that_says_it_is_set_when_map
     applicable = {table for table in MAP_TIME_FILING_LINK
                   if "filing_link_status" in processing[table]["descriptions"]}
     texts = {_column(table, "filing_link_status") for table in applicable}
-    assert applicable and len(texts) == 1, texts
+    assert applicable == set(MAP_TIME_FILING_LINK) and len(texts) == 1, texts
     (text,) = texts
     assert text.startswith("Always `unresolved`") and "before any filing is looked up" in text
     assert "_filing_associations" in text and "_native_filing_associations" in text
+
+    resolved_applicable = {table for table in RESOLVED_FILING_LINK
+                           if "filing_link_status" in processing[table]["descriptions"]}
+    resolved_texts = {_column(table, "filing_link_status") for table in resolved_applicable}
+    assert resolved_applicable == set(RESOLVED_FILING_LINK) and len(resolved_texts) == 1, resolved_texts
+    (rtext,) = resolved_texts
+    assert "Always `unresolved`" not in rtext
+    assert "`resolved_native_filing_key`" in rtext and "`fec_filings`" in rtext
+    assert "_filing_associations" in rtext and "_native_filing_associations" in rtext
 
 
 def test_the_other_map_time_statuses_name_where_they_are_decided():
