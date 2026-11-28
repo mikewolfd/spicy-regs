@@ -9,7 +9,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from scripts.check_table_joins import measure
-from spicy_regs.table_joins import JOINS, Join
+from spicy_regs.table_joins import JOINS, SOURCE_JOINS, Join
 
 
 @pytest.mark.parametrize("columns, child_key, parent_keys", [
@@ -86,10 +86,18 @@ def test_dated_report_keys_keep_the_undated_measurement_as_historical_evidence()
     assert all("/generations/" in url for side in ("child", "parent") for url in historical[side + "_urls"])
 
 
-def test_changed_printing_keys_do_not_inherit_old_measurements():
-    native = [j for j in JOINS if j.child in {"bill_sections", "section_diffs"} and "printing_id" in " ".join((*j.child_columns, *j.parent_columns))]
-    assert native
-    assert all(j.measurement is None and j.baseline_keys == 0 for j in native)
+def test_native_printing_keys_have_separate_baselines_from_processing_keys():
+    children = {"bill_sections", "section_diffs"}
+    native = [j for j in JOINS if j.child in children and j.parent == "bill_versions"]
+    assert len(native) == 3
+    historical = {j.name: j for j in SOURCE_JOINS}
+    for join in native:
+        assert any(column.endswith("printing_id") for column in join.child_columns)
+        assert join.measurement is not None and join.measurement["join"] == join.name
+        assert join.measurement["receipt"] == "docs/evidence/join-baselines-2026-11-28.json"
+        prior = historical[join.name.replace("printing_id", "source")]
+        assert prior.measurement is not None and prior.measurement["join"] == prior.name
+        assert prior.measurement.get("receipt") != join.measurement["receipt"]
 
 
 @pytest.mark.parametrize("parent", ["budget_volumes", "house_activity_reports"])

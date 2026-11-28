@@ -21,6 +21,8 @@ import zipfile
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from spicy_docs.sources.uscode import ReleasePoint, UsCodeSourceError
+
 from spicy_regs.sources.uscode_editions import MAX_ARCHIVE_BYTES, MAX_MEMBER_BYTES, SCHEMAS
 from spicy_regs.sources.uscode_editions_audit import (
     _reserve_report,
@@ -146,7 +148,7 @@ def native_metadata(root, title, release_point):
     )
 
 
-def native_observations(body, title="01", release_point="119-103"):
+def native_observations(body, title, release_point):
     """Return literal metadata and postorder structure/body observations of one title member."""
     require(len(body) <= MAX_MEMBER_BYTES, "selected XML member bound")
     decoded = body.decode("utf-8-sig")
@@ -234,11 +236,11 @@ def audit(candidate: Path, selection: Path):
     require(
         kind in KINDS
         and isinstance(point, str)
-        and re.fullmatch(r"[0-9]{2,3}-[0-9]+[a-z]?", point) is not None
         and spec.get("year") is None
         and (title is None if kind == "release-point-corpus" else isinstance(title, str) and TITLE_MEMBER.fullmatch(f"usc{title}.xml") is not None),
         "unsupported selected XML scope",
     )
+    point = ReleasePoint.from_label(point).label
     source = Path(spec["path"])
     source = source if source.is_absolute() else selection.parent / source
     require(source.stat().st_size <= MAX_ARCHIVE_BYTES, "selected archive byte bound")
@@ -279,8 +281,15 @@ def audit(candidate: Path, selection: Path):
             require(len(members) == 1, "a title archive holds exactly one member")
         for index, member in enumerate(members, 1):
             match = TITLE_MEMBER.fullmatch(member.filename.rsplit("/", 1)[-1])
+            # The pinned reader admits supporting files in annual XHTML only,
+            # not in release-point XML (even in a corpus ZIP).
             if match is None:
-                raise AssertionError("member is not a title: " + member.filename)
+                message = (
+                    "U.S. Code corpus archive entry name is not a title member"
+                    if kind == "release-point-corpus"
+                    else "U.S. Code title archive member name is not the requested title"
+                )
+                raise UsCodeSourceError(message)
             code_title = match["title"] + match["appendix"].lower()
             require(kind == "release-point-corpus" or code_title == title, "title member differs from the selection")
             require(member.file_size <= MAX_MEMBER_BYTES, "decoded member bound")
@@ -355,7 +364,8 @@ def audit(candidate: Path, selection: Path):
         complete_original_members=len(members),
         rows=dict(counts),
         evidence_sha256=before,
-        independence="All source expectations use independent ElementTree, native attributes/text and positional child paths; maintained helpers only declare schemas.",
+        independence="Native row expectations use independent ElementTree, attributes/text and positional child paths; "
+        "maintained declarations supply schemas, bounds and release-point label validation.",
         scope=f"Every member of one selected release-point archive ({scope}): every native metadata/heading/hierarchy/body/null/field/occurrence of every row. No publication or retirement proof.",
         limits="UTF8 XML without DTD/entities, within the builder's archive and member bounds; one member's whole tree at a time, not a memory bound. Rendering is documented descendant/body text, not facsimile or legal meaning. External supervision required.",
     )

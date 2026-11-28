@@ -78,7 +78,7 @@ def test_default_scheduled_run_does_not_filter_any_declaration(monkeypatch):
     monkeypatch.setattr(checker, "connect", duckdb.connect)
     monkeypatch.setattr(checker, "table_urls", lambda _: lambda name: [name])
     seen = []
-    def check(_con, joins, _urls, *, unpublished_new):
+    def check(_con, joins, _urls, *, unpublished_new, on_result):
         assert not unpublished_new
         seen.extend(joins)
         return [checker.verdict(j, 0, 0) for j in joins]
@@ -152,10 +152,10 @@ def test_record_writes_measured_baselines_that_the_registry_then_enforces(monkey
     assert checker.main([*args[:-1], empty.name]) == 1
     assert measurements.read_text() == before
 
-@pytest.mark.integration
-def test_only_a_declared_empty_child_may_be_unpublished(monkeypatch, tmp_path):
-    """Live httpfs over a local server: a 404 child of a declared-empty join is EMPTY; elsewhere it is unreadable."""
-    pq.write_table(pa.table({"id": pa.array(["one"], type=pa.string())}), tmp_path / "parent.parquet")
+@pytest.mark.parametrize("http_status", [404, 403, 429, 500])
+def test_http_failure_is_attributed_per_join_and_does_not_abort(monkeypatch, tmp_path, http_status):
+    """Read Parquet with httpfs against a loopback server, including genuine HTTP failures."""
+    pq.write_table(pa.table({"id": ["one"], "other_id": ["one"]}), tmp_path / "parent.parquet")
 
     class Files(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
@@ -164,17 +164,46 @@ def test_only_a_declared_empty_child_may_be_unpublished(monkeypatch, tmp_path):
         def log_message(self, format, *args):
             pass
 
+        def send_head(self):
+            assert "spicy-regs-join-check/1" in self.headers["User-Agent"]
+            if self.path == "/child.parquet":
+                self.send_error(http_status)
+                return None
+            return super().send_head()
+
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Files)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
     base = f"http://127.0.0.1:{server.server_port}"
-    monkeypatch.setattr(checker, "table_urls", lambda _: lambda name: [f"{base}/{name}.parquet"])
+    live_connect = checker.connect
+
+    def connect():
+        con = live_connect()
+        con.execute("SET http_retries = 0")
+        return con
+
+    monkeypatch.setattr(checker, "connect", connect)
+    monkeypatch.setattr(checker, "table_urls", lambda _: checker.TableURLs(base, {}))
+    declarations = (
+        replace(join(), baseline_keys=0, kind="empty"),
+        replace(join(), child="parent", parent="child", parent_columns=("other_id",)),
+        replace(join(), child="parent", parent="parent"),
+    )
+    monkeypatch.setattr(table_joins, "JOINS", declarations)
     receipt = tmp_path / "receipt.json"
     try:
-        for declared, code, status in ((replace(join(), baseline_keys=0, kind="empty"), 0, "EMPTY"),
-                                       (join(), 3, "UNREACHABLE")):
-            monkeypatch.setattr(table_joins, "JOINS", (declared,))
-            assert checker.main(["--index-url", base, "--receipt", str(receipt)]) == code
-            written = json.loads(receipt.read_text())
-            assert (written["results"][0]["status"] if code == 0 else written["status"]) == status
+        assert checker.main(["--index-url", base, "--receipt", str(receipt)]) == 3
     finally:
         server.shutdown()
+        server.server_close()
+        worker.join()
+    missing_child, missing_parent, live_join = json.loads(receipt.read_text())["results"]
+    expected_status = "NOT_PUBLISHED" if http_status == 404 else "UNREACHABLE"
+    assert missing_child["status"] == missing_parent["status"] == expected_status
+    assert missing_child["qualification_pending"] is (http_status == 404)
+    assert missing_parent["qualification_pending"] is False
+    assert missing_child["keys"] is missing_parent["keys"] is None
+    assert missing_child["reason"].startswith("child table child:")
+    assert missing_parent["reason"].startswith("parent table child:")
+    assert live_join["status"] == "OK"
+    assert live_join["keys"] == 1

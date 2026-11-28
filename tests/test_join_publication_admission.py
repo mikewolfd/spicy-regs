@@ -14,8 +14,12 @@ def declared(kind="unmeasured", keys=0):
     return table_joins.Join("child", ("id",), "parent", ("id",), keys, 0, kind)
 
 
+def unavailable(con, sql):
+    return live.ReadFailure("NOT_PUBLISHED", "HTTP 404")
+
+
 def test_absent_new_join_reports_no_measurement_and_cannot_record_a_baseline(tmp_path, monkeypatch):
-    monkeypatch.setattr(live, "_unpublished", lambda con, urls: True)
+    monkeypatch.setattr(live.KeyCache, "get", unavailable)
     with duckdb.connect() as con:
         result = live.measure(con, declared(), live.TableURLs("https://example.test", {}), allow_unpublished=True)
     assert result["status"] == "NOT_PUBLISHED"
@@ -29,14 +33,16 @@ def test_absent_new_join_reports_no_measurement_and_cannot_record_a_baseline(tmp
 
 
 @pytest.mark.parametrize("kind,keys,selected,allowed", [
-    ("unmeasured", 0, {}, False),  # default live check remains strict
+    ("unmeasured", 0, {}, False),  # direct measurement doesn't assume a waiver
     ("complete", 1, {}, True),  # prior measurement cannot disappear
     ("unmeasured", 0, {"child": ["missing-selected.parquet"]}, True),
 ])
 def test_existing_or_selected_inputs_are_not_excused(tmp_path, monkeypatch, kind, keys, selected, allowed):
-    monkeypatch.setattr(live, "_unpublished", lambda con, urls: True)
-    with duckdb.connect() as con, pytest.raises(duckdb.IOException):
-        live.measure(con, declared(kind, keys), live.TableURLs(str(tmp_path), selected), allow_unpublished=allowed)
+    monkeypatch.setattr(live.KeyCache, "get", unavailable)
+    with duckdb.connect() as con:
+        result = live.measure(con, declared(kind, keys), live.TableURLs(str(tmp_path), selected), allow_unpublished=allowed)
+    assert result["status"] == "NOT_PUBLISHED"
+    assert result["qualification_pending"] is False
 
 
 def test_published_new_rows_still_need_a_baseline(tmp_path):
@@ -51,14 +57,6 @@ def test_published_new_rows_still_need_a_baseline(tmp_path):
     assert result["keys"] == 1 and result["status"] in live.FAILING
 
 
-def test_source_failure_is_not_unpublished(monkeypatch):
-    def failed(*args):
-        raise duckdb.HTTPException("503 unavailable")
-    monkeypatch.setattr(live, "_unpublished", failed)
-    with duckdb.connect() as con, pytest.raises(duckdb.HTTPException):
-        live.measure(con, declared(), live.TableURLs("https://example.test", {}), allow_unpublished=True)
-
-
 @pytest.mark.parametrize("previously_declared", ["same", "changed-parent", "new"])
 def test_cli_opt_in_applies_only_to_new_identity(tmp_path, monkeypatch, previously_declared):
     join = declared()
@@ -71,7 +69,7 @@ def test_cli_opt_in_applies_only_to_new_identity(tmp_path, monkeypatch, previous
     monkeypatch.setattr(live, "table_urls", lambda base: live.TableURLs(base, {}))
     selected = []
 
-    def check(con, joins, urls, *, unpublished_new):
+    def check(con, joins, urls, *, unpublished_new, on_result):
         selected.extend(unpublished_new)
         return []
 

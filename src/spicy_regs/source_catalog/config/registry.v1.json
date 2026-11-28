@@ -4022,11 +4022,12 @@
     {
       "id": "declared:uscode:destination",
       "collection_id": "declared:uscode",
-      "status": "implemented-scoped-local",
-      "reason": "The OLRC acquisition guide and native edition proof identify consolidated U.S. Code. Implemented destinations retain current release-point XML and historical annual XHTML edition structure in uscode_editions and uscode_edition_structure. Keep their individual selection scopes and qualification pins; these are not enacted-law sections or Table III classifications. Normalized section bodies remain T09 work; local qualification does not establish publication or full publisher coverage.",
+      "status": "implemented-existing-observations",
+      "reason": "The published uscode-editions family retains native editions, structure and section content from selected OLRC annual XHTML and release-point XML archives. The linked local destinations and qualification pin describe earlier structure-only work, not the scope of the publication. These observations are not enacted-law sections or Table III classifications and do not establish full publisher coverage.",
       "tables": [
         "uscode_editions",
-        "uscode_edition_structure"
+        "uscode_edition_structure",
+        "uscode_edition_sections"
       ],
       "destination_ids": [
         "family:laws:destination:code-current",
@@ -4036,8 +4037,8 @@
         "path": "metadata/historical-rebuilds/20261010/uscode/verification.json",
         "sha256": "36d403326e9f64814c15140ec4835d273a86196e9f83a6ce8c25fc5c7b85d3d0"
       },
-      "qualification_scope": "Selected archive members and native itempath/section/chapter observations; no normalized section-body extraction",
-      "published": false
+      "qualification_scope": "Selected annual XHTML and release-point XML archive members, native itempath/section/chapter observations, and source-scoped section content; the linked local qualification is structure-only",
+      "published": true
     },
     {
       "id": "declared:supreme-court:destination",

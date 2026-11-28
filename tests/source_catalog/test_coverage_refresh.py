@@ -352,18 +352,24 @@ def test_reports_refuse_overwrite(tmp_path):
     assert json.loads(path.read_text()) == {"new": []}
 
 
-def test_declared_code_links_preserve_structure_only_scope():
+def test_declared_code_distinguishes_published_content_from_local_structure_qualification():
     registry = json.loads(
         (Path(__file__).parents[2] / "src/spicy_regs/source_catalog/config/registry.v1.json").read_text()
     )
     declared = next(p for p in registry["planned"] if p["id"] == "declared:uscode:destination")
     destinations = {p["id"]: p for p in registry["planned"]}
-    assert declared["status"] == "implemented-scoped-local"
-    assert set(declared["tables"]) == {"uscode_editions", "uscode_edition_structure"}
+    assert declared["status"] == "implemented-existing-observations"
+    assert set(declared["tables"]) == {"uscode_editions", "uscode_edition_structure", "uscode_edition_sections"}
+    assert set(declared["destination_ids"]) == {
+        "family:laws:destination:code-current", "family:laws:destination:code-historical",
+    }
     for ident in declared["destination_ids"]:
-        assert destinations[ident]["qualification_input"] == declared["qualification_input"]
-    assert declared["published"] is False
-    assert "no normalized section-body extraction" in declared["qualification_scope"]
+        destination = destinations[ident]
+        assert destination["qualification_input"] == declared["qualification_input"]
+        assert destination["published"] is False
+        assert "uscode_edition_sections" not in destination["tables"]
+    assert declared["published"] is True
+    assert "source-scoped section content" in declared["qualification_scope"]
 
 
 def test_post_integration_registry_preserves_scoped_authorities(index):

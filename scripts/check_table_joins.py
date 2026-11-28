@@ -7,8 +7,10 @@ decimals, so a new orphan or a narrowed parent shows as a failing number. A
 join reports a few orphans beyond those its floor admits as LAG
 (``Join.lag_allowance``) rather than failing, since a growing child can name a
 key its parent publishes a run later. A declared-empty child that now publishes keys fails too, until its
-baseline is recorded. Reads the publisher the output ledger names, or an explicit
-``--index-url``, never a default. It downloads column pages and writes nothing
+baseline is recorded. Each key projection is scanned once and retained in
+DuckDB only until its last join. HTTP 404 is reported per join, never as zero
+keys. Reads the publisher the output ledger names, or an explicit
+``--index-url``, never a default. It reads Parquet inputs and writes nothing
 but an optional receipt, except that ``--record`` also records each named join's
 measurement as its baseline in ``join_measurements.json``.
 """
@@ -20,10 +22,13 @@ import json
 import re
 import subprocess
 import sys
+from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
+from functools import cache
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import duckdb
 import httpx
@@ -98,10 +103,13 @@ def table_urls(base_url: str) -> TableURLs:
 
 
 def connect() -> duckdb.DuckDBPyConnection:
-    """Modest concurrency and patient retries: the public r2.dev endpoint answers 429 under load."""
-    con = duckdb.connect()
+    """Bound public reads: reuse HTTP connections, and read only column pages of large files."""
+    con = duckdb.connect(config={"custom_user_agent": "spicy-regs-join-check/1"})
     load_public_http(con)
-    con.execute("SET threads = 2")
+    con.execute("SET threads = 8; SET httpfs_connection_caching = true")
+    # A small immutable file is cheaper as one GET than as many row-group
+    # requests. Never fall back to downloading an entire large Parquet file.
+    con.execute("SET force_download_threshold = 33554432; SET auto_fallback_to_full_download = false")
     return con
 
 
@@ -113,84 +121,184 @@ def _literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def _unpublished(con: duckdb.DuckDBPyConnection, urls: list[str]) -> bool:
-    """Whether the publisher serves no file for a table (HTTP 404), as distinct from one it fails to serve."""
-    try:
-        con.execute(f"SELECT 1 FROM {publication.parquet_scan(urls)} LIMIT 0")
-    except duckdb.HTTPException as exc:
-        if exc.status_code == 404:
-            return True
-        raise
-    return False
+# The table and ordered key columns identify a scan. Different child filters are
+# counted in the same grouped projection, not another read of the Parquet.
+Key = tuple[str, tuple[str, ...]]
+ChildFilter = tuple[tuple[str, str], ...]
+_METRICS = ("child_input_rows", "child_nonnull_rows", "parent_input_rows", "parent_distinct_keys",
+            "parent_duplicate_keys", "max_parent_multiplicity", "max_matched_parent_multiplicity",
+            "inner_join_rows", "left_join_nonnull_rows")
 
 
-def measure(con: duckdb.DuckDBPyConnection, join: table_joins.Join, url_of: Callable[[str], list[str]],
-            *, allow_unpublished: bool = False) -> dict:
-    """Measure full selected inputs, preserving parent multiplicity and raw-row amplification.
+def _keys(join: table_joins.Join) -> tuple[Key, Key]:
+    return (join.measured_via or join.child, join.child_columns), (join.parent, join.parent_columns)
 
-    A declared-empty child that no generation publishes yet has no key to read: it
-    reports EMPTY without a parent read. Any other unpublished input stays unreadable.
-    """
-    child = [_quote(column) for column in join.child_columns]
-    parent = [_quote(column) for column in join.parent_columns]
-    child_urls, parent_urls = url_of(join.measured_via or join.child), url_of(join.parent)
-    if (allow_unpublished and join.kind == "unmeasured" and join.baseline_keys == join.baseline_missing == 0
-            and isinstance(url_of, TableURLs) and (join.measured_via or join.child) not in url_of.selected
-            and _unpublished(con, child_urls)):
-        return {"join": join.name, "kind": join.kind, "status": "NOT_PUBLISHED", "keys": None, "missing": None,
-                "resolved_pct": None, "floor_pct": None, "baseline_keys": 0, "baseline_missing": 0,
-                "examples": [], "scope": "new_unmeasured_child_not_published", "child_urls": child_urls,
-                "parent_urls": parent_urls, "expected_cardinality": join.expected_cardinality,
-                "reason": "No selected generation or legacy child file; live join qualification remains pending."}
-    if join.kind == "empty" and _unpublished(con, child_urls):
-        result = verdict(join, 0, 0)
-        result.update({"scope": "child_not_published", "child_urls": child_urls, "parent_urls": parent_urls,
-                       "expected_cardinality": join.expected_cardinality})
-        return result
-    keys_sql = ", ".join(f"c{i}" for i in range(len(child)))
-    on = " AND ".join(f"c.c{i} = p.p{i}" for i in range(len(child)))
-    child_where = (
-        " WHERE " + " AND ".join(f"{_quote(col)} = {_literal(val)}" for col, val in join.child_filter)
-        if join.child_filter
-        else ""
-    )
-    sql = f"""
-        WITH child_input AS (SELECT {', '.join(child)} FROM {publication.parquet_scan(child_urls)}{child_where}),
-             parent_input AS (SELECT {', '.join(parent)} FROM {publication.parquet_scan(parent_urls)}),
-             c AS (SELECT {', '.join(f'{col} AS c{i}' for i, col in enumerate(child))}, count(*) AS child_rows
-                   FROM child_input WHERE {' AND '.join(f'{col} IS NOT NULL' for col in child)}
-                   GROUP BY ALL),
-             p AS (SELECT {', '.join(f'{col} AS p{i}' for i, col in enumerate(parent))}, count(*) AS parent_rows
-                   FROM parent_input WHERE {' AND '.join(f'{col} IS NOT NULL' for col in parent)}
-                   GROUP BY ALL),
-             j AS (SELECT {keys_sql}, child_rows, coalesce(parent_rows, 0) AS parent_rows
-                   FROM c LEFT JOIN p ON {on})
+
+def _key_names(key: Key) -> list[str]:
+    return [f"k{i}" for i in range(len(key[1]))]
+
+
+def _grouped(key: Key, urls: list[str], filters: Sequence[ChildFilter]) -> str:
+    columns = [f"{_quote(col)} AS {alias}" for col, alias in zip(key[1], _key_names(key), strict=True)]
+    for i, conditions in enumerate(filters):
+        predicate = " AND ".join(f"{_quote(col)} = {_literal(val)}" for col, val in conditions)
+        count = f"count(*) FILTER (WHERE {predicate})" if predicate else "count(*)"
+        columns.append(f"{count} AS n{i}")
+    # Keep the null-key groups for raw input counts, but never join them.
+    group_by = ", ".join(str(i + 1) for i in range(len(key[1])))
+    return f"SELECT {', '.join(columns)} FROM {publication.parquet_scan(urls)} GROUP BY {group_by}"
+
+
+def _join_sql(key: Key, child: str, parent: str, child_count: str, parent_count: str) -> str:
+    names = _key_names(key)
+    cols = ", ".join(names)
+    nonnull = " AND ".join(f"{col} IS NOT NULL" for col in names)
+    return f"""
+        WITH c0 AS ({child}), p0 AS ({parent}),
+             c AS (SELECT {cols}, {child_count} AS n FROM c0 WHERE {child_count}>0 AND {nonnull}),
+             p AS (SELECT {cols}, {parent_count} AS n FROM p0 WHERE {parent_count}>0 AND {nonnull}),
+             j AS (SELECT {cols}, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows
+                   FROM c LEFT JOIN p USING ({cols}))
         SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,
-               (list(concat_ws('|', {keys_sql}) ORDER BY {keys_sql}) FILTER (WHERE parent_rows=0))[1:3] AS examples,
-               (SELECT count(*) FROM child_input) AS child_input_rows,
+               arg_min(concat_ws('|', {cols}), row({cols}), 3) FILTER (WHERE parent_rows=0) AS examples,
+               (SELECT coalesce(sum({child_count}),0) FROM c0) AS child_input_rows,
                coalesce(sum(child_rows),0) AS child_nonnull_rows,
-               (SELECT count(*) FROM parent_input) AS parent_input_rows,
+               (SELECT coalesce(sum({parent_count}),0) FROM p0) AS parent_input_rows,
                (SELECT count(*) FROM p) AS parent_distinct_keys,
-               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,
-               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,
+               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,
+               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,
                coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,
                coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,
                coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows
         FROM j"""
-    row = con.execute(sql).fetchone()
+
+
+@dataclass(frozen=True)
+class ReadFailure:
+    status: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class Projection:
+    name: str
+    filters: tuple[ChildFilter, ...]
+
+    @property
+    def sql(self) -> str:
+        return f"SELECT * FROM {self.name}"
+
+    def count_column(self, conditions: ChildFilter) -> str:
+        return f"n{self.filters.index(conditions)}"
+
+
+class KeyCache:
+    """Lazy, run-local distinct-key tables; drop each one after its final consumer."""
+
+    def __init__(self, con: duckdb.DuckDBPyConnection, joins: Sequence[table_joins.Join],
+                 url_of: Callable[[str], list[str]]):
+        self.con = con
+        self.urls = cache(url_of)
+        filters: dict[Key, dict[ChildFilter, None]] = {}
+        self.remaining: Counter[Key] = Counter()
+        for join in joins:
+            child, parent = _keys(join)
+            self.remaining.update((child, parent))
+            filters.setdefault(child, {})[join.child_filter] = None
+            filters.setdefault(parent, {})[()] = None
+        self.projections = {
+            key: Projection(f"temp.main._join_keys_{i}", tuple(scopes))
+            for i, (key, scopes) in enumerate(filters.items())
+        }
+        self.loaded: set[Key] = set()
+        self.failures: dict[Key, ReadFailure] = {}
+        self.absent: dict[str, ReadFailure] = {}
+
+    def get(self, key: Key) -> Projection | ReadFailure:
+        table = key[0]
+        projection = self.projections[key]
+        if table in self.absent:
+            return self.absent[table]
+        if key in self.failures:
+            return self.failures[key]
+        if key not in self.loaded:
+            sql = _grouped(key, self.urls(table), projection.filters)
+            try:
+                self.con.execute(f"CREATE TEMP TABLE {projection.name} AS {sql}")
+            except duckdb.HTTPException as exc:
+                if exc.status_code == 404:
+                    failure = ReadFailure("NOT_PUBLISHED", "HTTP 404")
+                    self.absent[table] = failure
+                    return failure
+                self.failures[key] = ReadFailure("UNREACHABLE", str(exc))
+                return self.failures[key]
+            except (duckdb.IOException, duckdb.BinderException) as exc:
+                self.failures[key] = ReadFailure("UNREACHABLE", str(exc))
+                return self.failures[key]
+            self.loaded.add(key)
+        return projection
+
+    def drop(self, key: Key) -> None:
+        if key in self.loaded:
+            self.con.execute(f"DROP TABLE {self.projections[key].name}")
+            self.loaded.remove(key)
+
+    def release(self, key: Key) -> None:
+        self.remaining[key] -= 1
+        if self.remaining[key] == 0:
+            self.drop(key)
+
+
+def _unreadable(join: table_joins.Join, failure: ReadFailure, side: str, table: str, pending: bool) -> dict:
+    reason = f"{side} table {table}: {failure.reason}"
+    if pending:
+        reason += "; live join qualification remains pending"
+    return {**_declaration(join), "status": failure.status, "keys": None, "missing": None,
+            "resolved_pct": None, "examples": [],
+            "scope": "input_not_published" if failure.status == "NOT_PUBLISHED" else "input_unreachable",
+            "reason": reason, "qualification_pending": pending}
+
+
+def _measure(keys: KeyCache, join: table_joins.Join, unpublished_allowed: bool,
+             selected: dict[str, list[str]] | None) -> dict:
+    child_key, parent_key = _keys(join)
+    child_urls, parent_urls = keys.urls(child_key[0]), keys.urls(parent_key[0])
+    common: dict = {"child_urls": child_urls, "parent_urls": parent_urls,
+              "expected_cardinality": join.expected_cardinality}
+    if join.child_filter:
+        common["child_filter"] = dict(join.child_filter)
+    child = keys.get(child_key)
+    if isinstance(child, ReadFailure):
+        pending = (child.status == "NOT_PUBLISHED" and unpublished_allowed
+                   and selected is not None and child_key[0] not in selected)
+        return {**_unreadable(join, child, "child", child_key[0], pending), **common}
+    parent = keys.get(parent_key)
+    if isinstance(parent, ReadFailure):
+        return {**_unreadable(join, parent, "parent", parent_key[0], False), **common}
+
+    query = _join_sql(child_key, child.sql, parent.sql, child.count_column(join.child_filter), parent.count_column(()))
+    row = keys.con.execute(query).fetchone()
     assert row is not None
     result = verdict(join, row[0], row[1], row[2] or [])
-    names = ("child_input_rows", "child_nonnull_rows", "parent_input_rows", "parent_distinct_keys",
-             "parent_duplicate_keys", "max_parent_multiplicity", "max_matched_parent_multiplicity",
-             "inner_join_rows", "left_join_nonnull_rows")
-    result.update(zip(names, row[3:]))
-    result.update({"scope": "full_selected_inputs", "child_urls": child_urls, "parent_urls": parent_urls,
-                   "sql": sql, "expected_cardinality": join.expected_cardinality})
-    if join.child_filter:
-        result["child_filter"] = {col: val for col, val in join.child_filter}
+    result.update(zip(_METRICS, row[3:], strict=True))
+    # The receipt replays from the recorded URLs, independent of the run's temp tables.
+    sql = _join_sql(child_key, _grouped(child_key, child_urls, [join.child_filter]),
+                    _grouped(parent_key, parent_urls, [()]), "n0", "n0")
+    result.update(common, scope="full_selected_inputs", sql=sql)
     if join.expected_cardinality == "one" and result["max_parent_multiplicity"] > 1:
         result["status"] = "MULTIPLICITY"
     return result
+
+
+def measure(con: duckdb.DuckDBPyConnection, join: table_joins.Join, url_of: Callable[[str], list[str]],
+            *, allow_unpublished: bool = False) -> dict:
+    """Measure one join, preserving parent multiplicity and raw-row amplification."""
+    return check(con, [join], url_of, unpublished_new=frozenset((join.name,)) if allow_unpublished else frozenset())[0]
+
+
+def _declaration(join: table_joins.Join) -> dict:
+    return {"join": join.name, "kind": join.kind, "floor_pct": join.floor_pct,
+            "baseline_keys": join.baseline_keys, "baseline_missing": join.baseline_missing}
 
 
 def verdict(join: table_joins.Join, keys: int, missing: int, examples: Sequence[str] = ()) -> dict:
@@ -204,15 +312,31 @@ def verdict(join: table_joins.Join, keys: int, missing: int, examples: Sequence[
         status = "OK"
     else:
         status = "LAG" if missing <= join.admitted_missing(keys) + join.lag_allowance(keys) else "BELOW"
-    return {"join": join.name, "kind": join.kind, "status": status, "keys": keys, "missing": missing,
-            "resolved_pct": None if pct is None else round(pct, 4), "floor_pct": floor,
-            "baseline_keys": join.baseline_keys, "baseline_missing": join.baseline_missing,
-            "examples": list(examples)}
+    return {**_declaration(join), "status": status, "keys": keys, "missing": missing,
+            "resolved_pct": None if pct is None else round(pct, 4), "examples": list(examples)}
 
 
 def check(con: duckdb.DuckDBPyConnection, joins: Iterable[table_joins.Join],
-          url_of: Callable[[str], list[str]], *, unpublished_new: frozenset[str] = frozenset()) -> list[dict]:
-    return [measure(con, join, url_of, allow_unpublished=join.name in unpublished_new) for join in joins]
+          url_of: Callable[[str], list[str]], *, unpublished_new: frozenset[str] = frozenset(),
+          on_result: Callable[[dict], None] | None = None) -> list[dict]:
+    declarations = list(joins)
+    keys = KeyCache(con, declarations, url_of)
+    selected = url_of.selected if isinstance(url_of, TableURLs) else None
+    results = []
+    try:
+        for join in declarations:
+            allowed = join.kind == "empty" or (join.name in unpublished_new and join.kind == "unmeasured"
+                                             and join.baseline_keys == join.baseline_missing == 0)
+            result = _measure(keys, join, allowed, selected)
+            results.append(result)
+            for key in _keys(join):
+                keys.release(key)
+            if on_result is not None:
+                on_result(result)
+    finally:
+        for key in tuple(keys.loaded):
+            keys.drop(key)
+    return results
 
 
 def record_baselines(joins: Sequence[table_joins.Join], results: Sequence[dict], receipt: Path,
@@ -226,7 +350,7 @@ def record_baselines(joins: Sequence[table_joins.Join], results: Sequence[dict],
     record = json.loads(path.read_text())
     entries = {entry["join"]: entry for entry in record["results"]}
     for join, result in zip(joins, results, strict=True):
-        if result["status"] in ("EMPTY", "EMPTIED", "MULTIPLICITY", "NOT_PUBLISHED"):
+        if result["status"] in ("EMPTY", "EMPTIED", "MULTIPLICITY", "NOT_PUBLISHED", "UNREACHABLE"):
             raise ValueError(f"{join.name}: {result['status']} has no baseline to record")
         kind = join.kind if join.kind != "unmeasured" else ("scope" if result["missing"] else "complete")
         entries[join.name] = {
@@ -239,8 +363,8 @@ def record_baselines(joins: Sequence[table_joins.Join], results: Sequence[dict],
 
 
 def _line(result: dict) -> str:
-    if result["status"] == "NOT_PUBLISHED":
-        return f"NOT_PUBLISHED {result['join']}  {result['reason']}"
+    if result["status"] in ("NOT_PUBLISHED", "UNREACHABLE"):
+        return f"{result['status']} {result['join']}  {result['reason']}"
     pct = "n/a" if result["resolved_pct"] is None else f"{result['resolved_pct']:.4f}%"
     floor = "none" if result["floor_pct"] is None else f"{result['floor_pct']:.4f}%"
     detail = f"  e.g. {result['examples']}" if result["examples"] else ""
@@ -300,6 +424,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                   "removed": removed, "results": []}, indent=2) + "\n")
             print("No added or changed join declarations; no public data reads needed.")
             return 0
+    if not args.record and not args.changed_since:
+        unpublished_new = frozenset(join.name for join in joins if join.kind == "unmeasured")
     if args.index_url:
         base, source = args.index_url.rstrip("/"), "an explicit --index-url, not the ledger's destination"
     else:
@@ -326,8 +452,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if all(r["status"] in ("OK", "EMPTY") for r in receipt["results"]) else EXIT_UNREACHABLE
     print(f"Checking {len(joins)} declared joins against {base} ({source}); baseline {table_joins.BASELINE_DATE}")
     try:
-        with connect() as con:
-            results = check(con, joins, table_urls(base), unpublished_new=unpublished_new)
+        with TemporaryDirectory(prefix="spicy-regs-join-") as spill, connect() as con:
+            con.execute("SET temp_directory = ?", [spill])
+            con.execute("SET memory_limit = '3GB'; SET preserve_insertion_order = false")
+            results = check(con, joins, table_urls(base), unpublished_new=unpublished_new,
+                            on_result=lambda result: print(_line(result), flush=True))
     except (httpx.HTTPError, duckdb.Error, publication.PublicationError) as exc:
         if args.receipt:
             args.receipt.write_text(json.dumps({"base": base, "changed_since": args.changed_since,
@@ -335,8 +464,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                                               "error": str(exc), "status": "UNREACHABLE"}, indent=2) + "\n")
         print(f"Live tables could not be read; joins were NOT checked: {exc}", file=sys.stderr)
         return EXIT_UNREACHABLE
-    for result in results:
-        print(_line(result))
     if args.receipt:
         args.receipt.write_text(json.dumps({"base": base, "changed_since": args.changed_since,
                                           "selected": [join.name for join in joins], "removed": removed,
@@ -353,6 +480,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     failed = [result for result in results if result["status"] in FAILING]
     counts = {status: sum(r["status"] == status for r in results) for status in dict.fromkeys(r["status"] for r in results)}
     print(" ".join(f"{status}={count}" for status, count in counts.items()))
+    if any(result["status"] == "UNREACHABLE" or
+           (result["status"] == "NOT_PUBLISHED" and not result["qualification_pending"]) for result in results):
+        return EXIT_UNREACHABLE
     return 1 if failed else 0
 
 

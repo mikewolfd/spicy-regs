@@ -1,0 +1,38 @@
+name: Check all public table joins
+
+on:
+  schedule:
+    - cron: '37 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-table-joins
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - name: Install checker dependencies
+        run: uv sync --frozen --no-default-groups
+      - name: Check the full registry against the ledger's public destination
+        run: uv run --frozen --no-default-groups python scripts/check_table_joins.py --receipt join-check-results.json
+      - name: Retain join measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: join-check-results
+          path: join-check-results.json
+          if-no-files-found: warn
+          retention-days: 14

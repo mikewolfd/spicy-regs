@@ -333,8 +333,27 @@ def test_describe_omits_only_measurements_and_ledger_statements_by_default_and_s
     assert full["detail"] == {"full": True, "omitted": []}
     expected = server._table_joins("bill_versions", measurements=True)
     assert full["joins"] == expected
-    # Measurements for changed native keys were invalidated; detail must not revive old evidence.
-    assert not any(join.get("measurement") for join in expected["outgoing"] + expected["incoming"])
+    # Only the three newly measured printing-key joins have evidence, not their old source-key versions.
+    # Incoming detail points to the child's description; the canonical joins carry the receipts.
+    assert all(join.get("measurement") is None for join in expected["outgoing"])
+    measured_keys = {
+        ("bill_sections", ("bill_id", "version_code", "printing_id")),
+        ("section_diffs", ("bill_id", "from_version_code", "from_printing_id")),
+        ("section_diffs", ("bill_id", "to_version_code", "to_printing_id")),
+    }
+    assert {
+        (join["child"], tuple(join["child_columns"])): join["measurement"]["receipt"]
+        for join in declared if join["parent"] == "bill_versions" and join["measurement"] is not None
+    } == dict.fromkeys(measured_keys, "docs/evidence/join-baselines-2026-11-28.json")
+    assert {
+        (join["child"], tuple(join["child_columns"])): join["measurement"]
+        for join in expected["incoming"] if "measurement" in join
+    } == {
+        (child, columns): {
+            "status": "see_child_description", "tool": "describe_table", "arguments": {"table": child, "detail": True},
+        }
+        for child, columns in measured_keys
+    }
     assert full["qualification"]["ledger_statements"]
     # The compact reply is a projection of the full one: every value it carries is the full reply's value.
     for key, value in compact.items():

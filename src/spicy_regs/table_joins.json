@@ -31,14 +31,42 @@
         "filing_id",
         "ein"
       ],
-      "kind": "unmeasured",
-      "reason": "Source-native selected filing membership; local cohort checked separately, public baseline pending.",
+      "kind": "complete",
+      "reason": "Source-native selected filing membership; the local cohort was checked separately.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 3,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "irs990_officers.filing_id+ein -> irs990_filings.filing_id+ein",
+        "kind": "complete",
+        "keys": 3,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 11,
+        "child_nonnull_rows": 11,
+        "parent_input_rows": 3,
+        "parent_distinct_keys": 3,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 11,
+        "left_join_nonnull_rows": 11,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/irs-form990/23e13ef19f7283ce08a420928d85e6b840967fa7226506d5603cf94db74a8fb8/irs990_officers.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/irs-form990/23e13ef19f7283ce08a420928d85e6b840967fa7226506d5603cf94db74a8fb8/irs990_filings.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"filing_id\" AS k0, \"ein\" AS k1, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/irs-form990/23e13ef19f7283ce08a420928d85e6b840967fa7226506d5603cf94db74a8fb8/irs990_officers.parquet'], hive_partitioning = false) GROUP BY 1, 2), p0 AS (SELECT \"filing_id\" AS k0, \"ein\" AS k1, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/irs-form990/23e13ef19f7283ce08a420928d85e6b840967fa7226506d5603cf94db74a8fb8/irs990_filings.parquet'], hive_partitioning = false) GROUP BY 1, 2),\n             c AS (SELECT k0, k1, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL),\n             p AS (SELECT k0, k1, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL),\n             j AS (SELECT k0, k1, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0, k1))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0, k1), row(k0, k1), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "irs990_grants",
@@ -51,14 +79,42 @@
         "filing_id",
         "ein"
       ],
-      "kind": "unmeasured",
+      "kind": "complete",
       "reason": "Schedule I recipient entries belong to their source filing, not an inferred organization match.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 1,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "irs990_grants.filing_id+ein -> irs990_filings.filing_id+ein",
+        "kind": "complete",
+        "keys": 1,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 1,
+        "child_nonnull_rows": 1,
+        "parent_input_rows": 3,
+        "parent_distinct_keys": 3,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 1,
+        "left_join_nonnull_rows": 1,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/irs-form990/23e13ef19f7283ce08a420928d85e6b840967fa7226506d5603cf94db74a8fb8/irs990_grants.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/irs-form990/23e13ef19f7283ce08a420928d85e6b840967fa7226506d5603cf94db74a8fb8/irs990_filings.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"filing_id\" AS k0, \"ein\" AS k1, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/irs-form990/23e13ef19f7283ce08a420928d85e6b840967fa7226506d5603cf94db74a8fb8/irs990_grants.parquet'], hive_partitioning = false) GROUP BY 1, 2), p0 AS (SELECT \"filing_id\" AS k0, \"ein\" AS k1, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/irs-form990/23e13ef19f7283ce08a420928d85e6b840967fa7226506d5603cf94db74a8fb8/irs990_filings.parquet'], hive_partitioning = false) GROUP BY 1, 2),\n             c AS (SELECT k0, k1, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL),\n             p AS (SELECT k0, k1, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL),\n             j AS (SELECT k0, k1, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0, k1))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0, k1), row(k0, k1), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "bill_actions",
@@ -561,14 +617,53 @@
         "version_code",
         "printing_id"
       ],
-      "kind": "unmeasured",
-      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins; this subject-key relationship has no measured baseline yet.",
+      "kind": "complete",
+      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 201590,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "bill_sections.bill_id+version_code+printing_id -> bill_versions.bill_id+version_code+printing_id",
+        "kind": "complete",
+        "keys": 201590,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 3681214,
+        "child_nonnull_rows": 3681214,
+        "parent_input_rows": 227159,
+        "parent_distinct_keys": 227159,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 3681214,
+        "left_join_nonnull_rows": 3681214,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=108/part-000000.parquet",
+          "https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=109/part-000000.parquet",
+          "https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=110/part-000000.parquet",
+          "https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=111/part-000000.parquet",
+          "https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=112/part-000000.parquet",
+          "https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=113/part-000000.parquet",
+          "https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=114/part-000000.parquet",
+          "https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=115/part-000000.parquet",
+          "https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=116/part-000000.parquet",
+          "https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=117/part-000000.parquet",
+          "https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=118/part-000000.parquet",
+          "https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=119/part-000000.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_versions.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"bill_id\" AS k0, \"version_code\" AS k1, \"printing_id\" AS k2, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=108/part-000000.parquet', 'https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=109/part-000000.parquet', 'https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=110/part-000000.parquet', 'https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=111/part-000000.parquet', 'https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=112/part-000000.parquet', 'https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=113/part-000000.parquet', 'https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=114/part-000000.parquet', 'https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=115/part-000000.parquet', 'https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=116/part-000000.parquet', 'https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=117/part-000000.parquet', 'https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=118/part-000000.parquet', 'https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_sections/congress=119/part-000000.parquet'], hive_partitioning = false) GROUP BY 1, 2, 3), p0 AS (SELECT \"bill_id\" AS k0, \"version_code\" AS k1, \"printing_id\" AS k2, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_versions.parquet'], hive_partitioning = false) GROUP BY 1, 2, 3),\n             c AS (SELECT k0, k1, k2, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL AND k2 IS NOT NULL),\n             p AS (SELECT k0, k1, k2, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL AND k2 IS NOT NULL),\n             j AS (SELECT k0, k1, k2, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0, k1, k2))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0, k1, k2), row(k0, k1, k2), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "section_diffs",
@@ -583,14 +678,42 @@
         "version_code",
         "printing_id"
       ],
-      "kind": "unmeasured",
-      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins; this subject-key relationship has no measured baseline yet.",
+      "kind": "complete",
+      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 39198,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "section_diffs.bill_id+from_version_code+from_printing_id -> bill_versions.bill_id+version_code+printing_id",
+        "kind": "complete",
+        "keys": 39198,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 39198,
+        "child_nonnull_rows": 39198,
+        "parent_input_rows": 227159,
+        "parent_distinct_keys": 227159,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 39198,
+        "left_join_nonnull_rows": 39198,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/section_diffs.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_versions.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"bill_id\" AS k0, \"from_version_code\" AS k1, \"from_printing_id\" AS k2, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/section_diffs.parquet'], hive_partitioning = false) GROUP BY 1, 2, 3), p0 AS (SELECT \"bill_id\" AS k0, \"version_code\" AS k1, \"printing_id\" AS k2, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_versions.parquet'], hive_partitioning = false) GROUP BY 1, 2, 3),\n             c AS (SELECT k0, k1, k2, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL AND k2 IS NOT NULL),\n             p AS (SELECT k0, k1, k2, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL AND k2 IS NOT NULL),\n             j AS (SELECT k0, k1, k2, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0, k1, k2))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0, k1, k2), row(k0, k1, k2), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "section_diffs",
@@ -605,14 +728,42 @@
         "version_code",
         "printing_id"
       ],
-      "kind": "unmeasured",
-      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins; this subject-key relationship has no measured baseline yet.",
+      "kind": "complete",
+      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 39198,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "section_diffs.bill_id+to_version_code+to_printing_id -> bill_versions.bill_id+version_code+printing_id",
+        "kind": "complete",
+        "keys": 39198,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 39198,
+        "child_nonnull_rows": 39198,
+        "parent_input_rows": 227159,
+        "parent_distinct_keys": 227159,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 39198,
+        "left_join_nonnull_rows": 39198,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/section_diffs.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_versions.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"bill_id\" AS k0, \"to_version_code\" AS k1, \"to_printing_id\" AS k2, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/section_diffs.parquet'], hive_partitioning = false) GROUP BY 1, 2, 3), p0 AS (SELECT \"bill_id\" AS k0, \"version_code\" AS k1, \"printing_id\" AS k2, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/bill-family/3cbc1104fc7f1e686cb4e555cdd7969672204d7ce4c95ebeec839fd674d38a23/bill_versions.parquet'], hive_partitioning = false) GROUP BY 1, 2, 3),\n             c AS (SELECT k0, k1, k2, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL AND k2 IS NOT NULL),\n             p AS (SELECT k0, k1, k2, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL AND k2 IS NOT NULL),\n             j AS (SELECT k0, k1, k2, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0, k1, k2))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0, k1, k2), row(k0, k1, k2), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "amendments",
@@ -1202,14 +1353,42 @@
         "document_number",
         "publication_date"
       ],
-      "kind": "unmeasured",
-      "reason": "Each typed agency child row belongs to exactly one dated Federal Register document in the same federal-register-typed generation; public baseline pending initial bootstrap.",
+      "kind": "complete",
+      "reason": "Each typed agency child row belongs to exactly one dated Federal Register document in the same federal-register-typed generation.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 1007937,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "federal_register_agencies.document_number+publication_date -> federal_register_documents.document_number+publication_date",
+        "kind": "complete",
+        "keys": 1007937,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 1593626,
+        "child_nonnull_rows": 1593626,
+        "parent_input_rows": 1013629,
+        "parent_distinct_keys": 1013629,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 1593626,
+        "left_join_nonnull_rows": 1593626,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/federal-register-typed/141eb097987d979fa386013bb6ecc5b71fb8ddd4e1bbc4583e4b1475d88eaefa/federal_register_agencies.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/federal-register-typed/141eb097987d979fa386013bb6ecc5b71fb8ddd4e1bbc4583e4b1475d88eaefa/federal_register_documents.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"document_number\" AS k0, \"publication_date\" AS k1, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/federal-register-typed/141eb097987d979fa386013bb6ecc5b71fb8ddd4e1bbc4583e4b1475d88eaefa/federal_register_agencies.parquet'], hive_partitioning = false) GROUP BY 1, 2), p0 AS (SELECT \"document_number\" AS k0, \"publication_date\" AS k1, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/federal-register-typed/141eb097987d979fa386013bb6ecc5b71fb8ddd4e1bbc4583e4b1475d88eaefa/federal_register_documents.parquet'], hive_partitioning = false) GROUP BY 1, 2),\n             c AS (SELECT k0, k1, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL),\n             p AS (SELECT k0, k1, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL),\n             j AS (SELECT k0, k1, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0, k1))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0, k1), row(k0, k1), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "federal_register_cfr_references",
@@ -1222,14 +1401,42 @@
         "document_number",
         "publication_date"
       ],
-      "kind": "unmeasured",
-      "reason": "Each typed CFR-reference child row belongs to exactly one dated Federal Register document in the same federal-register-typed generation; public baseline pending initial bootstrap.",
+      "kind": "complete",
+      "reason": "Each typed CFR-reference child row belongs to exactly one dated Federal Register document in the same federal-register-typed generation.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 207068,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "federal_register_cfr_references.document_number+publication_date -> federal_register_documents.document_number+publication_date",
+        "kind": "complete",
+        "keys": 207068,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 295814,
+        "child_nonnull_rows": 295814,
+        "parent_input_rows": 1013629,
+        "parent_distinct_keys": 1013629,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 295814,
+        "left_join_nonnull_rows": 295814,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/federal-register-typed/141eb097987d979fa386013bb6ecc5b71fb8ddd4e1bbc4583e4b1475d88eaefa/federal_register_cfr_references.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/federal-register-typed/141eb097987d979fa386013bb6ecc5b71fb8ddd4e1bbc4583e4b1475d88eaefa/federal_register_documents.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"document_number\" AS k0, \"publication_date\" AS k1, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/federal-register-typed/141eb097987d979fa386013bb6ecc5b71fb8ddd4e1bbc4583e4b1475d88eaefa/federal_register_cfr_references.parquet'], hive_partitioning = false) GROUP BY 1, 2), p0 AS (SELECT \"document_number\" AS k0, \"publication_date\" AS k1, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/federal-register-typed/141eb097987d979fa386013bb6ecc5b71fb8ddd4e1bbc4583e4b1475d88eaefa/federal_register_documents.parquet'], hive_partitioning = false) GROUP BY 1, 2),\n             c AS (SELECT k0, k1, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL),\n             p AS (SELECT k0, k1, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL),\n             j AS (SELECT k0, k1, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0, k1))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0, k1), row(k0, k1), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "federal_register_docket_candidates",
@@ -1242,14 +1449,42 @@
         "document_number",
         "publication_date"
       ],
-      "kind": "unmeasured",
-      "reason": "Each normalized docket-candidate row belongs to exactly one dated Federal Register document in the same federal-register-typed generation; public baseline pending initial bootstrap.",
+      "kind": "complete",
+      "reason": "Each normalized docket-candidate row belongs to exactly one dated Federal Register document in the same federal-register-typed generation.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 214952,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "federal_register_docket_candidates.document_number+publication_date -> federal_register_documents.document_number+publication_date",
+        "kind": "complete",
+        "keys": 214952,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 247568,
+        "child_nonnull_rows": 247568,
+        "parent_input_rows": 1013629,
+        "parent_distinct_keys": 1013629,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 247568,
+        "left_join_nonnull_rows": 247568,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/federal-register-typed/141eb097987d979fa386013bb6ecc5b71fb8ddd4e1bbc4583e4b1475d88eaefa/federal_register_docket_candidates.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/federal-register-typed/141eb097987d979fa386013bb6ecc5b71fb8ddd4e1bbc4583e4b1475d88eaefa/federal_register_documents.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"document_number\" AS k0, \"publication_date\" AS k1, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/federal-register-typed/141eb097987d979fa386013bb6ecc5b71fb8ddd4e1bbc4583e4b1475d88eaefa/federal_register_docket_candidates.parquet'], hive_partitioning = false) GROUP BY 1, 2), p0 AS (SELECT \"document_number\" AS k0, \"publication_date\" AS k1, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/federal-register-typed/141eb097987d979fa386013bb6ecc5b71fb8ddd4e1bbc4583e4b1475d88eaefa/federal_register_documents.parquet'], hive_partitioning = false) GROUP BY 1, 2),\n             c AS (SELECT k0, k1, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL),\n             p AS (SELECT k0, k1, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL),\n             j AS (SELECT k0, k1, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0, k1))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0, k1), row(k0, k1), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "documents",
@@ -3714,14 +3949,42 @@
         "scorecard_id",
         "publisher_member_key"
       ],
-      "kind": "unmeasured",
-      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins; this subject-key relationship has no measured baseline yet.",
+      "kind": "complete",
+      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 213139,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "scorecard_member_links.scorecard_id+publisher_member_key -> scorecard_members.scorecard_id+publisher_member_key",
+        "kind": "complete",
+        "keys": 213139,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 213139,
+        "child_nonnull_rows": 213139,
+        "parent_input_rows": 213139,
+        "parent_distinct_keys": 213139,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 213139,
+        "left_join_nonnull_rows": 213139,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecard-analysis/996e96fe2c44af429a8831cba2138f3d1c38ec28e64bf81e5a146e1604f55535/scorecard_member_links.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/scorecards/2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6/scorecard_members.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"scorecard_id\" AS k0, \"publisher_member_key\" AS k1, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/scorecard-analysis/996e96fe2c44af429a8831cba2138f3d1c38ec28e64bf81e5a146e1604f55535/scorecard_member_links.parquet'], hive_partitioning = false) GROUP BY 1, 2), p0 AS (SELECT \"scorecard_id\" AS k0, \"publisher_member_key\" AS k1, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6/scorecard_members.parquet'], hive_partitioning = false) GROUP BY 1, 2),\n             c AS (SELECT k0, k1, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL),\n             p AS (SELECT k0, k1, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL),\n             j AS (SELECT k0, k1, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0, k1))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0, k1), row(k0, k1), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "scorecard_item_links",
@@ -3734,14 +3997,42 @@
         "scorecard_id",
         "item_id"
       ],
-      "kind": "unmeasured",
-      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins; this subject-key relationship has no measured baseline yet.",
+      "kind": "complete",
+      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 19848,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "scorecard_item_links.scorecard_id+item_id -> scorecard_items.scorecard_id+item_id",
+        "kind": "complete",
+        "keys": 19848,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 47419,
+        "child_nonnull_rows": 47419,
+        "parent_input_rows": 19848,
+        "parent_distinct_keys": 19848,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 47419,
+        "left_join_nonnull_rows": 47419,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecard-analysis/996e96fe2c44af429a8831cba2138f3d1c38ec28e64bf81e5a146e1604f55535/scorecard_item_links.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/scorecards/2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6/scorecard_items.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"scorecard_id\" AS k0, \"item_id\" AS k1, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/scorecard-analysis/996e96fe2c44af429a8831cba2138f3d1c38ec28e64bf81e5a146e1604f55535/scorecard_item_links.parquet'], hive_partitioning = false) GROUP BY 1, 2), p0 AS (SELECT \"scorecard_id\" AS k0, \"item_id\" AS k1, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6/scorecard_items.parquet'], hive_partitioning = false) GROUP BY 1, 2),\n             c AS (SELECT k0, k1, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL),\n             p AS (SELECT k0, k1, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL AND k1 IS NOT NULL),\n             j AS (SELECT k0, k1, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0, k1))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0, k1), row(k0, k1), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "fec_collections",
@@ -4177,14 +4468,42 @@
       "parent_columns": [
         "cluster_id"
       ],
-      "kind": "unmeasured",
-      "reason": "The native cluster ID recorded with the extraction identifies its opinion group. The guarded opinion relationship separately identifies the exact captured input. This direct group relationship has no complete selected-input baseline yet.",
+      "kind": "complete",
+      "reason": "The native cluster ID recorded with the extraction identifies its opinion group. The guarded opinion relationship separately identifies the exact captured input.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 3,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "court_opinion_pdf_extractions.cluster_id -> court_opinion_clusters.cluster_id",
+        "kind": "complete",
+        "keys": 3,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 3,
+        "child_nonnull_rows": 3,
+        "parent_input_rows": 10213414,
+        "parent_distinct_keys": 10213414,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 3,
+        "left_join_nonnull_rows": 3,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/court-opinion-pdf-extractions/dcd5add439c59d2ce32b22203cd454914726b2939cc4ca0de738f8cbb0f53540/court_opinion_pdf_extractions.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/court-opinion-clusters/d493453869157cf37ef8eb6cf6d75b04c2357034f8732ef807145d29c28d3ce2/court_opinion_clusters.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"cluster_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/court-opinion-pdf-extractions/dcd5add439c59d2ce32b22203cd454914726b2939cc4ca0de738f8cbb0f53540/court_opinion_pdf_extractions.parquet'], hive_partitioning = false) GROUP BY 1), p0 AS (SELECT \"cluster_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/court-opinion-clusters/d493453869157cf37ef8eb6cf6d75b04c2357034f8732ef807145d29c28d3ce2/court_opinion_clusters.parquet'], hive_partitioning = false) GROUP BY 1),\n             c AS (SELECT k0, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL),\n             p AS (SELECT k0, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL),\n             j AS (SELECT k0, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0), row(k0), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "court_opinion_texts",
@@ -4249,14 +4568,46 @@
       "parent_columns": [
         "opinion_id"
       ],
-      "kind": "unmeasured",
-      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins; this subject-key relationship has no measured baseline yet.",
+      "kind": "scope",
+      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins.",
       "measured_via": null,
-      "baseline_keys": 0,
-      "baseline_missing": 0,
-      "floor_pct": null,
+      "baseline_keys": 7604016,
+      "baseline_missing": 1635,
+      "floor_pct": 99.9784,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "court_citation_map.citing_opinion_id -> court_opinions.opinion_id",
+        "kind": "scope",
+        "keys": 7604016,
+        "missing": 1635,
+        "resolved_pct": 99.9785,
+        "examples": [
+          "11455092",
+          "11455093",
+          "11455094"
+        ],
+        "child_input_rows": 78404647,
+        "child_nonnull_rows": 78404647,
+        "parent_input_rows": 10903928,
+        "parent_distinct_keys": 10903928,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 78385349,
+        "left_join_nonnull_rows": 78404647,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/court-citations/acc14e4e9e9061e2d1d7ecd57b6c224e3045868a9ba594bc632dc39f2e8cc120/court_citation_map.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/court-opinions/56f98c03a8b6fc02f94419a1eadd9a08f482be2a00571faf84399dc552a612c3/court_opinions.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"citing_opinion_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/court-citations/acc14e4e9e9061e2d1d7ecd57b6c224e3045868a9ba594bc632dc39f2e8cc120/court_citation_map.parquet'], hive_partitioning = false) GROUP BY 1), p0 AS (SELECT \"opinion_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/court-opinions/56f98c03a8b6fc02f94419a1eadd9a08f482be2a00571faf84399dc552a612c3/court_opinions.parquet'], hive_partitioning = false) GROUP BY 1),\n             c AS (SELECT k0, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL),\n             p AS (SELECT k0, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL),\n             j AS (SELECT k0, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0), row(k0), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "court_citation_map",
@@ -4267,14 +4618,46 @@
       "parent_columns": [
         "opinion_id"
       ],
-      "kind": "unmeasured",
-      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins; this subject-key relationship has no measured baseline yet.",
+      "kind": "scope",
+      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins.",
       "measured_via": null,
-      "baseline_keys": 0,
-      "baseline_missing": 0,
-      "floor_pct": null,
+      "baseline_keys": 4526318,
+      "baseline_missing": 100,
+      "floor_pct": 99.9977,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "court_citation_map.cited_opinion_id -> court_opinions.opinion_id",
+        "kind": "scope",
+        "keys": 4526318,
+        "missing": 100,
+        "resolved_pct": 99.9978,
+        "examples": [
+          "11455925",
+          "11455940",
+          "11455947"
+        ],
+        "child_input_rows": 78404647,
+        "child_nonnull_rows": 78404647,
+        "parent_input_rows": 10903928,
+        "parent_distinct_keys": 10903928,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 78404530,
+        "left_join_nonnull_rows": 78404647,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/court-citations/acc14e4e9e9061e2d1d7ecd57b6c224e3045868a9ba594bc632dc39f2e8cc120/court_citation_map.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/court-opinions/56f98c03a8b6fc02f94419a1eadd9a08f482be2a00571faf84399dc552a612c3/court_opinions.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"cited_opinion_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/court-citations/acc14e4e9e9061e2d1d7ecd57b6c224e3045868a9ba594bc632dc39f2e8cc120/court_citation_map.parquet'], hive_partitioning = false) GROUP BY 1), p0 AS (SELECT \"opinion_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/court-opinions/56f98c03a8b6fc02f94419a1eadd9a08f482be2a00571faf84399dc552a612c3/court_opinions.parquet'], hive_partitioning = false) GROUP BY 1),\n             c AS (SELECT k0, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL),\n             p AS (SELECT k0, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL),\n             j AS (SELECT k0, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0), row(k0), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "court_parentheticals",
@@ -4285,14 +4668,44 @@
       "parent_columns": [
         "opinion_id"
       ],
-      "kind": "unmeasured",
-      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins; this subject-key relationship has no measured baseline yet.",
+      "kind": "scope",
+      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins.",
       "measured_via": null,
-      "baseline_keys": 0,
-      "baseline_missing": 0,
-      "floor_pct": null,
+      "baseline_keys": 1212379,
+      "baseline_missing": 1,
+      "floor_pct": 99.9999,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "court_parentheticals.described_opinion_id -> court_opinions.opinion_id",
+        "kind": "scope",
+        "keys": 1212379,
+        "missing": 1,
+        "resolved_pct": 99.9999,
+        "examples": [
+          "11456059"
+        ],
+        "child_input_rows": 6561878,
+        "child_nonnull_rows": 6561878,
+        "parent_input_rows": 10903928,
+        "parent_distinct_keys": 10903928,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 6561877,
+        "left_join_nonnull_rows": 6561878,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/court-citations/acc14e4e9e9061e2d1d7ecd57b6c224e3045868a9ba594bc632dc39f2e8cc120/court_parentheticals.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/court-opinions/56f98c03a8b6fc02f94419a1eadd9a08f482be2a00571faf84399dc552a612c3/court_opinions.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"described_opinion_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/court-citations/acc14e4e9e9061e2d1d7ecd57b6c224e3045868a9ba594bc632dc39f2e8cc120/court_parentheticals.parquet'], hive_partitioning = false) GROUP BY 1), p0 AS (SELECT \"opinion_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/court-opinions/56f98c03a8b6fc02f94419a1eadd9a08f482be2a00571faf84399dc552a612c3/court_opinions.parquet'], hive_partitioning = false) GROUP BY 1),\n             c AS (SELECT k0, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL),\n             p AS (SELECT k0, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL),\n             j AS (SELECT k0, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0), row(k0), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "court_parentheticals",
@@ -4303,14 +4716,46 @@
       "parent_columns": [
         "opinion_id"
       ],
-      "kind": "unmeasured",
-      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins; this subject-key relationship has no measured baseline yet.",
+      "kind": "scope",
+      "reason": "Native subject keys replace source capture keys. The original measured relationship remains in processing_joins.",
       "measured_via": null,
-      "baseline_keys": 0,
-      "baseline_missing": 0,
-      "floor_pct": null,
+      "baseline_keys": 1901756,
+      "baseline_missing": 816,
+      "floor_pct": 99.957,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "court_parentheticals.describing_opinion_id -> court_opinions.opinion_id",
+        "kind": "scope",
+        "keys": 1901756,
+        "missing": 816,
+        "resolved_pct": 99.9571,
+        "examples": [
+          "11455093",
+          "11455094",
+          "11455095"
+        ],
+        "child_input_rows": 6561878,
+        "child_nonnull_rows": 6561878,
+        "parent_input_rows": 10903928,
+        "parent_distinct_keys": 10903928,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 6559127,
+        "left_join_nonnull_rows": 6561878,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/court-citations/acc14e4e9e9061e2d1d7ecd57b6c224e3045868a9ba594bc632dc39f2e8cc120/court_parentheticals.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/court-opinions/56f98c03a8b6fc02f94419a1eadd9a08f482be2a00571faf84399dc552a612c3/court_opinions.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"describing_opinion_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/court-citations/acc14e4e9e9061e2d1d7ecd57b6c224e3045868a9ba594bc632dc39f2e8cc120/court_parentheticals.parquet'], hive_partitioning = false) GROUP BY 1), p0 AS (SELECT \"opinion_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/court-opinions/56f98c03a8b6fc02f94419a1eadd9a08f482be2a00571faf84399dc552a612c3/court_opinions.parquet'], hive_partitioning = false) GROUP BY 1),\n             c AS (SELECT k0, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL),\n             p AS (SELECT k0, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL),\n             j AS (SELECT k0, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0), row(k0), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "member_vote_terms",
@@ -5645,14 +6090,42 @@
       "parent_columns": [
         "filing_id"
       ],
-      "kind": "unmeasured",
-      "reason": "Version-bound House source identities. Local pilot resolution is checked by its consumer probe; the shared publication has no measured House disclosure baseline.",
+      "kind": "complete",
+      "reason": "Version-bound House source identities; the local pilot resolution is checked by its consumer probe.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 8358,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "house_disclosure_reports.filing_id -> house_disclosure_filings.filing_id",
+        "kind": "complete",
+        "keys": 8358,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 8358,
+        "child_nonnull_rows": 8358,
+        "parent_input_rows": 42254,
+        "parent_distinct_keys": 42254,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 8358,
+        "left_join_nonnull_rows": 8358,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_reports.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_filings.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"filing_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_reports.parquet'], hive_partitioning = false) GROUP BY 1), p0 AS (SELECT \"filing_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_filings.parquet'], hive_partitioning = false) GROUP BY 1),\n             c AS (SELECT k0, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL),\n             p AS (SELECT k0, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL),\n             j AS (SELECT k0, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0), row(k0), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "house_disclosure_pages",
@@ -5663,14 +6136,42 @@
       "parent_columns": [
         "report_id"
       ],
-      "kind": "unmeasured",
-      "reason": "Version-bound House source identities. Local pilot resolution is checked by its consumer probe; the shared publication has no measured House disclosure baseline.",
+      "kind": "complete",
+      "reason": "Version-bound House source identities; the local pilot resolution is checked by its consumer probe.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 8358,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "house_disclosure_pages.report_id -> house_disclosure_reports.report_id",
+        "kind": "complete",
+        "keys": 8358,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 21655,
+        "child_nonnull_rows": 21655,
+        "parent_input_rows": 8358,
+        "parent_distinct_keys": 8358,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 21655,
+        "left_join_nonnull_rows": 21655,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_pages.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_reports.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"report_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_pages.parquet'], hive_partitioning = false) GROUP BY 1), p0 AS (SELECT \"report_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_reports.parquet'], hive_partitioning = false) GROUP BY 1),\n             c AS (SELECT k0, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL),\n             p AS (SELECT k0, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL),\n             j AS (SELECT k0, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0), row(k0), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "house_disclosure_transactions",
@@ -5681,14 +6182,42 @@
       "parent_columns": [
         "report_id"
       ],
-      "kind": "unmeasured",
-      "reason": "Version-bound House source identities. Local pilot resolution is checked by its consumer probe; the shared publication has no measured House disclosure baseline.",
+      "kind": "complete",
+      "reason": "Version-bound House source identities; the local pilot resolution is checked by its consumer probe.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 1999,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "house_disclosure_transactions.report_id -> house_disclosure_reports.report_id",
+        "kind": "complete",
+        "keys": 1999,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 20834,
+        "child_nonnull_rows": 20834,
+        "parent_input_rows": 8358,
+        "parent_distinct_keys": 8358,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 20834,
+        "left_join_nonnull_rows": 20834,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_transactions.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_reports.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"report_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_transactions.parquet'], hive_partitioning = false) GROUP BY 1), p0 AS (SELECT \"report_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_reports.parquet'], hive_partitioning = false) GROUP BY 1),\n             c AS (SELECT k0, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL),\n             p AS (SELECT k0, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL),\n             j AS (SELECT k0, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0), row(k0), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "house_disclosure_transactions",
@@ -5699,14 +6228,42 @@
       "parent_columns": [
         "filing_id"
       ],
-      "kind": "unmeasured",
-      "reason": "Version-bound House source identities. Local pilot resolution is checked by its consumer probe; the shared publication has no measured House disclosure baseline.",
+      "kind": "complete",
+      "reason": "Version-bound House source identities; the local pilot resolution is checked by its consumer probe.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 1999,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "house_disclosure_transactions.filing_id -> house_disclosure_filings.filing_id",
+        "kind": "complete",
+        "keys": 1999,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 20834,
+        "child_nonnull_rows": 20834,
+        "parent_input_rows": 42254,
+        "parent_distinct_keys": 42254,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 20834,
+        "left_join_nonnull_rows": 20834,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_transactions.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_filings.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"filing_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_transactions.parquet'], hive_partitioning = false) GROUP BY 1), p0 AS (SELECT \"filing_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_filings.parquet'], hive_partitioning = false) GROUP BY 1),\n             c AS (SELECT k0, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL),\n             p AS (SELECT k0, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL),\n             j AS (SELECT k0, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0), row(k0), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "house_disclosure_amendment_links",
@@ -5717,14 +6274,42 @@
       "parent_columns": [
         "report_id"
       ],
-      "kind": "unmeasured",
-      "reason": "Version-bound House source identities. Local pilot resolution is checked by its consumer probe; the shared publication has no measured House disclosure baseline.",
+      "kind": "complete",
+      "reason": "Version-bound House source identities; the local pilot resolution is checked by its consumer probe.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 1,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "house_disclosure_amendment_links.original_report_id -> house_disclosure_reports.report_id",
+        "kind": "complete",
+        "keys": 1,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 1,
+        "child_nonnull_rows": 1,
+        "parent_input_rows": 8358,
+        "parent_distinct_keys": 8358,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 1,
+        "left_join_nonnull_rows": 1,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_amendment_links.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_reports.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"original_report_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_amendment_links.parquet'], hive_partitioning = false) GROUP BY 1), p0 AS (SELECT \"report_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_reports.parquet'], hive_partitioning = false) GROUP BY 1),\n             c AS (SELECT k0, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL),\n             p AS (SELECT k0, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL),\n             j AS (SELECT k0, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0), row(k0), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "house_disclosure_amendment_links",
@@ -5735,14 +6320,42 @@
       "parent_columns": [
         "report_id"
       ],
-      "kind": "unmeasured",
-      "reason": "Version-bound House source identities. Local pilot resolution is checked by its consumer probe; the shared publication has no measured House disclosure baseline.",
+      "kind": "complete",
+      "reason": "Version-bound House source identities; the local pilot resolution is checked by its consumer probe.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 1,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "one",
-      "measurement": null
+      "measurement": {
+        "join": "house_disclosure_amendment_links.amended_report_id -> house_disclosure_reports.report_id",
+        "kind": "complete",
+        "keys": 1,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 1,
+        "child_nonnull_rows": 1,
+        "parent_input_rows": 8358,
+        "parent_distinct_keys": 8358,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 1,
+        "left_join_nonnull_rows": 1,
+        "child_urls": [
+          "https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_amendment_links.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_reports.parquet"
+        ],
+        "expected_cardinality": "one",
+        "scope": "full_selected_inputs",
+        "sql": "\n        WITH c0 AS (SELECT \"amended_report_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_amendment_links.parquet'], hive_partitioning = false) GROUP BY 1), p0 AS (SELECT \"report_id\" AS k0, count(*) AS n0 FROM read_parquet(['https://data.spicygov.ai/generations/house-disclosures/053b67c831f324bcf8b1b07e6f57801be34a36a52ea30406ee4bb85f9fbaab3c/house_disclosure_reports.parquet'], hive_partitioning = false) GROUP BY 1),\n             c AS (SELECT k0, n0 AS n FROM c0 WHERE n0>0 AND k0 IS NOT NULL),\n             p AS (SELECT k0, n0 AS n FROM p0 WHERE n0>0 AND k0 IS NOT NULL),\n             j AS (SELECT k0, c.n AS child_rows, coalesce(p.n, 0) AS parent_rows\n                   FROM c LEFT JOIN p USING (k0))\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               arg_min(concat_ws('|', k0), row(k0), 3) FILTER (WHERE parent_rows=0) AS examples,\n               (SELECT coalesce(sum(n0),0) FROM c0) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT coalesce(sum(n0),0) FROM p0) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE n>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(n) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "measured_on": "2026-11-28",
+        "receipt": "docs/evidence/join-baselines-2026-11-28.json",
+        "measured_expected_cardinality": "one"
+      }
     },
     {
       "child": "executive_disclosure_facts",
