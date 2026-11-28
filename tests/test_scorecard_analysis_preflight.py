@@ -27,9 +27,15 @@ def fixture_owner(index, key):
 
 @pytest.mark.parametrize("name", (*SOURCE_TABLES, *OFFICIAL_TABLES, *COMPARISON_INPUTS))
 def test_missing_native_input_refuses_before_any_subject_or_receipt_download(tmp_path, monkeypatch, name):
+    from spicy_regs import subject_catalog
+
     store, index = _inputs(tmp_path)
     owner = fixture_owner(index, name + ".parquet")
-    owner["etlReceipts"]["datasets"].remove(name)
+    if "etlReceipts" in owner:
+        owner["etlReceipts"]["datasets"].remove(name)
+    else:
+        retired = subject_catalog.retired_receipt_datasets() - {name}
+        monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
     calls = _serve(monkeypatch, store)
     output = tmp_path / "refused"
     output.mkdir()

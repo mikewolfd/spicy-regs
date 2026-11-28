@@ -57,7 +57,7 @@ def test_identifiers_and_occurrences_preserve_structure_and_receipt_locators():
     mapped = map_source_row("scorecard_items", before)
     assert [r["occurrence_id"] for r in mapped["references"]] == ["a", "b"]
     assert [r["citation_text"] for r in mapped["references"]] == ["H.R. 1", "H.R. 1"]
-    assert all("source_path" not in r for r in mapped["references"])
+    assert [r["source_path"] for r in mapped["references"]] == ["p1", "p2"]
     assert restore_source_row("scorecard_items", mapped) == before
 
 

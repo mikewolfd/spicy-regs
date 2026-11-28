@@ -117,8 +117,8 @@ def test_agc_house_district_correction_uses_accepted_term_and_preserves_raw(tmp_
     assert before == raw
     assert found["candidates_json"] is not None
     assert json.loads(found["candidates_json"])[0]["term_indexes"] == ["0"]
-    write_family(tmp_path, results, generation_id="corrected-geography")
-    assert read_family(tmp_path, LINK_NAMES, generation_id="corrected-geography") == results
+    write_family(tmp_path, results)
+    assert read_family(tmp_path, LINK_NAMES) == results
     import duckdb
     with duckdb.connect() as connection:
         assert connection.execute(
@@ -1159,8 +1159,8 @@ def test_partial_exact_bill_retains_candidates_without_operational_targets(tmp_p
     assert json.loads(candidates_json) == [{"bill_id": "118-hr-1"}]
     assert row["candidate_count"] == "1"
     assert RULE_VERSION == row["rule_version"] == "scorecard-resolution-v1.11"
-    write_family(tmp_path, results, generation_id="partial-link-test")
-    assert read_family(tmp_path, LINK_NAMES, generation_id="partial-link-test") == results
+    write_family(tmp_path, results)
+    assert read_family(tmp_path, LINK_NAMES) == results
 
 
 @pytest.mark.parametrize("status", ["unresolved", "ambiguous", "conflict"])

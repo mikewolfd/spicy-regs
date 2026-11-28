@@ -1,4 +1,4 @@
-"""Parity, invariant, and refusal tests for Arrow/DuckDB scorecard slice-carry."""
+"""Parity, invariant, and refusal tests for receiptless Arrow/DuckDB scorecard slice-carry."""
 
 from __future__ import annotations
 
@@ -14,14 +14,12 @@ import pyarrow.parquet as pq
 import pytest
 import yaml
 
-from spicy_regs import etl_receipts
 from spicy_regs.contract_types import described_schema
 import spicy_regs.data_dictionary as dictionary
-from spicy_regs.etl_receipts import RECEIPT_SCHEMA, ReceiptContext, failure_receipt
 from spicy_regs.generations import build_generation, verify_generation
 from spicy_regs.pipelines.rollups.scorecards import ScorecardsRollup
-from spicy_regs.scorecards import etl as scorecard_etl
-from spicy_regs.scorecards.etl import POLICIES, SOURCE_NAMES, generation_options, read_family, write_family
+from spicy_regs.receipt_switch import receipt_files
+from spicy_regs.scorecards.etl import POLICIES, SOURCE_NAMES, generation_schemas, read_family, write_family
 from spicy_regs.scorecards.registry import REGISTRY
 from spicy_regs.sources import publication as pub
 from spicy_regs.transforms.build_scorecards import ScorecardRefreshError, build_scorecards
@@ -97,7 +95,11 @@ def _multi_publisher_provider(editions_by_id: dict, outcomes: dict, *, prior_pro
     return SimpleNamespace(
         contracts=base.contracts,
         get_adapter=lambda name: MultiAdapter(
-            next(e.publisher_id for e in editions_by_id.values() if e.publisher_id == name or name.startswith(e.publisher_id))
+            next(
+                e.publisher_id
+                for e in editions_by_id.values()
+                if e.publisher_id == name or name.startswith(e.publisher_id)
+            )
         ),
         validate=base.validate,
         context=base.context,
@@ -109,42 +111,39 @@ def _rich_bundle(selected, cap: str, *, members: int = 4, items: bool = True, es
     rows = tables(selected, cap, members=members, items=items)
     if escape:
         rows["scorecard_members"][0]["member_name"] = "Member\x1b[0m"
-    rows["scorecard_metric_items"].append(
-        {
-            "scorecard_id": selected.scorecard_id,
-            "metric_id": "annual",
-            "item_id": "item" if items else "missing",
-            "participation_id": "p-tiny",
-            "methodology_id": None,
-            "publisher_position_text": "Yes",
-            "position_basis": "explicit",
-            "weight_text": "0.0000001",
-            "weight_number": "0.0000001",
-            "contribution_rule_text": "weighted",
-            "counts_toward_metric": "true",
-            "snapshot_id": rows["scorecard_snapshots"][0]["snapshot_id"],
-            "capture_id": cap,
-            "source_url": "https://source.test/body",
-            "source_path": "synthetic fixture",
-        }
-        if items
-        else {}
-    )
-    if not items:
-        rows["scorecard_metric_items"].pop()
+    if items:
+        rows["scorecard_metric_items"].append(
+            {
+                "scorecard_id": selected.scorecard_id,
+                "metric_id": "annual",
+                "item_id": "item",
+                "participation_id": "p-tiny",
+                "methodology_id": None,
+                "publisher_position_text": "Yes",
+                "position_basis": "explicit",
+                "weight_text": "0.0000001",
+                "weight_number": "0.0000001",
+                "contribution_rule_text": "weighted",
+                "counts_toward_metric": "true",
+                "snapshot_id": rows["scorecard_snapshots"][0]["snapshot_id"],
+                "capture_id": cap,
+                "source_url": "https://source.test/body",
+                "source_path": "synthetic fixture",
+            }
+        )
     return rows
 
 
-def _publish_prior_native(tmp_path: Path, monkeypatch, initial_rows: dict, *, failures=()):
+def _publish_prior_native(tmp_path: Path, monkeypatch, initial_rows: dict):
     prior_dir = tmp_path / "prior_etl"
-    files = write_family(prior_dir, initial_rows, generation_id="prior-gen-1", attempt_failures=failures)
+    files = write_family(prior_dir, initial_rows)
     generation = tmp_path / "prior_generation"
     build_generation(
         generation,
         family="scorecards",
         files=files,
         expected_keys=tuple(p.name for p in files),
-        **generation_options(prior_dir, SOURCE_NAMES),
+        schemas=generation_schemas(SOURCE_NAMES),
     )
     store = Store()
     index = pub.publish_generation(generation, client=store, bucket="test", prior_index=pub.empty_index())
@@ -158,16 +157,10 @@ def _publish_prior_native(tmp_path: Path, monkeypatch, initial_rows: dict, *, fa
     def download(key, target):
         return fetch(None, pub.single_member(index, key), target)
 
-    def download_receipts(target):
-        return fetch(None, pub.receipt_members(index, dataset="scorecards")[0], target)
-
-    return store, index, prior_dir, download, download_receipts
+    return store, index, prior_dir, download
 
 
-def _assert_parquet_except_all_equal(
-    dir_a: Path, dir_b: Path, filenames: tuple[str, ...], *, exclude_columns: dict[str, str] | None = None
-) -> None:
-    exclude = exclude_columns or {}
+def _assert_parquet_except_all_equal(dir_a: Path, dir_b: Path, filenames: tuple[str, ...]) -> None:
     with duckdb.connect() as con:
         for filename in filenames:
             path_a, path_b = dir_a / filename, dir_b / filename
@@ -178,21 +171,18 @@ def _assert_parquet_except_all_equal(
                 assert pf_a.metadata.num_rows == pf_b.metadata.num_rows, f"Row count mismatch on {filename}"
             lit_a = repr(str(path_a))
             lit_b = repr(str(path_b))
-            projection = f"* EXCLUDE ({exclude[filename]})" if filename in exclude else "*"
             row = con.execute(
                 f"SELECT count(*) FROM ("
-                f"(SELECT {projection} FROM read_parquet({lit_a}, hive_partitioning=false) EXCEPT ALL "
-                f"SELECT {projection} FROM read_parquet({lit_b}, hive_partitioning=false)) "
+                f"(SELECT * FROM read_parquet({lit_a}, hive_partitioning=false) EXCEPT ALL "
+                f"SELECT * FROM read_parquet({lit_b}, hive_partitioning=false)) "
                 f"UNION ALL "
-                f"(SELECT {projection} FROM read_parquet({lit_b}, hive_partitioning=false) EXCEPT ALL "
-                f"SELECT {projection} FROM read_parquet({lit_a}, hive_partitioning=false)))"
+                f"(SELECT * FROM read_parquet({lit_b}, hive_partitioning=false) EXCEPT ALL "
+                f"SELECT * FROM read_parquet({lit_a}, hive_partitioning=false)))"
             ).fetchone()
-            assert row is not None
-            delta = row[0]
-            assert delta == 0, f"EXCEPT ALL mismatch on {filename}: {delta} differing rows"
+            assert row == (0,), f"EXCEPT ALL mismatch on {filename}: {row}"
 
 
-def test_slice_carry_matches_full_rebuild_across_multiple_publishers_and_skips_unchanged_sqlite(
+def test_slice_carry_matches_full_rebuild_across_multiple_publishers_and_streams_without_receipts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     publishers = ("lcv", "afscme", "hrc", "nea", "afl_cio")
@@ -213,24 +203,8 @@ def test_slice_carry_matches_full_rebuild_across_multiple_publishers_and_skips_u
         _rich_bundle(editions["nea:2025"], "cap-nea-2025", members=2),
         _rich_bundle(editions["afl_cio:2025"], "cap-afl-2025", members=3),
     )
-    prior_failure = failure_receipt(
-        POLICIES["scorecard_snapshots"],
-        ReceiptContext(
-            "prior-gen-1",
-            "source-attempt:prior",
-            "scorecards-etl-v2",
-            [{"source_id": "scorecard-registry", "sha256": "sha256:" + "a" * 64}],
-            diagnostics={"reason_code": "source_acquisition_refused"},
-        ),
-        outcome="refused",
-        raw_fields={"raw_source": {"publisher_id": "nea", "stage": "listing"}},
-    )
-    store, index, prior_dir, download, download_receipts = _publish_prior_native(
-        tmp_path, monkeypatch, initial, failures=[prior_failure]
-    )
+    store, index, _, download = _publish_prior_native(tmp_path, monkeypatch, initial)
 
-    # Refresh 2 publishers: lcv:2025 retires 2 members and updates, lcv:2024 fails (must stay kept!),
-    # afscme:2025 refreshes cleanly; hrc, nea, afl_cio are not selected and must stay untouched.
     outcomes = {
         "lcv:2025": lambda sel, cap: _rich_bundle(sel, cap, members=2, items=False),
         "lcv:2024": provider([], {}).refusal("simulated edition refusal"),
@@ -269,7 +243,6 @@ def test_slice_carry_matches_full_rebuild_across_multiple_publishers_and_skips_u
                     completeness_rule="Synthetic complete member table",
                 )
 
-        # Adapt registry adapter names ("afl_cio" -> "afl_cio", etc.)
         return SimpleNamespace(
             contracts=base.contracts,
             get_adapter=lambda name: DetAdapter(name),
@@ -280,6 +253,7 @@ def test_slice_carry_matches_full_rebuild_across_multiple_publishers_and_skips_u
 
     def deterministic_uuids():
         from uuid import UUID
+
         counter = 0
 
         def next_uuid():
@@ -289,7 +263,6 @@ def test_slice_carry_matches_full_rebuild_across_multiple_publishers_and_skips_u
 
         return next_uuid
 
-    fixed_gen_id = "shared-refresh-gen"
     monkeypatch.setattr(
         pub,
         "_bounded_get",
@@ -313,33 +286,16 @@ def test_slice_carry_matches_full_rebuild_across_multiple_publishers_and_skips_u
             provider=deterministic_provider(),
             fetch_factory=no_fetch,
             download_prior=download,
-            download_prior_receipts=download_receipts,
-            receipt_generation_id=fixed_gen_id,
             now=NOW,
             validate_readback=lambda _prior, _current: None,
         )
 
-    # 2. Incremental slice-carry rebuild (validate_readback=None) — prove unchanged rows never touch
-    #    SQLite visit_receipt_bundle or read_indexed_family or ParquetFile.read().
+    # 2. Incremental slice-carry rebuild (validate_readback=None) — prove streaming only & zero receipts.
     with monkeypatch.context() as patch:
         patch.setattr("spicy_regs.source_evidence.uuid4", deterministic_uuids())
         slice_ev = evidence(tmp_path / "slice_run")
         slice_ev.inherit(index, public_url="https://data.example")
-        visited_datasets_and_counts: list[dict[str, int]] = []
-        orig_visit = etl_receipts.visit_receipt_bundle
         orig_pf = pq.ParquetFile
-
-        def guarded_visit(subjects, receipt_paths, policies, *, visit, generation_id, processing_outcomes=None):
-            counts = orig_visit(
-                subjects,
-                receipt_paths,
-                policies,
-                visit=visit,
-                generation_id=generation_id,
-                processing_outcomes=processing_outcomes,
-            )
-            visited_datasets_and_counts.append(counts)
-            return counts
 
         class NoEagerReadParquetFile:
             def __init__(self, *args, **kwargs):
@@ -358,9 +314,6 @@ def test_slice_carry_matches_full_rebuild_across_multiple_publishers_and_skips_u
             def read(self, *args, **kwargs):
                 pytest.fail("Slice-carry must stream batches, never eagerly materialize ParquetFile.read()")
 
-        patch.setattr(scorecard_etl, "read_indexed_family", lambda *a, **kw: pytest.fail("read_indexed_family called"))
-        patch.setattr(etl_receipts, "visit_receipt_bundle", guarded_visit)
-        patch.setattr(scorecard_etl, "visit_receipt_bundle", guarded_visit)
         patch.setattr(pq, "ParquetFile", NoEagerReadParquetFile)
         build_scorecards(
             tmp_path / "slice_build",
@@ -372,45 +325,17 @@ def test_slice_carry_matches_full_rebuild_across_multiple_publishers_and_skips_u
             provider=deterministic_provider(),
             fetch_factory=no_fetch,
             download_prior=download,
-            download_prior_receipts=download_receipts,
-            receipt_generation_id=fixed_gen_id,
             now=NOW,
         )
 
-    # visit_receipt_bundle ran only once, solely on the fresh slice (2 scorecards, not 6)!
-    assert len(visited_datasets_and_counts) == 1
-    assert visited_datasets_and_counts[0]["scorecards"] == 2
-    assert visited_datasets_and_counts[0]["scorecard_publishers"] == 2
-
-    # Exact table parity across all 11 subject tables and exact semantic receipt parity!
+    assert receipt_files(tmp_path / "full_build", tmp_path / "slice_build") == []
     _assert_parquet_except_all_equal(
         tmp_path / "full_build",
         tmp_path / "slice_build",
         tuple(f"{n}.parquet" for n in SOURCE_NAMES),
     )
-    _assert_parquet_except_all_equal(
-        tmp_path / "full_build",
-        tmp_path / "slice_build",
-        ("etl_receipts.parquet",),
-        exclude_columns={"etl_receipts.parquet": "receipt_id, attempt_id"},
-    )
-    # Carried unchanged prior receipts and unresolved refusals keep exact receipt_id and attempt_id too.
-    with duckdb.connect() as con:
-        full_r = repr(str(tmp_path / "full_build/etl_receipts.parquet"))
-        slice_r = repr(str(tmp_path / "slice_build/etl_receipts.parquet"))
-        gen_lit = repr(fixed_gen_id)
-        carried_delta = con.execute(
-            f"SELECT count(*) FROM ("
-            f"(SELECT * FROM read_parquet({full_r}, hive_partitioning=false) WHERE generation_id <> {gen_lit} "
-            f"EXCEPT ALL SELECT * FROM read_parquet({slice_r}, hive_partitioning=false) WHERE generation_id <> {gen_lit}) "
-            f"UNION ALL "
-            f"(SELECT * FROM read_parquet({slice_r}, hive_partitioning=false) WHERE generation_id <> {gen_lit} "
-            f"EXCEPT ALL SELECT * FROM read_parquet({full_r}, hive_partitioning=false) WHERE generation_id <> {gen_lit}))"
-        ).fetchone()
-        assert carried_delta == (0,)
     assert read_family(tmp_path / "slice_build", SOURCE_NAMES) == read_family(tmp_path / "full_build", SOURCE_NAMES)
 
-    # Verify rows-retired events match identically (excluding wall-clock recorded_at).
     full_retired = [
         {k: v for k, v in e.items() if k != "recorded_at"}
         for e in journal(full_ev)
@@ -423,7 +348,6 @@ def test_slice_carry_matches_full_rebuild_across_multiple_publishers_and_skips_u
     ]
     assert slice_retired == full_retired and len(slice_retired) > 0
 
-    # Verify generation admission + publication (including shrink guard!) succeed on slice-carried output.
     slice_ev.finish()
     gen_dir = tmp_path / "slice_generation"
     artifact = build_generation(
@@ -433,10 +357,11 @@ def test_slice_carry_matches_full_rebuild_across_multiple_publishers_and_skips_u
         expected_keys=tuple(f"{n}.parquet" for n in SOURCE_NAMES),
         read_snapshot=index,
         inputs=slice_ev.inputs(),
-        **generation_options(tmp_path / "slice_build", SOURCE_NAMES),
+        schemas=generation_schemas(SOURCE_NAMES),
     )
     admitted = verify_generation(gen_dir)
     assert admitted.pin == artifact.pin
+    assert "etlReceipts" not in admitted.root["spec"]
     published = pub.publish_generation(
         gen_dir,
         client=store,
@@ -445,10 +370,11 @@ def test_slice_carry_matches_full_rebuild_across_multiple_publishers_and_skips_u
         evidence_directories=(slice_ev.artifact_dir,),
     )
     assert published["families"]["scorecards"]["artifactDigest"] == artifact.pin.artifact_digest
+    assert "etlReceipts" not in published["families"]["scorecards"]
 
 
 def test_rollup_pipeline_end_to_end_slice_carry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify ScorecardsRollup builds and publishes a slice-carried generation end-to-end."""
+    """Verify ScorecardsRollup builds a receiptless slice-carried generation end-to-end."""
     monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
     monkeypatch.setattr(
         dictionary,
@@ -471,7 +397,7 @@ def test_rollup_pipeline_end_to_end_slice_carry(tmp_path: Path, monkeypatch: pyt
         _rich_bundle(editions["afscme:2025"], "cap-2", members=3),
         _rich_bundle(editions["hrc:2025"], "cap-3", members=3),
     )
-    store, index, _, download, _ = _publish_prior_native(tmp_path, monkeypatch, initial)
+    store, index, _, download = _publish_prior_native(tmp_path, monkeypatch, initial)
     monkeypatch.setenv("R2_PUBLIC_URL", "https://data.example")
     monkeypatch.setattr(pub, "load_index", lambda *args: index)
     monkeypatch.setattr(
@@ -482,7 +408,6 @@ def test_rollup_pipeline_end_to_end_slice_carry(tmp_path: Path, monkeypatch: pyt
         ),
     )
 
-    # Refresh only lcv through ScorecardsRollup.
     out_dir = tmp_path / "rollup_out"
     p = _multi_publisher_provider(editions, {"lcv:2025": lambda sel, cap: _rich_bundle(sel, cap, members=5)})
     rollup = ScorecardsRollup(
@@ -493,7 +418,6 @@ def test_rollup_pipeline_end_to_end_slice_carry(tmp_path: Path, monkeypatch: pyt
         provider=p,
         fetch_factory=no_fetch,
     )
-    # Use local downloads via r2.download monkeypatch.
     from spicy_regs.sources import r2
 
     monkeypatch.setattr(r2, "download", download)
@@ -502,7 +426,9 @@ def test_rollup_pipeline_end_to_end_slice_carry(tmp_path: Path, monkeypatch: pyt
     assert len(gens) == 1
     verified = verify_generation(gens[0])
     assert verified.root["spec"]["family"] == "scorecards"
-    restored = read_family(gens[0], SOURCE_NAMES, generation_id=verified.root["spec"]["etlReceipts"]["generationId"])
+    assert "etlReceipts" not in verified.root["spec"]
+    assert receipt_files(out_dir) == []
+    restored = read_family(gens[0], SOURCE_NAMES)
     assert len([r for r in restored["scorecard_members"] if r["scorecard_id"] == "lcv:2025"]) == 5
     assert len([r for r in restored["scorecard_members"] if r["scorecard_id"] == "afscme:2025"]) == 3
     assert len([r for r in restored["scorecard_members"] if r["scorecard_id"] == "hrc:2025"]) == 3
@@ -520,8 +446,6 @@ def test_rollup_pipeline_end_to_end_slice_carry(tmp_path: Path, monkeypatch: pyt
         "missing_kept_publisher_fk",
         "incomplete_kept_snapshot",
         "orphan_kept_child_snapshot",
-        "missing_prior_receipt",
-        "orphan_prior_receipt",
     ],
 )
 def test_slice_carry_refuses_loudly_on_schema_mismatch_and_corrupt_slices(
@@ -537,7 +461,7 @@ def test_slice_carry_refuses_loudly_on_schema_mismatch_and_corrupt_slices(
         _rich_bundle(editions["lcv:2025"], "cap-lcv", members=3),
         _rich_bundle(editions["afscme:2025"], "cap-afscme", members=3),
     )
-    _, index, prior_dir, download, download_receipts = _publish_prior_native(tmp_path, monkeypatch, initial)
+    _, index, prior_dir, _ = _publish_prior_native(tmp_path, monkeypatch, initial)
     bad_index = deepcopy(index)
     family_entry = bad_index["families"]["scorecards"]
 
@@ -549,14 +473,6 @@ def test_slice_carry_refuses_loudly_on_schema_mismatch_and_corrupt_slices(
         family_entry["tables"][key]["byteSize"] = len(raw)
         family_entry["tables"][key]["rows"] = table.num_rows
 
-    def re_pin_receipts(table: pa.Table) -> None:
-        target = prior_dir / "etl_receipts.parquet"
-        pq.write_table(table, target)
-        raw = target.read_bytes()
-        family_entry["etlReceipts"]["sha256"] = "sha256:" + hashlib.sha256(raw).hexdigest()
-        family_entry["etlReceipts"]["byteSize"] = len(raw)
-        family_entry["etlReceipts"]["rows"] = table.num_rows
-
     if fault == "index_missing_column":
         family_entry["tables"]["scorecard_members.parquet"]["columns"].pop()
     elif fault == "parquet_missing_column":
@@ -565,7 +481,11 @@ def test_slice_carry_refuses_loudly_on_schema_mismatch_and_corrupt_slices(
     elif fault == "parquet_wrong_type":
         tbl = pq.read_table(prior_dir / "scorecard_metric_items.parquet")
         idx = tbl.schema.get_field_index("weight_number")
-        tbl = tbl.set_column(idx, "weight_number", pa.array([str(x) if x is not None else None for x in tbl["weight_number"].to_pylist()], type=pa.string()))
+        tbl = tbl.set_column(
+            idx,
+            "weight_number",
+            pa.array([str(x) if x is not None else None for x in tbl["weight_number"].to_pylist()], type=pa.string()),
+        )
         re_pin_file("scorecard_metric_items.parquet", tbl)
     elif fault == "parquet_row_count_mismatch":
         family_entry["tables"]["scorecard_members.parquet"]["rows"] += 1
@@ -595,30 +515,11 @@ def test_slice_carry_refuses_loudly_on_schema_mismatch_and_corrupt_slices(
             if row["scorecard_id"] == "afscme:2025":
                 row["snapshot_id"] = "scorecard-snapshot:orphan"
         re_pin_file("scorecard_members.parquet", pa.Table.from_pylist(rows, schema=tbl.schema))
-    elif fault == "missing_prior_receipt":
-        tbl = pq.read_table(prior_dir / "etl_receipts.parquet")
-        rows = tbl.to_pylist()
-        drop_idx = next(i for i, r in enumerate(rows) if r["dataset"] == "scorecard_members")
-        rows.pop(drop_idx)
-        re_pin_receipts(pa.Table.from_pylist(rows, schema=RECEIPT_SCHEMA))
-    elif fault == "orphan_prior_receipt":
-        tbl = pq.read_table(prior_dir / "etl_receipts.parquet")
-        rows = tbl.to_pylist()
-        extra = deepcopy(next(r for r in rows if r["dataset"] == "scorecard_members"))
-        extra["record_id"] = "sha256:" + "0" * 64
-        extra["receipt_id"] = "sha256:" + "1" * 64
-        rows.append(extra)
-        re_pin_receipts(pa.Table.from_pylist(rows, schema=RECEIPT_SCHEMA))
 
     def download_faulty(key: str, target: Path) -> bool:
         target.write_bytes((prior_dir / key).read_bytes())
         return True
 
-    def download_faulty_receipts(target: Path) -> bool:
-        target.write_bytes((prior_dir / "etl_receipts.parquet").read_bytes())
-        return True
-
-    # Ensure verified_receipt_download reads our pinned file via download_prior_receipts without remote URL.
     monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
     ev = evidence(tmp_path / "fault_run")
     ev.read_snapshot = bad_index
@@ -634,7 +535,6 @@ def test_slice_carry_refuses_loudly_on_schema_mismatch_and_corrupt_slices(
             provider=p,
             fetch_factory=no_fetch,
             download_prior=download_faulty,
-            download_prior_receipts=download_faulty_receipts,
             now=NOW,
         )
     assert not list((tmp_path / "fault_build").glob("score*.parquet"))

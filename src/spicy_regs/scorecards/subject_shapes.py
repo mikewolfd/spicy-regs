@@ -12,6 +12,7 @@ from spicy_regs.scorecards.resolution import LINK_COLUMNS, LINK_KEYS
 from spicy_regs.scorecards.action_comparisons import TABLE as COMPARISON_TABLE, COLUMNS as COMPARISON_COLUMNS, KEYS as COMPARISON_KEYS, STATUSES
 
 POLICY_VERSION = "scorecards-etl-v2"
+ITEMS_POLICY_VERSION = "scorecards-etl-items-v3"
 RATING_POLICY_VERSION = "scorecards-etl-ratings-v4"
 MEMBER_LINK_POLICY_VERSION = "scorecards-etl-member-links-v5"
 ITEM_LINK_POLICY_VERSION = "scorecards-etl-item-links-v3"
@@ -234,6 +235,7 @@ NATIVE_LISTS = {
                         "roll_number_text",
                         "bill_citation_text",
                         "amendment_citation_text",
+                        "source_path",
                     )
                 ]
             )
@@ -299,14 +301,11 @@ def native_list(field: str, raw: str | None):
     mandatory = (
         {"scheme", "value"}
         if field == "identifiers_json"
-        else {
-            "occurrence_id",
-            "kind",
-            "source_path",
-            "period_text" if field == "periods_json" else "citation_text",
-        }
+        else {"occurrence_id", "kind", "period_text"}
+        if field == "periods_json"
+        else {"occurrence_id", "kind", "source_path", "citation_text"}
     )
-    allowed = keys if field == "identifiers_json" else keys | {"source_path"}
+    allowed = keys if field in {"identifiers_json", "references_json"} else keys | {"source_path"}
     seen = set()
     result = []
     for entry in entries:
@@ -395,4 +394,32 @@ def restore_source_row(name: str, row: Mapping) -> dict:
         if field not in BOOLEAN_FIELDS | DECIMAL_FIELDS | INTEGER_FIELDS:
             raise ValueError("Unknown scorecard conversion input")
         result[field] = value
+    return result
+
+
+def native_to_source_row(name: str, row: Mapping, *, include_omitted: bool = False) -> dict:
+    """Convert one published native Parquet row back to the string/null source dict shape."""
+    result = {}
+    for column in DOMAIN_COLUMNS[name]:
+        if column in NATIVE_LISTS:
+            value = row[NATIVE_LISTS[column][0]]
+            result[column] = (
+                None
+                if value is None
+                else json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+            )
+        elif column in BOOLEAN_FIELDS:
+            value = row[column]
+            result[column] = None if value is None else ("true" if value else "false")
+        elif column in INTEGER_FIELDS:
+            value = row[column]
+            result[column] = None if value is None else str(value)
+        elif column in DECIMAL_FIELDS and column != "value_number":
+            value = row[column]
+            result[column] = None if value is None else format(value, "f")
+        else:
+            result[column] = row[column]
+    if include_omitted:
+        for column in SOURCE_COLUMNS[name]:
+            result.setdefault(column, None)
     return result

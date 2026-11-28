@@ -213,6 +213,90 @@
    "publishedAt": "2026-11-11T04:05:38Z",
    "receipts": "generations/roll-call-votes/a77051b2e3b1e1c22ca48363b1a636c2969b886224c4cf833866a85cdc20a46c/etl_receipts.parquet"
   },
+  "scorecard_action_comparisons": {
+   "family": "scorecard-analysis",
+   "artifactDigest": "sha256:996e96fe2c44af429a8831cba2138f3d1c38ec28e64bf81e5a146e1604f55535",
+   "publishedAt": "2026-11-27T05:18:18Z",
+   "receipts": "generations/scorecard-analysis/996e96fe2c44af429a8831cba2138f3d1c38ec28e64bf81e5a146e1604f55535/etl_receipts.parquet"
+  },
+  "scorecard_item_links": {
+   "family": "scorecard-analysis",
+   "artifactDigest": "sha256:996e96fe2c44af429a8831cba2138f3d1c38ec28e64bf81e5a146e1604f55535",
+   "publishedAt": "2026-11-27T05:18:18Z",
+   "receipts": "generations/scorecard-analysis/996e96fe2c44af429a8831cba2138f3d1c38ec28e64bf81e5a146e1604f55535/etl_receipts.parquet"
+  },
+  "scorecard_items": {
+   "family": "scorecards",
+   "artifactDigest": "sha256:2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6",
+   "publishedAt": "2026-11-16T07:36:03Z",
+   "receipts": "generations/scorecards/2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6/etl_receipts.parquet"
+  },
+  "scorecard_member_item_results": {
+   "family": "scorecards",
+   "artifactDigest": "sha256:2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6",
+   "publishedAt": "2026-11-16T07:36:03Z",
+   "receipts": "generations/scorecards/2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6/etl_receipts.parquet"
+  },
+  "scorecard_member_links": {
+   "family": "scorecard-analysis",
+   "artifactDigest": "sha256:996e96fe2c44af429a8831cba2138f3d1c38ec28e64bf81e5a146e1604f55535",
+   "publishedAt": "2026-11-27T05:18:18Z",
+   "receipts": "generations/scorecard-analysis/996e96fe2c44af429a8831cba2138f3d1c38ec28e64bf81e5a146e1604f55535/etl_receipts.parquet"
+  },
+  "scorecard_member_ratings": {
+   "family": "scorecards",
+   "artifactDigest": "sha256:2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6",
+   "publishedAt": "2026-11-16T07:36:03Z",
+   "receipts": "generations/scorecards/2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6/etl_receipts.parquet"
+  },
+  "scorecard_members": {
+   "family": "scorecards",
+   "artifactDigest": "sha256:2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6",
+   "publishedAt": "2026-11-16T07:36:03Z",
+   "receipts": "generations/scorecards/2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6/etl_receipts.parquet"
+  },
+  "scorecard_methodologies": {
+   "family": "scorecards",
+   "artifactDigest": "sha256:2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6",
+   "publishedAt": "2026-11-16T07:36:03Z",
+   "receipts": "generations/scorecards/2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6/etl_receipts.parquet"
+  },
+  "scorecard_metric_components": {
+   "family": "scorecards",
+   "artifactDigest": "sha256:2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6",
+   "publishedAt": "2026-11-16T07:36:03Z",
+   "receipts": "generations/scorecards/2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6/etl_receipts.parquet"
+  },
+  "scorecard_metric_items": {
+   "family": "scorecards",
+   "artifactDigest": "sha256:2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6",
+   "publishedAt": "2026-11-16T07:36:03Z",
+   "receipts": "generations/scorecards/2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6/etl_receipts.parquet"
+  },
+  "scorecard_metrics": {
+   "family": "scorecards",
+   "artifactDigest": "sha256:2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6",
+   "publishedAt": "2026-11-16T07:36:03Z",
+   "receipts": "generations/scorecards/2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6/etl_receipts.parquet"
+  },
+  "scorecard_publishers": {
+   "family": "scorecards",
+   "artifactDigest": "sha256:2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6",
+   "publishedAt": "2026-11-16T07:36:03Z",
+   "receipts": "generations/scorecards/2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6/etl_receipts.parquet"
+  },
+  "scorecard_snapshots": {
+   "family": "scorecards",
+   "artifactDigest": "sha256:2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6",
+   "publishedAt": "2026-11-16T07:36:03Z",
+   "receipts": "generations/scorecards/2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6/etl_receipts.parquet"
+  },
+  "scorecards": {
+   "family": "scorecards",
+   "artifactDigest": "sha256:2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6",
+   "publishedAt": "2026-11-16T07:36:03Z",
+   "receipts": "generations/scorecards/2e5beb4b6563d51b3ef61f52812d16096f82f41f169318ff87d20ca65056bfd6/etl_receipts.parquet"
+  },
   "unified_agenda": {
    "family": "unified-agenda",
    "artifactDigest": "sha256:ab8eb2989a156a2cbf8deae048430decb5bfe8ab0bacb063034ea327c4d7f115",

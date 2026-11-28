@@ -12,6 +12,7 @@ import json
 _DOMENICI_KEY = ("lugar_mccourt:103-senate-html", "Senate:Domenici:Pete:NH:R")
 _SOURCE_SHA256 = "bafadfe81fe4d4b8cd419177e26e9f0ad061cd8784a3fe6561d3dc4e5519932c"
 _EDITION_SHA256 = "a8f3ffca9bc648e3c08408ae9efb30f12fe8fbe8e4e82fb23ec1d416617d8921"
+_NATIVE_EDITION_SHA256 = "1ba8e8b84bf325da9105accd40f4a45d44668cfbd01255ebdd1969c8bafa9ccd"
 
 
 def _digest(row: Mapping) -> str:
@@ -31,7 +32,7 @@ def reviewed_member_context(source: Mapping, edition: Mapping) -> tuple[Mapping,
     if (source.get("scorecard_id"), source.get("publisher_member_key")) != _DOMENICI_KEY:
         return source, None
     source_sha256, edition_sha256 = _digest(source), _digest(edition)
-    if source_sha256 != _SOURCE_SHA256 or edition_sha256 != _EDITION_SHA256:
+    if source_sha256 != _SOURCE_SHA256 or edition_sha256 not in {_EDITION_SHA256, _NATIVE_EDITION_SHA256}:
         return source, {
             "rule_id": "lugar-mccourt-103-domenici-state-v1",
             "status": "not_applied_source_changed",

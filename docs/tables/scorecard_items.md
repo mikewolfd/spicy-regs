@@ -27,7 +27,7 @@ One publisher-identified action or scoring item; multiple actions on one bill re
 | `roll_number_text` | `VARCHAR` | Source-stated roll number, preserved as text; NULL when unstated. |
 | `bill_citation_text` | `VARCHAR` | Source-stated bill citation, preserved as text; NULL when unstated. |
 | `amendment_citation_text` | `VARCHAR` | Source-stated amendment citation, preserved as text; NULL when unstated. |
-| `references` | `STRUCT(occurrence_id VARCHAR, citation_text VARCHAR, kind VARCHAR, congress_text VARCHAR, chamber_text VARCHAR, session_text VARCHAR, roll_number_text VARCHAR, bill_citation_text VARCHAR, amendment_citation_text VARCHAR)[]` | Ordered source citation occurrences with occurrence_id, citation_text, kind and source_path. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `references` | `STRUCT(occurrence_id VARCHAR, citation_text VARCHAR, kind VARCHAR, congress_text VARCHAR, chamber_text VARCHAR, session_text VARCHAR, roll_number_text VARCHAR, bill_citation_text VARCHAR, amendment_citation_text VARCHAR, source_path VARCHAR)[]` | Ordered source citation occurrences with occurrence_id, citation_text, kind and source_path. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `publisher_position_text` | `VARCHAR` | Source-stated publisher position, preserved as text; NULL when unstated. |
 | `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
 | `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |

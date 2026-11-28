@@ -10,7 +10,7 @@ from rulespec_artifacts import ArtifactVerificationError
 from spicy_regs import generations
 from spicy_regs.scorecards.operations import publish
 from spicy_regs.generations import build_generation
-from spicy_regs.scorecards.etl import SOURCE_NAMES, generation_options, write_family
+from spicy_regs.scorecards.etl import SOURCE_NAMES, generation_schemas, write_family
 from tests.generation_fakes import Store
 from tests.test_scorecard_refresh import edition, tables
 
@@ -22,7 +22,7 @@ def setup_candidate(tmp_path, monkeypatch, *, current=True, status="prepared_not
     files = write_family(source, tables(edition("2025")))
     directory = tmp_path / "generation"
     artifact = build_generation(directory, family=family, files=files, expected_keys=[p.name for p in files],
-                                read_snapshot=previous, **generation_options(source, SOURCE_NAMES))
+                                read_snapshot=previous, schemas=generation_schemas(SOURCE_NAMES))
     pin = artifact.pin.as_dict()
     snapshot = publish.publication.publish_generation(directory, client=Store(), bucket="test", prior_index=previous)
     if not current:
@@ -51,13 +51,13 @@ def setup_candidate(tmp_path, monkeypatch, *, current=True, status="prepared_not
 @pytest.fixture
 def semantic_checks(monkeypatch):
     calls = []
-    verify = generations._verify_receipts
+    verify = generations._verify_admitted_generation
 
     def counted(*args, **kwargs):
         calls.append(True)
         return verify(*args, **kwargs)
 
-    monkeypatch.setattr(generations, "_verify_receipts", counted)
+    monkeypatch.setattr(generations, "_verify_admitted_generation", counted)
     return calls
 
 
@@ -124,16 +124,14 @@ def test_observation_cannot_certify_a_wrong_or_unprepared_candidate(tmp_path, mo
     assert not (output / "receipt.json").exists()
 
 
-@pytest.mark.parametrize("field", ["logicalId", "tables", "etlReceipts"])
+@pytest.mark.parametrize("field", ["logicalId", "tables"])
 def test_same_digest_cannot_certify_different_candidate_descriptors(tmp_path, monkeypatch, field):
     prep, _, snapshot = setup_candidate(tmp_path, monkeypatch)
     current = snapshot["families"]["scorecards"]
     if field == "logicalId":
         current[field] = "urn:different"
-    elif field == "tables":
-        current[field]["scorecards.parquet"]["sha256"] = "sha256:" + "f" * 64
     else:
-        current[field]["generationId"] = "different-generation"
+        current[field]["scorecards.parquet"]["sha256"] = "sha256:" + "f" * 64
     output = tmp_path / "recovery"
     with pytest.raises(ValueError, match="not the currently published family"):
         publish.main(["--preparation", str(prep), "--output", str(output), "--observe-only"])

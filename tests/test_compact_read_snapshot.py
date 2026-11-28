@@ -29,7 +29,7 @@ from spicy_regs import (
 )
 from spicy_regs.generations import build_generation, verify_generation
 from spicy_regs.pipelines.rollups.base import RollupPipeline
-from spicy_regs.scorecards.etl import SOURCE_NAMES, generation_options, write_family
+from spicy_regs.scorecards.etl import SOURCE_NAMES, generation_schemas, write_family
 from spicy_regs.scorecards.operations import publish as scorecard_publish
 from spicy_regs.source_catalog.input_proof import input_proof
 from spicy_regs.source_evidence import CaptureEvidence
@@ -522,7 +522,7 @@ def test_downstream_seams_input_proof_conversion_proof_and_exact_verifiers(tmp_p
             files=files,
             expected_keys=[p.name for p in files],
             read_snapshot=sc_index,
-            **generation_options(source, SOURCE_NAMES),
+            schemas=generation_schemas(SOURCE_NAMES),
         )
         if mode == "legacy":
             _restamp_legacy_full_root(sc_gen, sc_index)
