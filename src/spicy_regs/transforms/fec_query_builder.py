@@ -2461,8 +2461,48 @@ def build_fec_query_generation(
             )
             yield row, sel
 
+    # Deduplicate proven-equivalent individual snapshot date members (e.g. indiv26 by_date/*)
+    # from fec_receipts while keeping every member row in fec_collection_selection; fail closed
+    # if multiple bulk_receipt collections share an archive responseSha256 without a matching proof.
+    excluded_indiv_cids: set[str] = set()
+    if individual_snapshot_proof is not None:
+        proof_bytes, proof_sha = individual_snapshot_proof
+        indiv_selection = individual_snapshot_selection(
+            proof_bytes,
+            proof_sha256=proof_sha,
+            source_generation_pin=source_generation_pin,
+            collections=collections,
+            source_counts=source_counts,
+        )
+        excluded_indiv_cids = {
+            row["collection_id"]
+            for row in indiv_selection
+            if row["selection_status"] == "duplicate"
+        }
+    remaining_bulk_receipt_archives: dict[str, list[str]] = defaultdict(list)
+    for col, _ in routed["bulk_receipt"]:
+        cid = col["collection_id"]
+        if cid in excluded_indiv_cids:
+            continue
+        sha = (col.get("scope", {}).get("capture") or {}).get("responseSha256")
+        if isinstance(sha, str) and sha:
+            remaining_bulk_receipt_archives[sha].append(cid)
+    unproven_multi_archives = {
+        sha: sorted(cids) for sha, cids in remaining_bulk_receipt_archives.items() if len(cids) > 1
+    }
+    if unproven_multi_archives:
+        raise ValueError(
+            "Multiple bulk_receipt collections share an archive responseSha256 without a matching "
+            f"individual_snapshot_proof ({unproven_multi_archives}); supply individual_snapshot_proof "
+            "to exclude proven-equivalent duplicate members from fec_receipts"
+        )
+
     def _iter_bulk_receipts() -> Iterator[tuple[dict[str, Any], CollectionSelection]]:
-        by_cid = {col["collection_id"]: col for col, _ in routed["bulk_receipt"]}
+        by_cid = {
+            col["collection_id"]: col
+            for col, _ in routed["bulk_receipt"]
+            if col["collection_id"] not in excluded_indiv_cids
+        }
         for row in _iter_collections_records(
             list(by_cid),
             source_records_path=records_path,
