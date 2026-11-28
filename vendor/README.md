@@ -45,7 +45,15 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
   598,325 bytes). Pinned only under the optional `ddk-bridge` extra and dependency group so base
   CLI/MCP installs and `source-readers` remain untouched.
 
-- **Selected Deflate64 IRS 990 & multi-part OGE 278e reader provider** `spicy_docs-0.85.0+readers.20261128.3` is built from
+- **Selected Mirrulations reader provider** `spicy_docs-0.85.0+readers.20261128.5` is built from
+  `7c32bdb4f0f88232419d0152ea50c1a4ba42e872` (tree `9ec0a1a45fddae1f98c248dbef551e27510c8184`,
+  `mikewolfd/spicy-docs#65`), including the `#64` reader changes (ss-zznj / ss-r8rf A) and the
+  exact Rulespec Artifacts 1.1.3 pin. The Mirrulations reader exposes the exact GET body on JSON
+  records and derived-text attachments. See [the receipt](spicy_docs-0.85.0+readers.20261128.5.json)
+  for source, wheel and RECORD identity. The superseded .20261128.3 wheel is recoverable from
+  this adoption commit's parent; its receipt remains.
+
+- **Prior Deflate64 IRS 990 & multi-part OGE 278e reader provider** `spicy_docs-0.85.0+readers.20261128.3` is built from
   `703c56c9804a95ee4a3e8386043974a3d9c5b594` (tree `e4f93d9a2a791e6814ea9f3423bddb3737ecde8c`,
   `mikewolfd/spicy-docs#62` and `mikewolfd/spicy-docs#63` on `fork/main`). It adds fail-closed streaming
   PKZIP method-9 (Deflate64 / Enhanced Deflate) ZIP support via `inflate64>=1.0.4` for May 2026+ IRS TEOS
@@ -592,7 +600,13 @@ Base CLI and MCP installs do not require them.
   administration-policy reader's loader). The 0.50.1 wheel (`211bc6a`, `08a0afaa`) and its
   record are at `16b0683`. Vendored adoption only; no package-registry upload is asserted.
 
-- `rulespec_artifacts-1.1.2`: exact dependency of SpicyDocs 0.39.2, built from Rulespec
+- `rulespec_artifacts-1.1.3`: exact dependency of the selected SpicyDocs wheel, built from
+  `5f5c5f1c98d20df79cb5eb27f18247f7382a25cd` (`Formspec-Labs/rulespec#3`). It uses the indexed
+  location key for both SQL admission updates (ss-g5ut). **99,338 bytes**, SHA-256
+  `c551f489c54ef912fdc33fb056d37e5f079bbeb1a8cb4e6f6e52844aecb333ca`;
+  see [the receipt](rulespec_artifacts-1.1.3.json).
+
+- Prior `rulespec_artifacts-1.1.2`: exact dependency of SpicyDocs 0.39.2, built from Rulespec
   `23d5f2d98973b2a7f1bf7ce4c9c7a786a4f369ab` (`packages/rulespec-artifacts` of a whole-repo
   archive, since it force-includes repository files, with hatchling's default reproducible
   timestamp). **99,323 bytes**, SHA-256

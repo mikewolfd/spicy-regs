@@ -51,6 +51,20 @@ class SourcePin(NamedTuple):
     raw_custody: str | None
 
 
+class _BoundedBody:
+    """Let the reader consume the live response once, without buffering it here."""
+
+    def __init__(self, body, size: int):
+        self.body = body
+        self.limit = size + 1
+
+    def read(self):
+        return self.body.read(self.limit)
+
+    def close(self):
+        self.body.close()
+
+
 class _PinnedObject:
     def __init__(self, fetch, key, pin, observations, archive, evidence_store, observe_source):
         self.fetch = fetch
@@ -124,15 +138,12 @@ class _PinnedObject:
                     **observed, "status": "source-changed", "reason": "Source response differs from the pinned version or size",
                 }
                 raise ValueError("Source response differs from the pinned version or size")
-            content = body.read(observed["size"] + 1)
-            if len(content) != observed["size"]:
-                raise ValueError("Source body does not match its pinned size")
-        finally:
+        except BaseException:
             body.close()
-        self.observations[self.key] = {
-            **observed, "sha256": hashlib.sha256(content).digest(), "custody": "external",
-        }
-        return {**response, "Body": StreamingBody(BytesIO(content), len(content))}
+            raise
+        self.observations[self.key] = observed
+        return {**response, "Body": _BoundedBody(body, observed["size"])}
+
 
 
 class PinnedChunk:
@@ -152,6 +163,12 @@ class PinnedChunk:
 
         return _PinnedObject(fetch, key, self.pins[key], self.observations, self.archive, self.evidence_store,
                              self.observe_source)
+
+    def record_capture(self, key: str, digest: str) -> None:
+        observation = self.observations[key]
+        observation["sha256"] = bytes.fromhex(digest.removeprefix("sha256:"))
+        # A replay still records its input custody. A live read now has local custody too.
+        observation.setdefault("custody", "central-raw-archive")
 
     def evidence(self, accepted, failures):
         observed_at = datetime.now(UTC).isoformat()

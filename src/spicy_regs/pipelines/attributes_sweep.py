@@ -25,6 +25,7 @@ from time import monotonic
 from cyclopts import App
 from loguru import logger
 
+from spicy_regs.pipelines.mirrulations_originals import CapturingReader, MirrulationsOriginals
 from spicy_regs.pipelines.regulations_state import source_record_type
 from spicy_regs.pipelines.staging import stage_agencies
 from spicy_regs.schemas import RECORD_TYPES
@@ -52,6 +53,7 @@ def sweep(
     download_workers: int = DOWNLOAD_WORKERS,
     read_factory=None,
     keep_order: bool = False,
+    publish_originals: bool = False,
 ) -> dict[str, int]:
     """Read every document and docket record and write both attribute tables whole; return rows per table.
 
@@ -64,13 +66,14 @@ def sweep(
     record_types = [RECORD_TYPES["dockets"], RECORD_TYPES["documents"]]
     source_types = {rt.name: source_record_type(rt) for rt in record_types}
 
-    def reader(consumed: frozenset[str]):
+    def reader(consumed: frozenset[str], originals: MirrulationsOriginals):
         if read_factory is not None:
             return read_factory(consumed)
-        return mirrulations.reader_factory(
+        read = mirrulations.reader_factory(
             list(source_types.values()), processed_keys=consumed or None, download_workers=download_workers,
             bounded=True,
         )
+        return lambda agency, source: CapturingReader(read(agency, source), originals)
 
     staging = output_dir / "attributes-staging"
     rmtree(staging, ignore_errors=True)
@@ -86,25 +89,26 @@ def sweep(
     unreadable: set[str] = set()
     transport: set[str] = set()
     rows_read: dict[str, int] = {}
-    for attempt in range(1, RETRY_PASSES + 1):
-        read = reader(frozenset(consumed))
-        result = stage_agencies(
-            pending, record_types, staging, lambda agency, rt: read(agency, source_types[rt.name]),
-            transform_for=transform_for, max_workers=max_workers,
-        )
-        for name, count in result.rows_by_type.items():
-            rows_read[name] = rows_read.get(name, 0) + count
-        consumed |= result.consumed_keys
-        unreadable |= set(result.parse_failed_keys)
-        transport = set(result.failed_keys) - consumed - unreadable
-        if not transport:
-            break
-        pending = sorted({key.split("/")[1] for key in transport})
-        logger.warning("Attribute sweep pass {}: {} keys failed in transport; re-reading {}", attempt, len(transport),
-                       pending)
-    if transport:
-        raise RuntimeError(f"Attribute sweep left {len(transport)} keys unread after {RETRY_PASSES} passes; "
-                           "nothing was written")
+    with MirrulationsOriginals(output_dir, mirrulations.BUCKET, publish=publish_originals, track_keys=False) as originals:
+        for attempt in range(1, RETRY_PASSES + 1):
+            read = reader(frozenset(consumed), originals)
+            result = stage_agencies(
+                pending, record_types, staging, lambda agency, rt: read(agency, source_types[rt.name]),
+                transform_for=transform_for, max_workers=max_workers,
+            )
+            for name, count in result.rows_by_type.items():
+                rows_read[name] = rows_read.get(name, 0) + count
+            consumed |= result.consumed_keys
+            unreadable |= set(result.parse_failed_keys)
+            transport = set(result.failed_keys) - consumed - unreadable
+            if not transport:
+                break
+            pending = sorted({key.split("/")[1] for key in transport})
+            logger.warning("Attribute sweep pass {}: {} keys failed in transport; re-reading {}", attempt, len(transport),
+                           pending)
+        if transport:
+            raise RuntimeError(f"Attribute sweep left {len(transport)} keys unread after {RETRY_PASSES} passes; "
+                               "nothing was written")
     logger.info("Attribute sweep read {} in {:.0f}s", rows_read, monotonic() - started)
     receipt = {
         "refused": [{"table": tee.table, "id": key, "reason": reason} for tee in tees for key, reason in tee.refused],
@@ -195,7 +199,8 @@ def main(
         raise ValueError("--shard and --shards go together")
     if shard is not None and shards is not None:
         agency = shard_agencies(agency or mirrulations.discover_agencies(), shard, shards)
-    sweep(output_dir, agencies=agency, max_workers=max_workers, keep_order=shard is not None)
+    sweep(output_dir, agencies=agency, max_workers=max_workers, keep_order=shard is not None,
+          publish_originals=not skip_upload)
     if not skip_upload:
         _publish(output_dir)
 

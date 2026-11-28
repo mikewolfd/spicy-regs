@@ -59,6 +59,7 @@ from dotenv import load_dotenv
 from loguru import logger
 
 from spicy_regs.enrich_pdf import apply_text_updates, with_text_columns
+from spicy_regs.pipelines.mirrulations_originals import MirrulationsOriginals
 from spicy_regs.schemas import RecordType
 from spicy_docs.sources import mirrulations
 from spicy_regs.sources.derived_text import DERIVED_STATUS
@@ -92,6 +93,7 @@ def _derived_text_updates(
     overwrite: bool,
     updates_path: Path,
     discover_from_derived: bool = False,
+    originals: MirrulationsOriginals | None = None,
 ) -> dict[str, int]:
     """Fetch derived-data text for a frame's candidate comments into ``updates_path``.
 
@@ -159,8 +161,14 @@ def _derived_text_updates(
         for (docket_agency, docket_id), comment_ids in work_by_docket.items()
         for comment_id in comment_ids
     )
-    with DerivedTextPool(resource_factory, max_workers=max_workers) as pool:
+    with DerivedTextPool(
+        resource_factory, max_workers=max_workers,
+        capture=originals.retain_attachment if originals is not None else None,
+        on_fill=originals.expect_fill if originals is not None else None,
+    ) as pool:
         stats = write_text_updates(pool.map(records), updates_path)
+    if originals is not None:
+        originals.commit()  # Before publishing any row that cites these attachments.
 
     logger.info(
         "Backfill: {} derived, {} missing, {} failed ({} refused dockets)",
@@ -211,12 +219,14 @@ def enrich_comments_with_derived_text(
 def _backfill_file(
     path: Path,
     *,
+    evidence_dir: Path,
     agency: str | None,
     resource_factory: ResourceFactory,
     limit: int | None,
     max_workers: int,
     overwrite: bool,
     discover_from_derived: bool = False,
+    publish_originals: bool = False,
 ) -> dict[str, int]:
     """Enrich one published Parquet file in place, writing only when a row was filled.
 
@@ -228,16 +238,18 @@ def _backfill_file(
     candidates = pl.read_parquet(path, columns=[c for c in _CANDIDATE_COLUMNS if c in present])
     with TemporaryDirectory(dir=path.parent, prefix=".derived-text-") as staging:
         updates = Path(staging) / "updates.parquet"
-        stats = _derived_text_updates(
-            with_text_columns(candidates),
-            agency=agency,
-            resource_factory=resource_factory,
-            limit=limit,
-            max_workers=max_workers,
-            overwrite=overwrite,
-            updates_path=updates,
-            discover_from_derived=discover_from_derived,
-        )
+        with MirrulationsOriginals(evidence_dir, mirrulations.BUCKET, publish=publish_originals) as originals:
+            stats = _derived_text_updates(
+                with_text_columns(candidates),
+                agency=agency,
+                resource_factory=resource_factory,
+                limit=limit,
+                max_workers=max_workers,
+                overwrite=overwrite,
+                updates_path=updates,
+                discover_from_derived=discover_from_derived,
+                originals=originals,
+            )
         if stats["derived"]:
             enriched = Path(staging) / path.name
             frame = with_text_columns(pl.scan_parquet(path))
@@ -255,18 +267,21 @@ def backfill_comments_parquet(
     max_workers: int = 8,
     overwrite: bool = False,
     discover_from_derived: bool = False,
+    publish_originals: bool = False,
 ) -> dict[str, int]:
     """Backfill the monolithic ``comments.parquet`` (carries ``agency_code``)."""
     if not comments_path.exists():
         raise FileNotFoundError(f"{comments_path} not found; download or build the dataset first")
     return _backfill_file(
         comments_path,
+        evidence_dir=comments_path.parent,
         agency=None,
         resource_factory=resource_factory,
         limit=limit,
         max_workers=max_workers,
         overwrite=overwrite,
         discover_from_derived=discover_from_derived,
+        publish_originals=publish_originals,
     )
 
 
@@ -278,6 +293,7 @@ def backfill_comment_partitions(
     max_workers: int = 8,
     overwrite: bool = False,
     discover_from_derived: bool = False,
+    publish_originals: bool = False,
 ) -> tuple[dict[str, int], list[Path]]:
     """Backfill every ``agency_code=*/*.parquet`` partition; agency comes from the path.
 
@@ -302,12 +318,14 @@ def backfill_comment_partitions(
             continue
         stats = _backfill_file(
             part,
+            evidence_dir=partition_dir.parent,
             agency=match.group(1),
             resource_factory=resource_factory,
             limit=remaining,
             max_workers=max_workers,
             overwrite=overwrite,
             discover_from_derived=discover_from_derived,
+            publish_originals=publish_originals,
         )
         for key, value in stats.items():
             totals[key] += value
@@ -331,6 +349,7 @@ def _backfill_agency_in_catalog(
     overwrite: bool = False,
     discover_from_derived: bool = False,
     comment_ids: frozenset[str] | None = None,
+    originals: MirrulationsOriginals | None = None,
 ) -> dict[str, int]:
     """Fill + upsert one agency's candidate comments in the attached catalog.
 
@@ -387,6 +406,7 @@ def _backfill_agency_in_catalog(
             overwrite=overwrite,
             updates_path=updates,
             discover_from_derived=discover_from_derived,
+            originals=originals,
         )
         if not stats["derived"]:
             return stats
@@ -411,6 +431,7 @@ def backfill_comments_catalog(
     record_type: RecordType,
     *,
     agencies: list[str] | None = None,
+    output_dir: Path = Path("output"),
     resource_factory: ResourceFactory = mirrulations.s3_resource,
     limit: int | None = None,
     max_workers: int = 8,
@@ -442,27 +463,29 @@ def backfill_comments_catalog(
                 ).fetchall()
             ]
 
-        totals = text_update_stats()
-        remaining = limit
-        for agency in agency_list:
-            if remaining is not None and remaining <= 0:
-                logger.info("Reached --limit budget; {} agency bucket(s) left unprocessed", len(agency_list))
-                break
-            stats = _backfill_agency_in_catalog(
-                con,
-                record_type,
-                agency,
-                resource_factory=resource_factory,
-                limit=remaining,
-                max_workers=max_workers,
-                overwrite=overwrite,
-                discover_from_derived=discover_from_derived,
-                comment_ids=comment_ids,
-            )
-            for key, value in stats.items():
-                totals[key] += value
-            if remaining is not None:
-                remaining -= stats["selected"]
+        with MirrulationsOriginals(output_dir, mirrulations.BUCKET, publish=True) as originals:
+            totals = text_update_stats()
+            remaining = limit
+            for agency in agency_list:
+                if remaining is not None and remaining <= 0:
+                    logger.info("Reached --limit budget; {} agency bucket(s) left unprocessed", len(agency_list))
+                    break
+                stats = _backfill_agency_in_catalog(
+                    con,
+                    record_type,
+                    agency,
+                    resource_factory=resource_factory,
+                    limit=remaining,
+                    max_workers=max_workers,
+                    overwrite=overwrite,
+                    discover_from_derived=discover_from_derived,
+                    comment_ids=comment_ids,
+                    originals=originals,
+                )
+                for key, value in stats.items():
+                    totals[key] += value
+                if remaining is not None:
+                    remaining -= stats["selected"]
 
         logger.info("Catalog backfill totals: {} across {} agency bucket(s)", totals, len(agency_list))
         logger.info("Next: run publish-comments-mirror so the filled text reaches the public read mirror.")
@@ -531,6 +554,7 @@ def main() -> None:
         stats = backfill_comments_catalog(
             RECORD_TYPES["comments"],
             agencies=agencies,
+            output_dir=args.output_dir,
             limit=args.limit,
             max_workers=args.max_workers,
             overwrite=args.overwrite,
@@ -549,6 +573,7 @@ def main() -> None:
             max_workers=args.max_workers,
             overwrite=args.overwrite,
             discover_from_derived=args.discover_from_derived,
+            publish_originals=args.upload,
         )
         if args.upload and changed:
             from spicy_regs.sources.r2 import upload_comment_partitions
@@ -561,6 +586,7 @@ def main() -> None:
             max_workers=args.max_workers,
             overwrite=args.overwrite,
             discover_from_derived=args.discover_from_derived,
+            publish_originals=args.upload,
         )
         if args.upload:
             from spicy_regs.sources.r2 import upload_file

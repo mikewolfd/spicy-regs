@@ -9,11 +9,14 @@ from dataclasses import dataclass
 from queue import SimpleQueue
 from threading import BoundedSemaphore, Event, Lock, Thread, local
 from time import monotonic
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from spicy_regs.sources.derived_text import DerivedCommentText, DerivedFill, DerivedTextUnavailable, DocketListings
+
+if TYPE_CHECKING:
+    from spicy_docs.sources.mirrulations import DerivedAttachment
 
 # One budget for all agencies/dockets using a pool. Pending results also occupy
 # a slot until consumed, so slow staging cannot accumulate an unbounded queue.
@@ -46,8 +49,9 @@ class DerivedTextPool:
     def __init__(
         self, resource_factory: Callable[[], Any], *, max_workers: int = 8, progress_seconds: float = 30,
         on_fill: Callable[[DerivedFill], None] | None = None,
+        capture: Callable[[DerivedAttachment], None] | None = None,
     ) -> None:
-        """``on_fill`` sees each fill before its row can be written (the ETL registers the objects it cites)."""
+        """Capture each fetched attachment before reporting the fill (or an all-blank result)."""
         if max_workers < 1:
             raise ValueError("text workers must be positive")
         self.max_workers = min(max_workers, MAX_TEXT_WORKERS)
@@ -62,7 +66,7 @@ class DerivedTextPool:
         listings = DocketListings()
         fetchers: SimpleQueue[DerivedCommentText] = SimpleQueue()
         for _ in range(self.max_workers):
-            fetchers.put(DerivedCommentText(resource_factory(), listings=listings))
+            fetchers.put(DerivedCommentText(resource_factory(), listings=listings, capture=capture))
 
         def initialize() -> None:
             self._local.fetcher = fetchers.get_nowait()

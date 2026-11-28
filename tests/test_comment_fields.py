@@ -136,6 +136,16 @@ def test_frozen_key_plan_can_capture_the_version_from_a_single_get(tmp_path):
     part = cf.part_path(tmp_path, plan.stem, key.split("/")[1], 0)
     checkpoint = json.loads(checkpoint_path(part).read_text())
     [observed] = pl.read_parquet(part.parent / checkpoint["evidence_file"]).to_dicts()
+    from spicy_docs.storage.raw_archive import CentralRawArchiveStore
+
+    assert observed["custody"] == "central-raw-archive"
+    digest = "sha256:" + sha256(body).hexdigest()
+    with CentralRawArchiveStore(create=False).open(digest) as stream:
+        assert stream.read() == body
+    [journal] = list(tmp_path.glob("source-evidence/*/artifact/journal.jsonl"))
+    [capture] = [event for line in journal.read_text().splitlines()
+                 if (event := json.loads(line))["event"] == "retained-file"]
+    assert (capture["source_record_key"], capture["version_id"], capture["sha256"]) == (key, "v1", digest)
     assert (observed["expected_etag"], observed["etag"], observed["version_id"], observed["sha256"]) == (
         None, '"observed"', "v1", sha256(body).digest(),
     )
@@ -417,10 +427,11 @@ def test_the_seed_excludes_a_reviewed_comment_only_as_reviewed(tmp_path, monkeyp
     cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store))
     reviewed = json.loads(store[_key(f"{PFAS}-0002")])
     _exclusion(monkeypatch, reviewed)
-    fetched = []
-    fetch = lambda key: fetched.append(key) or json.loads(store[key])  # noqa: E731
+    def fetch(_key):
+        pytest.fail("reviewed comment must use the captured original, not a second GET")
+
     counts = cf.build_attributes(tmp_path, fetch=fetch)
-    assert counts["rows"] == 3 and fetched == [_key(f"{PFAS}-0002")]
+    assert counts["rows"] == 3
     changed = {**reviewed, "data": {**reviewed["data"], "attributes": {**reviewed["data"]["attributes"], "title": "x"}}}
     _exclusion(monkeypatch, changed)
     with pytest.raises(ValueError, match="changed"):
