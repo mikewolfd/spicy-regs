@@ -418,15 +418,13 @@ def test_committee_reports_skips_packages_it_holds(tmp_path, monkeypatch):
     assert "CRPT-119hrpt2" in acquirer.requested
 
 
-@pytest.mark.parametrize("change", ["release", "code"])
-def test_a_report_is_re_read_for_a_code_change_not_a_release_string(tmp_path, monkeypatch, change):
-    """The token held ``spicy-docs=<version>``, so every version-only release re-read all 141 reports.
-
-    708f2bf4 against 95810b26 differed in ``observed_at`` alone. A release string moving with the
-    code unchanged re-reads nothing; the code moving re-reads what it derives.
-    """
+@pytest.mark.parametrize("change", ["release", "unrelated_code", "reader"])
+def test_a_report_is_re_read_only_for_a_report_reader_change(tmp_path, monkeypatch, change):
+    """Release and whole-package churn once caused rereads without changing report derivation."""
     import importlib
     import importlib.metadata
+
+    from spicy_docs.schemas import committee_report_tables
 
     from spicy_regs import generations
     from spicy_regs.transforms import build_committee_reports as module
@@ -436,41 +434,50 @@ def test_a_report_is_re_read_for_a_code_change_not_a_release_string(tmp_path, mo
     monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
     held = {"package_id": "CRPT-119hrpt1", "last_modified": "2026-09-10T12:00:00Z"}
     seed(tmp_path, "committee_reports", [held])
-    checkpoint = held | {"outcome": "complete", "rule_version": reads.RULE_VERSIONS["CRPT"], "observed_at": "2026-09-20"}
+    original_rules = reads.RULE_VERSIONS
+    checkpoint = held | {"outcome": "complete", "rule_version": original_rules["CRPT"], "observed_at": "2026-09-20"}
     pq.write_table(pa.Table.from_pylist([checkpoint]), prior_scratch_path(tmp_path, reads.READS_TABLE))
-    if change == "release":
-        real = importlib.metadata.version
-        monkeypatch.setattr(importlib.metadata, "version", lambda name: "9.9.9" if name == "spicy-docs" else real(name))
-    else:
-        monkeypatch.setattr(generations, "spicy_docs_code", lambda: "0" * 64)
-    importlib.reload(reads)
+
+    class Reader:
+        def packages(self, url, *, max_pages=40):
+            return iter(())
+
+    class Acquirer:
+        def __init__(self):
+            self.requested: list[str] = []
+
+        def acquire_parts(self, package_id, *, prefer=(), max_bytes=None):
+            self.requested.append(package_id)
+            raise LookupError("stub: no body in a hermetic test")
+
+        acquire = acquire_parts
+
+    class NoHearings:
+        def records(self, route, url, *, max_pages=1):
+            raise AssertionError("no hearing is pending")
+
     try:
-        assert (reads.RULE_VERSIONS["CRPT"] == checkpoint["rule_version"]) is (change == "release")
+        with monkeypatch.context() as patch:
+            if change == "release":
+                real = importlib.metadata.version
+                patch.setattr(importlib.metadata, "version", lambda name: "9.9.9" if name == "spicy-docs" else real(name))
+            elif change == "unrelated_code":
+                patch.setattr(generations, "spicy_docs_code", lambda: "0" * 64)
+            else:
+                patch.setattr(committee_report_tables, "REPORT_SECTION_READER_VERSION", "report-headings-test-bump")
+            importlib.reload(reads)
+            patch.setattr(module, "RULE_VERSIONS", reads.RULE_VERSIONS)
+            assert (reads.RULE_VERSIONS["CRPT"] == checkpoint["rule_version"]) is (change != "reader")
 
-        class Reader:
-            def packages(self, url, *, max_pages=40):
-                return iter(())
-
-        class Acquirer:
-            requested: list[str] = []
-
-            def acquire_parts(self, package_id, *, prefer=(), max_bytes=None):
-                self.requested.append(package_id)
-                raise LookupError("stub: no body in a hermetic test")
-
-            acquire = acquire_parts
-
-        class NoHearings:
-            def records(self, route, url, *, max_pages=1):
-                raise AssertionError("no hearing is pending")
-
-        acquirer = Acquirer()
-        module.build_committee_reports(tmp_path, reader=Reader(), acquirer=acquirer, hearings=NoHearings(),
-                                       download_prior=no_download)
-        assert acquirer.requested == ([] if change == "release" else ["CRPT-119hrpt1"])
+            acquirer = Acquirer()
+            module.build_committee_reports(
+                tmp_path, reader=Reader(), acquirer=acquirer, hearings=NoHearings(), download_prior=no_download,
+            )
+            assert acquirer.requested == ([held["package_id"]] if change == "reader" else [])
     finally:
-        monkeypatch.undo()
+        # Reload unpatched reader inputs without detaching existing importers from the rule map.
         importlib.reload(reads)
+        reads.RULE_VERSIONS = original_rules
 
 
 def test_amendments_carry_the_detail_routes_sponsor_and_amended_bill(tmp_path, monkeypatch):
