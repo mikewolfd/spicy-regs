@@ -686,12 +686,14 @@ Export to a staging directory and select it with its matching candidate as shown
 above; direct export to the selected public directory would leave the local
 selection's manifest and member pins stale.
 
-Copy the whole raw archive to mirror it. Transfer original objects before their
-acquisition receipts, and transfer the frozen snapshot after its selected base
-indexes. Verify the destination before treating the mirror as complete. Catalog
-caches and public exports can be rebuilt and need not be mirrored with the data.
-The mirror must retain original acquisition receipts and unknown provenance;
-copy time must not replace acquisition time.
+After a local acquisition, follow the [raw archive sync runbook](raw-archive-sync-runbook.md)
+to add new originals and acquisition receipts to the existing R2 mirror.
+To seed a new mirror, copy the whole raw archive. Transfer original objects
+before their acquisition receipts, and transfer the frozen snapshot after its
+selected base indexes. Verify the destination before treating the mirror as
+complete. Catalog caches and public exports can be rebuilt and need not be
+mirrored with the data. The mirror must retain original acquisition receipts
+and unknown provenance; copy time must not replace acquisition time.
 
 Expected, advertised, acquired, processed and published coverage remain distinct.
 A fresh holdings rebuild establishes local custody; it does not assert a fresh
