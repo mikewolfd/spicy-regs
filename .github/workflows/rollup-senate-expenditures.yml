@@ -18,6 +18,10 @@ on:
         required: false
         default: ''
         type: string
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   run:
     uses: ./.github/workflows/_rollup.yml

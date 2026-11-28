@@ -45,6 +45,10 @@ env:
   # so its catalog writes do not log the unlocked-write warning.
   SPICY_REGS_CATALOG_LOCK: comments-catalog-write
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   # Documents and comments can name a docket the Mirrulations mirror never
   # captured (165 on 2026-09-26). Ask the Regulations.gov API for each and merge

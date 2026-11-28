@@ -80,6 +80,10 @@ concurrency:
   cancel-in-progress: false
   queue: max
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   setup:
     runs-on: ubuntu-latest

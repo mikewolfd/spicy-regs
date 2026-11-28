@@ -33,6 +33,10 @@ concurrency:
   group: rollup-bill-family
   cancel-in-progress: false
   queue: max
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   run:
     uses: ./.github/workflows/_rollup.yml

@@ -20,6 +20,10 @@ on:
         required: false
         default: '500'
         type: string
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   run:
     uses: ./.github/workflows/_rollup.yml
