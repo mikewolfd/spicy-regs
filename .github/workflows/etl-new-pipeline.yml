@@ -291,7 +291,7 @@ jobs:
       # Successful passes publish raw-read and comment-text retry checkpoints
       # before the manifest, even with zero new rows. Fresh runners restore both.
       - name: Upload artifacts (for debugging)
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: etl-new-pipeline-output-batch-${{ needs.setup.outputs.batch }}

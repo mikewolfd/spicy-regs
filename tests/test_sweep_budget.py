@@ -321,6 +321,13 @@ def test_a_stopped_sweep_leaves_an_artifact_and_still_lets_the_consumers_publish
     assert consumers["needs"] == ["setup", "etl-new"] and "always()" not in consumers["if"]
 
 
+def test_debug_upload_is_eligible_on_failure_or_cancellation():
+    workflow = yaml.safe_load(WORKFLOW.read_text())
+    steps = workflow["jobs"]["etl-new"]["steps"]
+    upload = next(step for step in steps if step.get("name") == "Upload artifacts (for debugging)")
+    assert upload["if"] == "failure() || cancelled()"
+
+
 @pytest.mark.parametrize("status", [0, 1])
 @pytest.mark.parametrize("stopped_before", ["2", None])
 def test_a_stopped_sweep_is_a_warning_on_the_run_page(tmp_path, stopped_before, status):
@@ -391,22 +398,19 @@ def test_a_failed_list_of_todays_sweeps_does_not_cancel_the_retry(tmp_path):
     assert "--event schedule --status success" in calls
 
 
-def test_only_the_comment_attributes_family_gets_more_than_thirty_minutes():
-    """Its per-row receipt rewrite is estimated at about 121 minutes on 26.4M rows; the other four are small."""
+def test_refresh_omits_retired_comment_attributes_and_keeps_the_document_attributes_timeout():
     refresh = yaml.safe_load((WORKFLOW.parent / "_regulations-refresh.yml").read_text())
     families = refresh["jobs"]["base-families"]
-    assert "run-rollup-comment-attributes" in families["strategy"]["matrix"]["command"]
+    assert set(families["strategy"]["matrix"]["command"]) == {
+        "run-rollup-dockets", "run-rollup-documents", "run-rollup-docket-attributes", "run-rollup-document-attributes",
+    }
     assert families["with"]["timeout_minutes"] == (
-        "${{ matrix.command == 'run-rollup-comment-attributes' && 180 || matrix.command == 'run-rollup-document-attributes' && 90 || 30 }}"
+        "${{ matrix.command == 'run-rollup-document-attributes' && 90 || 30 }}"
     )
+    assert "free_disk" not in families["with"]
     rollup = yaml.safe_load((WORKFLOW.parent / "_rollup.yml").read_text())
     assert rollup[True]["workflow_call"]["inputs"]["timeout_minutes"]["type"] == "number"
     assert rollup["jobs"]["rollup"]["timeout-minutes"] == "${{ inputs.timeout_minutes }}"
-    # Three copies of its 4.2 GiB receipt member do not fit the 14 GB a hosted runner guarantees.
-    assert families["with"]["free_disk"] == "${{ matrix.command == 'run-rollup-comment-attributes' }}"
-    assert rollup[True]["workflow_call"]["inputs"]["free_disk"]["type"] == "boolean"
-    freeing = [step for step in rollup["jobs"]["rollup"]["steps"] if "inputs.free_disk" in str(step.get("if"))]
-    assert freeing and "sudo rm -rf" in freeing[0]["run"]
 
 
 @pytest.mark.parametrize(
