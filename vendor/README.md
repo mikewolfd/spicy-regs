@@ -38,7 +38,18 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
-- **Selected Senate PTR reader provider** `spicy_docs-0.85.0+readers.20261127.7` is built from
+- **Selected House disbursements date-adjudication provider** `spicy_docs-0.85.0+readers.20261128.1` is built from
+  `72ec8253a1c71752c391caa0f118c38452fef671` (tree `64498e5a39fdf222ca85a24e0191c005381a29eb`,
+  `mikewolfd/spicy-docs#60` on `fork/main`). It applies the independently adjudicated `ss-9uvk`
+  House CSV disbursement date rules (6 promoted `high`-confidence corrections across Pingree,
+  Huizenga, Vasquez, Waltz, McCaul, and Frankel; 2 structured unapplied `moderate` proposals for
+  Delgado and Maloney; and the Farenthold `date_reviews` prose refresh) atop `.20261127.7`. Two
+  clean `git archive` builds are byte-identical (`sha256:fe98d265...`).
+  See [the receipt](spicy_docs-0.85.0+readers.20261128.1.json) for source, wheel and RECORD identity.
+  The superseded `.20261127.7` wheel is recoverable from this adoption commit's parent;
+  its receipt remains.
+
+- **Prior Senate PTR reader provider** `spicy_docs-0.85.0+readers.20261127.7` is built from
   `b66be93001801226705f174683ec9256750ca518` (tree `50962df1fb7ec7a0ee07148c85273ef7e83202b1`,
   `mikewolfd/spicy-docs#59` on `fork/main`). It handles the two authentic 2025 Senate eFD publisher
   formats observed across all 146 electronic PTRs (`ss-iw09`): strictly directional `+1 day`
