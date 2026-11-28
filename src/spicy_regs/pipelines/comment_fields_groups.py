@@ -22,6 +22,12 @@ from spicy_regs.sources.publication import file_identity
 
 RESOURCES = ExportResources(memory="256MB", threads=1)
 COLUMNS = cfw.read_columns("attachments")
+#: Disjoint hash buckets for duplicate-ID checking and classification (must be a power of two).
+CLASSIFY_BUCKETS = 32
+#: Maximum candidate rows per contiguous sorted ``_file`` batch during ``members.parquet`` grouping.
+MEMBERS_BATCH_ROWS = 500_000
+#: Streaming Arrow record-batch size when writing Parquet outputs directly.
+ARROW_BATCH_ROWS = 65_536
 
 
 def _input(stage: Path) -> tuple[Path, dict]:
@@ -40,6 +46,140 @@ def _relation(path: Path) -> str:
 
 def _bytes() -> str:
     return " + ".join(f'coalesce(octet_length(encode(CAST(r."{c}" AS VARCHAR))), 0)' for c in COLUMNS)
+
+
+def _bucket_mask() -> tuple[int, int]:
+    buckets = CLASSIFY_BUCKETS
+    if buckets < 1 or (buckets & (buckets - 1)) != 0:
+        raise ValueError(f"CLASSIFY_BUCKETS must be a positive power of two: {buckets}")
+    return buckets, buckets - 1
+
+
+def _check_nonnull_ids(con, relation: str, label: str) -> None:
+    if con.execute(f"SELECT 1 FROM {relation} WHERE comment_id IS NULL LIMIT 1").fetchone():
+        raise ValueError(f"A {label} row has a NULL comment_id")
+
+
+def _check_no_duplicate_native_ids(con, index: str, buckets: int, mask: int) -> None:
+    for bucket in range(buckets):
+        if con.execute(
+            f"SELECT comment_id FROM {index} WHERE (hash(comment_id) & {mask}) = {bucket} "
+            "GROUP BY 1 HAVING count(*) > 1 LIMIT 1"
+        ).fetchone():
+            raise ValueError("A staged comment identity appears more than once in the native catalog")
+
+
+def _classify_partitioned(con, parts: str, index: str, target: Path, buckets: int, mask: int) -> None:
+    """Classify staged copies per identity across disjoint hash buckets, streaming into one Parquet file."""
+    bytes_expr = _bytes()
+    writer: pq.ParquetWriter | None = None
+    try:
+        for bucket in range(buckets):
+            reader = con.execute(f"""
+                SELECT r.comment_id, any_value(c.modify_date) AS modify_date, any_value(c._file) AS _file,
+                       count(*)::BIGINT AS read_copies, sum(r.row_bytes)::BIGINT AS read_value_bytes,
+                       CASE WHEN count(c.comment_id)=0 THEN 'absent-from-catalog'
+                            WHEN NOT bool_or(r.modify_date IS NOT DISTINCT FROM c.modify_date) THEN 'other-version-only'
+                            WHEN NOT bool_or(r.modify_date IS NOT DISTINCT FROM c.modify_date
+                                             AND r.has_attachments) THEN 'no-stated-value'
+                            ELSE 'candidate' END AS outcome
+                FROM (
+                    SELECT r.comment_id, r.modify_date,
+                           ({bytes_expr})::BIGINT AS row_bytes,
+                           (r.attachments_json IS NOT NULL) AS has_attachments
+                    FROM {parts} r
+                    WHERE (hash(r.comment_id) & {mask}) = {bucket}
+                ) r
+                LEFT JOIN (
+                    SELECT comment_id, modify_date, _file
+                    FROM {index}
+                    WHERE (hash(comment_id) & {mask}) = {bucket}
+                ) c USING (comment_id)
+                GROUP BY r.comment_id
+            """).to_arrow_reader(batch_size=ARROW_BATCH_ROWS)
+            if writer is None:
+                writer = pq.ParquetWriter(target, reader.schema, compression="zstd")
+            for batch in reader:
+                if batch.num_rows:
+                    writer.write_batch(batch)
+            del reader
+    finally:
+        if writer is not None:
+            writer.close()
+
+
+def _write_members_batched(con, classified: str, target: Path, *, max_rows: int, max_read_bytes: int) -> None:
+    """Assign monotonic group IDs across contiguous sorted ``_file`` batches, streaming in global order."""
+    if MEMBERS_BATCH_ROWS < 1:
+        raise ValueError(f"MEMBERS_BATCH_ROWS must be positive: {MEMBERS_BATCH_ROWS}")
+    file_counts = con.execute(
+        f"SELECT _file, count(*)::BIGINT AS identities FROM {classified} "
+        "WHERE outcome='candidate' GROUP BY _file ORDER BY _file"
+    ).fetchall()
+    if any(file_name is None for file_name, _ in file_counts):
+        raise ValueError("A candidate comment lacks a native file identity")
+    if not file_counts:
+        reader = con.execute(
+            f"SELECT comment_id, modify_date, _file, read_copies, read_value_bytes, 0::BIGINT AS group_id "
+            f"FROM {classified} WHERE false"
+        ).to_arrow_reader(batch_size=ARROW_BATCH_ROWS)
+        with pq.ParquetWriter(target, reader.schema, compression="zstd"):
+            pass
+        return
+    batches: list[tuple[str, str, int]] = []
+    batch_first: str | None = None
+    batch_last: str | None = None
+    batch_rows = 0
+    for file_name, identities in file_counts:
+        if batch_first is not None and batch_rows + identities > MEMBERS_BATCH_ROWS:
+            assert batch_last is not None
+            batches.append((batch_first, batch_last, batch_rows))
+            batch_first = batch_last = None
+            batch_rows = 0
+        if batch_first is None:
+            batch_first = file_name
+        batch_last = file_name
+        batch_rows += identities
+    if batch_first is not None:
+        assert batch_last is not None
+        batches.append((batch_first, batch_last, batch_rows))
+
+    half_bytes = max_read_bytes // 2
+    next_group_id = 0
+    writer: pq.ParquetWriter | None = None
+    try:
+        for first_file, last_file, expected_rows in batches:
+            reader = con.execute(
+                f"""SELECT comment_id, modify_date, _file, read_copies, read_value_bytes,
+                           (? + dense_rank() OVER (ORDER BY _file, row_bucket, byte_bucket) - 1)::BIGINT AS group_id
+                    FROM (
+                        SELECT *, (row_number() OVER w - 1) // {int(max_rows)} AS row_bucket,
+                               (sum(read_value_bytes) OVER w) // {int(half_bytes)} AS byte_bucket
+                        FROM {classified}
+                        WHERE outcome='candidate' AND _file BETWEEN ? AND ?
+                        WINDOW w AS (PARTITION BY _file ORDER BY comment_id ROWS UNBOUNDED PRECEDING)
+                    ) ORDER BY group_id, comment_id""",
+                [next_group_id, first_file, last_file],
+            ).to_arrow_reader(batch_size=ARROW_BATCH_ROWS)
+            if writer is None:
+                writer = pq.ParquetWriter(target, reader.schema, compression="zstd")
+            written_rows = 0
+            last_group_id: int | None = None
+            for batch in reader:
+                if batch.num_rows:
+                    writer.write_batch(batch)
+                    written_rows += batch.num_rows
+                    last_group_id = batch.column("group_id")[-1].as_py()
+            del reader
+            if written_rows != expected_rows or last_group_id is None:
+                raise RuntimeError(
+                    f"Batched group assignment mismatch for [{first_file}, {last_file}]: "
+                    f"wrote {written_rows}, expected {expected_rows}"
+                )
+            next_group_id = last_group_id + 1
+    finally:
+        if writer is not None:
+            writer.close()
 
 
 def plan(workdir: Path, stage: Path, *, max_rows: int, max_read_bytes: int,
@@ -96,33 +236,17 @@ def plan(workdir: Path, stage: Path, *, max_rows: int, max_read_bytes: int,
             evidence["truncated"] = True
         (workdir / "membership-explain.json").write_text(content)
         con.execute(membership_sql)
-        if con.execute(f"SELECT comment_id FROM {index} GROUP BY 1 HAVING count(*) > 1 LIMIT 1").fetchone():
-            raise ValueError("A staged comment identity appears more than once in the native catalog")
-        con.execute(f"""COPY (
-            SELECT r.comment_id, any_value(c.modify_date) AS modify_date, any_value(c._file) AS _file,
-                   count(*) AS read_copies, sum({_bytes()}) AS read_value_bytes,
-                   CASE WHEN count(c.comment_id)=0 THEN 'absent-from-catalog'
-                        WHEN NOT bool_or(r.modify_date IS NOT DISTINCT FROM c.modify_date) THEN 'other-version-only'
-                        WHEN NOT bool_or(r.modify_date IS NOT DISTINCT FROM c.modify_date
-                                         AND r.attachments_json IS NOT NULL) THEN 'no-stated-value'
-                        ELSE 'candidate' END AS outcome
-            FROM {parts} r LEFT JOIN {index} c USING (comment_id) GROUP BY r.comment_id
-        ) TO {cfw._sql(classified_path)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
+        buckets, mask = _bucket_mask()
+        _check_nonnull_ids(con, parts, "staged comment")
+        _check_nonnull_ids(con, index, "native catalog")
+        _check_no_duplicate_native_ids(con, index, buckets, mask)
+        _classify_partitioned(con, parts, index, classified_path, buckets, mask)
         oversized = con.execute(f"""SELECT comment_id, read_value_bytes FROM {classified}
                                     WHERE outcome='candidate' AND read_value_bytes > ? LIMIT 1""",
                                  [max_read_bytes // 2]).fetchone()
         if oversized:
             raise ValueError(f"One identity's copies exceed half the group byte budget: {oversized}")
-        con.execute(f"""COPY (
-            SELECT comment_id, modify_date, _file, read_copies, read_value_bytes,
-                   dense_rank() OVER (ORDER BY _file, row_bucket, byte_bucket)-1 AS group_id
-            FROM (
-                SELECT *, (row_number() OVER w-1) // {max_rows} AS row_bucket,
-                       (sum(read_value_bytes) OVER w) // {max_read_bytes // 2} AS byte_bucket
-                FROM {classified} WHERE outcome='candidate'
-                WINDOW w AS (PARTITION BY _file ORDER BY comment_id ROWS UNBOUNDED PRECEDING)
-            ) ORDER BY group_id, comment_id
-        ) TO {cfw._sql(members_path)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
+        _write_members_batched(con, classified, members_path, max_rows=max_rows, max_read_bytes=max_read_bytes)
         con.execute(f"COPY (SELECT * FROM {classified} WHERE outcome<>'candidate') "
                     f"TO {cfw._sql(excluded_path)} (FORMAT PARQUET, COMPRESSION ZSTD)")
         groups = con.execute(f"""SELECT group_id, min(_file) AS original_file, count(*) AS identities,
