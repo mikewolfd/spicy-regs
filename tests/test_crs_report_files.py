@@ -381,3 +381,35 @@ def test_corrupt_completed_text_phase_refuses_and_preserves_admitted_generation(
         files.build_crs_report_files(directory, [report()], transport=transport)
     files.verify_generation(Path(first["generation_directory"]))
     assert len(asked) == 1
+
+
+def test_publishable_flag_stamps_complete_family_and_refuses_zero_ok_bodies(tmp_path, source):
+    _, transport = source
+    local_only = files.build_crs_report_files(tmp_path / "local", [report()], transport=transport, allow_network=True)
+    assert local_only["publication_status"] == "local-partial"
+    assert local_only["status"] == "verified_local_candidate_not_published"
+    assert json.loads((Path(local_only["generation_directory"]) / "artifact.json").read_text())["spec"]["publicationStatus"] == "local-partial"
+
+    live_idx = tmp_path / "live.json"
+    live_idx.write_text(json.dumps({"format": "spicy-regs-publication", "version": 2, "families": {}}))
+    pub = files.build_crs_report_files(
+        tmp_path / "pub",
+        [report()],
+        prior_bundle=Path(local_only["bundle"]),
+        publishable=True,
+        read_index=live_idx,
+        transport=transport,
+    )
+    assert pub["requests"] == 0 and pub["publication_status"] == "complete-family"
+    assert pub["status"] == "verified_publishable_candidate"
+    root = json.loads((Path(pub["generation_directory"]) / "artifact.json").read_text())
+    assert root["spec"]["publicationStatus"] == "complete-family"
+    assert root["spec"]["readSnapshot"]["format"] == "spicy-regs-publication"
+
+    unavailable = httpx.MockTransport(
+        lambda _: httpx.Response(404, stream=httpx.ByteStream(b"missing"), headers={"Content-Type": "text/html"})
+    )
+    with pytest.raises(ValueError, match="at least one ok body observation"):
+        files.build_crs_report_files(
+            tmp_path / "empty_pub", [report()], allow_network=True, publishable=True, transport=unavailable
+        )

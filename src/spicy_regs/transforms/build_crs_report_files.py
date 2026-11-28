@@ -20,6 +20,7 @@ import pyarrow as pa
 
 from spicy_regs.etl_receipts import DatasetPolicy, ReceiptContext, read_with_receipts, write_dataset
 from spicy_regs.generations import build_generation, verify_generation
+from spicy_regs.pipelines.raw_releases import inherit_read_index
 from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.transforms.pdf_text import PYPDF_VERSION, extract_pdf_text
 
@@ -354,7 +355,7 @@ def build_crs_report_files(
     transport=None, allow_network: bool = False, max_reports: int = 10, max_requests: int = 20,
     max_file_bytes: int = 8 * 1024 * 1024, max_total_bytes: int = 64 * 1024 * 1024,
     max_prior_bytes: int = 128 * 1024 * 1024, max_prior_rows: int = 10000,
-    generation_id: str | None = None,
+    generation_id: str | None = None, publishable: bool = False, read_index: Path | None = None,
 ) -> dict:
     """Prepare a local candidate; explicit reports and offered URLs bound the work.
 
@@ -389,6 +390,7 @@ def build_crs_report_files(
     generation_id = generation_id or uuid4().hex
     processor_pin = text_processor_pin()
     evidence = CaptureEvidence(output_dir, FAMILY)
+    read_snapshot = inherit_read_index(evidence, read_index)
     budget = CrsFileBudget(max_requests=1, max_bytes=max_file_bytes, timeout_seconds=60,
                            min_request_interval_seconds=0)
     requests = decoded_bytes = downloaded_bytes = 0
@@ -535,18 +537,23 @@ def build_crs_report_files(
     except BaseException as error:
         evidence.finish(error)
         raise
+    if publishable and not any(row.get("body_state") == "ok" for row in rows):
+        raise ValueError("Publishable crs_report_files candidate requires at least one ok body observation")
     bundle = output_dir / ("bundle-" + generation_id)
     subject = _write(rows, bundle, generation_id)
     generation = output_dir / ("generation-" + generation_id)
+    pub_status = "complete-family" if publishable else "local-partial"
     artifact = build_generation(generation, family=FAMILY, files=[subject], expected_keys=[KEY],
-        inputs=evidence.inputs(), receipt_path=bundle / "etl_receipts.parquet", receipt_policies=[POLICY],
-        receipt_generation_id=generation_id, publication_status="local-partial")
+        read_snapshot=read_snapshot, inputs=evidence.inputs(), receipt_path=bundle / "etl_receipts.parquet",
+        receipt_policies=[POLICY], receipt_generation_id=generation_id, publication_status=pub_status)
     verify_generation(generation, expected_pin=artifact.pin)
     return {"bundle": str(bundle), "generation_directory": str(generation), "candidate_pin": artifact.pin.as_dict(),
             "rows": len(rows), "requests": requests, "downloaded_bytes": downloaded_bytes,
             "decoded_body_bytes": decoded_bytes,
             "reused_bodies": reused_bodies, "reused_text": reused_text,
-            "evidence_directory": str(evidence.artifact_dir), "status": "verified_local_candidate_not_published"}
+            "publication_status": pub_status,
+            "evidence_directory": str(evidence.artifact_dir),
+            "status": "verified_publishable_candidate" if publishable else "verified_local_candidate_not_published"}
 
 
 def main() -> None:
@@ -558,8 +565,11 @@ def main() -> None:
                         help="JSON with reports and optional retained_files capture pins")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--prior-bundle", type=Path)
+    parser.add_argument("--read-index", type=Path)
     parser.add_argument("--include-html", action="store_true")
     parser.add_argument("--allow-network", action="store_true")
+    parser.add_argument("--publishable", action="store_true",
+                        help="Stamp complete-family publication status for an owner-authorized selected cohort")
     for name, default in (("max-reports", 10), ("max-requests", 20), ("max-file-bytes", 8 * 1024 * 1024),
                           ("max-total-bytes", 64 * 1024 * 1024), ("max-prior-bytes", 128 * 1024 * 1024),
                           ("max-prior-rows", 10000)):
