@@ -15,7 +15,7 @@ from spicy_regs import data_dictionary as dd
 from spicy_regs import output_ledger
 from spicy_regs.duckdb_settings import load_public_http
 from spicy_regs.sources import publication
-from tests.test_chaos_r6_dictionary import MAP_TIME_FILING_LINK
+from tests.test_chaos_r6_dictionary import MAP_TIME_FILING_LINK, RESOLVED_FILING_LINK
 
 pytestmark = pytest.mark.integration
 
@@ -64,6 +64,21 @@ def test_filing_link_status_is_unresolved_with_no_filing_key_on_every_row_it_say
         link, key = stats["filing_link_status"], stats["filing_key"]
         assert link["complete"] and (link["min"], link["max"], link["nulls"]) == ("unresolved", "unresolved", 0), table
         assert key["nulls"] == key["values"], table
+
+
+def test_resolved_filing_link_tables_record_native_resolution_outcomes(urls, con):
+    """Check footer statistics on `/2` tables that run native filing-key resolution."""
+    resolved_count = 0
+    for table in RESOLVED_FILING_LINK:
+        stats = constants.footer_values(con, urls[table], ["filing_link_status", "filing_key"])
+        link, key = stats["filing_link_status"], stats["filing_key"]
+        assert link["complete"] and link["nulls"] == 0, table
+        if link["min"] == "resolved_native_filing_key":
+            assert key["nulls"] < key["values"], f"{table}: resolved status without any populated filing_key"
+            resolved_count += 1
+        else:
+            assert link["min"].startswith("unresolved_") and key["nulls"] == key["values"], table
+    assert resolved_count >= 14, f"Expected >= 14 tables with resolved filing_key, found {resolved_count}"
 
 
 def test_each_original_filing_expenditure_has_exactly_one_cover_and_the_bulk_file_none(urls, con):
