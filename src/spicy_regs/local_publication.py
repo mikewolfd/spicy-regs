@@ -43,6 +43,7 @@ LOCAL_FAMILIES = frozenset({
     "cms-medicaid",
     "cms-open-payments",
     "cms-part-b",
+    "cms-part-b-associations",
     "cms-part-d",
     "court-opinions",
     "crs-report-files",
@@ -104,6 +105,9 @@ def _family_schemas(family: str) -> dict | None:
     if family == "cms-part-b":
         from spicy_regs.transforms.build_cms_part_b import SCHEMA, TABLE
         return {TABLE: SCHEMA}
+    if family == "cms-part-b-associations":
+        from spicy_regs.transforms.build_cms_part_b_associations import SCHEMAS
+        return SCHEMAS
     if family == "cms-part-d":
         from spicy_regs.transforms.build_cms_part_d import SCHEMA, TABLE
         return {TABLE: SCHEMA}

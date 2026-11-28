@@ -120,6 +120,10 @@ FAMILY_TABLES: dict[str, tuple[str, ...]] = {
     "cms-medicare-provider": ("cms_medicare_provider",),
     "cms-open-payments": ("cms_open_payments_summaries",),
     "cms-part-b": ("cms_part_b_drug_spending",),
+    "cms-part-b-associations": (
+        "cms_part_b_drug_use_information",
+        "cms_part_b_manufacturer_associations",
+    ),
     "cms-part-d": ("cms_part_d_drug_spending",),
     "comment-attributes": ("comment_attributes",),
     "comments": ("comments", "comments_index"),
@@ -402,6 +406,7 @@ FAMILY_DOMAIN_ASSIGNMENTS: dict[str, tuple[str, tuple[str, ...]]] = {
     "cms-medicare-provider": ("spicygov", ("SpicyEntities",)),
     "cms-open-payments": ("spicygov", ("SpicyEntities",)),
     "cms-part-b": ("spicygov", ()),
+    "cms-part-b-associations": ("spicygov", ()),
     "cms-part-d": ("spicygov", ()),
     "comment-attributes": ("spicygov", ()),
     "comments": ("spicygov", ()),

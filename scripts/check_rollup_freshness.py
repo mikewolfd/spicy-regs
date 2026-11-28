@@ -184,6 +184,7 @@ FAMILY_CADENCE: dict[str, Cadence] = {
     "cms-part-d": _CMS,
     "cms-medicaid": _CMS,
     "cms-part-b": _CMS,
+    "cms-part-b-associations": _CMS,
     # CourtListener cuts each bulk export on a quarter's last day and finishes it the next; the scheduled
     # court-citations run is on the 9th and 16th after.
     "court-citations": Cadence("quarterly export, scheduled run", months=3, release_lag=1, grace=22),

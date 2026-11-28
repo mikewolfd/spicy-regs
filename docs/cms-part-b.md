@@ -5,8 +5,10 @@ explicit benefit year of an admitted CMS Part B release. The main file has no
 manufacturer field. `manufacturer_information_status` states that limit, and
 `source_resources_url` points to the exact release's supporting resources.
 The separately retained manufacturer workbook lists multiple associations
-per HCPCS; a join must not repeat or allocate the spending. The nonadditive
-association-table follow-up is `ss-mb8j`.
+per HCPCS; a join must not repeat or allocate the spending. Those literal
+associations and HCPCS-level drug-use descriptions live in the separate
+`cms-part-b-associations` family (`cms_part_b_manufacturer_associations` and
+`cms_part_b_drug_use_information`, `ss-mb8j`).
 
 SpicyDocs owns exact catalog selection, dictionary/count controls, bounded API
 pages and source admission/replay. This mapper uses that admitted release and
@@ -66,3 +68,55 @@ LIMIT 10;
 An observed count-matching source walk does not prove a frozen publisher
 population or historical completeness. Source qualification, local generation
 acceptance and public selection are separate evidence.
+
+## Manufacturer and drug-use associations (`cms-part-b-associations`)
+
+The CMS Part B supporting workbook linked from `source_resources_url`
+(`Medicare-Part-B-Drug-Dashboard-Manufacturer-Drug_use - 260602.xlsx` for
+benefit year 2024) publishes two worksheets with distinct grains:
+
+* `cms_part_b_manufacturer_associations` (`Manufacturer Summary`, many rows per
+  HCPCS): preserves every literal `(hcpcs_code, drug_description, brand_name,
+  generic_name, manufacturer_name)` row with exact 1-based `source_row_number`,
+  `source_sheet`, `source_workbook_sha256`, and linked Part B release identity.
+  CMS truncates `Manufacturer` at 15 characters on many rows (for example,
+  `Grifols Therape`, `Adma Biologics,`) and leaves brand, generic, and
+  manufacturer blank on some wound-dressing/skin-substitute codes; all strings
+  remain literal and `spending_allocation_status = 'not_allocated_in_source'`.
+* `cms_part_b_drug_use_information` (`Drug Use Information`, 1 row per HCPCS):
+  preserves literal brand/generic display markers (`*`), CMS's clinical
+  monograph text (`drug_uses`), explicit `drug_use_status` (`summary_provided`,
+  `not_available`, `empty`), and CMS's `***` disclaimer text in
+  `source_selection_json`. Upstream CMS text discrepancies (such as `Q9966` and
+  `Q9967` carrying Iohexol prose under Iodixanol in the 2024 workbook) are
+  retained verbatim rather than edited.
+
+Build a candidate generation from retained central-archive originals without
+touching `cms-part-b`:
+
+```sh
+python -m spicy_regs.pipelines.cms_part_b_associations build \
+  --captures "$CMS_PART_B_ASSOC_CAPTURES" --output-dir "$CMS_PART_B_ASSOC_OUTPUT"
+```
+
+To inspect manufacturers and drug uses alongside spending without ever
+multiplying `total_spending_usd`, aggregate `cms_part_b_manufacturer_associations`
+to `(benefit_year, hcpcs_code)` before joining to `cms_part_b_drug_spending`:
+
+```sql
+WITH m AS (
+  SELECT benefit_year, hcpcs_code,
+         COUNT(*) AS association_row_count,
+         LIST(brand_name ORDER BY source_row_number) AS brand_names,
+         LIST(manufacturer_name ORDER BY source_row_number) AS manufacturers
+  FROM cms_part_b_manufacturer_associations
+  GROUP BY benefit_year, hcpcs_code
+)
+SELECT s.hcpcs_code, s.benefit_year, s.total_spending_usd,
+       m.association_row_count, m.manufacturers,
+       u.drug_use_status, u.drug_uses
+FROM cms_part_b_drug_spending AS s
+LEFT JOIN m USING (benefit_year, hcpcs_code)
+LEFT JOIN cms_part_b_drug_use_information AS u USING (benefit_year, hcpcs_code)
+WHERE s.hcpcs_code = '90371';
+```

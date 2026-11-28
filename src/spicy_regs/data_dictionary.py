@@ -605,6 +605,8 @@ TABLES: tuple[str, ...] = (
     "cms_part_d_drug_spending",
     "cms_medicaid_drug_spending",
     "cms_part_b_drug_spending",
+    "cms_part_b_manufacturer_associations",
+    "cms_part_b_drug_use_information",
     "cms_medicare_provider",
     "cms_open_payments_summaries",
     "nppes_provider_observations",
@@ -771,6 +773,8 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "cms_part_d_drug_spending",
         "cms_medicaid_drug_spending",
         "cms_part_b_drug_spending",
+        "cms_part_b_manufacturer_associations",
+        "cms_part_b_drug_use_information",
         "cms_medicare_provider",
     "cms_open_payments_summaries",
         "nppes_provider_observations",
@@ -1092,6 +1096,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.build_cms_part_d import SCHEMA as CMS_PART_D_SCHEMA
     from spicy_regs.transforms.build_cms_medicaid import SCHEMA as CMS_MEDICAID_SCHEMA
     from spicy_regs.transforms.build_cms_part_b import SCHEMA as CMS_PART_B_SCHEMA
+    from spicy_regs.transforms.build_cms_part_b_associations import SCHEMAS as CMS_PART_B_ASSOCIATION_SCHEMAS
     from spicy_regs.transforms.build_cms_provider import SCHEMA as CMS_PROVIDER_SCHEMA
     from spicy_regs.transforms.build_cms_open_payments import SCHEMA as CMS_OPEN_PAYMENTS_SCHEMA
     from spicy_regs.transforms.build_nppes_providers import SCHEMA as NPPES_PROVIDER_SCHEMA
@@ -1232,6 +1237,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         "cms_part_d_drug_spending": CMS_PART_D_SCHEMA,
         "cms_medicaid_drug_spending": CMS_MEDICAID_SCHEMA,
         "cms_part_b_drug_spending": CMS_PART_B_SCHEMA,
+        **CMS_PART_B_ASSOCIATION_SCHEMAS,
         "cms_medicare_provider": CMS_PROVIDER_SCHEMA,
         "cms_open_payments_summaries": CMS_OPEN_PAYMENTS_SCHEMA,
         "nppes_provider_observations": NPPES_PROVIDER_SCHEMA,
