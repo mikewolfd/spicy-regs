@@ -933,6 +933,423 @@
       "normalized_docket_candidates"
     ]
   },
+  "federal_register_documents": {
+    "table": "federal_register_documents",
+    "label": "Federal Register typed documents (Layer 1)",
+    "summary": "One natively typed row per dated Federal Register record, keyed by (`document_number`, `publication_date`), derived by streaming immutable 31-field federalregister.gov API JSON pages referenced by `federal_register.source_sha256`. Adds native `DATE` and `BIGINT` columns, `full_text_xml_url`, `agency_names`, `source_record_id`, `source_locator`, and `member_names` sparsity tracking alongside the compatibility `federal_register` table.",
+    "coverage": "Derived: exact 1-to-1 dated-key counterpart of `federal_register` from 1994-01-03 onward, streamed from immutable 31-field API JSON pages in R2 source evidence.",
+    "kind": "derived",
+    "measured_on": "2026-11-28",
+    "data_quality": "Reconciled 1-to-1 on (`document_number`, `publication_date`) and `source_sha256` against the pinned `federal_register` generation; conflicting same-date observations and legacy 22-field or pre-1.3 pages are refused fail-closed. `member_names` records the exact JSON keys present on each raw document object so absent fields remain distinct from explicit JSON `null`, `false`, empty lists (`[]`), and empty objects (`{}`). `agencies` and `cfr_references` store per-element JSON strings in publisher order (including nested URLs stripped from `federal_register`); join `federal_register_agencies`, `federal_register_cfr_references`, and `federal_register_docket_candidates` on (`document_number`, `publication_date`) for typed child rows.",
+    "columns": [
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Reversible dated source identity (`document_number@YYYY-MM-DD`) minted by SpicyDocs."
+      },
+      {
+        "column_name": "document_number",
+        "column_type": "VARCHAR",
+        "description": "Literal Federal Register document number as served (`2017-07442`, unpadded before 2013). Part of the composite primary key with `publication_date`."
+      },
+      {
+        "column_name": "publication_date",
+        "column_type": "DATE",
+        "description": "Native `DATE` the document was published in the Federal Register. Part of the composite primary key with `document_number`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest (`sha256:<hex>`) of the immutable 31-field API JSON page under `source-evidence/blobs/sha256/<hex>` from which this row was parsed."
+      },
+      {
+        "column_name": "source_locator",
+        "column_type": "VARCHAR",
+        "description": "Zero-based JSON Pointer (`/results/<index>`) locating this document inside the retained API page blob."
+      },
+      {
+        "column_name": "abstract",
+        "column_type": "VARCHAR",
+        "description": "Agency abstract of the document; NULL when null or absent (check `member_names`)."
+      },
+      {
+        "column_name": "action",
+        "column_type": "VARCHAR",
+        "description": "Document action line as stated by the API (e.g. `Final rule.`, `Final rule; correction.`); distinguishes corrections and delays from initial rules."
+      },
+      {
+        "column_name": "agencies",
+        "column_type": "VARCHAR[]",
+        "description": "Ordered `VARCHAR[]` of compact JSON strings for each publisher agency object in `agencies`, preserving source order, repeated canonical IDs/slugs, `url`, and `json_url`."
+      },
+      {
+        "column_name": "agency_names",
+        "column_type": "VARCHAR[]",
+        "description": "Ordered `VARCHAR[]` of publisher agency display names (`agency_names`), preserved verbatim from the 31-field API response."
+      },
+      {
+        "column_name": "body_html_url",
+        "column_type": "VARCHAR",
+        "description": "URL of the document's full-text HTML body on federalregister.gov; NULL when absent or null."
+      },
+      {
+        "column_name": "cfr_references",
+        "column_type": "VARCHAR[]",
+        "description": "Ordered `VARCHAR[]` of compact JSON strings for each publisher CFR reference object, preserving `title`, `part`, `chapter`, and `citation_url`."
+      },
+      {
+        "column_name": "comments_close_on",
+        "column_type": "DATE",
+        "description": "Native `DATE` closing deadline for public comments; NULL when the document states no comment deadline."
+      },
+      {
+        "column_name": "correction_of",
+        "column_type": "VARCHAR",
+        "description": "API URL of the document corrected by an editorial Federal Register correction record; NULL otherwise."
+      },
+      {
+        "column_name": "corrections",
+        "column_type": "VARCHAR[]",
+        "description": "Ordered `VARCHAR[]` of API URLs for editorial corrections linked to this document; empty list `[]` distinct from NULL."
+      },
+      {
+        "column_name": "disposition_notes",
+        "column_type": "VARCHAR",
+        "description": "Literal presidential document disposition notes from schema 1.3; NULL when null or absent."
+      },
+      {
+        "column_name": "docket_ids",
+        "column_type": "VARCHAR[]",
+        "description": "Ordered `VARCHAR[]` of literal docket labels printed on the document; see `federal_register_docket_candidates` for normalized Regulations.gov candidates and `regulations_dot_gov_info` for publisher-stated docket links."
+      },
+      {
+        "column_name": "effective_on",
+        "column_type": "DATE",
+        "description": "Native `DATE` stated as `effective_on` by the Federal Register API; NULL when omitted."
+      },
+      {
+        "column_name": "end_page",
+        "column_type": "BIGINT",
+        "description": "Native `BIGINT` last page number in the Federal Register volume."
+      },
+      {
+        "column_name": "executive_order_notes",
+        "column_type": "VARCHAR",
+        "description": "Literal executive-order history prose from schema 1.3; preserves source line breaks and spelling."
+      },
+      {
+        "column_name": "executive_order_number",
+        "column_type": "BIGINT",
+        "description": "Native `BIGINT` executive order number for presidential executive orders; NULL otherwise."
+      },
+      {
+        "column_name": "full_text_xml_url",
+        "column_type": "VARCHAR",
+        "description": "Official XML full-text URL served by federalregister.gov; carried here and omitted on legacy `federal_register`."
+      },
+      {
+        "column_name": "html_url",
+        "column_type": "VARCHAR",
+        "description": "Document landing page URL on federalregister.gov."
+      },
+      {
+        "column_name": "pdf_url",
+        "column_type": "VARCHAR",
+        "description": "Official PDF rendition URL; NULL where the Register serves no PDF (chiefly 1994 records)."
+      },
+      {
+        "column_name": "president",
+        "column_type": "VARCHAR",
+        "description": "Compact JSON text of the publisher's `president` object (`{identifier, name}`) as stated across all document types; NULL when null or absent."
+      },
+      {
+        "column_name": "regulation_id_numbers",
+        "column_type": "VARCHAR[]",
+        "description": "Ordered `VARCHAR[]` of Regulation Identifier Numbers listed by the API; empty list `[]` distinct from NULL."
+      },
+      {
+        "column_name": "regulations_dot_gov_info",
+        "column_type": "VARCHAR",
+        "description": "Compact JSON text of the publisher's `regulations_dot_gov_info` object (`{}` when stated empty, distinct from NULL); retains the publisher's stated Regulations.gov `docket_id` separately from normalized `docket_ids`."
+      },
+      {
+        "column_name": "significant",
+        "column_type": "BOOLEAN",
+        "description": "Native `BOOLEAN` Executive Order 12866 significance flag (`true`, `false`, or NULL when neither is stated)."
+      },
+      {
+        "column_name": "signing_date",
+        "column_type": "DATE",
+        "description": "Native `DATE` a presidential document was signed; NULL for non-presidential documents."
+      },
+      {
+        "column_name": "start_page",
+        "column_type": "BIGINT",
+        "description": "Native `BIGINT` first page number in the Federal Register volume."
+      },
+      {
+        "column_name": "subtype",
+        "column_type": "VARCHAR",
+        "description": "Federal Register document subtype when stated (e.g. `Executive Order`); NULL on most non-presidential documents."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "Document title as served by the Federal Register API."
+      },
+      {
+        "column_name": "topics",
+        "column_type": "VARCHAR[]",
+        "description": "Ordered `VARCHAR[]` of Federal Register CFR index topic terms; empty list `[]` distinct from NULL."
+      },
+      {
+        "column_name": "type",
+        "column_type": "VARCHAR",
+        "description": "Literal Federal Register API `type` field (`Rule`, `Proposed Rule`, `Notice`, `Presidential Document`, etc.)."
+      },
+      {
+        "column_name": "volume",
+        "column_type": "BIGINT",
+        "description": "Native `BIGINT` Federal Register volume number."
+      },
+      {
+        "column_name": "member_names",
+        "column_type": "VARCHAR[]",
+        "description": "Ordered `VARCHAR[]` of JSON member keys present on the raw source document object, distinguishing absent keys from explicit JSON `null`, `false`, `[]`, and `{}`."
+      }
+    ],
+    "subject": "rulemaking",
+    "grain": "One row per dated Federal Register document (`document_number`, `publication_date`).",
+    "identity_columns": [
+      "document_number",
+      "publication_date"
+    ]
+  },
+  "federal_register_agencies": {
+    "table": "federal_register_agencies",
+    "label": "Federal Register typed document agencies (Layer 1)",
+    "summary": "Physical typed child table (`federal_register_agencies.parquet`) holding one row per publisher agency entry on a Federal Register document in zero-based source order, including `id`, `parent_id`, `raw_name`, `name`, `slug`, `url`, `json_url`, and `member_names`. Distinct from the legacy MCP SQL relationship views `federal_register_agencies_occurrences` and `federal_register_agencies_pairs` over `federal_register`, which expose only `(document_number, publication_date, source_ordinal, target_key)` without full agency attributes or URLs.",
+    "coverage": "Derived: one row per element of `agencies` on every document in `federal_register_documents` (from 1994-01-03 onward).",
+    "kind": "derived",
+    "measured_on": "2026-11-28",
+    "data_quality": "Preserves exact publisher order via zero-based `position` and does NOT deduplicate repeated canonical `id` or `slug` values when a document lists multiple distinct `<SUBAGY>`/`<AGENCY>` entries resolving to the same agency. Joins `federal_register_documents` on (`document_number`, `publication_date`) with native `DATE` equality; zero orphan rows are enforced on every build. `member_names` distinguishes absent agency JSON keys from explicit JSON `null`.",
+    "columns": [
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Parent document's reversible dated source identity (`document_number@YYYY-MM-DD`)."
+      },
+      {
+        "column_name": "document_number",
+        "column_type": "VARCHAR",
+        "description": "Parent Federal Register document number; joins `federal_register_documents` with `publication_date`."
+      },
+      {
+        "column_name": "publication_date",
+        "column_type": "DATE",
+        "description": "Parent document's native `DATE` publication date; joins `federal_register_documents` with `document_number`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest (`sha256:<hex>`) of the retained API page blob containing the parent document."
+      },
+      {
+        "column_name": "source_locator",
+        "column_type": "VARCHAR",
+        "description": "Zero-based JSON Pointer (`/results/<doc>/agencies/<position>`) locating this agency object inside the retained blob."
+      },
+      {
+        "column_name": "position",
+        "column_type": "INTEGER",
+        "description": "Zero-based ordinal position (`INTEGER`) of this agency entry in the parent document's `agencies` array."
+      },
+      {
+        "column_name": "member_names",
+        "column_type": "VARCHAR[]",
+        "description": "Ordered `VARCHAR[]` of JSON keys present on this raw agency object, distinguishing absent keys from explicit `null`."
+      },
+      {
+        "column_name": "id",
+        "column_type": "BIGINT",
+        "description": "Native `BIGINT` Federal Register canonical agency identifier; may repeat across entries on one document, or be NULL on unmapped raw entries."
+      },
+      {
+        "column_name": "parent_id",
+        "column_type": "BIGINT",
+        "description": "Native `BIGINT` Federal Register parent agency identifier; NULL for top-level agencies or when omitted."
+      },
+      {
+        "column_name": "json_url",
+        "column_type": "VARCHAR",
+        "description": "Federal Register API JSON endpoint URL for this agency; omitted on legacy `federal_register` and preserved here."
+      },
+      {
+        "column_name": "name",
+        "column_type": "VARCHAR",
+        "description": "Canonical agency name stated by the Federal Register API."
+      },
+      {
+        "column_name": "raw_name",
+        "column_type": "VARCHAR",
+        "description": "Literal agency/subagency heading string as printed on the Federal Register document."
+      },
+      {
+        "column_name": "slug",
+        "column_type": "VARCHAR",
+        "description": "Federal Register URL slug for the canonical agency; may repeat across entries on one document."
+      },
+      {
+        "column_name": "url",
+        "column_type": "VARCHAR",
+        "description": "Federal Register web page URL for this agency; omitted on legacy `federal_register` and preserved here."
+      }
+    ],
+    "subject": "rulemaking",
+    "grain": "One row per publisher agency entry (`document_number`, `publication_date`, `position`).",
+    "identity_columns": [
+      "document_number",
+      "publication_date",
+      "position"
+    ]
+  },
+  "federal_register_cfr_references": {
+    "table": "federal_register_cfr_references",
+    "label": "Federal Register typed CFR references (Layer 1)",
+    "summary": "Physical typed child table (`federal_register_cfr_references.parquet`) holding one row per Code of Federal Regulations reference listed on a Federal Register document in zero-based source order, with native `BIGINT` `title`, `VARCHAR` `part` and `chapter` preserving mixed numeric/Roman/alphanumeric spellings, and `citation_url` (which legacy `federal_register.cfr_references` strips).",
+    "coverage": "Derived: one row per element of `cfr_references` on every document in `federal_register_documents` (from 1994-01-03 onward).",
+    "kind": "derived",
+    "measured_on": "2026-11-28",
+    "data_quality": "`part` and `chapter` are stored as `VARCHAR` so mixed publisher integers and Roman/alphanumeric strings (such as chapter `I` vs `2` or part `60a`) remain in one typed column without lossy casting. Preserves `citation_url` verbatim and tracks absent vs explicit `null` keys via `member_names`. Joins `federal_register_documents` on (`document_number`, `publication_date`) with native `DATE` equality; zero orphan rows are enforced on every build.",
+    "columns": [
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Parent document's reversible dated source identity (`document_number@YYYY-MM-DD`)."
+      },
+      {
+        "column_name": "document_number",
+        "column_type": "VARCHAR",
+        "description": "Parent Federal Register document number; joins `federal_register_documents` with `publication_date`."
+      },
+      {
+        "column_name": "publication_date",
+        "column_type": "DATE",
+        "description": "Parent document's native `DATE` publication date; joins `federal_register_documents` with `document_number`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest (`sha256:<hex>`) of the retained API page blob containing the parent document."
+      },
+      {
+        "column_name": "source_locator",
+        "column_type": "VARCHAR",
+        "description": "Zero-based JSON Pointer (`/results/<doc>/cfr_references/<position>`) locating this CFR object inside the retained blob."
+      },
+      {
+        "column_name": "position",
+        "column_type": "INTEGER",
+        "description": "Zero-based ordinal position (`INTEGER`) of this entry in the parent document's `cfr_references` array."
+      },
+      {
+        "column_name": "member_names",
+        "column_type": "VARCHAR[]",
+        "description": "Ordered `VARCHAR[]` of JSON keys present on this raw CFR reference object, distinguishing absent keys from explicit `null`."
+      },
+      {
+        "column_name": "title",
+        "column_type": "BIGINT",
+        "description": "Native `BIGINT` CFR title number (e.g. `40` for Title 40 CFR); NULL when omitted."
+      },
+      {
+        "column_name": "part",
+        "column_type": "VARCHAR",
+        "description": "CFR part identifier stored as `VARCHAR` so numeric and alphanumeric parts (e.g. `60`, `60a`) share one query column."
+      },
+      {
+        "column_name": "chapter",
+        "column_type": "VARCHAR",
+        "description": "CFR chapter identifier stored as `VARCHAR` so Roman numerals and integer chapters (e.g. `I`, `2`) share one query column."
+      },
+      {
+        "column_name": "citation_url",
+        "column_type": "VARCHAR",
+        "description": "Publisher-stated CFR citation URL when present; omitted on legacy `federal_register` and preserved here."
+      }
+    ],
+    "subject": "rulemaking",
+    "grain": "One row per publisher CFR reference entry (`document_number`, `publication_date`, `position`).",
+    "identity_columns": [
+      "document_number",
+      "publication_date",
+      "position"
+    ]
+  },
+  "federal_register_docket_candidates": {
+    "table": "federal_register_docket_candidates",
+    "label": "Federal Register normalized docket candidates (Layer 1)",
+    "summary": "Physical typed child table (`federal_register_docket_candidates.parquet`) extracting normalized Regulations.gov docket candidates from each literal `docket_ids` label using SpicyDocs' shared plural docket normalizer (`normalize_docket_references` / `linked_docket_ids`), preserving both the zero-based `label_position` and zero-based `candidate_position` within multi-docket labels.",
+    "coverage": "Derived: every normalized Regulations.gov docket candidate extracted from `docket_ids` across `federal_register_documents` (from 1994-01-03 onward).",
+    "kind": "derived",
+    "measured_on": "2026-11-28",
+    "data_quality": "Extracted solely from printed `docket_ids` strings by syntax normalization; these candidate identifiers remain distinct from the publisher-stated Regulations.gov link in `federal_register_documents.regulations_dot_gov_info` and do not by themselves establish docket existence on regulations.gov. Labels yielding no Regulations.gov candidate produce zero rows here while remaining verbatim in `federal_register_documents.docket_ids`. Joins `federal_register_documents` on (`document_number`, `publication_date`) with native `DATE` equality; zero orphan rows are enforced on every build.",
+    "columns": [
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Parent document's reversible dated source identity (`document_number@YYYY-MM-DD`)."
+      },
+      {
+        "column_name": "document_number",
+        "column_type": "VARCHAR",
+        "description": "Parent Federal Register document number; joins `federal_register_documents` with `publication_date`."
+      },
+      {
+        "column_name": "publication_date",
+        "column_type": "DATE",
+        "description": "Parent document's native `DATE` publication date; joins `federal_register_documents` with `document_number`."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest (`sha256:<hex>`) of the retained API page blob containing the parent document."
+      },
+      {
+        "column_name": "source_locator",
+        "column_type": "VARCHAR",
+        "description": "Parent document's JSON Pointer (`/results/<doc>`) inside the retained API page blob."
+      },
+      {
+        "column_name": "label_position",
+        "column_type": "INTEGER",
+        "description": "Zero-based ordinal position (`INTEGER`) of `label` in the parent document's `docket_ids` array."
+      },
+      {
+        "column_name": "candidate_position",
+        "column_type": "INTEGER",
+        "description": "Zero-based ordinal position (`INTEGER`) of `docket_id` among normalized candidates extracted from `label`."
+      },
+      {
+        "column_name": "label",
+        "column_type": "VARCHAR",
+        "description": "Literal printed docket label verbatim from `federal_register_documents.docket_ids`."
+      },
+      {
+        "column_name": "docket_id",
+        "column_type": "VARCHAR",
+        "description": "Normalized Regulations.gov docket identifier candidate returned by SpicyDocs' shared plural normalizer; distinct from `regulations_dot_gov_info.docket_id`."
+      }
+    ],
+    "subject": "rulemaking",
+    "grain": "One row per normalized docket candidate (`document_number`, `publication_date`, `label_position`, `candidate_position`).",
+    "identity_columns": [
+      "document_number",
+      "publication_date",
+      "label_position",
+      "candidate_position"
+    ]
+  },
   "discovery_signals": {
     "table": "discovery_signals",
     "label": "Agency activity spikes",
@@ -2190,7 +2607,7 @@
     "coverage": "Derived, and bounded by its inputs: every docketed proceeding, paired from its cleaned `lifecycle_events` and censored at the day its inputs end.",
     "kind": "derived",
     "measured_on": "2026-09-28",
-    "data_quality": "A Regulations.gov document that states no Register number in `fr_doc_num`, or whose stated number resolves to no Register row, is dated by its upload, which for a legacy document can be years after the rule: on snapshot_9b2c770e's inputs 262 lifecycles anchor on such a document, 74 of them upload pairs outside survival (docs/ontology.md). A proposal typed only by Regulations.gov (`lifecycle_events.source = 'regulations_gov'`, an unnumbered upload) can be a petition for rulemaking, a state program submission or an information-collection notice the Register files under another type: on snapshot_62318069's inputs 515 survival lifecycles since 2015 anchor on one (352 open); a Register number its title names is not read as its identity. Where the proceeding also holds the Register's proposal, the Register's anchors (54d); an upload keeps its anchor when a final falls between the two or the Register's is a comment-period extension or correction, so an earlier proposal whose Register copy is missing may still anchor on its later re-proposal (FDA's 1978 OTC-monograph dockets re-proposed in the 1990s). A final that finalizes another docket's proposal is paired in its own proceeding only and the proposal stays `open`: a RIN never groups dockets (56a), and the Register's docket labels are often an agency's own (2026-15833 names 'CMS-1849-F and CMS-0062-F' and no RIN). A Register proposal naming several dockets anchors one lifecycle per docket (502 proposals behind 2,358 of 35,327 survival rows on snapshot_62318069's inputs; EPA 20%). A posting Regulations.gov flags withdrawn (`documents.withdrawn`) anchors nothing: it was misfiled, duplicated, moved or replaced, and the Register publishes an agency's withdrawal of a rule as a document of its own.\nFor `routine_family` `pesticide_tolerance` the proposal is usually EPA's notice that it received a pesticide petition (FFDCA 408(d)(3)), typed Proposed Rule, not a proposal of rule text: 443 of the 459 EPA tolerance lifecycles proposed since 2020 on snapshot_448e6d9a's inputs. Time to final then runs from the receipt notice, and `proposal_form` does not tell the two apart.\nFDA's notices that it filed a food or color additive petition (\"Filing of Food Additive Petition\", \"… Color Additive Petition\") are the same case with no stratum: the Register types them Proposed Rule (its `action`, \"Notification of petition.\", is not carried by `federal_register`), `routine_family` is NULL, and on snapshot_55d396ee's inputs 64 of the 199 FDA lifecycles proposed since 2018, and 130 of the 831 in the published FDA cell, anchor on one. Match the proposal's Register title (`filing of … petition`) to set them apart. A count of lifecycles counts docketed proceedings, not rulemakings: FNA's three open lifecycles on that snapshot are one RIN, 0584-AF22, in dockets FNA-2026-0034, -0166 and -0201; count distinct `proceedings.rin` for rulemakings.",
+    "data_quality": "A Regulations.gov document that states no Register number in `fr_doc_num`, or whose stated number resolves to no Register row, is dated by its upload, which for a legacy document can be years after the rule: on snapshot_9b2c770e's inputs 262 lifecycles anchor on such a document, 74 of them upload pairs outside survival (docs/ontology.md). A proposal typed only by Regulations.gov (`lifecycle_events.source = 'regulations_gov'`, an unnumbered upload) can be a petition for rulemaking, a state program submission or an information-collection notice the Register files under another type: on snapshot_62318069's inputs 515 survival lifecycles since 2015 anchor on one (352 open); a Register number its title names is not read as its identity. Where the proceeding also holds the Register's proposal, the Register's anchors (54d); an upload keeps its anchor when a final falls between the two or the Register's is a comment-period extension or correction, so an earlier proposal whose Register copy is missing may still anchor on its later re-proposal (FDA's 1978 OTC-monograph dockets re-proposed in the 1990s). A final that finalizes another docket's proposal is paired in its own proceeding only and the proposal stays `open`: a RIN never groups dockets (56a), and the Register's docket labels are often an agency's own (2026-15833 names 'CMS-1849-F and CMS-0062-F' and no RIN). A Register proposal naming several dockets anchors one lifecycle per docket (502 proposals behind 2,358 of 35,327 survival rows on snapshot_62318069's inputs; EPA 20%). A posting Regulations.gov flags withdrawn (`documents.withdrawn`) anchors nothing: it was misfiled, duplicated, moved or replaced, and the Register publishes an agency's withdrawal of a rule as a document of its own.\nFor `routine_family` `pesticide_tolerance` the proposal is usually EPA's notice that it received a pesticide petition (FFDCA 408(d)(3)), typed Proposed Rule, not a proposal of rule text: 443 of the 459 EPA tolerance lifecycles proposed since 2020 on snapshot_448e6d9a's inputs. Time to final then runs from the receipt notice, and `proposal_form` does not tell the two apart.\nFDA's notices that it filed a food or color additive petition (\"Filing of Food Additive Petition\", \"… Color Additive Petition\") are the same case with no stratum: the Register types them Proposed Rule (on snapshot_55d396ee's inputs its `action`, \"Notification of petition.\", was not yet carried by `federal_register`; current `federal_register` and `federal_register_documents` carry `action`), `routine_family` is NULL, and on snapshot_55d396ee's inputs 64 of the 199 FDA lifecycles proposed since 2018, and 130 of the 831 in the published FDA cell, anchor on one. Match the proposal's Register title (`filing of … petition`) to set them apart. A count of lifecycles counts docketed proceedings, not rulemakings: FNA's three open lifecycles on that snapshot are one RIN, 0584-AF22, in dockets FNA-2026-0034, -0166 and -0201; count distinct `proceedings.rin` for rulemakings.",
     "columns": [
       {
         "column_name": "proceeding_id",
@@ -45060,7 +45477,7 @@
       {
         "column_name": "cfr_references",
         "column_type": "STRUCT(title BIGINT, part VARCHAR, chapter VARCHAR)[]",
-        "description": "The CFR citations the document affects, a Native list of `{title, part, chapter, citation_url}`. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        "description": "The CFR citations the document affects, a Native list of `{title, part, chapter}` (`citation_url` is omitted on `federal_register` and preserved on `federal_register_cfr_references`). Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
         "column_name": "topics",

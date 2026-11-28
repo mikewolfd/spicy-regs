@@ -547,6 +547,10 @@ TABLES: tuple[str, ...] = (
     "agency_stats",
     "agency_monthly_volume",
     "fr_docket_links",
+    "federal_register_documents",
+    "federal_register_agencies",
+    "federal_register_cfr_references",
+    "federal_register_docket_candidates",
     "discovery_signals",
     "cfr_sections",
     "congress_bills",
@@ -730,6 +734,10 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "oira_reviews",
         "oira_meetings",
         "federal_register",
+        "federal_register_documents",
+        "federal_register_agencies",
+        "federal_register_cfr_references",
+        "federal_register_docket_candidates",
         "sam_entities",
         "lobbying_filings",
         "lobbying_activities",
@@ -1092,6 +1100,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.build_sam_sources import SCHEMAS as SAM_SOURCE_SCHEMAS
     from spicy_regs.transforms.build_executive_orders import SCHEMA as EXECUTIVE_ORDER_SCHEMA
     from spicy_regs.transforms.build_federal_register_bodies import SCHEMA as FEDERAL_REGISTER_BODIES_SCHEMA
+    from spicy_regs.transforms.federal_register_layer1 import layer1_schemas as federal_register_layer1_schemas
     from spicy_regs.transforms.build_executive_disclosures import SCHEMAS as EXECUTIVE_DISCLOSURE_SCHEMAS
     from spicy_regs.schemas.house_disbursements import SCHEMAS as HOUSE_DISBURSEMENT_SCHEMAS
     from spicy_regs.schemas.senate_disclosures import SCHEMAS as SENATE_DISCLOSURE_SCHEMAS
@@ -1237,6 +1246,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         **SAM_SOURCE_SCHEMAS,
         "executive_order_observations": EXECUTIVE_ORDER_SCHEMA,
         "federal_register_document_bodies": FEDERAL_REGISTER_BODIES_SCHEMA,
+        **federal_register_layer1_schemas(),
         **EXECUTIVE_DISCLOSURE_SCHEMAS,
         **HOUSE_DISBURSEMENT_SCHEMAS,
         **SENATE_DISCLOSURE_SCHEMAS,

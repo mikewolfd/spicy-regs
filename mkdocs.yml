@@ -95,6 +95,10 @@ nav:
       - oira_meetings: tables/oira_meetings.md
       - federal_register: tables/federal_register.md
       - federal_register_document_bodies: tables/federal_register_document_bodies.md
+      - federal_register_documents: tables/federal_register_documents.md
+      - federal_register_agencies: tables/federal_register_agencies.md
+      - federal_register_cfr_references: tables/federal_register_cfr_references.md
+      - federal_register_docket_candidates: tables/federal_register_docket_candidates.md
       # The materialized rulemaking dataset (materialized/rulemaking/latest.json)
       - rule_targets: tables/rule_targets.md
       - proceedings: tables/proceedings.md

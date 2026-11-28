@@ -1015,7 +1015,7 @@
       "agency_slugs": "The issuing agencies' Register slugs, comma-separated in publisher order (repeating a slug when multiple `agencies` entries resolve to the same canonical agency); NULL when none. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "docket_ids": "The docket labels the document states, a Native list, as printed (many are agency numbers). Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "regulation_id_numbers": "The Regulation Identifier Numbers the API lists, a Native list. `[]` on a large share of Rule documents every year, an API limit: some of those state a RIN in the printed text, and some print it inside docket_ids. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
-      "cfr_references": "The CFR citations the document affects, a Native list of `{title, part, chapter, citation_url}`. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
+      "cfr_references": "The CFR citations the document affects, a Native list of `{title, part, chapter}` (`citation_url` is omitted on `federal_register` and preserved on `federal_register_cfr_references`). Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "topics": "The Register's CFR index terms for the document (`topics`), a Native list; `[]` when it lists none. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "volume": "The Federal Register volume.",
       "start_page": "The document's first page.",

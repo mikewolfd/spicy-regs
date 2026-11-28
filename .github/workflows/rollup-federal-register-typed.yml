@@ -1,0 +1,31 @@
+name: Rollup — federal_register_typed
+# Manual bootstrap and repair entry point; routine execution is sequenced by its parent workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Rebuild all four typed tables from every pinned R2 blob instead of incremental merge'
+        required: false
+        default: false
+        type: boolean
+      skip_upload:
+        description: 'Skip R2 upload (dry run)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  run:
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-federal-register-typed
+      producer_ref: main
+      # Streams immutable 31-field R2 source-evidence blobs (zero external FR API calls), no receipts.
+      timeout_minutes: 60
+      fr_typed_force_rebuild: ${{ github.event_name == 'workflow_dispatch' && inputs.force_rebuild || false }}
+      skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}

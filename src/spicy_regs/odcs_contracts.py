@@ -232,6 +232,12 @@ FAMILY_TABLES: dict[str, tuple[str, ...]] = {
     "fec-source-catalog": ("fec_source_catalog",),
     "federal-register": ("federal_register",),
     "federal-register-bodies": ("federal_register_document_bodies",),
+    "federal-register-typed": (
+        "federal_register_agencies",
+        "federal_register_cfr_references",
+        "federal_register_docket_candidates",
+        "federal_register_documents",
+    ),
     "feed-summary": ("feed_summary",),
     "fjc-judicial-careers": ("fjc_appointments", "fjc_courts", "fjc_judges", "fjc_service_terms", "fjc_snapshots"),
     "foreign-assistance": ("foreign_assistance_observations", "foreign_assistance_snapshots"),
@@ -439,6 +445,7 @@ FAMILY_DOMAIN_ASSIGNMENTS: dict[str, tuple[str, tuple[str, ...]]] = {
     "fec-source-catalog": ("spicygov", ()),
     "federal-register": ("spicygov", ("RefSpec",)),
     "federal-register-bodies": ("spicygov", ("RefSpec",)),
+    "federal-register-typed": ("spicygov", ("RefSpec",)),
     "feed-summary": ("spicygov", ()),
     "fjc-judicial-careers": ("spicygov", ("SpicyEntities",)),
     "foreign-assistance": ("spicygov", ()),
@@ -872,7 +879,9 @@ def resolve_refspec_mapping(
         )
     # urn:ref:federal-register-agency: applies ONLY to scalar numeric Federal Register agency ID columns,
     # never to agency_slugs or nested agencies struct arrays.
-    if column_name == "fr_agency_id":
+    if column_name == "fr_agency_id" or (
+        table_name == "federal_register_agencies" and column_name in ("id", "parent_id")
+    ):
         return (
             RefSpecMapping(
                 refspec_urn="urn:ref:federal-register-agency:",
@@ -882,7 +891,10 @@ def resolve_refspec_mapping(
             ),
             documented,
         )
-    if column_name in ("agencies", "agency_slugs") and table_name == "federal_register":
+    if column_name in ("agencies", "agency_slugs", "agency_names") and table_name in (
+        "federal_register",
+        "federal_register_documents",
+    ):
         return (
             RefSpecMapping(
                 refspec_urn=None,
@@ -892,7 +904,7 @@ def resolve_refspec_mapping(
             ),
             documented,
         )
-    if column_name == "topics" and table_name == "federal_register":
+    if column_name == "topics" and table_name in ("federal_register", "federal_register_documents"):
         return (
             RefSpecMapping(
                 refspec_urn="urn:ref:atlas-resource-scheme:federal-register-api-topics",
