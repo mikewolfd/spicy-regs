@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -51,6 +52,80 @@ def arguments(tmp_path, plan, operation="pilot", group=0):
     root.mkdir(exist_ok=True)
     return SimpleNamespace(workdir=root, config={"plan": plan, "group": group}, runtime_ref="a" * 40,
                            operation=operation, group=str(group))
+
+
+def group_17_plan(tmp_path):
+    plan_file = tmp_path / "earlier-plan.json"
+    plan_key = "staging/test/plan.json"
+    run.owner.durable(plan_file, {
+        "format": "comment-physical-fill/1", "runtime_ref": "a" * 40, "journals": "staging/test/journals",
+        "groups": [{"group_id": 17, "original_file": "group-17.parquet", "identities": 1, "read_value_bytes": 0}],
+    })
+    return JournalStore({plan_key: plan_file.read_bytes()}), {"key": plan_key, **run.pin(plan_file)}
+
+
+def test_reconcile_matrix_selects_group_without_group_argument(tmp_path, monkeypatch, capsys):
+    store, plan = group_17_plan(tmp_path)
+    runtime_ref = run.subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    config = {"plan": plan, "group": 17, "recovery_sha256": "c" * 64, "recovery_runtime_ref": "a" * 40}
+    monkeypatch.setattr(run, "verified_target_client", lambda: (store, "test"))
+    monkeypatch.setattr(run.groups, "RESOURCES", run.groups.RESOURCES)
+    monkeypatch.setattr(sys, "argv", [
+        str(Path(run.__file__)), "--runtime-ref", runtime_ref, "--operation", "reconcile",
+        "--config", json.dumps(config), "--workdir", str(tmp_path / "selection"), "--matrix",
+    ])
+    run.main()
+    assert capsys.readouterr().out == "[17]\n"
+
+
+@pytest.mark.parametrize("receipt_gap", ["journal", "tail", "preimage"])
+def test_reconcile_refuses_pending_evidence_outside_pinned_receipt(tmp_path, monkeypatch, receipt_gap):
+    store, plan = group_17_plan(tmp_path)
+    args = arguments(tmp_path, plan, group=17)
+    work = args.workdir / "writer"
+    prepared = {"prepare_id": "earlier-prepare"}
+    journal = writer._journal(work, prepared)
+    journal.parent.mkdir(parents=True)
+    run.owner.durable(journal.parent / "prepare.json", prepared)
+    preimage = (tmp_path if receipt_gap == "preimage" else journal.parent) / "preimage.parquet"
+    preimage.write_bytes(b"preimage for the pending batch")
+    pending = {"state": "pending", "prepare_id": prepared["prepare_id"], "batch": "pending-batch",
+               "preimage": str(preimage), "preimage_sha256": run.digest(preimage)}
+    if receipt_gap == "tail":
+        writer._append(journal, {"state": "verified", "batch": "earlier-batch"})
+    elif receipt_gap == "preimage":
+        writer._append(journal, pending)
+    run.recovery(args)
+    args.config.update(recovery_sha256=run.digest(args.workdir / "recovery.json"), recovery_runtime_ref=args.runtime_ref)
+    args.operation, args.runtime_ref = "reconcile", "b" * 40
+    extension = b"" if receipt_gap == "preimage" else (json.dumps(pending) + "\n").encode()
+    merged = (journal.read_bytes() if journal.exists() else b"") + extension
+    store.objects[f"staging/test/journals/{journal.name}"] = merged
+    monkeypatch.setattr(writer, "reconcile_pending", lambda *a, **kw: pytest.fail("Unpinned evidence reached the writer"))
+    problem = "preimage" if receipt_gap == "preimage" else "journal"
+    with pytest.raises(ValueError, match=f"Pending {problem} differs from the pinned recovery receipt"):
+        run.run_group(args, store, "test")
+    assert journal.read_bytes() == merged
+
+
+def test_reconcile_rejects_symlinked_recovery_receipt_before_catalog_connect(tmp_path, monkeypatch):
+    store, plan = group_17_plan(tmp_path)
+    args = arguments(tmp_path, plan, group=17)
+    work = args.workdir / "writer"
+    prepared = {"prepare_id": "earlier-prepare"}
+    journal = writer._journal(work, prepared)
+    journal.parent.mkdir(parents=True)
+    run.owner.durable(journal.parent / "prepare.json", prepared)
+    run.recovery(args)
+    real_receipt = tmp_path / "outside-recovery.json"
+    real_receipt.write_bytes((args.workdir / "recovery.json").read_bytes())
+    (args.workdir / "recovery.json").unlink()
+    (args.workdir / "recovery.json").symlink_to(real_receipt)
+    args.config.update(recovery_sha256=run.digest(real_receipt), recovery_runtime_ref=args.runtime_ref)
+    args.operation, args.runtime_ref = "reconcile", "b" * 40
+    monkeypatch.setattr(run.iceberg, "_connect", lambda *a, **kw: pytest.fail("Symlinked receipt reached catalog connect"))
+    with pytest.raises(ValueError, match="Recovery receipt differs"):
+        run.run_group(args, store, "test")
 
 
 def test_real_group_write_resume_and_undo_preserve_conflicting_copies(tmp_path, catalog, monkeypatch):
@@ -444,6 +519,7 @@ def test_workflow_queues_writer_and_keeps_always_recovery():
     workflow = yaml.safe_load((Path(__file__).parents[1] / ".github/workflows/fill-comment-attachment-groups.yml").read_text())
     assert workflow["concurrency"]["group"] == "comments-catalog-write"
     assert workflow["concurrency"]["cancel-in-progress"] is False
+    assert "reconcile" in workflow[True]["workflow_dispatch"]["inputs"]["operation"]["options"]
     job = workflow["jobs"]["fill"]
     assert job["strategy"]["max-parallel"] == 1 and job["strategy"]["fail-fast"] is True
     steps = job["steps"]
@@ -451,3 +527,218 @@ def test_workflow_queues_writer_and_keeps_always_recovery():
     assert steps[-1]["if"] == "always()" and "writer/fill/" in steps[-1]["with"]["path"]
     assert "runner.temp" not in str(job["env"])
     assert all("--no-sync" in s["run"] for s in steps if "uv run" in s.get("run", ""))
+
+
+def test_cross_runtime_reconcile_abandons_uncommitted_pending_and_unblocks_new_pilot(tmp_path, catalog, monkeypatch):
+    store, old_plan = setup_plan(tmp_path, catalog)
+    monkeypatch.setenv(run.iceberg.CATALOG_LOCK_ENV, "comments-catalog-write")
+    monkeypatch.setattr(run, "verified_target_client", lambda: (store, "test"))
+    monkeypatch.setattr(run.maintenance, "run", lambda *a: {})
+
+    # Simulate an old runtime ("a"*40) crashing pre-commit after journaling "pending".
+    old_args = arguments(tmp_path, old_plan, operation="pilot", group=0)
+    from spicy_regs.sources import regulatory_catalog as native
+
+    def crash_replace(*a, **kw):
+        raise RuntimeError("simulated OOM before COMMIT")
+
+    with monkeypatch.context() as mp:
+        mp.setattr(native, "replace_native", crash_replace)
+        with pytest.raises(writer.FillVerificationError, match="simulated OOM before COMMIT"):
+            run.run_group(old_args, store, "test")
+    # Remove the failed line to simulate an abrupt non-FillVerificationError (e.g. DuckDB OOM) leaving "pending" last.
+    prepared = run.load(old_args.workdir / "writer/fill/prepare.json")
+    journal = writer._journal(old_args.workdir / "writer", prepared)
+    pending_only = [line for line in writer._lines(journal) if line["state"] == "pending"]
+    assert len(pending_only) == 1
+    journal.write_text(json.dumps(pending_only[0]) + "\n")
+    writer.sync_journals(old_args.workdir / "writer", "staging/aggregate/journals", push=True, client=store)
+    run.owner.durable(old_args.workdir / "maintenance-state.json", {"generation": "old"})
+    run.recovery(old_args)
+    old_rec_sha = run.digest(old_args.workdir / "recovery.json")
+
+    # Build a fresh plan for the new runtime ("b"*40).
+    new_plan_dir = tmp_path / "plan-new"
+    new_plan_dir.mkdir()
+    agg_config = {field: {"key": f"staging/aggregate/{name}", **run.pin(tmp_path / "stage" / name)}
+                  for field, name in (("staging", "staging.json"), ("reads", "reads.parquet"))}
+    plan_args = SimpleNamespace(workdir=new_plan_dir, config=agg_config, runtime_ref="b" * 40, operation="plan")
+    run.make_plan(plan_args, store, "test")
+    new_plan = run.load(new_plan_dir / "result.json")["plan"]
+
+    # Before reconcile, new pilot is blocked by the pending remote journal.
+    blocked = SimpleNamespace(workdir=tmp_path / "blocked-pilot", config={"plan": new_plan, "group": 0},
+                              runtime_ref="b" * 40, operation="pilot", group="0")
+    blocked.workdir.mkdir()
+    with pytest.raises(ValueError, match="exact earlier recovery"):
+        run.run_group(blocked, store, "test")
+
+    # Wrong recovery_runtime_ref refuses fail-closed.
+    bad_rec = SimpleNamespace(
+        workdir=old_args.workdir,
+        config={"plan": old_plan, "group": 0, "recovery_sha256": old_rec_sha, "recovery_runtime_ref": "c" * 40},
+        runtime_ref="b" * 40, operation="reconcile", group="0",
+    )
+    with pytest.raises(ValueError, match="Plan runtime/format differs"):
+        run.run_group(bad_rec, store, "test")
+
+    # Cross-runtime reconcile verifies old recovery artifact, appends "abandoned", never calls _write_batch.
+    rec_args = SimpleNamespace(
+        workdir=old_args.workdir,
+        config={"plan": old_plan, "group": 0, "recovery_sha256": old_rec_sha, "recovery_runtime_ref": "a" * 40},
+        runtime_ref="b" * 40, operation="reconcile", group="0",
+    )
+    with monkeypatch.context() as mp:
+        mp.setattr(writer, "_write_batch", lambda *a, **kw: pytest.fail("reconcile must never start new batches"))
+        mp.setattr(run.runner, "supervise", lambda *a, **kw: run.run_group(rec_args, store, "test"))
+        run.guarded(rec_args)
+    res = run.load(old_args.workdir / "result.json")
+    assert res["operation"] == "reconcile" and res["status"] == "complete"
+    assert res["reconciled"]["outcome"] == "abandoned"
+    assert (old_args.workdir / "published-result.json").exists()
+
+    # Reconciling again refuses both with the old receipt (journal changed) and with the updated receipt (no pending).
+    rec_path = old_args.workdir / "recovery.json"
+    with pytest.raises(RuntimeError, match="recovery receipt is missing or differs"):
+        writer.reconcile_pending(
+            old_args.workdir / "writer",
+            receipt_path=rec_path,
+            receipt_sha256=old_rec_sha,
+            resources=run.RESOURCES,
+        )
+    with pytest.raises(ValueError, match="no pending write to reconcile"):
+        writer.reconcile_pending(
+            old_args.workdir / "writer",
+            receipt_path=rec_path,
+            receipt_sha256=run.digest(rec_path),
+            resources=run.RESOURCES,
+        )
+
+    # Now fresh pilot on new runtime ("b"*40) runs cleanly and fills row B!
+    new_pilot = SimpleNamespace(workdir=tmp_path / "new-pilot", config={"plan": new_plan, "group": 0},
+                                runtime_ref="b" * 40, operation="pilot", group="0")
+    new_pilot.workdir.mkdir()
+    run.run_group(new_pilot, store, "test")
+    assert table(catalog)["B"]["attachments_json"] == LISTED
+    assert run.load(new_pilot.workdir / "result.json")["written"]["rows_changed"] == 1
+
+
+@pytest.fixture
+def committed_pending_group(tmp_path, catalog, monkeypatch):
+    from tests.test_comment_fields_write import Proxy, _recorded
+
+    store, old_plan = setup_plan(tmp_path, catalog)
+    monkeypatch.setenv(run.iceberg.CATALOG_LOCK_ENV, "comments-catalog-write")
+    monkeypatch.setattr(run.maintenance, "run", lambda *a: {})
+    old_args = arguments(tmp_path, old_plan, operation="pilot", group=0)
+    run.run_group(old_args, store, "test")
+    # Rewind journal to just the "pending" line (simulating crash right after COMMIT, before journaling "verified").
+    prepared = run.load(old_args.workdir / "writer/fill/prepare.json")
+    journal = writer._journal(old_args.workdir / "writer", prepared)
+    pending_only = [line for line in writer._lines(journal) if line["state"] == "pending"]
+    assert len(pending_only) == 1
+    journal.write_text(json.dumps(pending_only[0]) + "\n")
+    writer.sync_journals(old_args.workdir / "writer", "staging/aggregate/journals", push=True, client=store)
+    run.recovery(old_args)
+    old_rec_sha = run.digest(old_args.workdir / "recovery.json")
+
+    rec_args = SimpleNamespace(
+        workdir=old_args.workdir,
+        config={"plan": old_plan, "group": 0, "recovery_sha256": old_rec_sha, "recovery_runtime_ref": "a" * 40},
+        runtime_ref="b" * 40, operation="reconcile", group="0",
+    )
+    # Plain DuckDB catalog stand-in lacks Iceberg AT (VERSION => ...) and snapshot history; strip AT and stub commit_record.
+    from contextlib import contextmanager
+    import re as _re
+    real_connect = run.iceberg._connect
+
+    @contextmanager
+    def _proxy_connect():
+        con = real_connect()
+        try:
+            yield Proxy(con, rewrite=lambda sql: _re.sub(r" AT \(VERSION => \d+\)", "", sql))
+        finally:
+            con.close()
+
+    monkeypatch.setattr(run.iceberg, "_connect", _proxy_connect)
+    monkeypatch.setattr(writer, "commit_record", _recorded({"added-records": "1", "added-position-deletes": "1"}))
+    monkeypatch.setattr(writer, "_write_batch", lambda *a, **kw: pytest.fail("reconcile must never start new batches"))
+    return rec_args, store, journal
+
+
+def test_cross_runtime_reconcile_verifies_committed_pending_batch(committed_pending_group):
+    rec_args, store, journal = committed_pending_group
+    run.run_group(rec_args, store, "test")
+    res = run.load(rec_args.workdir / "result.json")
+    assert res["reconciled"]["outcome"] == "verified"
+    assert writer._lines(journal)[-1]["recovered"] is True
+
+
+def test_retained_committed_reconcile_failure_can_feed_undo(committed_pending_group, catalog, monkeypatch):
+    rec_args, store, journal = committed_pending_group
+    pending = writer._lines(journal)[-1]
+    postimage = Path(pending["preimage"]).with_name(Path(pending["preimage"]).stem + "-written.parquet")
+    postimage.unlink()  # Require reconcile itself to capture the committed rows for undo.
+    run.recovery(rec_args)
+    rec_args.config["recovery_sha256"] = run.digest(rec_args.workdir / "recovery.json")
+    check = writer._check
+
+    def check_with_wrong_expected_fill(con, table_name, columns, filled, *args, **kwargs):
+        check(con, table_name, columns, [], *args, **kwargs)
+
+    monkeypatch.setenv("GITHUB_RUN_ID", "200")
+    monkeypatch.setattr(run, "verified_target_client", lambda: (store, "test"))
+    with monkeypatch.context() as mp:
+        mp.setattr(writer, "_check", check_with_wrong_expected_fill)
+        mp.setattr(run.runner, "supervise", lambda *a, **kw: run.run_group(rec_args, store, "test"))
+        with pytest.raises(writer.FillVerificationError, match="rows differ from the pre-image"):
+            run.guarded(rec_args)
+
+    failed = writer._lines(journal)[-1]
+    assert failed["state"] == "failed" and failed["committed"] is True
+    assert failed["postimage"] == str(postimage) and failed["postimage_sha256"] == run.digest(postimage)
+    assert table(catalog)["B"]["attachments_json"] == LISTED
+    assert not (rec_args.workdir / "published-result.json").exists()
+    run.finalize(rec_args)  # The workflow's always step retains the artifact again before upload.
+    receipt = rec_args.workdir / "recovery.json"
+    assert run.load(receipt)["identity"]["runtime_ref"] == rec_args.config["recovery_runtime_ref"]
+    undo_args = SimpleNamespace(
+        workdir=rec_args.workdir, operation="undo", group=rec_args.group,
+        runtime_ref=rec_args.config["recovery_runtime_ref"],
+        config={"plan": rec_args.config["plan"], "group": rec_args.config["group"], "recovery_sha256": run.digest(receipt),
+                "undo_batch": failed["batch"], "expected_snapshot": failed["snapshot_after"]["snapshot_id"]},
+    )
+    assert run.choose(undo_args, store, "test") == [0]
+    monkeypatch.setenv("GITHUB_RUN_ID", "201")
+    monkeypatch.setattr(run.iceberg, "_connect", catalog)
+    monkeypatch.setattr(run.runner, "supervise", lambda *a, **kw: run.run_group(undo_args, store, "test"))
+    run.guarded(undo_args)
+    assert run.load(undo_args.workdir / "result.json")["undo"]["rows_restored"] == 1
+    assert writer._lines(journal)[-1]["state"] == "undone"
+    assert json.loads(store.objects[f"staging/aggregate/journals/{journal.name}"].splitlines()[-1])["state"] == "undone"
+    assert table(catalog)["B"]["attachments_json"] is None
+
+
+def test_reconcile_row_count_failure_before_postimage_records_original_error(committed_pending_group):
+    rec_args, store, journal = committed_pending_group
+    preimage = Path(writer._lines(journal)[-1]["preimage"])
+    postimage = preimage.with_name(preimage.stem + "-written.parquet")
+    postimage.unlink()
+    # Simulate recovery after the batch committed with a different row count from prepare.
+    prepared_path = journal.parent / "prepare.json"
+    prepared = run.load(prepared_path)
+    prepared["table_rows"] += 1
+    run.owner.durable(prepared_path, prepared)
+    run.recovery(rec_args)
+    rec_args.config["recovery_sha256"] = run.digest(rec_args.workdir / "recovery.json")
+
+    with pytest.raises(writer.FillVerificationError, match="the table holds 3 rows, not the 4 it held at prepare") as error:
+        run.run_group(rec_args, store, "test")
+    assert isinstance(error.value.__cause__, writer.FillVerificationError)
+    pending, failed = writer._lines(journal)
+    assert pending["state"] == "pending" and failed["state"] == "failed" and failed["committed"] is True
+    assert failed["reason"] == f"recovered commit: {error.value.__cause__}"
+    assert failed["postimage"] is None and failed["postimage_sha256"] is None
+    assert not postimage.exists()
+    with pytest.raises(RuntimeError, match="no recorded postimage"):
+        writer.undo(rec_args.workdir / "writer", failed["batch"], expected_snapshot=failed["snapshot_after"]["snapshot_id"])

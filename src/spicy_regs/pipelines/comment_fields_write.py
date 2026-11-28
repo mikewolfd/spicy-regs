@@ -46,11 +46,13 @@ import json
 import secrets
 import shutil
 import time
+from collections.abc import Mapping
 from contextlib import suppress
 from functools import cache
 from os import getenv
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 
 from spicy_regs.duckdb_settings import ExportResources
 from spicy_regs.schemas import COMMENT
@@ -1180,10 +1182,135 @@ def _records_commits(con) -> bool:
         return False
 
 
+def _require_sha256_pin(label: str, value: str) -> str:
+    if not isinstance(value, str) or len(value) != 64 or any(ch not in "0123456789abcdef" for ch in value):
+        raise ValueError(f"{label} must be a 64-character lowercase hex SHA-256 pin")
+    return value
+
+
+def _has_symlink_under(root: Path, target: Path) -> bool:
+    cur = root
+    for part in target.relative_to(root).parts:
+        cur = cur / part
+        if cur.is_symlink():
+            return True
+    return False
+
+
+def _verify_receipt_member(
+    receipt_dir: Path, receipt_root: Path, pinned_files: Mapping[str, Any], path: Path, label: str,
+) -> str:
+    if not path.is_file() or path.is_symlink():
+        raise RuntimeError(f"{label} is missing or invalid relative to the verified recovery receipt")
+    abs_path = path.absolute()
+    if abs_path.is_relative_to(receipt_dir):
+        matched_root = receipt_dir
+    elif abs_path.is_relative_to(receipt_root):
+        matched_root = receipt_root
+    else:
+        raise RuntimeError(f"{label} lies outside the verified recovery receipt root")
+    rel = abs_path.relative_to(matched_root)
+    if not rel.parts or ".." in rel.parts or _has_symlink_under(matched_root, abs_path):
+        raise RuntimeError(f"{label} traverses a symlink inside the verified recovery receipt root")
+    resolved = path.resolve(strict=True)
+    if not resolved.is_relative_to(receipt_root) or resolved.relative_to(receipt_root) != rel:
+        raise RuntimeError(f"{label} resolves outside or differently from the verified recovery receipt root")
+    member_key = str(rel)
+    entry = pinned_files.get(member_key)
+    if not isinstance(entry, dict):
+        raise RuntimeError(f"{label} is absent from the verified recovery receipt")
+    expected_sha = entry.get("sha256")
+    expected_bytes = entry.get("bytes")
+    if not isinstance(expected_sha, str) or type(expected_bytes) is not int:
+        raise RuntimeError(f"{label} has an invalid pin entry in the verified recovery receipt")
+    _require_sha256_pin(f"receipt[{member_key}].sha256", expected_sha)
+    if resolved.stat().st_size != expected_bytes or _sha256(resolved) != expected_sha:
+        raise RuntimeError(f"{label} differs from the pinned recovery receipt")
+    return expected_sha
+
+
+def reconcile_pending(
+    workdir: Path,
+    *,
+    receipt_path: Path,
+    receipt_sha256: str,
+    resources: ExportResources | None = None,
+    con=None,
+) -> dict:
+    """Reconcile a receipt-verified pending write journal entry against the live catalog without starting new batches."""
+    if not getenv(iceberg.CATALOG_LOCK_ENV):
+        raise RuntimeError(f"write holds the comments catalog: set {iceberg.CATALOG_LOCK_ENV} only while holding the "
+                           "lock (docs/comment-fields-fill.md)")
+    _require_sha256_pin("receipt_sha256", receipt_sha256)
+    receipt_path = Path(receipt_path)
+    if not receipt_path.is_file() or receipt_path.is_symlink() or _sha256(receipt_path) != receipt_sha256:
+        raise RuntimeError("recovery receipt is missing or differs from receipt_sha256")
+    receipt = json.loads(receipt_path.read_text())
+    pinned_files = receipt.get("files") if isinstance(receipt, dict) else None
+    if not isinstance(pinned_files, dict):
+        raise RuntimeError("recovery receipt lacks a valid files map")
+    receipt_dir = receipt_path.parent.absolute()
+    receipt_root = receipt_path.parent.resolve(strict=True)
+    out = fill_dir(workdir)
+    prepare_path = out / "prepare.json"
+    _verify_receipt_member(receipt_dir, receipt_root, pinned_files, prepare_path, "prepare.json")
+    prepared = json.loads(prepare_path.read_text())
+    if _sha256(out / "fill.parquet") != prepared["fill_sha256"]:
+        raise RuntimeError("fill.parquet is not the one prepare.json names; prepare again")
+    if "columns" not in prepared:
+        raise RuntimeError("prepare.json names no fill columns (it predates fill profiles); prepare again")
+    _prepared_operation(prepared)
+    _refuse_committed_failures(workdir)
+    journal = _journal(workdir, prepared)
+    _verify_receipt_member(receipt_dir, receipt_root, pinned_files, journal, journal.name)
+    lines = _lines(journal)
+    pending = lines[-1] if lines and lines[-1]["state"] == "pending" else None
+    if pending is None:
+        raise ValueError(f"no pending write to reconcile in {journal.name}")
+    if pending.get("prepare_id") != prepared["prepare_id"]:
+        raise RuntimeError(f"pending batch {pending.get('batch')} in {journal.name} differs from prepare.json; stop (runbook)")
+    preimage = Path(pending["preimage"]) if pending.get("preimage") else None
+    if preimage is None:
+        raise RuntimeError(f"the pre-image of pending batch {pending.get('batch')} is missing; stop (runbook)")
+    pinned_preimage_sha = _verify_receipt_member(
+        receipt_dir, receipt_root, pinned_files, preimage, f"the pre-image of pending batch {pending.get('batch')}",
+    )
+    if pending.get("preimage_sha256") != pinned_preimage_sha:
+        raise RuntimeError(f"the pre-image of pending batch {pending.get('batch')} differs from the journal; stop (runbook)")
+    verified = [line for line in lines if line["state"] == "verified"]
+    expected = verified[-1]["snapshot_after"] if verified else prepared["snapshot"]
+    own = con is None
+    con = con or iceberg._connect()
+    resources = resources or WRITE_RESOURCES
+    resources.configure(con, out / "spill")
+    storage_access(con)
+    table = iceberg._qualified(COMMENT)
+    try:
+        after = _recover(con, journal, pending, prepared, table, expected)
+    finally:
+        if own:
+            con.close()
+    terminal = _lines(journal)[-1]
+    return {
+        "outcome": terminal["state"],
+        "batch": pending["batch"],
+        "prepare_id": prepared["prepare_id"],
+        "snapshot_before": pending["snapshot_before"],
+        "snapshot_after": after,
+    }
+
+
 def _recover(con, journal: Path, pending: dict, prepared: dict, table: str, expected: dict) -> dict:
     """A run that stopped after journaling a batch as pending: find whether that batch committed, and account for it."""
-    current = iceberg._read_snapshot(con, COMMENT).__dict__
     ids = {k: pending.get(k) for k in ("batch", "files", "prepare_id")}
+    if ids["prepare_id"] != prepared["prepare_id"]:
+        raise RuntimeError(f"pending batch {ids['batch']} in {journal.name} differs from prepare.json; stop (runbook)")
+    preimage = Path(pending["preimage"]) if pending.get("preimage") else None
+    if preimage is None or not preimage.is_file() or _sha256(preimage) != pending.get("preimage_sha256"):
+        raise RuntimeError(f"the pre-image of pending batch {ids['batch']} is missing or differs from the journal; "
+                           "stop (runbook)")
+    kept = {k: pending[k] for k in ("preimage", "preimage_sha256")}
+    current = iceberg._read_snapshot(con, COMMENT).__dict__
     if current == pending["snapshot_before"]:
         _append(journal, {"state": "abandoned", **ids})
         return expected
@@ -1195,24 +1322,22 @@ def _recover(con, journal: Path, pending: dict, prepared: dict, table: str, expe
     if problem:
         raise RuntimeError(f"the commit after a pending batch is not that batch ({problem}); prepare again")
     # Our commit, never checked: compare the rows it wrote with the stored pre-image and the fill.
-    kept = {k: pending[k] for k in ("preimage", "preimage_sha256")}
-    if _sha256(Path(kept["preimage"])) != kept["preimage_sha256"]:
-        raise RuntimeError(f"the pre-image of pending batch {ids['batch']} is not the one journaled; stop (runbook)")
     con.execute(f"CREATE OR REPLACE TEMP VIEW _prior AS SELECT * FROM read_parquet({_sql(kept['preimage'])})")
     file_list = ", ".join(map(_sql, pending["files"]))
     con.execute(f"CREATE OR REPLACE TEMP VIEW _batch AS SELECT * FROM read_parquet("
                 f"{_sql(fill_dir(journal.parent.parent) / 'fill.parquet')}) WHERE _file IN ({file_list})")
-    postimage = Path(kept["preimage"]).with_name(f"{Path(kept['preimage']).stem}-written.parquet")
+    postimage = preimage.with_name(f"{preimage.stem}-written.parquet")
     try:
         _check(con, table, list(COMMENT.schema), prepared["columns"], pending["files"], set(pending["before_files"]),
                pending["by_file"], prepared["table_rows"], postimage=postimage, at=after["snapshot_id"],
                operation=_prepared_operation(prepared))
     except FillVerificationError as error:
-        kept |= {"postimage": str(postimage), "postimage_sha256": _sha256(postimage)}
+        has_postimage = postimage.exists()
+        kept |= {"postimage": str(postimage) if has_postimage else None,
+                 "postimage_sha256": _sha256(postimage) if has_postimage else None}
         _append(journal, {"state": "failed", **ids, "committed": True, "reason": f"recovered commit: {error}", **kept,
                           "snapshot_before": pending["snapshot_before"], "snapshot_after": after})
-        raise FillVerificationError(f"committed batch {ids['batch']} differs from its pre-image with the fill "
-                                    "applied; undo it (runbook)") from error
+        raise FillVerificationError(f"committed batch {ids['batch']} failed verification: {error}") from error
     kept |= {"postimage": str(postimage), "postimage_sha256": _sha256(postimage)}
     _append(journal, {"state": "verified", **ids, "planned": planned, "changed": planned, **kept,
                       "snapshot_before": pending["snapshot_before"], "snapshot_after": after, "recovered": True})
@@ -1256,6 +1381,8 @@ def undo(workdir: Path, batch: str, *, expected_snapshot: int, con=None) -> dict
     journal, line = _committed_batch(workdir, batch)
     images = {}
     for name in ("preimage", "postimage"):
+        if not line.get(name):
+            raise RuntimeError(f"batch {batch} has no recorded {name}; restore it by hand (runbook)")
         images[name] = Path(line[name])
         if _sha256(images[name]) != line[f"{name}_sha256"]:
             raise RuntimeError(f"{images[name]} is not the {name} batch {batch} journaled; stop (runbook)")

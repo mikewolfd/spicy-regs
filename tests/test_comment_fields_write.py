@@ -1238,6 +1238,131 @@ def test_empty_original_document_id_recovers_after_crash_between_commit_and_jour
     assert after["B"]["comment_reference_values_json"] == '{"originalDocumentId":"  \\t"}'
 
 
+def _write_reconcile_receipt(root: Path, members: list[Path]) -> tuple[Path, str]:
+    files = {
+        str(path.absolute().relative_to(root.absolute())): {
+            "bytes": path.stat().st_size,
+            "sha256": cfw._sha256(path),
+        }
+        for path in members
+    }
+    receipt_path = root / "recovery.json"
+    receipt_path.write_text(json.dumps({"files": files}, sort_keys=True))
+    return receipt_path, cfw._sha256(receipt_path)
+
+
+@pytest.mark.parametrize(("damage", "problem"), [
+    ("missing preimage", "pre-image of pending batch .* is missing or invalid"),
+    ("different preimage bytes", "pre-image of pending batch .* differs from the pinned recovery receipt"),
+    ("different prepare id", "differs from prepare.json"),
+])
+def test_reconcile_refuses_uncommitted_pending_with_invalid_evidence(tmp_path, catalog, damage, problem):
+    seed(catalog, [row("A")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S"}])
+    prepared = cfw.prepare(tmp_path)
+    path = cfw._journal(tmp_path, prepared)
+    preimage = path.parent / "preimage.parquet"
+    preimage.write_bytes(b"retained preimage")
+    preimage_sha = cfw._sha256(preimage)
+    pending = {"state": "pending", "prepare_id": prepared["prepare_id"], "batch": "pending-batch", "files": ["EPA"],
+               "snapshot_before": prepared["snapshot"], "preimage": str(preimage), "preimage_sha256": preimage_sha}
+    if damage == "different prepare id":
+        pending["prepare_id"] = "some-other-prepare"
+    cfw._append(path, pending)
+    receipt_path, receipt_sha = _write_reconcile_receipt(
+        tmp_path, [cfw.fill_dir(tmp_path) / "prepare.json", path, preimage],
+    )
+    if damage == "missing preimage":
+        preimage.unlink()
+    elif damage == "different preimage bytes":
+        preimage.write_bytes(b"different preimage")
+    initial = path.read_bytes()
+
+    with pytest.raises(RuntimeError, match=problem):
+        cfw.reconcile_pending(tmp_path, receipt_path=receipt_path, receipt_sha256=receipt_sha)
+    assert path.read_bytes() == initial
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    ["missing_receipt_args", "missing_receipt_file", "wrong_receipt_sha", "unpinned_journal_tail",
+     "unpinned_preimage", "symlinked_preimage_parent", "symlinked_internal_parent_alt_root"],
+)
+def test_reconcile_pending_requires_verified_receipt_at_writer_entrypoint(tmp_path, catalog, tamper):
+    seed(catalog, [row("A")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S"}])
+    prepared = cfw.prepare(tmp_path)
+    path = cfw._journal(tmp_path, prepared)
+    if tamper == "symlinked_preimage_parent":
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside"
+        outside_dir.mkdir()
+        outside_preimage = outside_dir / "preimage.parquet"
+        outside_preimage.write_bytes(b"retained preimage")
+        linked_dir = path.parent / "linked"
+        linked_dir.symlink_to(outside_dir)
+        preimage = linked_dir / "preimage.parquet"
+    elif tamper == "symlinked_internal_parent_alt_root":
+        real_dir = path.parent / "real"
+        real_dir.mkdir()
+        real_preimage = real_dir / "preimage.parquet"
+        real_preimage.write_bytes(b"retained preimage")
+        linked_dir = path.parent / "linked"
+        linked_dir.symlink_to(real_dir)
+        preimage = linked_dir / "preimage.parquet"
+    else:
+        preimage = path.parent / "preimage.parquet"
+        preimage.write_bytes(b"retained preimage")
+    preimage_sha = cfw._sha256(preimage)
+    pending = {"state": "pending", "prepare_id": prepared["prepare_id"], "batch": "pending-batch", "files": ["EPA"],
+               "snapshot_before": prepared["snapshot"], "preimage": str(preimage), "preimage_sha256": preimage_sha}
+    if tamper == "unpinned_journal_tail":
+        cfw._append(path, {"state": "verified", "batch": "earlier-batch", "prepare_id": prepared["prepare_id"]})
+        receipt_path, receipt_sha = _write_reconcile_receipt(
+            tmp_path, [cfw.fill_dir(tmp_path) / "prepare.json", path, preimage],
+        )
+        cfw._append(path, pending)
+    elif tamper == "unpinned_preimage":
+        cfw._append(path, pending)
+        receipt_path, receipt_sha = _write_reconcile_receipt(
+            tmp_path, [cfw.fill_dir(tmp_path) / "prepare.json", path],
+        )
+    elif tamper == "symlinked_internal_parent_alt_root":
+        cfw._append(path, pending)
+        receipt_path, receipt_sha = _write_reconcile_receipt(
+            tmp_path, [cfw.fill_dir(tmp_path) / "prepare.json", path, preimage.resolve()],
+        )
+        alt_root = tmp_path / "alt-alias"
+        alt_root.symlink_to(tmp_path)
+        receipt_path = alt_root / "recovery.json"
+    else:
+        cfw._append(path, pending)
+        receipt_path, receipt_sha = _write_reconcile_receipt(
+            tmp_path, [cfw.fill_dir(tmp_path) / "prepare.json", path, preimage],
+        )
+    initial = path.read_bytes()
+
+    if tamper == "missing_receipt_args":
+        with pytest.raises(TypeError):
+            getattr(cfw, "reconcile_pending")(tmp_path)
+    elif tamper == "missing_receipt_file":
+        receipt_path.unlink()
+        with pytest.raises(RuntimeError, match="recovery receipt is missing or differs"):
+            cfw.reconcile_pending(tmp_path, receipt_path=receipt_path, receipt_sha256=receipt_sha)
+    elif tamper == "wrong_receipt_sha":
+        with pytest.raises(RuntimeError, match="recovery receipt is missing or differs"):
+            cfw.reconcile_pending(tmp_path, receipt_path=receipt_path, receipt_sha256="0" * 64)
+    elif tamper == "unpinned_journal_tail":
+        with pytest.raises(RuntimeError, match="differs from the pinned recovery receipt"):
+            cfw.reconcile_pending(tmp_path, receipt_path=receipt_path, receipt_sha256=receipt_sha)
+    elif tamper in {"symlinked_preimage_parent", "symlinked_internal_parent_alt_root"}:
+        with pytest.raises(RuntimeError, match="symlink|outside|differently"):
+            cfw.reconcile_pending(tmp_path, receipt_path=receipt_path, receipt_sha256=receipt_sha)
+    else:
+        with pytest.raises(RuntimeError, match="absent from the verified recovery receipt"):
+            cfw.reconcile_pending(tmp_path, receipt_path=receipt_path, receipt_sha256=receipt_sha)
+    assert path.read_bytes() == initial
+
+
 # --------------------------------------------------------------------------- #
 # Partitioned spill-free prepare() equivalence, duplicate guards, and tight-budget stress (ss-flsg)
 # --------------------------------------------------------------------------- #
