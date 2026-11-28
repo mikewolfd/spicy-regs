@@ -309,8 +309,22 @@ def test_actual_laws_builder_reuses_only_verified_receipt_prior(tmp_path, monkey
 
 def test_actual_committee_producer_keeps_empty_read_checkpoints(tmp_path, monkeypatch):
     from .test_committee_reports import StubDiscovery, StubBodyAcquirer, StubHearings
+    from spicy_regs import subject_catalog
     from spicy_regs.transforms.build_committee_reports import build_committee_reports
 
+    # Lift the retired marker for this unit test of the legacy receipt admission helper.
+    retired = subject_catalog.retired_receipt_datasets()
+    committee_datasets = frozenset({
+        "committee_reports",
+        "report_sections",
+        "hearing_transcripts",
+        "hearing_bill_links",
+        "committee_report_cbo_letters",
+        "committee_report_reads",
+        "committee_report_read_outcomes",
+        "committee_reports_document_file_outcomes",
+    })
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired - committee_datasets)
     monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
     kwargs = {"reader": StubDiscovery(), "acquirer": StubBodyAcquirer(), "hearings": StubHearings()}
     first = build_with_receipts(

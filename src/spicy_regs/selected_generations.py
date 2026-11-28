@@ -76,25 +76,54 @@ def remember_selection(root: Path, selections) -> None:
     _remember_selection(root, selections, {})
 
 
-def _remember_selection(root, selections, checked):
+def _remember_selection(root, selections, checked, *, removed=()):
+    from spicy_regs.subject_catalog import shared_receipt_logs
+
     directory = Path(root) / ".native-state"
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / "selection.json"
     values = json.loads(target.read_text()) if target.exists() else {}
+    shared_logs = shared_receipt_logs()
+    replaced_receipts = set()
+    for dataset in removed:
+        prior = values.pop(dataset, None)
+        if prior and dataset not in shared_logs and prior.get("receipts"):
+            replaced_receipts.add(prior["receipts"]["path"])
+
+    def member(path):
+        return {"path": str(Path(path).resolve()), "sha256": _member_pin(path, checked)}
+
     for selected in selections:
-        if selected.receipts is None:
-            # A table without receipts is never a native selection: it is read where its plain rollup wrote it.
-            values.pop(selected.dataset, None)
-            continue
-
-        def member(path):
-            return {"path": str(Path(path).resolve()), "sha256": _member_pin(path, checked)}
-
+        prior = values.get(selected.dataset)
+        new_receipts = member(selected.receipts) if selected.receipts is not None else None
+        if (
+            prior
+            and selected.dataset not in shared_logs
+            and prior.get("receipts")
+            and (new_receipts is None or new_receipts["path"] != prior["receipts"]["path"])
+        ):
+            replaced_receipts.add(prior["receipts"]["path"])
         values[selected.dataset] = {
             "generation_id": selected.generation_id,
             "subjects": [member(p) for p in selected.subjects],
-            "receipts": member(selected.receipts),
+            "receipts": new_receipts,
         }
+    if replaced_receipts:
+        active_owner_receipts = {
+            entry["receipts"]["path"]
+            for name, entry in values.items()
+            if name not in shared_logs and entry.get("receipts")
+        }
+        orphaned = replaced_receipts - active_owner_receipts
+        if orphaned:
+            for dataset in [
+                name
+                for name, entry in values.items()
+                if name in shared_logs
+                and entry.get("receipts")
+                and entry["receipts"]["path"] in orphaned
+            ]:
+                values.pop(dataset, None)
     temporary = target.with_name(target.name + "." + uuid4().hex)
     temporary.write_text(json.dumps(values))
     temporary.replace(target)
@@ -223,27 +252,37 @@ class SelectedInputs:
 
         ``ranged`` is for a caller that reads only ``dataset``'s receipts (every Congress reader selects them by
         dataset): a remote shared member may then be read for that dataset's rows alone (:meth:`_ranged_receipts`).
-        ``last_receipts`` selects the receipts a retired table's live generation still lists, for the one night a
-        reader needs a field they alone hold (``congress_subjects.PROMOTED``); otherwise a retired table has none.
+        ``last_receipts`` requests the pinned receipt-era input when a retired table's reader needs fields held there.
         """
-        if dataset in self.cache:
-            if dataset in self.ranged and not ranged:
-                raise ValueError(f"{dataset}: receipts were selected for this dataset alone")
-            selected = self.cache[dataset]
-            for path in (*selected.subjects, *((selected.receipts,) if selected.receipts else ())):
-                _member_pin(path, self.checked)
-            return self.cache[dataset]
         from spicy_regs.subject_catalog import retired_receipt_datasets
 
         retired = dataset in retired_receipt_datasets()
+        cache_key = (dataset, True) if retired and last_receipts else dataset
+        if cache_key in self.cache:
+            selected = self.cache[cache_key]
+            if selected.receipts is not None and dataset in self.ranged and not ranged:
+                raise ValueError(f"{dataset}: receipts were selected for this dataset alone")
+            for path in (*selected.subjects, *((selected.receipts,) if selected.receipts else ())):
+                _member_pin(path, self.checked)
+            return selected
         if self.index is None:
             value = self.local.get(dataset)
             published = self.root / f"{dataset}.parquet"
-            if retired and published.is_file():
-                # A local run beside the table a plain rollup just wrote: that file is the selection, pinned by hash.
-                _member_pin(published, self.checked)
-                self.cache[dataset] = SelectedDataset(dataset, (published,), None, None)
-                return self.cache[dataset]
+            partitioned = self.root / dataset
+            if retired and (value is None or (value["receipts"] is not None and not last_receipts)):
+                # Local workspaces can start from a public table before a rollup records an immutable selection.
+                if published.is_file():
+                    subjects = (published,)
+                elif partitioned.is_dir() and not partitioned.is_symlink():
+                    subjects = tuple(sorted(partitioned.rglob("*.parquet")))
+                else:
+                    subjects = None
+                if subjects is not None:
+                    for subject in subjects:
+                        _member_pin(subject, self.checked)
+                    result = SelectedDataset(dataset, subjects, None, None)
+                    self.cache[cache_key] = result
+                    return result
             if value is None:
                 return None
 
@@ -256,7 +295,7 @@ class SelectedInputs:
             result = SelectedDataset(
                 dataset,
                 tuple(checked(p) for p in value["subjects"]),
-                checked(value["receipts"]),
+                checked(value["receipts"]) if value["receipts"] is not None else None,
                 value["generation_id"],
             )
         else:
@@ -323,8 +362,8 @@ class SelectedInputs:
                 # A retired table is its published table, even while its live generation still lists the receipts
                 # it last published with: they are not read again unless asked for, so they are not fetched (4.2
                 # GiB for comment_attributes on its first receipts-free night).
-                self.cache[dataset] = SelectedDataset(dataset, subjects, None, None)
-                return self.cache[dataset]
+                self.cache[cache_key] = SelectedDataset(dataset, subjects, None, None)
+                return self.cache[cache_key]
             receipts = publication.receipt_members(self.index, dataset=dataset)
             if len(receipts) != 1:
                 raise ValueError(f"{dataset}: ambiguous selected receipt member")
@@ -334,7 +373,7 @@ class SelectedInputs:
             if receipt_path is not None:
                 self.ranged[dataset] = {"sha256": receipts[0].sha256, "byteSize": receipts[0].byte_size}
             result = SelectedDataset(dataset, subjects, receipt_path or fetch(receipts[0]), specification["generationId"])
-        self.cache[dataset] = result
+        self.cache[cache_key] = result
         return result
 
 
@@ -342,34 +381,41 @@ def remember_generation(root: Path, directory: Path, artifact) -> None:
     """Select every dataset from one already admitted immutable generation."""
     from rulespec_artifacts import LocalFileState, LocalMemberSource, iter_member_descriptors
     from spicy_regs.local_data import file_signature
+    from spicy_regs.navigation_read_outcomes import READ_TABLES
     from spicy_regs.sources.publication import member_table
+    from spicy_regs.subject_catalog import retired_receipt_datasets
 
-    specification = artifact.root["spec"].get("etlReceipts")
-    if specification is None:
+    spec = artifact.root["spec"]
+    specification = spec.get("etlReceipts")
+    retired = retired_receipt_datasets()
+    public_datasets = {key.removesuffix(".parquet") for key in spec["tables"]} & retired
+    if specification is None and not public_datasets:
         return
-    members = list(iter_member_descriptors(artifact, LocalMemberSource(directory)))
-    selected = []
+    subjects = {}
     checked = {}
-    for member in members:
-        if member.object_key is None:
+    receipt_key = specification["key"] if specification is not None else None
+    for member in iter_member_descriptors(artifact, LocalMemberSource(directory)):
+        key = member.object_key
+        if key is None:
             raise ValueError("Native generation member has no object key")
-        path = directory / member.object_key
-        state = (artifact.local_member_states or {}).get(member.object_key)
+        path = directory / key
+        if key != receipt_key:
+            subjects.setdefault(member_table(key).removesuffix(".parquet"), []).append(path)
+        state = (artifact.local_member_states or {}).get(key)
         if state is not None:
             signature = file_signature(path)
             if LocalFileState.from_stat(path.lstat()) != state:
                 raise ValueError("Native generation changed after byte admission")
             checked[path.absolute()] = (signature, member.sha256)
-    for policy in specification["policies"]:
-        dataset = policy["dataset"]
-        subjects = []
-        for member in members:
-            key = member.object_key
-            if key is None:
-                raise ValueError("Native generation member has no object key")
-            if key != specification["key"] and member_table(key) == dataset + ".parquet":
-                subjects.append(directory / key)
-        selected.append(
-            SelectedDataset(dataset, tuple(subjects), directory / specification["key"], specification["generationId"])
-        )
-    _remember_selection(root, selected, checked)
+    if specification is None:
+        # The outcome table now owns incremental checkpoint reads for this dataset.
+        removed = [dataset for dataset, outcome in READ_TABLES.items() if outcome in public_datasets and dataset in retired]
+        selected = [SelectedDataset(name, tuple(subjects.get(name, ())), None, None) for name in sorted(public_datasets)]
+        _remember_selection(root, selected, checked, removed=removed)
+    else:
+        selected = [
+            SelectedDataset(name, tuple(subjects.get(name, ())), directory / specification["key"],
+                            specification["generationId"])
+            for name in (policy["dataset"] for policy in specification["policies"])
+        ]
+        _remember_selection(root, selected, checked)

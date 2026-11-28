@@ -11,9 +11,17 @@ from spicy_regs.sources import publication
 from tests.test_congress_receipts import shaped
 from tests.test_legislative_receipts import retained, row
 
-# The votes trio's tables publish no receipts since ss-vse3; here they stand in for the receipt route it last
+# The votes trio and laws publish no receipts since ss-vse3; here they stand in for the receipt route they last
 # published under (tests/conftest.py).
 pytestmark = pytest.mark.usefixtures("votes_receipts_unretired")
+
+
+@pytest.fixture(autouse=True)
+def _laws_receipts_unretired(monkeypatch):
+    from spicy_regs import subject_catalog
+
+    retired = subject_catalog.retired_receipt_datasets() - {"laws"}
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
 
 
 class MixedRollup(SubjectReceiptRollup):

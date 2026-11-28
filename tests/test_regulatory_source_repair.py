@@ -172,18 +172,16 @@ def test_body_reread_preserves_independent_publisher_status(tmp_path, source_cor
 
 @pytest.mark.parametrize("fault", ["date", "duplicate", "late_failure", "corrupt_prior"])
 def test_failed_input_preserves_prior_and_can_retry(tmp_path, fault):
-    import pyarrow as pa
-
     value = raw()
     path = tmp_path / "documents.parquet"
     prior = {**shaped(value), "fr_doc_num": None}
     write(path, [prior])
-    if fault == "corrupt_prior":
-        # Documents receipts are retired, so the local prior is the pinned public table itself.
-        path.write_bytes(b"damaged retained file")
     selection_path = tmp_path / ".native-state" / "selection.json"
     selected_before = selection_path.read_bytes()
     before = path.read_bytes()
+    selected_path = Path(json.loads(selected_before)["documents"]["subjects"][0]["path"])
+    if fault == "corrupt_prior":
+        selected_path.write_bytes(b"damaged retained file")
     values = [deepcopy(value)]
     if fault == "date":
         values[0]["data"]["attributes"]["modifyDate"] = "not-a-date"
@@ -195,22 +193,27 @@ def test_failed_input_preserves_prior_and_can_retry(tmp_path, fault):
         if fault == "late_failure":
             raise ValueError("source read unresolved")
 
-    with pytest.raises((ValueError, pa.ArrowInvalid)):
+    with pytest.raises(ValueError):
         repair_records(records(), table="documents", output_dir=tmp_path)
     assert path.read_bytes() == before
     assert not (tmp_path / "manifest.parquet").exists()
     assert selection_path.read_bytes() == selected_before
     if fault == "corrupt_prior":
-        # A fresh source record cannot bypass reading the selected prior.
-        with pytest.raises((ValueError, pa.ArrowInvalid)):
+        # The intact convenience copy cannot stand in for the damaged prior.
+        with pytest.raises(ValueError, match="Selected local native member changed"):
             repair_records([value], table="documents", output_dir=tmp_path)
         assert path.read_bytes() == before
         assert selection_path.read_bytes() == selected_before
 
-        # Recover by restoring a separately qualified generation table.
+        # Recover by selecting a separately admitted generation.
+        from spicy_regs.selected_generations import SelectedInputs, remember_selection
+
         recovery_root = tmp_path / "recovered"
         write(recovery_root / "documents.parquet", [prior])
-        path.write_bytes((recovery_root / "documents.parquet").read_bytes())
+        recovered = SelectedInputs(recovery_root, tmp_path / "recovery-input", public_url="").select("documents")
+        assert recovered is not None
+        remember_selection(tmp_path, [recovered])
+        assert selected_path.read_bytes() == b"damaged retained file"
     repair_records([value], table="documents", output_dir=tmp_path)
     assert processing_rows(path)[0]["fr_doc_num"] == "06-04731"
 

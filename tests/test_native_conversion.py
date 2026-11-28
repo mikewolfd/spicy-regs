@@ -1360,13 +1360,52 @@ def test_split_support_still_refuses_unlisted_physical_tables(tmp_path, monkeypa
 def test_checkpoint_source_rows_convert_and_restore_in_their_declared_main_shape(
         tmp_path, monkeypatch, bucket, family, read_dataset):
     """The complete family includes checkpoint reads even when no subject row was produced."""
-    from spicy_regs import etl_policy_registry
+    from spicy_regs import etl_policy_registry, subject_catalog
     from spicy_regs.generations import build_generation
     from spicy_regs.legislative_documents import field_registry
+    from spicy_regs.legislative_rollups import LegislativeReceiptRollup
     from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
     from tests.test_legislative_receipts import retained, row
 
     monkeypatch.delenv("R2_ALLOW_SHRINK", raising=False)
+    # Both families retired their receipts (ss-vse3); stand in their receipt-route rollups here, as
+    # ``cfr_on_its_receipt_route`` does for cfr-sections, to exercise historical conversion admission.
+    if family == "committee-reports":
+        class _ReceiptRoute(LegislativeReceiptRollup):
+            name = "committee-reports"
+            retain_source_evidence = True
+            inputs = ()
+            outputs = (
+                "committee_reports.parquet",
+                "report_sections.parquet",
+                "hearing_transcripts.parquet",
+                "hearing_bill_links.parquet",
+                "committee_report_cbo_letters.parquet",
+                "committee_report_reads.parquet",
+            )
+            added_tables = ("committee_report_cbo_letters.parquet",)
+
+            def build(self, output_dir):
+                pytest.fail("Conversion must reuse retained source inputs")
+    else:
+        class _ReceiptRoute(LegislativeReceiptRollup):
+            name = "native-legal-references"
+            retain_source_evidence = True
+            inputs = ()
+            outputs = (
+                "native_legal_references.parquet",
+                "native_legal_reference_reads.parquet",
+            )
+
+            def build(self, output_dir):
+                pytest.fail("Conversion must reuse retained source inputs")
+
+    retired = subject_catalog.retired_receipt_datasets()
+    family_datasets = frozenset(p.dataset for p in _ReceiptRoute.receipt_policies)
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired - family_datasets)
+    found = conversion._rollup_class
+    monkeypatch.setattr(conversion, "_rollup_class", lambda fam, base=None: (
+        _ReceiptRoute if fam == family and base is None else found(fam, base)))
     cls = conversion._rollup_class(family)
     reads_key = read_dataset + ".parquet"
     assert reads_key in cls.source_outputs

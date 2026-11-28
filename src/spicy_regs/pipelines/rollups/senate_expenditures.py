@@ -11,22 +11,21 @@ from pathlib import Path
 from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import make_rollup_app
-from spicy_regs.legislative_rollups import LegislativeReceiptRollup, family_policies
+from spicy_regs.legislative_rollups import LegislativeTableRollup
 from spicy_regs.transforms.build_senate_expenditures import build_senate_expenditures
 
 
-class SenateExpendituresRollup(LegislativeReceiptRollup):
+class SenateExpendituresRollup(LegislativeTableRollup):
     """The Secretary of the Senate's ruled expenditure tables, from GovInfo granule PDFs (api.data.gov key)."""
 
     name: ClassVar[str] = "senate-expenditures"
     retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
-    receipt_policies = family_policies('senate_expenditures')
     output: ClassVar[str] = "senate_expenditures.parquet"
 
-    def build(self, output_dir: Path) -> Path:
+    def build(self, output_dir: Path) -> tuple[Path, ...]:
         self.acquisition_status: dict = {}
-        result = self.build_receipts(
+        result = self.build_tables(
             output_dir,
             build_senate_expenditures,
             evidence=self.source_evidence,

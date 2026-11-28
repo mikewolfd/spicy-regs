@@ -11,7 +11,7 @@ import pytest
 
 from spicy_regs.generations import build_generation, verify_generation
 from spicy_regs.source_evidence import CaptureEvidence, verify_evidence
-from spicy_regs.transforms.native_legal_references import CONTRACTS, OUTPUTS, build_native_legal_references
+from spicy_regs.transforms.native_legal_references import OUTPUTS, build_native_legal_references
 
 FIXTURES = Path(__file__).parent / "fixtures/native_legal_references"
 
@@ -49,32 +49,47 @@ def test_retained_native_occurrences_and_generation(tmp_path):
     [target] = json.loads(reference["target_candidates_json"])
     assert target["target_kind"] == "usc_section" and target["normalized_key"] == "5-401"
     assert target["target_status"] == "not_checked"  # no selected target bytes
-    with pytest.raises(ValueError, match="require ETL receipts"):
-        build_generation(
-            tmp_path / "unmigrated",
-            family="native-legal-references",
-            files=files,
-            expected_keys=OUTPUTS,
-            schemas={contract.name: [(c, "VARCHAR") for c in contract.columns] for contract in CONTRACTS},
-        )
-    from spicy_regs.legislative_receipts import FILE_POLICY, write_legislative_outputs, policy
+    from spicy_regs import legislative_tables
+    from spicy_regs.legislative_receipts import FILE_POLICY, policy, write_legislative_outputs
     from spicy_regs.native_types import described_schema
+    from spicy_regs.navigation_read_outcomes import FILE_TABLES
+    from spicy_regs.pipelines.rollups.native_legal_references import NativeLegalReferencesRollup
 
+    # Receipts are retired for native-legal-references: a generation declaring receipts is refused.
     bundle = tmp_path / "receipt-bundle"
     write_legislative_outputs(files, bundle, generation_id="native-test")
-    subject_policy = policy("native_legal_references")
+    with pytest.raises(ValueError, match="Receipts are retired"):
+        build_generation(
+            tmp_path / "refused-receipts",
+            family="native-legal-references",
+            files=[bundle / "native_legal_references.parquet", bundle / "native_legal_reference_reads.parquet"],
+            expected_keys=list(OUTPUTS),
+            schemas={name: described_schema(policy(name).subject_schema) for name in (
+                "native_legal_references", "native_legal_reference_reads")},
+            inputs=evidence.inputs(),
+            receipt_path=bundle / "etl_receipts.parquet",
+            receipt_policies=[policy("native_legal_references"), policy("native_legal_reference_reads"), FILE_POLICY],
+            receipt_generation_id="native-test",
+        )
+
+    # Receiptless native conversion & admission succeeds without etl_receipts.parquet.
+    plain = tmp_path / "plain-bundle"
+    plain.mkdir()
+    mapped = {p.stem: legislative_tables.to_public(p.stem, p, plain / p.name) for p in files}
+    file_table = FILE_TABLES["native-legal-references"]
+    outcomes = legislative_tables.write_file_outcomes(
+        file_table, [(p.stem, p) for p in files], mapped, plain, plain / f"{file_table}.parquet",
+        generation_id="native-test",
+    )
     artifact = build_generation(
         tmp_path / "candidate",
         family="native-legal-references",
-        files=[bundle / "native_legal_references.parquet", bundle / "native_legal_reference_reads.parquet"],
-        expected_keys=list(OUTPUTS),
-        schemas={name: described_schema(policy(name).subject_schema) for name in (
-            "native_legal_references", "native_legal_reference_reads")},
+        files=[plain / "native_legal_references.parquet", plain / "native_legal_reference_reads.parquet", outcomes],
+        expected_keys=list(NativeLegalReferencesRollup.outputs),
+        schemas=NativeLegalReferencesRollup(manifest=FIXTURES / "manifest.json").generation_schemas(),
         inputs=evidence.inputs(),
-        receipt_path=bundle / "etl_receipts.parquet",
-        receipt_policies=[subject_policy, policy("native_legal_reference_reads"), FILE_POLICY],
-        receipt_generation_id="native-test",
     )
+    assert "etlReceipts" not in artifact.root["spec"]
     verify_generation(tmp_path / "candidate", expected_pin=artifact.pin)
     verify_evidence(evidence.artifact_dir, expected_pin=evidence.artifact.pin)
 
@@ -391,8 +406,7 @@ def test_statute_replay_emits_verified_spans_and_merges_over_legacy_xpath_only_p
         NATIVE_LEGAL_REFERENCE_RULE,
         NATIVE_LEGAL_REFERENCES,
     )
-    from spicy_regs.legislative_receipts import FILE_POLICY, policy, write_legislative_outputs
-    from spicy_regs.native_types import described_schema
+    from spicy_regs.legislative_receipts import policy
 
     # 1. Stage a legacy XPath-only (/003) prior lacking the 6/3 appended character-offset span columns.
     prior_dir = tmp_path / "legacy-prior"
@@ -548,9 +562,19 @@ def test_statute_replay_emits_verified_spans_and_merges_over_legacy_xpath_only_p
     assert cand1622["target_table_selected"] == "usc_release_point_sections"
     assert cand1622["candidate_keys"] == [{"usc_title": "50", "usc_section_key": "1622"}]
 
-    # Seal under legislative-documents/4 (refs) and /3 (reads) and verify native Arrow span columns and integrity.
+    # Seal under legislative-documents/4 (refs) and /3 (reads) without receipts and verify native Arrow spans.
+    from spicy_regs import legislative_tables
+    from spicy_regs.navigation_read_outcomes import FILE_TABLES
+    from spicy_regs.pipelines.rollups.native_legal_references import NativeLegalReferencesRollup
+
     bundle = tmp_path / "sealed-bundle"
-    write_legislative_outputs(files, bundle, generation_id="statute-v4-test")
+    bundle.mkdir()
+    mapped = {p.stem: legislative_tables.to_public(p.stem, p, bundle / p.name) for p in files}
+    file_table = FILE_TABLES["native-legal-references"]
+    outcomes = legislative_tables.write_file_outcomes(
+        file_table, [(p.stem, p) for p in files], mapped, bundle, bundle / f"{file_table}.parquet",
+        generation_id="statute-v4-test",
+    )
     sealed_refs = pq.read_table(bundle / "native_legal_references.parquet")
     assert pa.types.is_int64(sealed_refs.schema.field("text_span_start").type)
     assert pa.types.is_int64(sealed_refs.schema.field("text_span_end").type)
@@ -560,15 +584,12 @@ def test_statute_replay_emits_verified_spans_and_merges_over_legacy_xpath_only_p
     artifact = build_generation(
         tmp_path / "candidate",
         family="native-legal-references",
-        files=[bundle / "native_legal_references.parquet", bundle / "native_legal_reference_reads.parquet"],
-        expected_keys=list(OUTPUTS),
-        schemas={name: described_schema(policy(name).subject_schema) for name in (
-            "native_legal_references", "native_legal_reference_reads")},
+        files=[bundle / "native_legal_references.parquet", bundle / "native_legal_reference_reads.parquet", outcomes],
+        expected_keys=list(NativeLegalReferencesRollup.outputs),
+        schemas=NativeLegalReferencesRollup(manifest=manifest_path).generation_schemas(),
         inputs=evidence.inputs(),
-        receipt_path=bundle / "etl_receipts.parquet",
-        receipt_policies=[policy("native_legal_references"), policy("native_legal_reference_reads"), FILE_POLICY],
-        receipt_generation_id="statute-v4-test",
     )
+    assert "etlReceipts" not in artifact.root["spec"]
     verify_generation(tmp_path / "candidate", expected_pin=artifact.pin)
     verify_evidence(evidence.artifact_dir, expected_pin=evidence.artifact.pin)
 

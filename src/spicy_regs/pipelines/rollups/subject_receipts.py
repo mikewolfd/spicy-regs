@@ -72,7 +72,7 @@ def dataset_policy(name):
 class SelectedPriors:
     """Capture one publication index and fetch only its pinned subject/receipt pairs."""
 
-    def __init__(self, directory, *, index=None, public_url=None, root=None, ranged=frozenset()):
+    def __init__(self, directory, *, index=None, public_url=None, root=None, ranged=frozenset(), last_receipts=frozenset()):
         """``ranged`` names the Congress datasets whose receipts may be read by row group (``SelectedInputs.select``):
         another family's soft inputs, each read for its own rows. A family's own priors read many datasets of one
         member, so they fetch it whole once, verify its SHA-256, and then read each dataset's row groups alone."""
@@ -86,10 +86,8 @@ class SelectedPriors:
         from spicy_regs.congress_subjects import PROMOTED
         from spicy_regs.subject_catalog import retired_receipt_datasets
 
-        #: Retired Congress tables with fields their receipts alone held: while their live generation still lists
-        #: those receipts (its first receipts-free night), the prior is restored through them, by row group, which
-        #: back-fills the promoted columns (``congress_tables``).
-        self.last_receipts = frozenset(PROMOTED) & retired_receipt_datasets()
+        # Restore receipt-era fields once to seed promoted Congress columns and legislative checkpoints.
+        self.last_receipts = (frozenset(PROMOTED) | last_receipts) & retired_receipt_datasets()
         self.ranged = (frozenset(ranged) | self.last_receipts) & set(CONGRESS)
         self.restored = {}
         self.selections = {}
@@ -102,6 +100,12 @@ class SelectedPriors:
 
     def select(self, dataset):
         """The selection of ``dataset``, read as this reader reads it (:attr:`ranged`, :attr:`last_receipts`)."""
+        from spicy_regs.subject_catalog import retired_receipt_datasets
+
+        if dataset in READ_TABLES and dataset in retired_receipt_datasets():
+            if dataset in self.selected.local:
+                return self.selected.select(dataset, last_receipts=True)
+            return self.selected.select(READ_TABLES[dataset])
         return self.selected.select(dataset, ranged=dataset in self.ranged, last_receipts=dataset in self.last_receipts)
 
     def get(self, dataset):
@@ -225,16 +229,23 @@ class SelectedPriors:
         """A retired dataset's prior: its pinned public table, as its mapper's builders read their input.
 
         The regulations mapper (``regulations_shape.published_as_source``), the Congress mapper
-        (``congress_tables.as_builder_input``, for its ``READABLE`` tables), and the FEC identity mapper
-        (``fec_tables.published_as_fec_source``, for its ``FEC_PUBLISHED_READABLE`` tables) read a published table
-        back into their builders' shape; any other dataset refuses by name rather than hand a builder a table it
-        would misread. Its consumers then wait for such a reader here, or switch first.
+        (``congress_tables.as_builder_input``, for its ``READABLE`` tables), the FEC identity mapper
+        (``fec_tables.published_as_fec_source``, for its ``FEC_PUBLISHED_READABLE`` tables), and the legislative mapper
+        (``legislative_tables.as_builder_input``, for its ``READABLE`` tables) read a published table back into
+        their builders' shape; any other dataset refuses by name rather than hand a builder a table it would
+        misread. Its consumers then wait for such a reader here, or switch first.
         """
+        from spicy_regs import legislative_tables
         from spicy_regs.congress_tables import READABLE, as_builder_input
         from spicy_regs.pipelines.rollups.fec_tables import FEC_PUBLISHED_READABLE, published_as_fec_source
         from spicy_regs.transforms.regulations_shape import SOURCE_COLUMNS, published_as_source
 
-        if dataset not in SOURCE_COLUMNS and dataset not in READABLE and dataset not in FEC_PUBLISHED_READABLE:
+        if (
+            dataset not in SOURCE_COLUMNS
+            and dataset not in READABLE
+            and dataset not in FEC_PUBLISHED_READABLE
+            and dataset not in legislative_tables.READABLE
+        ):
             raise ValueError(f"{dataset}: its receipts are retired and its mapper has no reader of the published "
                              "table (SelectedPriors._published); add one before its consumers read it")
         output = self.directory / dataset / "processing" / (dataset + ".parquet")
@@ -244,11 +255,33 @@ class SelectedPriors:
                 as_builder_input(dataset, subjects, output)
             elif dataset in FEC_PUBLISHED_READABLE:
                 published_as_fec_source(dataset, subjects, output)
+            elif dataset in legislative_tables.READABLE:
+                file_outcomes: tuple[Path, ...] = ()
+                if (
+                    subjects
+                    and (file_table := legislative_tables.FILE_TABLE_FOR_DATASET.get(dataset)) is not None
+                    and not legislative_tables.has_checkpoint_metadata(subjects[0])
+                ):
+                    outcome_selection = self.selected.select(file_table)
+                    if outcome_selection is not None:
+                        file_outcomes = outcome_selection.subjects
+                # Keep the member layout for builders that merge and carry partitions independently.
+                if subjects and subjects[0].name != output.name and any(
+                    parent.name == dataset for parent in subjects[0].parents
+                ):
+                    output = output.with_suffix("")
+                    for subject in subjects:
+                        root = next(parent for parent in subject.parents if parent.name == dataset)
+                        legislative_tables.as_builder_input(
+                            dataset, [subject], output / subject.relative_to(root), file_outcomes=file_outcomes
+                        )
+                else:
+                    legislative_tables.as_builder_input(dataset, subjects, output, file_outcomes=file_outcomes)
             else:
                 published_as_source(dataset, subjects, output)
         self.selections[dataset] = (subjects, None, None)
         self.restored[dataset] = output
-        self.processing_members[dataset] = (output,)
+        self.processing_members[dataset] = tuple(sorted(output.rglob("*.parquet"))) if output.is_dir() else (output,)
         self._check_processing(dataset)
         return output
 
@@ -520,16 +553,18 @@ class NativeReceiptLifecycle(RollupPipeline):
     inputs: ClassVar[tuple[str, ...]]
 
     def _new_receipt_work(self, output_dir, snapshot=None):
+        from spicy_regs.legislative_tables import RECEIPT_CHECKPOINT_DATASETS
         from spicy_regs.selected_generations import unique_build_directory
 
+        outputs = self.outputs or (self.output,)
         private = unique_build_directory(output_dir)
         prior = SelectedPriors(
             private / "selected-priors",
             root=self.output_dir or output_dir,
             index=snapshot if os.getenv("R2_PUBLIC_URL") else None,
             # Another family's soft inputs (votes' bill_vote_references); never this family's own priors.
-            ranged=frozenset(key.removesuffix(".parquet") for key in self.soft_inputs
-                             if key not in (self.outputs or (self.output,))),
+            ranged=frozenset(key.removesuffix(".parquet") for key in self.soft_inputs if key not in outputs),
+            last_receipts=RECEIPT_CHECKPOINT_DATASETS.intersection(key.removesuffix(".parquet") for key in outputs),
         )
         return private, prior
 
@@ -707,7 +742,7 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
                     legislative,
                     bundle,
                     generation_id=self.receipt_generation_id,
-                    prior_receipts=list(dict.fromkeys(v[1] for v in prior.selections.values())),
+                    prior_receipts=list(dict.fromkeys(v[1] for v in prior.selections.values() if v[1] is not None)),
                     replayed=frozenset(prior.replaced),
                     file_outcomes_table=FILE_TABLES.get(getattr(self, "publication_family", None) or self.name),
                     carried_partitions=prior.carried_partitions or None,
@@ -842,4 +877,135 @@ class SubjectTableRollup(NativeReceiptLifecycle):
             if left_out:
                 logger.info(summary(path.stem, left_out, shown))
             visible.append(output_dir / path.name)
+        return tuple(visible) if self.outputs else visible[0]
+
+
+class LegislativeTableRollup(NativeReceiptLifecycle):
+    """A legislative-document family whose tables publish no per-row receipts (ss-vse3; policies ``receipts_retired``).
+
+    The builder runs as under :class:`SubjectReceiptRollup`, on the same selected priors and inputs: each published
+    table (and retired read-checkpoint outcome table) is read back as builder input via ``legislative_tables``. Each
+    output it writes is mapped directly to its public Parquet table by ``legislative_tables.to_public``, with
+    read-outcome and document-file-outcome tables written without ``etl_receipts.parquet`` or
+    ``legislative_document_file_states``. A run refuses at its start, before any build work, while
+    ``docs/pins/receipt-archive.json`` does not pin the live generation that still lists this family's receipts
+    (``publication.require_live_receipt_pins``).
+    """
+
+    source_outputs: ClassVar[tuple[str, ...]]
+    retired_receipt_datasets: ClassVar[tuple[str, ...]]
+
+    def __init_subclass__(cls, **kwargs):
+        from spicy_regs.subject_catalog import retired_receipt_datasets
+
+        super().__init_subclass__(**kwargs)
+        keys = cls.outputs or (cls.output,)
+        if any(not isinstance(key, str) for key in keys):
+            raise ValueError("Legislative table rollup requires explicit output names")
+        cls.source_outputs = tuple(str(key) for key in keys)
+        names = tuple(key.removesuffix(".parquet") for key in cls.source_outputs)
+        registry = field_registry()
+        if unknown := sorted(set(names) - set(registry)):
+            raise ValueError(f"{cls.__name__}: {unknown} are not registered legislative-document datasets")
+        processing_only = frozenset(name for name in names if registry[name]["processing_only"])
+        outcomes = tuple(READ_TABLES[name] for name in names if name in READ_TABLES)
+        family = getattr(cls, "publication_family", None) or cls.name
+        if family in FILE_TABLES:
+            outcomes += (FILE_TABLES[family],)
+        retired_names = tuple(dict.fromkeys((*names, *outcomes)))
+        if unretired := sorted(set(retired_names) - retired_receipt_datasets()):
+            raise ValueError(f"{cls.__name__}: {unretired} still publish receipts; use LegislativeReceiptRollup")
+        cls.retired_receipt_datasets = retired_names
+        cls.receipt_policies = ()
+        cls.receipt_only_tables = ()
+        cls.added_tables = tuple(dict.fromkeys((*cls.added_tables, *(name + ".parquet" for name in outcomes))))
+        visible = tuple(
+            key for key in cls.source_outputs if key.removesuffix(".parquet") not in processing_only
+        ) + tuple(name + ".parquet" for name in outcomes)
+        if cls.outputs or outcomes:
+            cls.outputs = visible
+        elif visible:
+            cls.output = visible[0]
+
+    def generation_schemas(self):
+        from spicy_regs.legislative_documents import subject_schema
+
+        schemas = {}
+        for key in self.outputs or (self.output,):
+            dataset = key.removesuffix(".parquet")
+            if dataset in NAVIGATION_OUTCOME_POLICIES:
+                schemas[dataset] = described_schema(NAVIGATION_OUTCOME_POLICIES[dataset].subject_schema)
+            else:
+                schemas[dataset] = described_schema(subject_schema(dataset))
+        return schemas
+
+    def _prime(self, output_dir, snapshot=None):
+        if snapshot is not None:
+            from spicy_regs.sources import publication
+
+            publication.require_live_receipt_pins(dict(snapshot), self.retired_receipt_datasets)
+        return super()._prime(output_dir, snapshot)
+
+    def build_tables(self, output_dir, builder, **kwargs):
+        from spicy_regs import legislative_tables
+
+        private, prior = self._receipt_work(output_dir)
+        work = private / "source-output"
+        work.mkdir()
+        candidate = private / "candidate"
+        candidate.mkdir()
+        built = self._call_builder(prior, work, builder, kwargs)
+        paths = built if isinstance(built, tuple) else (built,)
+        observed = {path.name if path.is_dir() else path.stem for path in paths}
+        if observed != {key.removesuffix(".parquet") for key in self.source_outputs}:
+            raise ValueError("Producer outputs differ from the complete classified family")
+        registry = field_registry()
+        mapped_subjects: dict[str, list[str]] = {}
+        source_outputs: list[tuple[str, Path]] = []
+        subjects: list[Path] = []
+        for path in paths:
+            dataset = path.name if path.is_dir() else path.stem
+            source_outputs.append((dataset, path))
+            if registry[dataset]["processing_only"]:
+                mapped_subjects[dataset] = []
+            else:
+                target = candidate / (dataset if path.is_dir() else f"{dataset}.parquet")
+                with phase_log("public-table", dataset=dataset):
+                    mapped_subjects[dataset] = legislative_tables.to_public(dataset, path, target)
+                subjects.append(target)
+            if dataset in READ_TABLES:
+                outcome_name = READ_TABLES[dataset]
+                outcome_target = candidate / f"{outcome_name}.parquet"
+                with phase_log("read-outcomes", dataset=outcome_name):
+                    legislative_tables.write_read_outcomes(
+                        dataset, path, outcome_target, generation_id=self.receipt_generation_id
+                    )
+                mapped_subjects[outcome_name] = [f"{outcome_name}.parquet"]
+                subjects.append(outcome_target)
+        family = getattr(self, "publication_family", None) or self.name
+        if file_table := FILE_TABLES.get(family):
+            file_target = candidate / f"{file_table}.parquet"
+            with phase_log("file-outcomes", dataset=file_table):
+                legislative_tables.write_file_outcomes(
+                    file_table,
+                    source_outputs,
+                    mapped_subjects,
+                    candidate,
+                    file_target,
+                    generation_id=self.receipt_generation_id,
+                )
+            subjects.append(file_target)
+        visible: list[Path] = []
+        with phase_log("visible-copies", files=len(subjects)):
+            for source in subjects:
+                target = output_dir / source.name
+                if source.is_dir():
+                    if target.exists():
+                        previous = private / "previous" / source.name
+                        previous.parent.mkdir(parents=True, exist_ok=True)
+                        target.rename(previous)
+                    shutil.copytree(source, target)
+                else:
+                    shutil.copyfile(source, target)
+                visible.append(target)
         return tuple(visible) if self.outputs else visible[0]

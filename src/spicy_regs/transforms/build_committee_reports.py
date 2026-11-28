@@ -69,6 +69,7 @@ from spicy_regs.sources import r2
 from spicy_regs.sources.hearing_detail import hearing_detail_facts, hearing_detail_urls
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key, listing_reader
 from spicy_regs.phase_log import annotate
+from spicy_regs.transforms.read_checkpoints import checkpoint_metadata, read_checkpoints
 from spicy_regs.transforms.table_merge import (
     merge_contract_table,
     merge_table,
@@ -252,10 +253,18 @@ def _extraction_versions() -> dict[str, str]:
     return {name: version(name) for name in ("spicy-docs", "pymupdf")}
 
 
+_HEARING_REUSE_FIELDS = ("sha256", "format", "body_completeness", "text_derivation", "page_count")
+
+
 def _prior_hearing_rows(path: Path | None, packages: Collection[str]) -> dict[tuple[str, str], dict]:
     """Read only selected prior hearings once, including their retained text and join witness."""
     if path is None or not packages:
         return {}
+    reuse_cp = {
+        (str(item["package_id"]), str(item["last_modified"])): item
+        for item in read_checkpoints(path, "hearing-body-reuse")
+        if isinstance(item.get("package_id"), str) and isinstance(item.get("last_modified"), str)
+    }
     with duckdb.connect(config={"threads": 1, "memory_limit": "512MiB"}) as db:
         available = {row[0] for row in db.execute("DESCRIBE SELECT * FROM read_parquet(?)", [str(path)]).fetchall()}
         columns = [name for name in ("package_id", "last_modified", "event_id", "body_text", "body_completeness",
@@ -269,8 +278,52 @@ def _prior_hearing_rows(path: Path | None, packages: Collection[str]) -> dict[tu
         key = (row["package_id"], row["last_modified"])
         if key in lookup:
             raise ValueError("Prior hearing rows repeat a dated key")
+        if (cp := reuse_cp.get(key)) is not None:
+            for field in _HEARING_REUSE_FIELDS:
+                if row.get(field) is None and cp.get(field) is not None:
+                    row[field] = cp[field]
         lookup[key] = row
     return lookup
+
+
+def _hearing_reuse_checkpoints(
+    prior_file: Path | None,
+    fresh_rows: Collection[Mapping[str, Any]],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    """Per-revision body reuse metadata retained in Parquet KV metadata without exposing bookkeeping columns."""
+    checkpoints: dict[tuple[str, str], dict[str, Any]] = {
+        (str(item["package_id"]), str(item["last_modified"])): dict(item)
+        for item in read_checkpoints(prior_file, "hearing-body-reuse")
+        if isinstance(item.get("package_id"), str) and isinstance(item.get("last_modified"), str)
+    }
+    if prior_file is not None:
+        with duckdb.connect(config={"threads": 1, "memory_limit": "512MiB"}) as db:
+            available = {row[0] for row in db.execute("DESCRIBE SELECT * FROM read_parquet(?)", [str(prior_file)]).fetchall()}
+            if {"package_id", "last_modified"} <= available and any(f in available for f in _HEARING_REUSE_FIELDS):
+                sel = ", ".join(f if f in available else "NULL" for f in _HEARING_REUSE_FIELDS)
+                for row in db.execute(f"SELECT package_id, last_modified, {sel} FROM read_parquet(?)", [str(prior_file)]).fetchall():
+                    package_id, last_modified, *values = row
+                    if package_id is not None and last_modified is not None and any(v is not None for v in values):
+                        key = (str(package_id), str(last_modified))
+                        existing = checkpoints.get(key, {})
+                        checkpoints[key] = {
+                            "package_id": key[0],
+                            "last_modified": key[1],
+                            **{
+                                field: val if val is not None else existing.get(field)
+                                for field, val in zip(_HEARING_REUSE_FIELDS, values, strict=True)
+                            },
+                        }
+    for row in fresh_rows:
+        package_id = row.get("package_id")
+        last_modified = row.get("last_modified")
+        if isinstance(package_id, str) and isinstance(last_modified, str):
+            checkpoints[(package_id, last_modified)] = {
+                "package_id": package_id,
+                "last_modified": last_modified,
+                **{field: row.get(field) for field in _HEARING_REUSE_FIELDS},
+            }
+    return checkpoints
 
 
 def _qualified_prior_event(row: Mapping[str, Any], body: Any) -> bool:
@@ -1369,11 +1422,22 @@ def build_committee_reports(
     replaced = {"committee_reports": evaluated_reports, "report_sections": evaluated_reports,
                 "committee_report_cbo_letters": evaluated_reports,
                 "hearing_bill_links": evaluated_hearings, "hearing_transcripts": evaluated_hearings}
+    hearing_reuse_cp = _hearing_reuse_checkpoints(prior_hearings, hearing_rows)
+    hearing_metadata = (
+        checkpoint_metadata(
+            prior_hearings,
+            "hearing-body-reuse",
+            (hearing_reuse_cp[k] for k in sorted(hearing_reuse_cp)),
+        )
+        if hearing_reuse_cp
+        else None
+    )
     paths = {name: merge_contract_table(output_dir, name, rows, download_prior=download_prior,
                                         replace_parents=(("package_id", "last_modified"), replaced[name]),
                                         backfill_prior={"part_id": "package_id"} if name in
                                         ("committee_reports", "report_sections", "committee_report_cbo_letters") else None,
-                                        prior_present=(prior_files[name] is not None) if name in prior_files else None)
+                                        prior_present=(prior_files[name] is not None) if name in prior_files else None,
+                                        parquet_metadata=hearing_metadata if name == "hearing_transcripts" else None)
              for name, rows in (("committee_reports", report_rows), ("report_sections", section_rows),
                                 ("hearing_transcripts", hearing_rows), ("hearing_bill_links", link_rows),
                                 ("committee_report_cbo_letters", letter_rows))}

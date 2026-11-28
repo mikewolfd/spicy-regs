@@ -1110,20 +1110,20 @@ def test_laws_rollup_preserves_olrc_access_refusal_on_resume_and_reconciliation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """BLOCKER 2: LawsRollup sets deferred_failure in build() so OLRC 401/403 refusal is preserved across resume & ALREADY_LIVE."""
-    from spicy_regs import etl_policy_registry
+    from spicy_regs.legislative_documents import subject_schema
+    from spicy_regs.navigation_read_outcomes import FILE_POLICIES
     from spicy_regs.pipelines.rollups import laws as laws_mod
 
-    monkeypatch.setattr(etl_policy_registry, "require_registered_receipts", lambda *_: None)
     store = Store()
     _setup_r2_env(monkeypatch, store)
     calls = {"build": 0}
 
-    def _fake_build_receipts(self, output_dir: Path, _builder, *, evidence=None):
+    def _fake_build_tables(self, output_dir: Path, _builder, *, evidence=None):
         calls["build"] += 1
         assert evidence is not None
         evidence.event("table3-bulk-refused", status=403)
         paths = []
-        rpaths = []
+
         def _dummy_value(field: pa.Field, required: bool):
             if field.nullable and not required:
                 return None
@@ -1140,31 +1140,16 @@ def test_laws_rollup_preserves_olrc_access_refusal_on_resume_and_reconciliation(
                 return []
             return None
 
-        for pol in self.receipt_policies:
-            ctx = ReceiptContext(
-                self.receipt_generation_id,
-                f"{pol.dataset}-1",
-                pol.policy_version,
-                [{"source_id": "s", "source_uri": "https://source.test/law",
-                  "sha256": "sha256:" + "d" * 64, "locator": "row:0", "body_version": "1"}],
-                {},
-            )
-            id_set = set(pol.identity_fields)
-            row = {field.name: _dummy_value(field, field.name in id_set) for field in pol.subject_schema}
-            subject, rpath = write_dataset(
-                [] if pol.receipt_only else [(row, ctx)],
-                output_dir / f"ds-{pol.dataset}",
-                pol,
-                generation_id=self.receipt_generation_id,
-            )
-            if not pol.receipt_only:
-                assert subject is not None
-                paths.append(subject)
-            rpaths.append(rpath)
-        combine_receipts(rpaths, output_dir / "etl_receipts.parquet")
+        for key in self.outputs:
+            dataset = key.removesuffix(".parquet")
+            schema = FILE_POLICIES[dataset].subject_schema if dataset in FILE_POLICIES else subject_schema(dataset)
+            row = {field.name: _dummy_value(field, not field.nullable) for field in schema}
+            target = output_dir / key
+            pq.write_table(pa.Table.from_pylist([row], schema=schema), target)
+            paths.append(target)
         return tuple(paths)
 
-    monkeypatch.setattr(laws_mod.LawsRollup, "build_receipts", _fake_build_receipts)
+    monkeypatch.setattr(laws_mod.LawsRollup, "build_tables", _fake_build_tables)
     monkeypatch.setattr(laws_mod, "olrc_access_refused", lambda _ev: ["Table III"])
 
     # Attempt 1 fails during pointer write while OLRC refused Table III.

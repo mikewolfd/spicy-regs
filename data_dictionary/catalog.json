@@ -959,67 +959,6 @@
         ]
       },
       {
-        "dataset": "committee_report_cbo_letters",
-        "receipt_only": false,
-        "policy_version": "legislative-documents/3",
-        "identity_columns": [
-          "package_id",
-          "part_id",
-          "last_modified",
-          "letter_seq"
-        ],
-        "processing_fields": [
-          "raw_source_row"
-        ]
-      },
-      {
-        "dataset": "committee_report_read_outcomes",
-        "receipt_only": false,
-        "policy_version": "navigation-read-outcomes/1",
-        "identity_columns": [
-          "generation_id",
-          "package_id"
-        ],
-        "processing_fields": [
-          "recorded_event"
-        ]
-      },
-      {
-        "dataset": "committee_report_reads",
-        "receipt_only": true,
-        "policy_version": "legislative-documents/1",
-        "identity_columns": [],
-        "processing_fields": [
-          "raw_source_row"
-        ]
-      },
-      {
-        "dataset": "committee_reports",
-        "receipt_only": false,
-        "policy_version": "legislative-documents/3",
-        "identity_columns": [
-          "package_id",
-          "part_id",
-          "last_modified"
-        ],
-        "processing_fields": [
-          "raw_source_row"
-        ]
-      },
-      {
-        "dataset": "committee_reports_document_file_outcomes",
-        "receipt_only": false,
-        "policy_version": "navigation-read-outcomes/1",
-        "identity_columns": [
-          "generation_id",
-          "source_dataset",
-          "member_ordinal"
-        ],
-        "processing_fields": [
-          "recorded_event"
-        ]
-      },
-      {
         "dataset": "committees",
         "receipt_only": false,
         "policy_version": "congress-subjects/1",
@@ -1189,32 +1128,6 @@
         ]
       },
       {
-        "dataset": "hearing_bill_links",
-        "receipt_only": false,
-        "policy_version": "legislative-documents/3",
-        "identity_columns": [
-          "package_id",
-          "last_modified",
-          "bill_id",
-          "link_id"
-        ],
-        "processing_fields": [
-          "raw_source_row"
-        ]
-      },
-      {
-        "dataset": "hearing_transcripts",
-        "receipt_only": false,
-        "policy_version": "legislative-documents/4",
-        "identity_columns": [
-          "package_id",
-          "last_modified"
-        ],
-        "processing_fields": [
-          "raw_source_row"
-        ]
-      },
-      {
         "dataset": "house_activity_reports",
         "receipt_only": false,
         "policy_version": "legislative-documents/3",
@@ -1265,57 +1178,6 @@
         ]
       },
       {
-        "dataset": "law_code_sections",
-        "receipt_only": false,
-        "policy_version": "legislative-documents/1",
-        "identity_columns": [
-          "congress",
-          "session",
-          "seq"
-        ],
-        "processing_fields": [
-          "raw_source_row"
-        ]
-      },
-      {
-        "dataset": "law_sections",
-        "receipt_only": false,
-        "policy_version": "legislative-documents/1",
-        "identity_columns": [
-          "law_id",
-          "seq"
-        ],
-        "processing_fields": [
-          "raw_source_row"
-        ]
-      },
-      {
-        "dataset": "laws",
-        "receipt_only": false,
-        "policy_version": "legislative-documents/1",
-        "identity_columns": [
-          "congress",
-          "law_type",
-          "number"
-        ],
-        "processing_fields": [
-          "raw_source_row"
-        ]
-      },
-      {
-        "dataset": "laws_document_file_outcomes",
-        "receipt_only": false,
-        "policy_version": "navigation-read-outcomes/1",
-        "identity_columns": [
-          "generation_id",
-          "source_dataset",
-          "member_ordinal"
-        ],
-        "processing_fields": [
-          "recorded_event"
-        ]
-      },
-      {
         "dataset": "legislative_document_file_states",
         "receipt_only": true,
         "policy_version": "1",
@@ -1340,43 +1202,6 @@
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
-        ]
-      },
-      {
-        "dataset": "native_legal_reference_reads",
-        "receipt_only": false,
-        "policy_version": "legislative-documents/3",
-        "identity_columns": [
-          "scope_id"
-        ],
-        "processing_fields": [
-          "raw_source_row"
-        ]
-      },
-      {
-        "dataset": "native_legal_references",
-        "receipt_only": false,
-        "policy_version": "legislative-documents/4",
-        "identity_columns": [
-          "scope_id",
-          "body_version_id",
-          "occurrence_index"
-        ],
-        "processing_fields": [
-          "raw_source_row"
-        ]
-      },
-      {
-        "dataset": "native_legal_references_document_file_outcomes",
-        "receipt_only": false,
-        "policy_version": "navigation-read-outcomes/1",
-        "identity_columns": [
-          "generation_id",
-          "source_dataset",
-          "member_ordinal"
-        ],
-        "processing_fields": [
-          "recorded_event"
         ]
       },
       {
@@ -1503,20 +1328,6 @@
         ]
       },
       {
-        "dataset": "report_sections",
-        "receipt_only": false,
-        "policy_version": "legislative-documents/3",
-        "identity_columns": [
-          "package_id",
-          "part_id",
-          "last_modified",
-          "seq"
-        ],
-        "processing_fields": [
-          "raw_source_row"
-        ]
-      },
-      {
         "dataset": "rule_targets",
         "receipt_only": false,
         "policy_version": "regulations-native-v2",
@@ -1601,35 +1412,6 @@
         ]
       },
       {
-        "dataset": "senate_expenditures",
-        "receipt_only": false,
-        "policy_version": "legislative-documents/2",
-        "identity_columns": [
-          "package_id",
-          "file_name",
-          "page",
-          "table_ordinal",
-          "row_ordinal",
-          "body_version_id"
-        ],
-        "processing_fields": [
-          "raw_source_row"
-        ]
-      },
-      {
-        "dataset": "senate_expenditures_document_file_outcomes",
-        "receipt_only": false,
-        "policy_version": "navigation-read-outcomes/1",
-        "identity_columns": [
-          "generation_id",
-          "source_dataset",
-          "member_ordinal"
-        ],
-        "processing_fields": [
-          "recorded_event"
-        ]
-      },
-      {
         "dataset": "table3_historical_records",
         "receipt_only": false,
         "policy_version": "table3-historical-public/2",
@@ -1641,18 +1423,6 @@
         ],
         "processing_fields": [
           "source_position"
-        ]
-      },
-      {
-        "dataset": "table3_records",
-        "receipt_only": false,
-        "policy_version": "legislative-documents/1",
-        "identity_columns": [
-          "act_key",
-          "seq"
-        ],
-        "processing_fields": [
-          "raw_source_row"
         ]
       },
       {

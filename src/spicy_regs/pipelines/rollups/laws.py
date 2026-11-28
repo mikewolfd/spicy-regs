@@ -11,21 +11,20 @@ from pathlib import Path
 from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import make_rollup_app
-from spicy_regs.legislative_rollups import LegislativeReceiptRollup, family_policies
+from spicy_regs.legislative_rollups import LegislativeTableRollup
 from spicy_regs.transforms.build_laws import build_laws, olrc_access_refused
 
 
-class LawsRollup(LegislativeReceiptRollup):
+class LawsRollup(LegislativeTableRollup):
     """Enacted laws with their Statutes at Large citation, and the OLRC classification tables (api.data.gov key)."""
 
     name: ClassVar[str] = "laws"
     retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
-    receipt_policies = family_policies('laws', 'law_code_sections', 'table3_records', 'law_sections')
     outputs: ClassVar[tuple[str, ...]] = ("laws.parquet", "law_code_sections.parquet", "table3_records.parquet", "law_sections.parquet")
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        result = self.build_receipts(output_dir, build_laws, evidence=self.source_evidence)
+        result = self.build_tables(output_dir, build_laws, evidence=self.source_evidence)
         blocked = olrc_access_refused(self.source_evidence) if self.source_evidence is not None else []
         if blocked:
             self.deferred_failure = RuntimeError(

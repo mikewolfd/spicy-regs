@@ -12,18 +12,17 @@ from typing import Annotated, ClassVar
 from cyclopts import App, Parameter
 from dotenv import load_dotenv
 
-from spicy_regs.legislative_rollups import LegislativeReceiptRollup, family_policies
+from spicy_regs.legislative_rollups import LegislativeTableRollup
 from spicy_regs.pipelines.rollups.base import file_scope_digest
 from spicy_regs.transforms.build_committee_reports import build_committee_reports
 
 
-class CommitteeReportsRollup(LegislativeReceiptRollup):
+class CommitteeReportsRollup(LegislativeTableRollup):
     """GovInfo committee reports, their agency blocks, and hearing transcripts (api.data.gov key)."""
 
     name: ClassVar[str] = "committee-reports"
     retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
-    receipt_policies = family_policies('committee_reports', 'report_sections', 'hearing_transcripts', 'hearing_bill_links', 'committee_report_cbo_letters', 'committee_report_reads')
     outputs: ClassVar[tuple[str, ...]] = (
         "committee_reports.parquet",
         "report_sections.parquet",
@@ -33,7 +32,6 @@ class CommitteeReportsRollup(LegislativeReceiptRollup):
         "committee_report_reads.parquet",
     )
 
-    receipt_only_tables = ("committee_report_reads.parquet",)
     # The first generation with this table is a migration; publication refuses any other change of membership.
     added_tables: ClassVar[tuple[str, ...]] = ("committee_report_cbo_letters.parquet",)
 
@@ -83,8 +81,8 @@ class CommitteeReportsRollup(LegislativeReceiptRollup):
             extra["retained_bundle_root"] = retained_bundle_root
         if retained_raw_archive is not None:
             extra["retained_raw_archive"] = retained_raw_archive
-        result = self.build_receipts(output_dir, build_committee_reports, evidence=self.source_evidence,
-                                     reread=reread, coverage=self.acquisition_status, **extra)
+        result = self.build_tables(output_dir, build_committee_reports, evidence=self.source_evidence,
+                                   reread=reread, coverage=self.acquisition_status, **extra)
         if failed := self.acquisition_status.get("nothing_read"):
             self.deferred_failure = RuntimeError(
                 f"Committee reports read none of the packages attempted in {', '.join(failed)}; see acquisition-coverage")

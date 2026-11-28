@@ -22,9 +22,10 @@ from spicy_docs.schemas.committee_report_tables import (
 )
 from spicy_docs.schemas.hearing_bill_link_tables import HEARING_BILL_LINKS
 
+from spicy_regs.generations import build_generation, verify_generation
 from spicy_regs.govinfo_revisions import latest_package_rows
-from spicy_regs.legislative_receipts import admit_bundle, write_legislative_outputs
-from spicy_regs.navigation_read_outcomes import FILE_TABLES
+from spicy_regs import legislative_tables
+from spicy_regs.navigation_read_outcomes import FILE_TABLES, READ_TABLES
 from spicy_regs.pipelines.rollups import committee_reports as rollup_module
 from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.transforms import build_committee_reports as workflow
@@ -44,6 +45,44 @@ CRPT_HELD = "CRPT-119hrpt1"
 WITHDRAWN_64154 = "CHRG-118hhrg64154"
 WITHDRAWN_64598 = "CHRG-118hhrg64598"
 WITHDRAWN_64599 = "CHRG-118hhrg64599"
+
+
+def _admit_plain_generation(outputs: tuple[Path, ...], stage_dir: Path, gen_dir: Path, *, generation_id: str) -> None:
+    """Convert raw committee-reports builder outputs to receiptless native Parquet and admit a generation."""
+    stage_dir.mkdir(parents=True, exist_ok=True)
+    mapped: dict[str, list[str]] = {}
+    subjects: list[Path] = []
+    source_outputs: list[tuple[str, Path]] = []
+    for path in outputs:
+        dataset = path.stem
+        source_outputs.append((dataset, path))
+        if dataset == READS_TABLE:
+            mapped[dataset] = []
+            outcome_name = READ_TABLES[dataset]
+            outcome_target = stage_dir / f"{outcome_name}.parquet"
+            legislative_tables.write_read_outcomes(dataset, path, outcome_target, generation_id=generation_id)
+            mapped[outcome_name] = [outcome_target.name]
+            subjects.append(outcome_target)
+        else:
+            target = stage_dir / path.name
+            mapped[dataset] = legislative_tables.to_public(dataset, path, target)
+            subjects.append(target)
+    file_table = FILE_TABLES["committee-reports"]
+    file_target = stage_dir / f"{file_table}.parquet"
+    legislative_tables.write_file_outcomes(
+        file_table, source_outputs, mapped, stage_dir, file_target, generation_id=generation_id
+    )
+    subjects.append(file_target)
+    artifact = build_generation(
+        gen_dir,
+        family="committee-reports",
+        files=subjects,
+        expected_keys=list(rollup_module.CommitteeReportsRollup.outputs),
+        schemas=rollup_module.CommitteeReportsRollup().generation_schemas(),
+    )
+    assert "etlReceipts" not in artifact.root["spec"]
+    assert not (gen_dir / "etl_receipts.parquet").exists()
+    verify_generation(gen_dir, expected_pin=artifact.pin)
 
 # Exact GPO absence reason from retained CRPT-119hrpt758 (422 chars).
 ABSENCE_758 = (
@@ -365,7 +404,7 @@ def test_rollup_forwards_crpt_reread_and_retained_bundle_env_vars(tmp_path, monk
     monkeypatch.setattr(rollup_module, "build_committee_reports", lambda *args, **kwargs: calls.append(kwargs) or ())
     monkeypatch.setattr(
         rollup_module.CommitteeReportsRollup,
-        "build_receipts",
+        "build_tables",
         lambda self, directory, builder, **kwargs: builder(directory, **kwargs),
     )
     rollup_module.CommitteeReportsRollup().build(tmp_path)
@@ -715,16 +754,8 @@ def test_retained_bundle_merges_withdrawn_hearings_onto_prior_crpt_generation_of
     assert discovery_event["cursor"] == inherited_cursor
     assert discovery_event["mode"] == "retained-bundle"
 
-    # Full native legislative-documents/4 conversion & generation admission passes.
-    native_dir = tmp_path / "native"
-    manifest = write_legislative_outputs(
-        outputs,
-        native_dir,
-        generation_id="test-wave1-merged",
-        file_outcomes_table=FILE_TABLES["committee-reports"],
-    )
-    assert not any(manifest["fresh_refused_rows"].values())
-    admit_bundle(native_dir, tmp_path / "generation", family="committee-reports")
+    # Full native legislative-documents/4 conversion & receiptless generation admission passes.
+    _admit_plain_generation(outputs, tmp_path / "native", tmp_path / "generation", generation_id="test-wave1-merged")
 
     # Next night's live discovery run sees all 3 withdrawn packages as settled and asks GovInfo for none of them.
     next_dir = tmp_path / "next_night"
@@ -870,17 +901,9 @@ def test_ss_xzy2_real_withdrawn_bundle_merges_onto_ss_uep5_prior_and_passes_wave
     )
     evidence.finish()
 
-    # Step 3: Convert to native legislative-documents/4 and admit generation.
-    native_dir = tmp_path / "native"
-    manifest = write_legislative_outputs(
-        outputs,
-        native_dir,
-        generation_id="test-ss-xzy2-real-merge",
-        file_outcomes_table=FILE_TABLES["committee-reports"],
-    )
-    assert not any(manifest["fresh_refused_rows"].values())
+    # Step 3: Convert to native legislative-documents/4 and admit receiptless generation.
     gen_dir = tmp_path / "generation"
-    admit_bundle(native_dir, gen_dir, family="committee-reports")
+    _admit_plain_generation(outputs, tmp_path / "native", gen_dir, generation_id="test-ss-xzy2-real-merge")
 
     # Step 4: Run exact arch_wave1.md §7.4 SQL oracles for BOTH ss-uep5 and ss-xzy2.
     with duckdb.connect() as db:

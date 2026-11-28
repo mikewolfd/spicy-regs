@@ -255,29 +255,144 @@ def _held_laws(prior_file: Path | None, congresses: tuple[int, ...], sections_fi
     import duckdb
 
     columns = {row[0] for row in duckdb.sql(f"DESCRIBE SELECT * FROM read_parquet('{prior_file}')").fetchall()}
-    selected = [name if name in columns else "NULL" for name in
-                ("uslm_reader_version", "law_text_outcome", "law_text_reader_version")]
-    if sections_file is None:
-        selected[1:] = ["NULL", "NULL"]
+    uslm_cp = {
+        str(row["law_id"]): row
+        for row in read_checkpoints(prior_file, "laws-uslm")
+        if isinstance(row.get("law_id"), str)
+    }
+    selected = [
+        name if name in columns else "NULL"
+        for name in (
+            "uslm_reader_version",
+            "law_text_outcome",
+            "law_text_reader_version",
+            "law_section_count",
+            "uslm_sha256",
+        )
+    ]
     rows = duckdb.sql(
         f"SELECT law_id, update_date, uslm_outcome, {', '.join(selected)} FROM read_parquet('{prior_file}') WHERE congress IN (SELECT UNNEST(?))",
         params=[[str(c) for c in congresses]],
     ).fetchall()
-    held = {str(row[0]): HeldLaw(*row[1:]) for row in rows}
-    if sections_file is not None and {"law_section_count", "uslm_sha256"} <= columns:
+    held: dict[str, HeldLaw] = {}
+    uslm_shas: dict[str, str | None] = {}
+    section_counts: dict[str, str | None] = {}
+    for law_id, update_date, uslm_outcome, reader_ver, text_outcome, text_ver, sec_count, uslm_sha in rows:
+        key = str(law_id)
+        cp = uslm_cp.get(key, {})
+        eff_reader = reader_ver if reader_ver is not None else cp.get("uslm_reader_version")
+        eff_text_outcome = text_outcome if sections_file is not None else None
+        eff_text_ver = (
+            (text_ver if text_ver is not None else cp.get("law_text_reader_version"))
+            if sections_file is not None
+            else None
+        )
+        held[key] = HeldLaw(update_date, uslm_outcome, eff_reader, eff_text_outcome, eff_text_ver)
+        uslm_shas[key] = uslm_sha if uslm_sha is not None else cp.get("uslm_sha256")
+        section_counts[key] = None if sec_count is None else str(sec_count)
+    if sections_file is not None and "law_section_count" in columns and ("uslm_sha256" in columns or uslm_cp):
         # A parent status alone cannot establish that its matching children survived.
-        invalid = duckdb.sql(
-            f"SELECT p.law_id FROM read_parquet('{prior_file}') p LEFT JOIN "
-            f"(SELECT law_id, count(*) AS n, min(source_sha256) AS lo, max(source_sha256) AS hi "
-            f"FROM read_parquet('{sections_file}') GROUP BY law_id) s USING (law_id) "
-            "WHERE p.law_text_outcome = 'parsed' AND "
-            "(TRY_CAST(p.law_section_count AS BIGINT) IS DISTINCT FROM coalesce(s.n, 0) "
-            "OR s.lo IS DISTINCT FROM p.uslm_sha256 OR s.hi IS DISTINCT FROM p.uslm_sha256)"
-        ).fetchall()
-        for (law_id,) in invalid:
-            if law_id in held:
-                held[law_id] = held[law_id]._replace(text_reader_version=None)
+        sec_cols = {row[0] for row in duckdb.sql(f"DESCRIBE SELECT * FROM read_parquet('{sections_file}')").fetchall()}
+        sec_cp = {
+            str(row["law_id"]): row.get("source_sha256")
+            for row in read_checkpoints(sections_file, "laws-sections")
+            if isinstance(row.get("law_id"), str)
+        }
+        sha_expr = "min(source_sha256), max(source_sha256)" if "source_sha256" in sec_cols else "NULL, NULL"
+        sec_stats = {
+            str(lid): (int(n), lo, hi)
+            for lid, n, lo, hi in duckdb.sql(
+                f"SELECT law_id, count(*), {sha_expr} FROM read_parquet('{sections_file}') GROUP BY law_id"
+            ).fetchall()
+        }
+        for key, item in list(held.items()):
+            if item.text_outcome != "parsed":
+                continue
+            raw_count = section_counts.get(key)
+            expected_count = (
+                int(raw_count)
+                if raw_count is not None and (raw_count.isdigit() or (raw_count.startswith("-") and raw_count[1:].isdigit()))
+                else None
+            )
+            actual_count, lo, hi = sec_stats.get(key, (0, None, None))
+            if actual_count > 0 and lo is None and hi is None:
+                lo = hi = sec_cp.get(key)
+            uslm_sha = uslm_shas.get(key)
+            if expected_count != actual_count or lo != uslm_sha or hi != uslm_sha:
+                held[key] = item._replace(text_reader_version=None)
     return held
+
+
+def _laws_uslm_checkpoints(prior_file: Path | None, fresh_rows: Iterable[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Per-law USLM reader versions and digests retained in Parquet KV metadata without exposing bookkeeping columns."""
+    checkpoints: dict[str, dict[str, Any]] = {
+        str(row["law_id"]): dict(row)
+        for row in read_checkpoints(prior_file, "laws-uslm")
+        if isinstance(row.get("law_id"), str)
+    }
+    if prior_file is not None:
+        import duckdb
+
+        cols = {row[0] for row in duckdb.sql(f"DESCRIBE SELECT * FROM read_parquet('{prior_file}')").fetchall()}
+        wanted = ("uslm_reader_version", "law_text_reader_version", "uslm_sha256")
+        if "law_id" in cols and any(c in cols for c in wanted):
+            sel = ", ".join(c if c in cols else "NULL" for c in wanted)
+            for law_id, reader_ver, text_ver, uslm_sha in duckdb.sql(
+                f"SELECT law_id, {sel} FROM read_parquet('{prior_file}')"
+            ).fetchall():
+                if law_id is not None and (reader_ver is not None or text_ver is not None or uslm_sha is not None):
+                    key = str(law_id)
+                    existing = checkpoints.get(key, {})
+                    checkpoints[key] = {
+                        "law_id": key,
+                        "uslm_reader_version": reader_ver if reader_ver is not None else existing.get("uslm_reader_version"),
+                        "law_text_reader_version": text_ver if text_ver is not None else existing.get("law_text_reader_version"),
+                        "uslm_sha256": uslm_sha if uslm_sha is not None else existing.get("uslm_sha256"),
+                    }
+    for row in fresh_rows:
+        law_id = row.get("law_id")
+        if isinstance(law_id, str) and law_id:
+            checkpoints[law_id] = {
+                "law_id": law_id,
+                "uslm_reader_version": row.get("uslm_reader_version"),
+                "law_text_reader_version": row.get("law_text_reader_version"),
+                "uslm_sha256": row.get("uslm_sha256"),
+            }
+    return checkpoints
+
+
+def _law_section_checkpoints(
+    prior_file: Path | None,
+    fresh_sections: Iterable[Mapping[str, Any]],
+    evaluated: set[str],
+) -> dict[str, dict[str, Any]]:
+    """Per-law section source digests retained in Parquet KV metadata so ``_held_laws`` verifies parent/child parity."""
+    checkpoints: dict[str, dict[str, Any]] = {
+        str(row["law_id"]): dict(row)
+        for row in read_checkpoints(prior_file, "laws-sections")
+        if isinstance(row.get("law_id"), str)
+    }
+    if prior_file is not None:
+        import duckdb
+
+        cols = {row[0] for row in duckdb.sql(f"DESCRIBE SELECT * FROM read_parquet('{prior_file}')").fetchall()}
+        if {"law_id", "source_sha256"} <= cols:
+            for law_id, lo, hi in duckdb.sql(
+                f"SELECT law_id, min(source_sha256), max(source_sha256) FROM read_parquet('{prior_file}') GROUP BY law_id"
+            ).fetchall():
+                if law_id is not None and lo is not None and lo == hi:
+                    checkpoints.setdefault(str(law_id), {"law_id": str(law_id), "source_sha256": str(lo)})
+    fresh_by_law: dict[str, str | None] = {}
+    for row in fresh_sections:
+        law_id = row.get("law_id")
+        if isinstance(law_id, str) and law_id:
+            fresh_by_law[law_id] = row.get("source_sha256")
+    for law_id in evaluated:
+        if law_id in fresh_by_law:
+            checkpoints[law_id] = {"law_id": law_id, "source_sha256": fresh_by_law[law_id]}
+        else:
+            checkpoints.pop(law_id, None)
+    return checkpoints
 
 
 def _held_congresses(prior_file: Path | None) -> set[int]:
@@ -1041,8 +1156,19 @@ def build_laws(
                           checkpoints, evaluated, evidence)
     _journal_retired(priors[TABLE3], table3, output_dir, evidence)
 
+    uslm_checkpoints = _laws_uslm_checkpoints(priors[NAME], law_rows)
+    section_checkpoints = _law_section_checkpoints(priors[TEXT_SECTIONS], text_sections, text_evaluated)
+
     return (
-        merge_contract_table(output_dir, NAME, law_rows, prior_present=priors[NAME] is not None),
+        merge_contract_table(
+            output_dir,
+            NAME,
+            law_rows,
+            prior_present=priors[NAME] is not None,
+            parquet_metadata=checkpoint_metadata(
+                priors[NAME], "laws-uslm", (uslm_checkpoints[k] for k in sorted(uslm_checkpoints))
+            ),
+        ),
         _rederive_places(merge_contract_table(output_dir, CODE_SECTIONS, section_rows,
                                               prior_present=priors[CODE_SECTIONS] is not None,
                                               replace_parents=(("congress", "session"), sessions)), action=True),
@@ -1050,6 +1176,14 @@ def build_laws(
                                               replace_parents=("act_key", evaluated),
                                               parquet_metadata=checkpoint_metadata(priors[TABLE3], "laws-table3",
                                                                                    checkpoints.values())), action=False),
-        merge_contract_table(output_dir, TEXT_SECTIONS, text_sections, prior_present=priors[TEXT_SECTIONS] is not None,
-                             replace_parents=("law_id", text_evaluated)),
+        merge_contract_table(
+            output_dir,
+            TEXT_SECTIONS,
+            text_sections,
+            prior_present=priors[TEXT_SECTIONS] is not None,
+            replace_parents=("law_id", text_evaluated),
+            parquet_metadata=checkpoint_metadata(
+                priors[TEXT_SECTIONS], "laws-sections", (section_checkpoints[k] for k in sorted(section_checkpoints))
+            ),
+        ),
     )
