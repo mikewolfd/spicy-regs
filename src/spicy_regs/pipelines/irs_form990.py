@@ -357,8 +357,12 @@ def _receipt_etag(receipt: Mapping[str, Any]) -> str | None:
     return None
 
 
-def _match_verified_local_blob(store, sha: str, size: int, observed_at: str) -> tuple[Path, str, int, str] | None:
-    if not isinstance(sha, str) or not _SHA256_RE.fullmatch(sha) or type(size) is not int or size <= 0:
+def _match_verified_local_blob(
+    store, sha: str, size: int | None, observed_at: str
+) -> tuple[Path, str, int, str] | None:
+    if not isinstance(sha, str) or not _SHA256_RE.fullmatch(sha):
+        return None
+    if size is not None and (type(size) is not int or size <= 0):
         return None
     try:
         described = store.describe_blob(sha, size)
@@ -366,7 +370,12 @@ def _match_verified_local_blob(store, sha: str, size: int, observed_at: str) -> 
         return None
     if described["encoding"] != "raw":
         raise ValueError("Raw original must be stored unwrapped to be read as a file")
-    return store.root / described["object"], sha, size, observed_at
+    actual_size = described.get("bytes")
+    if type(actual_size) is not int or actual_size <= 0:
+        return None
+    if size is not None and actual_size != size:
+        return None
+    return store.root / described["object"], sha, actual_size, observed_at
 
 
 def _find_local_raw_match(
@@ -377,17 +386,23 @@ def _find_local_raw_match(
 ) -> tuple[Path, str, int, str] | None:
     """Return ``(blob_path, sha256, byte_size, observed_at)`` for an exact verified local blob.
 
-    Matches either by explicit ``sha256``/``response_sha256`` + ``byte_size`` or, for ``discover()``
-    manifests omitting ``sha256``, by verified ``(url, etag, byte_size)`` (or unambiguous ``(url, etag)``
-    when ``HEAD`` omitted ``Content-Length``) against ``prior_years_meta`` or ``CentralRawArchiveStore``
-    acquisition receipts.
+    Matches either by explicit ``sha256``/``response_sha256`` (never falling through to
+    ``(url, etag)`` when an explicit digest is supplied) or, for ``discover()`` manifests
+    omitting ``sha256``, by verified ``(url, etag, byte_size)`` (or unambiguous ``(url, etag)``
+    when ``HEAD`` omitted ``Content-Length``) against ``prior_years_meta`` or completed HTTP 200
+    ``CentralRawArchiveStore`` capture receipts.
     """
-    sha = entry.get("sha256") or entry.get("response_sha256")
+    raw_shas = [entry.get(key) for key in ("sha256", "response_sha256") if entry.get(key) is not None]
     size = _entry_size(entry)
     observed_at = str(entry.get("observed_at") or datetime.now(UTC).isoformat())
     if size is not None and size <= 0:
         return None
-    if isinstance(sha, str) and isinstance(size, int):
+    if raw_shas:
+        if len(raw_shas) == 2 and raw_shas[0] != raw_shas[1]:
+            return None
+        sha = raw_shas[0]
+        if not isinstance(sha, str):
+            return None
         return _match_verified_local_blob(store, sha, size, observed_at)
 
     url = str(entry.get("url") or entry.get("request_url") or "")
@@ -428,7 +443,7 @@ def _find_local_raw_match(
     if len(prior_matches) > 1:
         return None
 
-    # 2. Scan CentralRawArchiveStore acquisition receipts for an unambiguous verified match.
+    # 2. Scan CentralRawArchiveStore acquisition receipts for an unambiguous completed HTTP 200 capture match.
     acquisitions_dir = store.root / "acquisitions" / "sha256"
     if not acquisitions_dir.is_dir():
         return None
@@ -445,6 +460,18 @@ def _find_local_raw_match(
         receipt = doc.get("receipt")
         if not isinstance(receipt, Mapping):
             continue
+        if (
+            receipt.get("event") != "capture"
+            or receipt.get("status_code") != 200
+            or receipt.get("response_complete") is not True
+            or receipt.get("source_validation") == "refused"
+            or str(receipt.get("stage", "")).endswith(":refused")
+        ):
+            continue
+        raw_encoding = receipt.get("content_encoding")
+        if raw_encoding is not None:
+            if not isinstance(raw_encoding, str) or (raw_encoding.strip().lower() or "identity") != "identity":
+                continue
         urls = {
             receipt.get(key)
             for key in ("requested_url", "resolved_url", "source_url", "original_location")
@@ -476,14 +503,26 @@ def _validate_manifest_expected_size(
 ) -> int | None:
     from spicy_docs.sources import irs_form990 as source
 
-    expected_size = _entry_size(entry)
-    if expected_size is None:
+    sizes: list[int] = []
+    for key in ("byte_size", "content_length"):
+        val = entry.get(key)
+        if val is not None:
+            if type(val) is not int:
+                raise source.IRS990Error(
+                    f"IRS {kind} manifest {key} must be an integer, got {val!r} for {url}"
+                )
+            if not 0 < val <= bound:
+                raise source.IRS990Error(
+                    f"IRS {kind} manifest {key} {val} is outside allowed bound (1..{bound}) for {url}"
+                )
+            sizes.append(val)
+    if not sizes:
         return None
-    if not 0 < expected_size <= bound:
+    if len(sizes) == 2 and sizes[0] != sizes[1]:
         raise source.IRS990Error(
-            f"IRS {kind} manifest size {expected_size} is outside allowed bound (1..{bound}) for {url}"
+            f"IRS {kind} manifest byte_size ({sizes[0]}) disagrees with content_length ({sizes[1]}) for {url}"
         )
-    return expected_size
+    return sizes[0]
 
 
 def _check_response_content_length(response, *, bound: int, kind: str, url: str) -> None:
@@ -560,7 +599,13 @@ def _stream_download_full_index(
                 raise source.IRS990Error(f"IRS index GET returned HTTP {response.status_code} for {url}")
             _check_response_content_length(response, bound=source.MAX_INDEX_BYTES, kind="index", url=url)
             raw_actual_etag = response.headers.get("etag")
-            actual_etag = raw_actual_etag.strip() if isinstance(raw_actual_etag, str) and raw_actual_etag.strip() else None
+            actual_etag = (
+                raw_actual_etag.strip() if isinstance(raw_actual_etag, str) and raw_actual_etag.strip() else None
+            )
+            if expected_size is None and expected_etag and not actual_etag:
+                raise source.IRS990Error(
+                    f"IRS index GET omitted ETag when manifest has no Content-Length for {url}"
+                )
             if expected_etag and actual_etag and actual_etag != expected_etag:
                 raise source.IRS990Error(
                     f"IRS index ETag changed for {url}: expected {expected_etag!r}, got {actual_etag!r}"
@@ -626,37 +671,49 @@ def _stream_download_hash_only_zip(
     digest = hashlib.sha256()
     byte_size = 0
     actual_etag: str | None = None
-    with httpx.Client(headers=headers, timeout=600, follow_redirects=False, transport=retained) as client:
-        with client.stream("GET", url) as response:
-            _check_http_access(response.status_code, url)
-            if response.status_code != 200:
-                raise source.IRS990Error(f"IRS archive GET returned HTTP {response.status_code} for {url}")
-            _check_response_content_length(response, bound=source.MAX_ARCHIVE_BYTES, kind="archive", url=url)
-            raw_actual_etag = response.headers.get("etag")
-            actual_etag = raw_actual_etag.strip() if isinstance(raw_actual_etag, str) and raw_actual_etag.strip() else None
-            if expected_etag and actual_etag and actual_etag != expected_etag:
-                raise source.IRS990Error(
-                    f"IRS archive ETag changed for {url}: expected {expected_etag!r}, got {actual_etag!r}"
+    try:
+        with httpx.Client(headers=headers, timeout=600, follow_redirects=False, transport=retained) as client:
+            with client.stream("GET", url) as response:
+                _check_http_access(response.status_code, url)
+                if response.status_code != 200:
+                    raise source.IRS990Error(f"IRS archive GET returned HTTP {response.status_code} for {url}")
+                _check_response_content_length(response, bound=source.MAX_ARCHIVE_BYTES, kind="archive", url=url)
+                raw_actual_etag = response.headers.get("etag")
+                actual_etag = (
+                    raw_actual_etag.strip() if isinstance(raw_actual_etag, str) and raw_actual_etag.strip() else None
                 )
-            with dest_path.open("wb") as sink:
-                for chunk in response.iter_bytes(_CHUNK_BYTES):
-                    byte_size += len(chunk)
-                    if byte_size > source.MAX_ARCHIVE_BYTES:
-                        raise source.IRS990Error(
-                            f"IRS archive stream exceeded bound {source.MAX_ARCHIVE_BYTES} for {url}"
-                        )
-                    digest.update(chunk)
-                    sink.write(chunk)
+                if expected_size is None and expected_etag and not actual_etag:
+                    raise source.IRS990Error(
+                        f"IRS archive GET omitted ETag when manifest has no Content-Length for {url}"
+                    )
+                if expected_etag and actual_etag and actual_etag != expected_etag:
+                    raise source.IRS990Error(
+                        f"IRS archive ETag changed for {url}: expected {expected_etag!r}, got {actual_etag!r}"
+                    )
+                with dest_path.open("wb") as sink:
+                    for chunk in response.iter_bytes(_CHUNK_BYTES):
+                        byte_size += len(chunk)
+                        if byte_size > source.MAX_ARCHIVE_BYTES:
+                            raise source.IRS990Error(
+                                f"IRS archive stream exceeded bound {source.MAX_ARCHIVE_BYTES} for {url}"
+                            )
+                        digest.update(chunk)
+                        sink.write(chunk)
 
-    if byte_size <= 0:
-        raise source.IRS990Error(f"IRS archive GET returned empty body for {url}")
-    sha256 = "sha256:" + digest.hexdigest()
-    if expected_size is not None and byte_size != expected_size:
-        raise source.IRS990Error(f"IRS archive size differs from manifest for {url}: {byte_size} != {expected_size}")
+        if byte_size <= 0:
+            raise source.IRS990Error(f"IRS archive GET returned empty body for {url}")
+        sha256 = "sha256:" + digest.hexdigest()
+        if expected_size is not None and byte_size != expected_size:
+            raise source.IRS990Error(
+                f"IRS archive size differs from manifest for {url}: {byte_size} != {expected_size}"
+            )
 
-    receipt = _latest_capture_event(evidence, stage="irs-form990-archive", url=url)
-    if receipt["sha256"] != sha256 or receipt["byte_size"] != byte_size:
-        raise source.IRS990Error(f"IRS archive receipt digest differs from streamed bytes for {url}")
+        receipt = _latest_capture_event(evidence, stage="irs-form990-archive", url=url)
+        if receipt["sha256"] != sha256 or receipt["byte_size"] != byte_size:
+            raise source.IRS990Error(f"IRS archive receipt digest differs from streamed bytes for {url}")
+    except BaseException:
+        dest_path.unlink(missing_ok=True)
+        raise
 
     return {
         "request_url": url,
@@ -857,12 +914,13 @@ def sync_build(
                 )
                 if saved_idx["sha256"] != index_sha:
                     raise ValueError(f"IRS retained index digest differs for {index_url}")
+                index_etag = _entry_etag(index_entry)
                 index_descriptor = {
                     "request_url": index_url,
                     "response_sha256": index_sha,
                     "byte_size": index_size,
                     "observed_at": index_obs,
-                    **({"etag": index_entry["etag"]} if index_entry.get("etag") else {}),
+                    **({"etag": index_etag} if index_etag else {}),
                 }
             else:
                 if offline:
@@ -927,12 +985,13 @@ def sync_build(
                                 )
                                 if saved_zip["sha256"] != zip_sha:
                                     raise ValueError(f"IRS retained archive digest differs for {zip_url}")
+                                archive_etag = _entry_etag(archive_entry)
                                 archive_descriptor = {
                                     "request_url": zip_url,
                                     "response_sha256": zip_sha,
                                     "byte_size": zip_size,
                                     "observed_at": zip_obs,
-                                    **({"etag": archive_entry["etag"]} if archive_entry.get("etag") else {}),
+                                    **({"etag": archive_etag} if archive_etag else {}),
                                 }
                                 stream_path = zip_path
                                 evidence_mode = "hash_only_local_reuse"

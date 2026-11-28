@@ -6,7 +6,7 @@
 
 Multi-year IRS Form 990 nonprofit return headers, Part I financial totals, and Part VIII/IX reconciliations partitioned by submission_year.
 
-**Coverage.** Window. Multi-year Form 990 streaming population across official IRS TEOS annual indexes and bulk XML archives for visually qualified schema cohorts (2020v4.* through 2025v4.*), partitioned by submission_year. Form 990-EZ, Form 990-PF, Form 990-T, and separate non-XML Form 990-N e-Postcard filings are excluded from financial interpretation (with exact per-year exclusion counts retained in the build population summary). Political organization Forms 8871/8872 live separately in irs-527 and are never conflated here. No donor completeness claim. *(measured 2026-11-28)*
+**Coverage.** Window. Multi-year Form 990 streaming population across official IRS TEOS annual indexes and bulk XML archives for visually qualified schema cohorts (2016v3.* through 2025v4.*), partitioned by submission_year. Form 990-EZ, Form 990-PF, Form 990-T, and separate non-XML Form 990-N e-Postcard filings are excluded from financial interpretation (with exact per-year exclusion counts retained in the build population summary). Political organization Forms 8871/8872 live separately in irs-527 and are never conflated here. No donor completeness claim. *(measured 2026-11-28)*
 
 - **Parquet file:** `irs990_filings.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -21,7 +21,7 @@ Multi-year IRS Form 990 nonprofit return headers, Part I financial totals, and P
 | `return_id` | `VARCHAR` | Literal index RETURN_ID. Distinct from OBJECT_ID, EIN and DLN. |
 | `tax_period` | `VARCHAR` | Literal six-character TAX_PERIOD from index, reconciled to XML tax period end month. |
 | `return_type` | `VARCHAR` | Literal index and XML return type. Financial interpretation supports 990 only; 990EZ, 990PF, 990T and separate 990-N are excluded. |
-| `return_version` | `VARCHAR` | Literal XML returnVersion. Only visually qualified Form 990 schema cohorts (2020v4.* through 2025v4.*) are interpreted; unknown versions are quarantined and fail the build above 0.1%. |
+| `return_version` | `VARCHAR` | Literal XML returnVersion. Only visually qualified Form 990 schema cohorts (2016v3.* through 2025v4.*) are interpreted; unknown versions are quarantined and fail the build above 0.1%. |
 | `tax_year` | `VARCHAR` | Literal XML TaxYr; missing remains NULL. |
 | `tax_period_begin` | `VARCHAR` | Literal XML TaxPeriodBeginDt; missing remains NULL. |
 | `tax_period_end` | `VARCHAR` | Literal XML TaxPeriodEndDt, checked against the annual index tax period. |
