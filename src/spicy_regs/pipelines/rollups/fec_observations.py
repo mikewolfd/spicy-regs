@@ -9,7 +9,7 @@ import pyarrow.parquet as pq
 
 from cyclopts import App
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline
+from spicy_regs.pipelines.rollups.base import RollupPipeline, file_scope_digest
 from spicy_regs.native_types import described_schema
 from spicy_regs.transforms.fec_identity_context_fields import normalize_record
 from spicy_regs.transforms.fec_identity_receipts import dataset_policy
@@ -30,9 +30,27 @@ class FecObservationsRollup(RollupPipeline):
             for key in OUTPUTS
         }
 
-    def __init__(self, *, manifest: Path, output_dir: Path | None = None, skip_upload: bool = True):
-        super().__init__(output_dir=output_dir, skip_upload=skip_upload)
+    def __init__(
+        self,
+        *,
+        manifest: Path,
+        output_dir: Path | None = None,
+        skip_upload: bool = True,
+        resume: bool = False,
+        require_resume_candidate: bool = False,
+    ):
+        super().__init__(
+            output_dir=output_dir,
+            skip_upload=skip_upload,
+            resume=resume,
+            require_resume_candidate=require_resume_candidate,
+        )
         self.manifest = manifest
+
+    def invocation_scope(self) -> dict:
+        scope = super().invocation_scope()
+        scope["fec_observations"] = {"manifest_sha256": file_scope_digest(self.manifest)}
+        return scope
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         # A selection names where its builder's code lived (a git+file: implementation id), so its published copy
@@ -79,9 +97,17 @@ app = App(help=__doc__)
 
 
 @app.default
-def main(*, manifest: Path, output_dir: Path | None = None, skip_upload: bool = True) -> None:
+def main(
+    *,
+    manifest: Path,
+    output_dir: Path | None = None,
+    skip_upload: bool = True,
+    resume: bool = False,
+) -> None:
     """Read explicit input selection; write companions, scopes and relationships."""
-    FecObservationsRollup(manifest=manifest, output_dir=output_dir, skip_upload=skip_upload).run()
+    FecObservationsRollup(
+        manifest=manifest, output_dir=output_dir, skip_upload=skip_upload, resume=resume
+    ).run()
 
 
 if __name__ == "__main__":

@@ -223,6 +223,25 @@ on:
         required: false
         default: ''
         type: string
+      resume_run_id:
+        description: 'Optional earlier workflow run ID whose retained generation candidate should resume'
+        required: false
+        default: ''
+        type: string
+      resume_run_attempt:
+        description: 'Optional attempt number of resume_run_id (blank uses 1 for explicit run ID, or previous attempt on re-run)'
+        required: false
+        default: ''
+        type: string
+      resume_mode:
+        description: 'Resume retained generation candidates before rebuilding: auto or off'
+        required: false
+        default: 'auto'
+        type: string
+
+permissions:
+  contents: read
+  actions: read
 
 jobs:
   rollup:
@@ -275,6 +294,249 @@ jobs:
               'inputs': scope,
           }
           Path('output/invocation.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          PY
+
+      - name: Resolve retained candidate artifacts for retry
+        id: resume_lookup
+        if: inputs.resume_mode != 'off' && (inputs.resume_run_id != '' || github.run_attempt != '1')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          COMMAND: ${{ inputs.command }}
+          RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+          RESUME_RUN_ATTEMPT: ${{ inputs.resume_run_attempt }}
+          RESUME_MODE: ${{ inputs.resume_mode }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          mode = os.environ.get('RESUME_MODE', 'auto').strip() or 'auto'
+          if mode not in {'auto', 'off'}:
+              raise SystemExit(f'Invalid resume_mode: {mode!r}; expected auto or off')
+
+          explicit_run = os.environ.get('RESUME_RUN_ID', '').strip()
+          explicit_attempt = os.environ.get('RESUME_RUN_ATTEMPT', '').strip()
+          explicit = bool(explicit_run)
+          run_id = explicit_run or os.environ['GITHUB_RUN_ID'].strip()
+          if explicit_attempt:
+              attempt = explicit_attempt
+          elif explicit:
+              attempt = '1'
+          else:
+              attempt = str(int(os.environ['GITHUB_RUN_ATTEMPT'].strip()) - 1)
+
+          if not (run_id.isascii() and run_id.isdigit() and int(run_id) >= 1):
+              raise SystemExit(f'Invalid resume run ID: {run_id!r}')
+          if not (attempt.isascii() and attempt.isdigit() and int(attempt) >= 1):
+              raise SystemExit(f'Invalid resume run attempt: {attempt!r}')
+
+          command = os.environ['COMMAND'].strip()
+          repo = os.environ['GITHUB_REPOSITORY'].strip()
+          token = os.environ['GH_TOKEN'].strip()
+          output_name = f'rollup-output-{command}-{run_id}-{attempt}'
+          audit_name = f'rollup-audit-{command}-{run_id}-{attempt}'
+
+          headers = {
+              'Authorization': f'Bearer {token}',
+              'Accept': 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+              'User-Agent': 'spicy-regs-rollup-resume/1.0',
+          }
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                  return None
+
+          no_redirect = urllib.request.build_opener(NoRedirect)
+
+          def api_json(path: str) -> dict:
+              req = urllib.request.Request(f'https://api.github.com{path}', headers=headers)
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  return json.loads(resp.read().decode('utf-8'))
+
+          def artifact_ready(artifact_id: int) -> bool:
+              meta = api_json(f'/repos/{repo}/actions/artifacts/{artifact_id}')
+              if meta.get('expired') is not False:
+                  return False
+              req = urllib.request.Request(
+                  f'https://api.github.com/repos/{repo}/actions/artifacts/{artifact_id}/zip',
+                  headers=headers,
+              )
+              try:
+                  with no_redirect.open(req, timeout=30) as resp:
+                      return resp.status == 302
+              except urllib.error.HTTPError as err:
+                  return err.code == 302
+
+          def find_artifacts() -> tuple[dict | None, dict | None]:
+              out_art = None
+              aud_art = None
+              page = 1
+              while True:
+                  data = api_json(f'/repos/{repo}/actions/runs/{run_id}/artifacts?per_page=100&page={page}')
+                  items = data.get('artifacts', [])
+                  for item in items:
+                      if item.get('expired') is not False:
+                          continue
+                      if item.get('name') == output_name and out_art is None:
+                          out_art = item
+                      elif item.get('name') == audit_name and aud_art is None:
+                          aud_art = item
+                  if len(items) < 100 or (out_art is not None and aud_art is not None):
+                      break
+                  page += 1
+              return out_art, aud_art
+
+          delays = (2, 4, 6, 8, 10)
+          has_output = False
+          has_audit = False
+          for idx in range(len(delays) + 1):
+              out_art, aud_art = find_artifacts()
+              out_ok = out_art is not None and artifact_ready(int(out_art['id']))
+              aud_ok = aud_art is not None and artifact_ready(int(aud_art['id']))
+              if out_ok and (aud_art is None or aud_ok):
+                  has_output = True
+                  has_audit = aud_ok
+                  break
+              if idx < len(delays):
+                  time.sleep(delays[idx])
+
+          if explicit and not has_output:
+              raise SystemExit(
+                  f'Explicit resume requested from run {run_id} attempt {attempt}, '
+                  f'but artifact {output_name!r} was not found or not ready for download'
+              )
+          if not has_output:
+              print(
+                  f'No ready retained artifact {output_name!r} found for run {run_id} attempt {attempt}; '
+                  'proceeding with fresh build',
+                  file=sys.stderr,
+              )
+
+          with Path(os.environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as stream:
+              stream.write(f'source_run_id={run_id}\n')
+              stream.write(f'source_attempt={attempt}\n')
+              stream.write(f'has_output={"true" if has_output else "false"}\n')
+              stream.write(f'has_audit={"true" if has_audit else "false"}\n')
+              stream.write(f'output_artifact_name={output_name}\n')
+              stream.write(f'audit_artifact_name={audit_name}\n')
+              stream.write(f'explicit_resume={"true" if explicit else "false"}\n')
+          PY
+
+      - name: Download prior rollup output artifact
+        if: steps.resume_lookup.outputs.has_output == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.resume_lookup.outputs.output_artifact_name }}
+          path: ${{ runner.temp }}/restored-output
+          run-id: ${{ steps.resume_lookup.outputs.source_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Download prior rollup audit artifact
+        if: steps.resume_lookup.outputs.has_output == 'true' && steps.resume_lookup.outputs.has_audit == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.resume_lookup.outputs.audit_artifact_name }}
+          path: ${{ runner.temp }}/restored-audit
+          run-id: ${{ steps.resume_lookup.outputs.source_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Stage retained generation candidate into output
+        if: steps.resume_lookup.outputs.has_output == 'true'
+        env:
+          RUNNER_TEMP: ${{ runner.temp }}
+          SOURCE_RUN_ID: ${{ steps.resume_lookup.outputs.source_run_id }}
+          SOURCE_ATTEMPT: ${{ steps.resume_lookup.outputs.source_attempt }}
+          OUTPUT_ARTIFACT_NAME: ${{ steps.resume_lookup.outputs.output_artifact_name }}
+          AUDIT_ARTIFACT_NAME: ${{ steps.resume_lookup.outputs.audit_artifact_name }}
+          EXPLICIT_RESUME: ${{ steps.resume_lookup.outputs.explicit_resume }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import shutil
+          import sys
+          from pathlib import Path
+
+          temp_root = Path(os.environ['RUNNER_TEMP'])
+          restored_output = temp_root / 'restored-output'
+          restored_audit = temp_root / 'restored-audit'
+          output_root = Path('output')
+          explicit = os.environ.get('EXPLICIT_RESUME') == 'true'
+
+          def refuse(message: str) -> None:
+              if explicit:
+                  raise SystemExit(f'Refusing explicit resume: {message}')
+              print(f'Skipping automatic candidate restore ({message}); running fresh build', file=sys.stderr)
+              raise SystemExit(0)
+
+          current_inv_path = output_root / 'invocation.json'
+          current_inv = json.loads(current_inv_path.read_text(encoding='utf-8'))
+
+          prior_inv_path = restored_audit / 'invocation.json'
+          if not prior_inv_path.is_file():
+              prior_inv_path = restored_output / 'invocation.json'
+          if not prior_inv_path.is_file():
+              refuse('restored artifacts lack prior invocation.json')
+          prior_inv = json.loads(prior_inv_path.read_text(encoding='utf-8'))
+
+          if prior_inv.get('inputs', {}).get('command') != current_inv.get('inputs', {}).get('command'):
+              refuse('command differs from prior invocation')
+          if prior_inv.get('code_revision') != current_inv.get('code_revision'):
+              refuse('code_revision differs from prior invocation')
+
+          operational = {
+              'skip_upload',
+              'timeout_minutes',
+              'free_disk',
+              'producer_ref',
+              'resume_run_id',
+              'resume_run_attempt',
+              'resume_mode',
+          }
+          prior_scope = {k: v for k, v in prior_inv.get('inputs', {}).items() if k not in operational}
+          current_scope = {k: v for k, v in current_inv.get('inputs', {}).items() if k not in operational}
+          if prior_scope != current_scope:
+              refuse('non-operational workflow inputs differ from prior invocation')
+
+          candidates_root = restored_output / 'resume-candidates'
+          if not candidates_root.is_dir() or not list(candidates_root.rglob('*.json')):
+              refuse('prior artifact contains no retained generation candidate binding')
+
+          def copy_tree(src_root: Path, rel_name: str) -> None:
+              src = src_root / rel_name
+              if not src.is_dir() or src.is_symlink():
+                  return
+              dst = output_root / rel_name
+              shutil.copytree(src, dst, dirs_exist_ok=True, symlinks=False)
+
+          for name in ('generations', 'generation-inputs', 'resume-candidates'):
+              copy_tree(restored_output, name)
+          for name in ('source-evidence', 'raw-source-originals'):
+              copy_tree(restored_audit, name)
+
+          current_inv['resumed_from'] = {
+              'run_id': os.environ['SOURCE_RUN_ID'],
+              'run_attempt': os.environ['SOURCE_ATTEMPT'],
+              'output_artifact': os.environ['OUTPUT_ARTIFACT_NAME'],
+              'audit_artifact': os.environ['AUDIT_ARTIFACT_NAME'],
+          }
+          tmp_inv = output_root / '.invocation.json.tmp'
+          tmp_inv.write_text(json.dumps(current_inv, indent=2) + '\n', encoding='utf-8')
+          tmp_inv.replace(current_inv_path)
+
+          with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as stream:
+              stream.write('SPICY_REGS_RESUME_GENERATION=true\n')
+              if explicit:
+                  stream.write('SPICY_REGS_RESUME_REQUIRE=true\n')
           PY
 
       - name: Prepare explicit retained FEC inputs

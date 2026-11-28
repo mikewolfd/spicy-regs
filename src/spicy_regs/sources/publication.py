@@ -1095,6 +1095,16 @@ def snapshot(base_url: str) -> Iterator[dict]:
         _snapshot.reset(token)
 
 
+@contextmanager
+def with_snapshot(base_url: str, index: dict) -> Iterator[dict]:
+    """Bind all member reads for ``base_url`` to an already-loaded authoritative index."""
+    token = _snapshot.set((base_url.rstrip("/"), index))
+    try:
+        yield index
+    finally:
+        _snapshot.reset(token)
+
+
 def parquet_tables(index: Mapping) -> tuple[str, ...]:
     """Active Parquet table names, independent of any consumer's supported-table list."""
     return tuple(sorted({key.removesuffix(".parquet")
@@ -1500,19 +1510,29 @@ def _get_bounded(client, bucket: str, key: str) -> tuple[bytes, str] | None:
     return raw, response["ETag"]
 
 
-def _stored_index(client, bucket: str) -> tuple[dict, str | None]:
-    """Read the stored publication index and its conditional-write token.
+def _stored_index_with_raw(client, bucket: str) -> tuple[dict, str | None, bytes | None]:
+    """Read the stored publication index, its conditional-write token, and exact wire bytes.
 
     While the index is absent it is empty with no token, so the first write creates it. A response without an
     ETag refuses.
     """
     stored = _get_bounded(client, bucket, INDEX_V2_KEY)
     if stored is None:
-        return {**empty_index(), "version": 2}, None
+        return {**empty_index(), "version": 2}, None, None
     raw, etag = stored
     if not isinstance(etag, str) or not etag:
         raise PublicationError("Publication index has no conditional-write token")
-    return {**parse_index(raw), "version": 2}, etag
+    return {**parse_index(raw), "version": 2}, etag, raw
+
+
+def _stored_index(client, bucket: str) -> tuple[dict, str | None]:
+    """Read the stored publication index and its conditional-write token.
+
+    While the index is absent it is empty with no token, so the first write creates it. A response without an
+    ETag refuses.
+    """
+    index, etag, _ = _stored_index_with_raw(client, bucket)
+    return index, etag
 
 
 def _put_pointer(client, bucket: str, key: str, raw: bytes, etag: str | None) -> bool:
@@ -1826,7 +1846,17 @@ def publish_evidence(client, bucket: str, path: Path, artifact, *, archive_root:
         logger.info("Evidence blobs: {}", ", ".join(
             f"{count:,} {how or 'refused'}" for how, count in Counter(shown.values()).most_common()))
     for key in metadata:
-        _put_immutable(client, bucket, f"{prefix}/{key}", path / key)
+        remote = f"{prefix}/{key}"
+        expected_size = (path / key).stat().st_size
+        stored = _head(client, bucket, remote)
+        if stored is not None:
+            if stored.get("ContentLength") != expected_size:
+                raise PublicationError(
+                    f"Stored evidence metadata {remote} has ContentLength "
+                    f"{stored.get('ContentLength')}, expected {expected_size}"
+                )
+            continue
+        _put_immutable(client, bucket, remote, path / key)
     admit_artifact(
         _EvidenceMembers(client, bucket, prefix, local, set(blobs), {key for key, how in shown.items() if how}),
         expected_pin=artifact.pin,
@@ -2118,6 +2148,15 @@ def require_live_receipt_pins(index: dict, datasets) -> None:
             _require_receipt_archive_pins(owner[0], owner[1]["artifactDigest"], [name])
 
 
+def _member_byte_size(source, key: str) -> int:
+    """Measure exact byte size of an artifact root/manifest member from ``source``."""
+    with source.open(key) as stream:
+        size = 0
+        while chunk := stream.read(_READ_BACK_CHUNK):
+            size += len(chunk)
+        return size
+
+
 def _stage_verified_generation(
     artifact, source, *, upload_member, client, bucket: str, index: dict,
     evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
@@ -2220,15 +2259,29 @@ def _stage_verified_generation(
     }
     prior_prefix = old_family.get("prefix") if old_family is not None else None
     reused = 0
+    already_staged = 0
     current = {member.object_key: (member.sha256, member.byte_size) for member in members}
     for key in sorted(source.keys()):
+        destination_key = f"{prefix}/{key}"
+        stored = _head(client, bucket, destination_key)
+        if stored is not None:
+            expected_size = current[key][1] if key in current else _member_byte_size(source, key)
+            if stored.get("ContentLength") != expected_size:
+                raise PublicationError(
+                    f"Stored generation member {destination_key} has ContentLength "
+                    f"{stored.get('ContentLength')}, expected {expected_size}"
+                )
+            already_staged += 1
+            continue
         if prior_prefix is not None and key in current and prior_members.get(key) == current[key]:
-            _copy_unchanged_member(client, bucket, f"{prior_prefix}/{key}", f"{prefix}/{key}")
+            _copy_unchanged_member(client, bucket, f"{prior_prefix}/{key}", destination_key)
             reused += 1
         else:
             upload_member(prefix, key)
     if reused:
         logger.info("publication: reused {} unchanged member(s) across generation prefixes", reused)
+    if already_staged:
+        logger.info("publication: skipped {} already-staged immutable member(s) under {}", already_staged, prefix)
     # S3 success or caller-supplied metadata is not byte-verification evidence.
     admit_artifact(_S3Members(client, bucket, prefix), expected_pin=artifact.pin)
     # Coverage metadata has its own prefix: table artifacts remain Parquet-only.
@@ -2252,7 +2305,16 @@ def _stage_verified_generation(
             expected_sha, size = "sha256:" + hashlib.sha256(raw).hexdigest(), len(raw)
             def open_body(raw=raw):
                 return BytesIO(raw)
-        _put_immutable_stream(client, bucket, proof_prefix + "/" + name, open_body, size, sha256=expected_sha)
+        proof_key = proof_prefix + "/" + name
+        stored = _head(client, bucket, proof_key)
+        if stored is not None:
+            if stored.get("ContentLength") != size:
+                raise PublicationError(
+                    f"Stored generation input proof {proof_key} has ContentLength "
+                    f"{stored.get('ContentLength')}, expected {size}"
+                )
+        else:
+            _put_immutable_stream(client, bucket, proof_key, open_body, size, sha256=expected_sha)
         with _S3Members(client, bucket, proof_prefix).open(name) as body:
             if _stream_identity(body)["sha256"] != expected_sha:
                 raise PublicationError("Stored generation input proof differs from its exact inputs")
@@ -2289,12 +2351,35 @@ def _publish_verified_generation(
         # Stamped per attempt, so it is the instant this write moves the pointer. Replaying the generation already
         # current moves nothing, so its entry is kept as stored, with or without an instant.
         current = index["families"].get(family)
-        moved = current if _generation_entry(current) == entry else {**entry, "publishedAt": _instant()}
+        already_current = _generation_entry(current) == entry
+        moved = current if already_current else {**entry, "publishedAt": _instant()}
         updated, raw = _merge_family(index, family, moved)
-        if _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag):
+        try:
+            written = _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag)
+        except Exception as exc:
+            if not already_current:
+                try:
+                    reread, _, reread_raw = _stored_index_with_raw(client, bucket)
+                except Exception:
+                    raise exc from None
+                if reread_raw is not None and _generation_entry(reread["families"].get(family)) == entry:
+                    logger.warning(
+                        "publication: pointer write for {} raised {} after landing; reconciled live {}",
+                        family, type(exc).__name__, INDEX_V2_KEY,
+                    )
+                    return _published(reread, reread_raw, family, local)
+            raise
+        if written:
             return _published(updated, raw, family, local)
         logger.info("publication: pointer moved concurrently; merging {} onto the reread index", family)
-        index, etag = _stored_index(client, bucket)
+        index, etag, reread_raw = _stored_index_with_raw(client, bucket)
+        if reread_raw is not None and _generation_entry(index["families"].get(family)) == entry:
+            logger.warning(
+                "publication: pointer write for {} returned precondition conflict, but live {} already holds "
+                "this generation (lost acknowledgement reconciled)",
+                family, INDEX_V2_KEY,
+            )
+            return _published(index, reread_raw, family, local)
         _assert_family_unchanged(index, prior_index, family, exact=exact_prior)
     raise PublicationError("Publication changed concurrently; retry from a fresh snapshot")
 

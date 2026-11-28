@@ -115,6 +115,13 @@ class AdministrationPolicyRollup(SourceRefreshRollup):
     force_publish: bool = False
     _live_has_etl_receipts: bool = False
 
+    def invocation_scope(self) -> dict:
+        scope = super().invocation_scope()
+        scope["administration_policy"] = {
+            "force_publish": bool(self.force_publish or flag_env("ADMINISTRATION_POLICY_FORCE_PUBLISH"))
+        }
+        return scope
+
     def _prime(self, output_dir: Path, snapshot: Mapping | None = None) -> dict[str, dict]:
         parents = super()._prime(output_dir, snapshot)
         family = (snapshot or {}).get("families", {}).get(self.name, {})
@@ -152,6 +159,12 @@ class TreasuryFiscalRollup(SourceRefreshRollup):
     name = "treasury-fiscal"
     outputs = tuple(f"{table}.parquet" for table in build_treasury_fiscal.SCHEMAS)
     mts_issue_date: str | None = None
+
+    def invocation_scope(self) -> dict:
+        scope = super().invocation_scope()
+        mts_raw = (self.mts_issue_date or getenv("TREASURY_MTS_ISSUE_DATE") or "").strip() or None
+        scope["treasury_fiscal"] = {"mts_issue_date": mts_raw}
+        return scope
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         evidence = self.evidence
@@ -246,6 +259,11 @@ class FecFinancialProfilesRollup(SourceRefreshRollup):
     output = build_fec_financial_profiles.OUTPUT
     #: The one cycle the family holds (``select`` builds from one cycle's pair).
     cycle = 2026
+
+    def invocation_scope(self) -> dict:
+        scope = super().invocation_scope()
+        scope["fec_financial_profiles"] = {"cycle": self.cycle}
+        return scope
 
     def build(self, output_dir: Path) -> Path:
         evidence = self.evidence

@@ -53,6 +53,14 @@ class HeldCitationsRollup(SubjectReceiptRollup):
         self.source_members = {}
         self.input_pins = {}
 
+    def invocation_scope(self) -> dict:
+        scope = super().invocation_scope()
+        scope["held_citations"] = {
+            "selection_sha256": self.selection_sha256,
+            "input_generations": dict(sorted(self.expected.items())),
+        }
+        return scope
+
     def _observe_remote_inputs(self, output_dir, public_url):
         if not public_url:
             raise ValueError("Held citation extraction requires R2_PUBLIC_URL and explicit input generations")
@@ -126,9 +134,17 @@ app = App(help=__doc__)
 
 
 @app.default
-def main(*, selection: Path, output_dir: Path | None = None, skip_upload: bool = True):
+def main(
+    *,
+    selection: Path,
+    output_dir: Path | None = None,
+    skip_upload: bool = True,
+    resume: bool = False,
+):
     load_dotenv()
-    HeldCitationsRollup(selection=selection, output_dir=output_dir, skip_upload=skip_upload).run()
+    HeldCitationsRollup(
+        selection=selection, output_dir=output_dir, skip_upload=skip_upload, resume=resume
+    ).run()
 
 
 if __name__ == "__main__":
