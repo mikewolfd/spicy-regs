@@ -5,19 +5,18 @@ from typing import ClassVar
 
 from cyclopts import App
 
-from spicy_regs.legislative_rollups import LegislativeReceiptRollup, family_policies
+from spicy_regs.legislative_rollups import LegislativeTableRollup
 from spicy_regs.pipelines.rollups.base import file_scope_digest
 from spicy_regs.transforms.native_legal_references import build_native_legal_references
 
 
-class NativeLegalReferencesRollup(LegislativeReceiptRollup):
+class NativeLegalReferencesRollup(LegislativeTableRollup):
     name: ClassVar[str] = "native-legal-references"
     inputs: ClassVar[tuple[str, ...]] = ()
     outputs: ClassVar[tuple[str, ...]] = (
         "native_legal_references.parquet",
         "native_legal_reference_reads.parquet",
     )
-    receipt_policies = family_policies("native_legal_references", "native_legal_reference_reads")
     retain_source_evidence: ClassVar[bool] = True
 
     def __init__(
@@ -54,7 +53,7 @@ class NativeLegalReferencesRollup(LegislativeReceiptRollup):
                 self.manifest, directory, evidence=evidence, download_prior=download_prior
             )
 
-        return self.build_receipts(output_dir, builder)
+        return self.build_tables(output_dir, builder)
 
 
 app = App(help=__doc__)

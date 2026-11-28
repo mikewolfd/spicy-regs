@@ -27,7 +27,8 @@ def test_laws_rollup_runs_native_generation_with_verified_local_prior(tmp_path, 
     LawsRollup(output_dir=first).run()
     [generation] = (first / "generations").iterdir()
     artifact = verify_generation(generation)
-    assert artifact.root["spec"]["etlReceipts"]["generationId"]
+    assert "etlReceipts" not in artifact.root["spec"]
+    assert not (generation / "etl_receipts.parquet").exists()
     # What the read of each law's PLAW established is published beside the row; which reader made it is not.
     published = pq.read_table(first / "laws.parquet")
     assert published.schema.equals(policy("laws").subject_schema)
@@ -82,7 +83,8 @@ def test_senate_rollup_returns_native_subject_and_file_outcomes_in_one_generatio
     senate_expenditures.SenateExpendituresRollup(output_dir=scheduled, skip_upload=True).run()
     [generation] = (scheduled / "generations").iterdir()
     artifact = verify_generation(generation)
-    assert artifact.root["spec"]["etlReceipts"]["generationId"]
+    assert "etlReceipts" not in artifact.root["spec"]
+    assert not (generation / "etl_receipts.parquet").exists()
     assert "senate_expenditures_document_file_outcomes.parquet" in artifact.root["spec"]["tables"]
     assert pq.read_table(scheduled / "senate_expenditures.parquet").equals(table)
 

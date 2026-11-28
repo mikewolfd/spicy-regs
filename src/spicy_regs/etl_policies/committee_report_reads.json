@@ -7,5 +7,6 @@
     "raw_source_row"
   ],
   "receipt_only": true,
-  "nullable_identity_fields": []
+  "nullable_identity_fields": [],
+  "receipts_retired": true
 }

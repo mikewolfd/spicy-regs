@@ -994,11 +994,11 @@ def test_the_rollup_fails_after_publishing_only_when_a_collection_read_nothing(t
                                                                                nothing_read, fails):
     from spicy_regs.pipelines.rollups.committee_reports import CommitteeReportsRollup
 
-    def build_receipts(self, output_dir, builder, **kwargs):
+    def build_tables(self, output_dir, builder, **kwargs):
         kwargs["coverage"].update(pending=57, deferred=56, nothing_read=nothing_read)
         return ()
 
-    monkeypatch.setattr(CommitteeReportsRollup, "build_receipts", build_receipts)
+    monkeypatch.setattr(CommitteeReportsRollup, "build_tables", build_tables)
     monkeypatch.delenv("COMMITTEE_REPORTS_REREAD", raising=False)
     rollup = CommitteeReportsRollup(output_dir=tmp_path)
     rollup.build(tmp_path)

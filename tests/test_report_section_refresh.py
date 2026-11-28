@@ -259,8 +259,8 @@ def test_the_rollup_reads_its_reread_list_from_the_environment(tmp_path, monkeyp
         monkeypatch.setenv("COMMITTEE_REPORTS_REREAD", raw)
     calls = []
     monkeypatch.setattr(committee_reports, "build_committee_reports", lambda *args, **kwargs: calls.append(kwargs))
-    # This check concerns environment forwarding; receipt builds are exercised separately.
-    monkeypatch.setattr(committee_reports.CommitteeReportsRollup, "build_receipts",
+    # This check concerns environment forwarding; table builds are exercised separately.
+    monkeypatch.setattr(committee_reports.CommitteeReportsRollup, "build_tables",
                         lambda self, directory, builder, **kwargs: builder(directory, **kwargs))
     committee_reports.CommitteeReportsRollup().build(tmp_path)
     assert [call["reread"] for call in calls] == [expected]

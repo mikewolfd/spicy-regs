@@ -289,6 +289,8 @@ def _identity_value(column: str, row: Mapping[str, Any]) -> str | None:
     if column in {"text_sha256", "input_sha256"}:
         return body_version_id(value)
     if column == "link_source":
+        if isinstance(value, str) and re.fullmatch(r"hearing-link:[0-9a-f]{64}", value):
+            return value
         return _key("hearing-link", [row.get("package_id"), row.get("bill_id"), value])
     if column == "equivalent_xml_source":
         if value is None and row.get("equivalent_xml_version_code") is None:

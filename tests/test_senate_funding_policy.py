@@ -154,12 +154,16 @@ def test_retained_integer_bundle_restores_exact_raw_then_builds_new_strings(tmp_
 
 
 def test_selected_old_publication_stays_integer_and_cannot_claim_current_schema(tmp_path, monkeypatch, earlier_bundle):
+    from spicy_regs import subject_catalog
     from spicy_regs.etl_policy_registry import installed_policies
     from spicy_regs.fec_receipt_adapter import ReceiptAdapter
     from spicy_regs.generations import build_generation
     from spicy_regs.local_data import local_selection
     from spicy_regs.selected_generations import SelectedDataset, remember_selection
 
+    # Lift the retired marker for this test of historical integer-schema receipt admission.
+    retired = subject_catalog.retired_receipt_datasets()
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired - {DATASET})
     bundle, raw, _ = earlier_bundle
     subject, receipts = bundle / f"{DATASET}.parquet", bundle / "etl_receipts.parquet"
     current = installed_policies()[DATASET]
