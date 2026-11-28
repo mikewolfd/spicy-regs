@@ -433,8 +433,11 @@ def test_pipeline_build_publish_dry_run_mcp_and_failure_sealing(tmp_path, monkey
 
 
 def test_registration_parity_and_receipts_free_invariants():
+    from spicy_regs import etl_policy_registry
+
     # No etl_policies JSON for this receipts-free local family.
-    assert not (REPO_ROOT / "etl_policies" / f"{module.TABLE}.json").exists()
+    assert not (REPO_ROOT / "src" / "spicy_regs" / "etl_policies" / f"{module.TABLE}.json").exists()
+    assert module.TABLE not in etl_policy_registry.installed_policies()
 
     # local_publication registration
     assert module.FAMILY in local_publication.LOCAL_FAMILIES
@@ -471,10 +474,15 @@ def test_registration_parity_and_receipts_free_invariants():
 
     # managed_only prevents bare legacy fallback when not in publication index
     with pytest.MonkeyPatch.context() as mp:
+        from spicy_regs.sources import publication as pub
+        from tests.test_generation_mcp import connection_fixture
+
         mp.setattr(mcp_server, "DATA_DIR", None)
-        assert module.TABLE in mcp_server.TABLES
-        # Check source directly via bare-file refusal using empty index
-        # (ensures managed_only set contains courtlistener_bankruptcy_dockets)
-        src_text = (REPO_ROOT / "src/spicy_regs/mcp_server.py").read_text()
-        managed_block = src_text.split("managed_only = {", 1)[1].split("}", 1)[0]
-        assert f'"{module.TABLE}"' in managed_block
+        built = connection_fixture(mp, pub.empty_index(), {}, tables=(module.TABLE,))
+        mcp_server._build_connection()
+        (con,) = built
+        try:
+            assert con.seen == []
+            assert module.TABLE not in mcp_server._available_tables(con.cursor())
+        finally:
+            con.close()
