@@ -208,6 +208,35 @@ def test_same_workspace_cutover_drops_orphaned_shared_receipt_only_pin(tmp_path,
     assert set(other_selected.native) == {"laws", "budget_volumes", "legislative_document_file_states"}
     assert other_selected.native["legislative_document_file_states"].receipts == other_receipts
 
+    # An empty subject table or independently readable checkpoint on the shared receipt still owns it;
+    # only once that last owner moves off the receipt is the catalog-declared shared log dropped.
+    partial_root = tmp_path / "workspace-empty-owner"
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: frozenset())
+    mixed_bundle = tmp_path / "mixed-old"
+    write_legislative_outputs([old_law], mixed_bundle, generation_id="mixed-old")
+    mixed_laws, mixed_receipts = mixed_bundle / "laws.parquet", mixed_bundle / "etl_receipts.parquet"
+    remember_selection(partial_root, [
+        SelectedDataset("laws", (mixed_laws,), mixed_receipts, "mixed-old"),
+        SelectedDataset("members", (), mixed_receipts, "mixed-old"),
+        SelectedDataset("bill_family_archives", (), mixed_receipts, "mixed-old"),
+        SelectedDataset("legislative_document_file_states", (), mixed_receipts, "mixed-old"),
+    ])
+    monkeypatch.undo()
+    partial_gen = partial_root / "generations" / "laws-receipt-free"
+    partial_art = build_generation(partial_gen, family="laws", files=[new_law], expected_keys=["laws.parquet"])
+    remember_generation(partial_root, partial_gen, partial_art)
+    # laws moved off, but empty members + bill_family_archives still own mixed_receipts, so all stay pinned.
+    after_laws = SelectedInputs(partial_root, tmp_path / "read-1", public_url="").local
+    assert set(after_laws) == {"laws", "members", "bill_family_archives", "legislative_document_file_states"}
+    # Moving empty members off still leaves bill_family_archives owning mixed_receipts.
+    remember_selection(partial_root, [SelectedDataset("members", (new_law,), None, None)])
+    after_members = SelectedInputs(partial_root, tmp_path / "read-2", public_url="").local
+    assert set(after_members) == {"laws", "members", "bill_family_archives", "legislative_document_file_states"}
+    # Once the final owner (bill_family_archives) moves off mixed_receipts, the shared log is pruned cleanly.
+    remember_selection(partial_root, [SelectedDataset("bill_family_archives", (new_law,), None, None)])
+    after_final = SelectedInputs(partial_root, tmp_path / "read-3", public_url="").local
+    assert set(after_final) == {"laws", "members", "bill_family_archives"}
+
 
 def test_mcp_captures_multiple_generations_and_scopes_shared_receipts(tmp_path, monkeypatch):
     old = selected_family(tmp_path, monkeypatch)

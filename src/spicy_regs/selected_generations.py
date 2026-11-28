@@ -77,14 +77,17 @@ def remember_selection(root: Path, selections) -> None:
 
 
 def _remember_selection(root, selections, checked, *, removed=()):
+    from spicy_regs.subject_catalog import shared_receipt_logs
+
     directory = Path(root) / ".native-state"
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / "selection.json"
     values = json.loads(target.read_text()) if target.exists() else {}
+    shared_logs = shared_receipt_logs()
     replaced_receipts = set()
     for dataset in removed:
         prior = values.pop(dataset, None)
-        if prior and prior.get("subjects") and prior.get("receipts"):
+        if prior and dataset not in shared_logs and prior.get("receipts"):
             replaced_receipts.add(prior["receipts"]["path"])
 
     def member(path):
@@ -95,7 +98,7 @@ def _remember_selection(root, selections, checked, *, removed=()):
         new_receipts = member(selected.receipts) if selected.receipts is not None else None
         if (
             prior
-            and prior.get("subjects")
+            and selected.dataset not in shared_logs
             and prior.get("receipts")
             and (new_receipts is None or new_receipts["path"] != prior["receipts"]["path"])
         ):
@@ -106,17 +109,17 @@ def _remember_selection(root, selections, checked, *, removed=()):
             "receipts": new_receipts,
         }
     if replaced_receipts:
-        active_subject_receipts = {
+        active_owner_receipts = {
             entry["receipts"]["path"]
-            for entry in values.values()
-            if entry.get("subjects") and entry.get("receipts")
+            for name, entry in values.items()
+            if name not in shared_logs and entry.get("receipts")
         }
-        orphaned = replaced_receipts - active_subject_receipts
+        orphaned = replaced_receipts - active_owner_receipts
         if orphaned:
             for dataset in [
                 name
                 for name, entry in values.items()
-                if not entry.get("subjects")
+                if name in shared_logs
                 and entry.get("receipts")
                 and entry["receipts"]["path"] in orphaned
             ]:
