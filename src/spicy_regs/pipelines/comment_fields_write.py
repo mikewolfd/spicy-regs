@@ -46,11 +46,13 @@ import json
 import secrets
 import shutil
 import time
+from collections.abc import Mapping
 from contextlib import suppress
 from functools import cache
 from os import getenv
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 
 from spicy_regs.duckdb_settings import ExportResources
 from spicy_regs.schemas import COMMENT
@@ -1186,26 +1188,50 @@ def _require_sha256_pin(label: str, value: str) -> str:
     return value
 
 
+def _verify_receipt_member(receipt_root: Path, pinned_files: Mapping[str, Any], path: Path, label: str) -> str:
+    if not path.is_file() or path.is_symlink():
+        raise RuntimeError(f"{label} is missing or invalid relative to the verified recovery receipt")
+    abs_path = path.absolute()
+    if not abs_path.is_relative_to(receipt_root):
+        raise RuntimeError(f"{label} lies outside the verified recovery receipt root")
+    member_key = str(abs_path.relative_to(receipt_root))
+    entry = pinned_files.get(member_key)
+    if not isinstance(entry, dict):
+        raise RuntimeError(f"{label} is absent from the verified recovery receipt")
+    expected_sha = entry.get("sha256")
+    expected_bytes = entry.get("bytes")
+    if not isinstance(expected_sha, str) or type(expected_bytes) is not int:
+        raise RuntimeError(f"{label} has an invalid pin entry in the verified recovery receipt")
+    _require_sha256_pin(f"receipt[{member_key}].sha256", expected_sha)
+    if path.stat().st_size != expected_bytes or _sha256(path) != expected_sha:
+        raise RuntimeError(f"{label} differs from the pinned recovery receipt")
+    return expected_sha
+
+
 def reconcile_pending(
     workdir: Path,
     *,
-    pinned_prepare_sha256: str,
-    pinned_journal_sha256: str,
-    pinned_preimage_sha256: str,
+    receipt_path: Path,
+    receipt_sha256: str,
     resources: ExportResources | None = None,
     con=None,
 ) -> dict:
-    """Reconcile a receipt-pinned pending write journal entry against the live catalog without starting new batches."""
+    """Reconcile a receipt-verified pending write journal entry against the live catalog without starting new batches."""
     if not getenv(iceberg.CATALOG_LOCK_ENV):
         raise RuntimeError(f"write holds the comments catalog: set {iceberg.CATALOG_LOCK_ENV} only while holding the "
                            "lock (docs/comment-fields-fill.md)")
-    _require_sha256_pin("pinned_prepare_sha256", pinned_prepare_sha256)
-    _require_sha256_pin("pinned_journal_sha256", pinned_journal_sha256)
-    _require_sha256_pin("pinned_preimage_sha256", pinned_preimage_sha256)
+    _require_sha256_pin("receipt_sha256", receipt_sha256)
+    receipt_path = Path(receipt_path)
+    if not receipt_path.is_file() or receipt_path.is_symlink() or _sha256(receipt_path) != receipt_sha256:
+        raise RuntimeError("recovery receipt is missing or differs from receipt_sha256")
+    receipt = json.loads(receipt_path.read_text())
+    pinned_files = receipt.get("files") if isinstance(receipt, dict) else None
+    if not isinstance(pinned_files, dict):
+        raise RuntimeError("recovery receipt lacks a valid files map")
+    receipt_root = receipt_path.parent.absolute()
     out = fill_dir(workdir)
     prepare_path = out / "prepare.json"
-    if not prepare_path.is_file() or prepare_path.is_symlink() or _sha256(prepare_path) != pinned_prepare_sha256:
-        raise RuntimeError("prepare.json differs from the pinned recovery receipt")
+    _verify_receipt_member(receipt_root, pinned_files, prepare_path, "prepare.json")
     prepared = json.loads(prepare_path.read_text())
     if _sha256(out / "fill.parquet") != prepared["fill_sha256"]:
         raise RuntimeError("fill.parquet is not the one prepare.json names; prepare again")
@@ -1214,20 +1240,21 @@ def reconcile_pending(
     _prepared_operation(prepared)
     _refuse_committed_failures(workdir)
     journal = _journal(workdir, prepared)
-    if not journal.is_file() or journal.is_symlink() or _sha256(journal) != pinned_journal_sha256:
-        raise RuntimeError(f"{journal.name} differs from the pinned recovery receipt")
+    _verify_receipt_member(receipt_root, pinned_files, journal, journal.name)
     lines = _lines(journal)
     pending = lines[-1] if lines and lines[-1]["state"] == "pending" else None
     if pending is None:
         raise ValueError(f"no pending write to reconcile in {journal.name}")
     if pending.get("prepare_id") != prepared["prepare_id"]:
         raise RuntimeError(f"pending batch {pending.get('batch')} in {journal.name} differs from prepare.json; stop (runbook)")
-    if pending.get("preimage_sha256") != pinned_preimage_sha256:
-        raise RuntimeError("pending preimage digest differs from the pinned recovery receipt")
     preimage = Path(pending["preimage"]) if pending.get("preimage") else None
-    if preimage is None or not preimage.is_file() or preimage.is_symlink() or _sha256(preimage) != pinned_preimage_sha256:
-        raise RuntimeError(f"the pre-image of pending batch {pending.get('batch')} is missing or differs from the "
-                           "pinned recovery receipt; stop (runbook)")
+    if preimage is None:
+        raise RuntimeError(f"the pre-image of pending batch {pending.get('batch')} is missing; stop (runbook)")
+    pinned_preimage_sha = _verify_receipt_member(
+        receipt_root, pinned_files, preimage, f"the pre-image of pending batch {pending.get('batch')}",
+    )
+    if pending.get("preimage_sha256") != pinned_preimage_sha:
+        raise RuntimeError(f"the pre-image of pending batch {pending.get('batch')} differs from the journal; stop (runbook)")
     verified = [line for line in lines if line["state"] == "verified"]
     expected = verified[-1]["snapshot_after"] if verified else prepared["snapshot"]
     own = con is None

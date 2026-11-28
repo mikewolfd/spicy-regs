@@ -577,25 +577,20 @@ def test_cross_runtime_reconcile_abandons_uncommitted_pending_and_unblocks_new_p
     assert res["reconciled"]["outcome"] == "abandoned"
     assert (old_args.workdir / "published-result.json").exists()
 
-    # Reconciling again refuses both with the old receipt pin (journal changed) and with the updated journal (no pending).
-    prepared = run.load(old_args.workdir / "writer/fill/prepare.json")
-    journal = writer._journal(old_args.workdir / "writer", prepared)
-    old_prepare_sha = run.digest(old_args.workdir / "writer/fill/prepare.json")
-    pending_line = [line for line in writer._lines(journal) if line["state"] == "pending"][-1]
-    with pytest.raises(RuntimeError, match="differs from the pinned recovery receipt"):
+    # Reconciling again refuses both with the old receipt (journal changed) and with the updated receipt (no pending).
+    rec_path = old_args.workdir / "recovery.json"
+    with pytest.raises(RuntimeError, match="recovery receipt is missing or differs"):
         writer.reconcile_pending(
             old_args.workdir / "writer",
-            pinned_prepare_sha256=old_prepare_sha,
-            pinned_journal_sha256="0" * 64,
-            pinned_preimage_sha256=pending_line["preimage_sha256"],
+            receipt_path=rec_path,
+            receipt_sha256=old_rec_sha,
             resources=run.RESOURCES,
         )
     with pytest.raises(ValueError, match="no pending write to reconcile"):
         writer.reconcile_pending(
             old_args.workdir / "writer",
-            pinned_prepare_sha256=old_prepare_sha,
-            pinned_journal_sha256=run.digest(journal),
-            pinned_preimage_sha256=pending_line["preimage_sha256"],
+            receipt_path=rec_path,
+            receipt_sha256=run.digest(rec_path),
             resources=run.RESOURCES,
         )
 

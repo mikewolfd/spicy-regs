@@ -308,7 +308,13 @@ def run_group(args, client, bucket):
         maintenance.run("verify", args.workdir / "maintenance-state.json")
         with iceberg._connect() as con:
             con.execute("SET max_temp_directory_size='1GB'")
-            reconciled = writer.reconcile_pending(work, **pinned, resources=RESOURCES, con=con)
+            reconciled = writer.reconcile_pending(
+                work,
+                receipt_path=args.workdir / "recovery.json",
+                receipt_sha256=args.config["recovery_sha256"],
+                resources=RESOURCES,
+                con=con,
+            )
         owner.durable(args.workdir / "result.json", {
             **identity(args), "operation": "reconcile", "status": "complete",
             "recovery_identity": recovery_identity(args), "reconciled": reconciled,
