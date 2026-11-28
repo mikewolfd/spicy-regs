@@ -194,7 +194,7 @@ def _unlisted_rins(x_pattern: int, well_formed: int, placeholder: int, detail: s
 
 JOINS: tuple[Join, ...] = (
     _join("irs990_officers", ("filing_id", "ein"), "irs990_filings", ("filing_id", "ein"), 0, 0,
-          "unmeasured", "Source-native selected filing membership; local cohort checked separately, public baseline pending.",
+          "unmeasured", "Source-native selected filing membership; the local cohort was checked separately.",
           expected_cardinality="one"),
     _join("irs990_grants", ("filing_id", "ein"), "irs990_filings", ("filing_id", "ein"), 0, 0,
           "unmeasured", "Schedule I recipient entries belong to their source filing, not an inferred organization match.",
@@ -327,17 +327,17 @@ JOINS: tuple[Join, ...] = (
     _join("federal_register_agencies", ("document_number", "publication_date"),
           "federal_register_documents", ("document_number", "publication_date"), 0, 0, "unmeasured",
           reason="Each typed agency child row belongs to exactly one dated Federal Register document in the same "
-                 "federal-register-typed generation; public baseline pending initial bootstrap.",
+                 "federal-register-typed generation.",
           expected_cardinality="one"),
     _join("federal_register_cfr_references", ("document_number", "publication_date"),
           "federal_register_documents", ("document_number", "publication_date"), 0, 0, "unmeasured",
           reason="Each typed CFR-reference child row belongs to exactly one dated Federal Register document in the "
-                 "same federal-register-typed generation; public baseline pending initial bootstrap.",
+                 "same federal-register-typed generation.",
           expected_cardinality="one"),
     _join("federal_register_docket_candidates", ("document_number", "publication_date"),
           "federal_register_documents", ("document_number", "publication_date"), 0, 0, "unmeasured",
           reason="Each normalized docket-candidate row belongs to exactly one dated Federal Register document in the "
-                 "same federal-register-typed generation; public baseline pending initial bootstrap.",
+                 "same federal-register-typed generation.",
           expected_cardinality="one"),
     _join("documents", "fr_doc_num", "federal_register", "document_number", 454_231, 64_761, "design",
           "fr_doc_num is Regulations.gov's spelling, which zero-pads where the Register did not (every "
@@ -935,8 +935,7 @@ JOINS: tuple[Join, ...] = (
           'court_opinion_clusters', 'cluster_id',
           0, 0, 'unmeasured',
           'The native cluster ID recorded with the extraction identifies its opinion group. The guarded '
-          'opinion relationship separately identifies the exact captured input. This direct group relationship '
-          'has no complete selected-input baseline yet.', expected_cardinality='one'),
+          'opinion relationship separately identifies the exact captured input.', expected_cardinality='one'),
     _join('court_opinion_pdf_extractions', ('opinion_id', 'native_sha1'),
           'court_opinions', ('opinion_id', 'sha1'),
           3, 0, 'complete',
@@ -1114,8 +1113,8 @@ JOINS += (
 
 JOINS += tuple(
     _join(child, child_key, parent, parent_key, 0, 0, "unmeasured",
-          "Version-bound House source identities. Local pilot resolution is checked by its consumer probe; "
-          "the shared publication has no measured House disclosure baseline.", expected_cardinality="one")
+          "Version-bound House source identities; the local pilot resolution is checked by its consumer probe.",
+          expected_cardinality="one")
     for child, child_key, parent, parent_key in (
         ("house_disclosure_reports", "filing_id", "house_disclosure_filings", "filing_id"),
         ("house_disclosure_pages", "report_id", "house_disclosure_reports", "report_id"),
@@ -1270,7 +1269,7 @@ def _native_join(join):
                    expected_cardinality=_DECLARED_CARDINALITIES.get(join.name, join.expected_cardinality),
                    reason=(join.reason if join.parent in {"budget_volumes", "house_activity_reports"} else
                            "Native subject keys replace source capture keys. The original measured relationship "
-                           "remains in processing_joins; this subject-key relationship has no measured baseline yet."))
+                           "remains in processing_joins."))
 
 
 # A native key change drops the source measurement; one recorded under the native name applies.

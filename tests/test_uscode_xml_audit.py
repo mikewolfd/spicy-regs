@@ -8,6 +8,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
+from spicy_docs.sources.uscode import UsCodeSourceError
+
 from spicy_regs.sources import uscode_editions as builder
 from spicy_regs.sources import uscode_xml_audit as auditor
 
@@ -143,7 +145,7 @@ APPENDIX = XML.replace(
 ).replace(b'identifier="/us/usc/t1"', b'identifier="/us/usc/t5a"')
 
 
-def corpus_fixture(tmp_path, members):
+def corpus_selection(tmp_path, members, point="119-103"):
     original = tmp_path / "corpus.zip"
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w", zipfile.ZIP_DEFLATED) as z:
@@ -151,16 +153,21 @@ def corpus_fixture(tmp_path, members):
             z.writestr(name, body)
     original.write_bytes(stream.getvalue())
     selection = tmp_path / "selection.json"
-    spec = {"kind": "release-point-corpus", "release_point": "119-103", "path": original.name,
+    spec = {"kind": "release-point-corpus", "release_point": point, "path": original.name,
             "sha256": auditor.sha(original)}
     selection.write_text(json.dumps({"format": "spicy-uscode-edition-inputs", "version": 1, "sources": [spec]}))
+    return selection
+
+
+def corpus_fixture(tmp_path, members):
+    selection = corpus_selection(tmp_path, members)
     candidate = tmp_path / "candidate"
     builder.build(selection, candidate)
     return candidate, selection
 
 
 def test_a_whole_release_point_corpus_is_audited_member_by_member(tmp_path):
-    candidate, selection = corpus_fixture(tmp_path, [("usc01.xml", XML), ("usc05A.xml", APPENDIX)])
+    candidate, selection = corpus_fixture(tmp_path, [("titles/", b""), ("titles/usc01.xml", XML), ("titles/usc05A.xml", APPENDIX)])
     result = auditor.audit(candidate, selection)
     assert result["status"] == "verified-complete-selected-xml119-103-corpus"
     assert result["complete_original_members"] == 2
@@ -179,7 +186,36 @@ def test_a_corpus_member_of_another_title_refuses(tmp_path):
         auditor.audit(candidate, selection)
 
 
-@pytest.mark.parametrize("change", ["release_point", "title", "kind", "year", "multi"])
+@pytest.mark.parametrize("label", ["113-142not128", "119-103a"])
+def test_unsupported_release_point_labels_refuse_like_the_builder(tmp_path, label):
+    selection = corpus_selection(tmp_path, [("usc01.xml", XML)], point=label)
+    candidate = tmp_path / "candidate"
+    # OLRC uses exclusion labels, but this pinned reader does not yet accept them.
+    with pytest.raises(UsCodeSourceError, match="release point label is unsupported"):
+        builder.build(selection, candidate)
+    with pytest.raises(UsCodeSourceError, match="release point label is unsupported"):
+        auditor.audit(candidate, selection)
+
+
+def test_a_non_title_corpus_file_refuses_like_the_builder(tmp_path):
+    candidate, _ = corpus_fixture(tmp_path, [("usc01.xml", XML)])
+    selection = corpus_selection(tmp_path, [("README.txt", b"supporting file"), ("usc01.xml", XML)])
+    with pytest.raises(UsCodeSourceError, match="corpus archive entry name is not a title member"):
+        builder.build(selection, tmp_path / "other")
+    # Repin the original in the otherwise intact candidate to reach member validation.
+    (candidate / "selection.json").write_bytes(selection.read_bytes())
+    path = candidate / "rebuild.json"
+    rebuild = json.loads(path.read_text())
+    rebuild["manifest_sha256"] = auditor.sha(selection)
+    rebuild["generation"] = auditor.identity(
+        "uscode-editions-public-v2", rebuild["manifest_sha256"], rebuild["reader_sha256"]
+    )
+    path.write_text(json.dumps(rebuild))
+    with pytest.raises(UsCodeSourceError, match="corpus archive entry name is not a title member"):
+        auditor.audit(candidate, selection)
+
+
+@pytest.mark.parametrize("change", ["title", "kind", "year", "multi"])
 def test_selected_xml_scope_refuses_before_candidate_reads(tmp_path, change):
     selection = tmp_path / "selection.json"
     spec = dict(kind="release-point-title", release_point="119-103", title="01", path="absent", sha256="absent")
@@ -203,7 +239,7 @@ def test_selected_xml_scope_refuses_before_candidate_reads(tmp_path, change):
 )
 def test_native_identity_or_dtd_refuses(bad):
     with pytest.raises(AssertionError):
-        auditor.native_observations(bad)
+        auditor.native_observations(bad, "01", "119-103")
 
 
 @pytest.mark.parametrize(
@@ -216,7 +252,7 @@ def test_native_identity_or_dtd_refuses(bad):
 )
 def test_non_utf8_encoding_and_hidden_dtd_refuse(bad):
     with pytest.raises(AssertionError, match="non-UTF8"):
-        auditor.native_observations(bad)
+        auditor.native_observations(bad, "01", "119-103")
 
 
 def test_report_existing_input_or_candidate_paths_refuse_without_writes(tmp_path):
