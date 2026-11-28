@@ -19,10 +19,10 @@ from pathlib import Path
 from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import make_rollup_app
-from spicy_regs.pipelines.rollups.fec_receipts import FecReceiptRollup as RollupPipeline
+from spicy_regs.pipelines.rollups.fec_tables import FecTableRollup
 
 
-class OrgCommitteeLinksRollup(RollupPipeline):
+class OrgCommitteeLinksRollup(FecTableRollup):
     """Commenter organizations name-matched to FEC committees/PACs."""
 
     name: ClassVar[str] = "org-committee-links"
@@ -31,7 +31,7 @@ class OrgCommitteeLinksRollup(RollupPipeline):
     output: ClassVar[str] = "org_committee_links.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return self.build_receipts(output_dir)
+        return self.build_table(output_dir)
 
 
 app = make_rollup_app(OrgCommitteeLinksRollup)

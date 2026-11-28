@@ -52686,63 +52686,6 @@
         ]
       },
       {
-        "dataset": "fec_candidate_history",
-        "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/2",
-        "identity_columns": [
-          "candidate_id",
-          "cycle"
-        ],
-        "processing_fields": [
-          "conversion_inputs",
-          "conversion_diagnostics",
-          "source_input"
-        ]
-      },
-      {
-        "dataset": "fec_committee_history",
-        "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/2",
-        "identity_columns": [
-          "committee_id",
-          "cycle"
-        ],
-        "processing_fields": [
-          "conversion_inputs",
-          "conversion_diagnostics",
-          "source_input"
-        ]
-      },
-      {
-        "dataset": "fec_committees",
-        "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/2",
-        "identity_columns": [
-          "committee_id"
-        ],
-        "processing_fields": [
-          "cycles_json",
-          "candidate_ids_json",
-          "conversion_inputs",
-          "conversion_diagnostics",
-          "source_input"
-        ]
-      },
-      {
-        "dataset": "fec_source_catalog",
-        "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/2",
-        "identity_columns": [
-          "observation_ordinal"
-        ],
-        "processing_fields": [
-          "source_metadata_json",
-          "conversion_inputs",
-          "conversion_diagnostics",
-          "source_input"
-        ]
-      },
-      {
         "dataset": "financial_changes",
         "receipt_only": false,
         "policy_version": "legislative-documents/1",
@@ -53009,24 +52952,6 @@
         ],
         "processing_fields": [
           "recorded_event"
-        ]
-      },
-      {
-        "dataset": "org_committee_links",
-        "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/2",
-        "identity_columns": [
-          "organization",
-          "committee_id"
-        ],
-        "processing_fields": [
-          "organization_norm",
-          "organization_core",
-          "name_source",
-          "agency_codes_json",
-          "conversion_inputs",
-          "conversion_diagnostics",
-          "source_input"
         ]
       },
       {

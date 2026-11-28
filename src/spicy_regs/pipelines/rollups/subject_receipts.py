@@ -224,15 +224,17 @@ class SelectedPriors:
     def _published(self, dataset, subjects):
         """A retired dataset's prior: its pinned public table, as its mapper's builders read their input.
 
-        The regulations mapper (``regulations_shape.published_as_source``) and the Congress mapper
-        (``congress_tables.as_builder_input``, for its ``READABLE`` tables) read a published table back into their
-        builders' shape; any other dataset refuses by name rather than hand a builder a table it would misread. Its
-        consumers then wait for such a reader here, or switch first.
+        The regulations mapper (``regulations_shape.published_as_source``), the Congress mapper
+        (``congress_tables.as_builder_input``, for its ``READABLE`` tables), and the FEC identity mapper
+        (``fec_tables.published_as_fec_source``, for its ``FEC_PUBLISHED_READABLE`` tables) read a published table
+        back into their builders' shape; any other dataset refuses by name rather than hand a builder a table it
+        would misread. Its consumers then wait for such a reader here, or switch first.
         """
         from spicy_regs.congress_tables import READABLE, as_builder_input
+        from spicy_regs.pipelines.rollups.fec_tables import FEC_PUBLISHED_READABLE, published_as_fec_source
         from spicy_regs.transforms.regulations_shape import SOURCE_COLUMNS, published_as_source
 
-        if dataset not in SOURCE_COLUMNS and dataset not in READABLE:
+        if dataset not in SOURCE_COLUMNS and dataset not in READABLE and dataset not in FEC_PUBLISHED_READABLE:
             raise ValueError(f"{dataset}: its receipts are retired and its mapper has no reader of the published "
                              "table (SelectedPriors._published); add one before its consumers read it")
         output = self.directory / dataset / "processing" / (dataset + ".parquet")
@@ -240,6 +242,8 @@ class SelectedPriors:
         with phase_log("prior-published-input", dataset=dataset):
             if dataset in READABLE:
                 as_builder_input(dataset, subjects, output)
+            elif dataset in FEC_PUBLISHED_READABLE:
+                published_as_fec_source(dataset, subjects, output)
             else:
                 published_as_source(dataset, subjects, output)
         self.selections[dataset] = (subjects, None, None)

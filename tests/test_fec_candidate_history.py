@@ -140,14 +140,7 @@ def test_complete_generation_binds_exact_responses_and_refresh_retires_rows(tmp_
         )
     generations = [json.loads(p.read_text()) for p in (tmp_path / "generations").glob("*/artifact.json")]
     assert any(verified.pin.artifact_digest in json.dumps(generation) for generation in generations)
-    # The rows are written under the policy main declares for this table, not a version literal of this lane.
-    version = dataset_policy("fec_candidate_history").policy_version
-    assert version == "fec-identity-context-receipts/2"
-    assert dataset_policy("fec_committee_history").policy_version == "fec-identity-context-receipts/2"
-    written = {
-        row["policy_version"]
-        for receipts in (tmp_path / "generations").glob("*/etl_receipts.parquet")
-        for row in pq.read_table(receipts).to_pylist()
-        if row["dataset"] == "fec_candidate_history"
-    }
-    assert written == {version}
+    # Receipts are retired for both bulk master histories; generations publish only the native table.
+    assert not list((tmp_path / "generations").glob("*/etl_receipts.parquet"))
+    assert all("etlReceipts" not in generation["spec"] for generation in generations)
+    assert pq.read_schema(tmp_path / build.OUTPUT).equals(dataset_policy("fec_candidate_history").subject_schema)

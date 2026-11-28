@@ -37,6 +37,41 @@ ACQUIRING = frozenset({"fec_committees", "fec_candidate_history", "fec_committee
 HISTORIES = frozenset({"fec_candidate_history", "fec_committee_history"})
 
 
+def resolve_acquisition(table, builder_options, *, evidence_dir, forbidden_dir=None):
+    """Validate selection/resume options and resolve durable raw storage before any directory is created."""
+    selection, resume = builder_options.get("selection"), builder_options.get("resume")
+    if selection is not None and table not in HISTORIES:
+        raise ValueError("selection rebuilds only the candidate and committee history tables")
+    if resume is not None and table != "fec_committees":
+        raise ValueError("resume continues only a committee walk")
+    if selection is not None and (builder_options.get("capture_dir") is not None or builder_options.get("evidence")):
+        raise ValueError("A selection rebuild acquires nothing; pass neither capture_dir nor evidence")
+    if selection is not None:
+        path = Path(selection).resolve()
+        try:
+            with path.open("rb") as stream:
+                digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
+        except OSError:
+            raise ValueError(f"FEC master selection is missing or unreadable: {selection}") from None
+        builder_options["selection"] = path
+        return {"route": "selection", "selection": {"path": str(path), "sha256": digest}}
+    if table not in ACQUIRING:
+        return None
+    if resume is not None:
+        attempt = Path(resume).resolve()
+        if not (attempt / "checkpoint.json").is_file():
+            raise ValueError(f"{resume} is not a retained committee attempt (no checkpoint.json)")
+        builder_options["resume"] = attempt
+    raw_default = (evidence_dir() if callable(evidence_dir) else evidence_dir) / "raw"
+    capture_dir = Path(builder_options.get("capture_dir") or os.environ.get("FEC_CAPTURE_DIR") or raw_default).resolve()
+    if forbidden_dir is not None and capture_dir.is_relative_to(Path(forbidden_dir).resolve()):
+        raise ValueError("FEC acquisition storage must not be inside the receipt bundle")
+    builder_options["capture_dir"] = capture_dir
+    if resume is not None:
+        return {"route": "resume", "capture_dir": str(capture_dir), "resume": str(builder_options["resume"])}
+    return {"route": "refresh", "capture_dir": str(capture_dir)}
+
+
 def build_fec_identity_rollup(
     table, output_dir, *, generation_id, inputs=(), prior_bundle=None, prior_generation_id=None, **builder_options
 ):
@@ -49,13 +84,6 @@ def build_fec_identity_rollup(
     """
     if table not in BUILDERS:
         raise ValueError("Unsupported FEC identity rollup")
-    selection, resume = builder_options.get("selection"), builder_options.get("resume")
-    if selection is not None and table not in HISTORIES:
-        raise ValueError("selection rebuilds only the candidate and committee history tables")
-    if resume is not None and table != "fec_committees":
-        raise ValueError("resume continues only a committee walk")
-    if selection is not None and (builder_options.get("capture_dir") is not None or builder_options.get("evidence")):
-        raise ValueError("A selection rebuild acquires nothing; pass neither capture_dir nor evidence")
     if table == "fec_committees":
         if prior_bundle is None and not builder_options.get("full_walk"):
             raise ValueError(
@@ -68,30 +96,7 @@ def build_fec_identity_rollup(
         raise FileExistsError(output_dir)
     # Raw custody belongs beside the bundle, never in the staging directory below.
     evidence_dir = output_dir.with_name(output_dir.name + ".inputs")
-    acquisition: dict | None = None
-    if selection is not None:
-        path = Path(selection).resolve()
-        try:
-            with path.open("rb") as stream:
-                digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
-        except OSError:
-            raise ValueError(f"FEC master selection is missing or unreadable: {selection}") from None
-        builder_options["selection"] = path
-        acquisition = {"route": "selection", "selection": {"path": str(path), "sha256": digest}}
-    elif table in ACQUIRING:
-        capture_dir = Path(
-            builder_options.get("capture_dir") or os.environ.get("FEC_CAPTURE_DIR") or evidence_dir / "raw"
-        ).resolve()
-        if capture_dir.is_relative_to(output_dir.resolve()):
-            raise ValueError("FEC acquisition storage must not be inside the receipt bundle")
-        builder_options["capture_dir"] = capture_dir
-        acquisition = {"route": "refresh", "capture_dir": str(capture_dir)}
-        if resume is not None:
-            attempt = Path(resume).resolve()
-            if not (attempt / "checkpoint.json").is_file():
-                raise ValueError(f"{resume} is not a retained committee attempt (no checkpoint.json)")
-            builder_options["resume"] = attempt
-            acquisition = {"route": "resume", "capture_dir": str(capture_dir), "resume": str(attempt)}
+    acquisition = resolve_acquisition(table, builder_options, evidence_dir=evidence_dir, forbidden_dir=output_dir)
     output_dir.parent.mkdir(parents=True, exist_ok=True)
     evidence_dir.mkdir(exist_ok=False)
     if acquisition is not None:

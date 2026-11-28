@@ -20,7 +20,11 @@ RESOURCE = dd.REPO_ROOT / "data_dictionary/fec_typed_schemas.json"
 
 @pytest.mark.parametrize("owner", ["legacy", "native", "absent", "local_native", "invalid"])
 def test_describe_table_uses_the_selected_generation_field_meaning(monkeypatch, owner):
+    from spicy_regs import subject_catalog
+
     table, column = "fec_candidate_history", "party"
+    retired = subject_catalog.retired_receipt_datasets()
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired - {table})
     entry = json.loads(dd.DEFAULT_MCP_METADATA_PATH.read_text())[table]
     historical = entry["legacy_column_descriptions"][column]
     current = next(c["description"] for c in entry["columns"] if c["column_name"] == column)
