@@ -8,12 +8,9 @@ from typing import Any, TypedDict
 
 import duckdb
 import httpx
-import pyarrow.parquet as pq
 import pytest
 
-from spicy_regs.transforms.government_receipts import internal_prior, POLICIES
-from spicy_regs.transforms.government_source_shapes import GovernmentShapeError
-from spicy_regs.etl_receipts import validate_receipt_bundle
+from spicy_regs.transforms.government_source_shapes import GovernmentShapeError, native_to_legacy_rows
 
 LIST = {"id": "R1", "updateDate": "2026-10-01T00:00:00Z", "version": 2,
         "publishDate": "2026-09-30T00:00:00Z", "title": "Report", "contentType": "Reports", "status": "Active"}
@@ -49,7 +46,7 @@ def setup_builder(tmp_path, monkeypatch):
 
 
 def literal(path):
-    return pq.read_table(internal_prior("crs_reports", path)).to_pylist()
+    return native_to_legacy_rows("crs_reports", path)
 
 
 def test_qualified_detail_survives_refresh_failed_retry_and_explicit_clearing(tmp_path, monkeypatch):
@@ -81,8 +78,7 @@ def test_qualified_detail_survives_refresh_failed_retry_and_explicit_clearing(tm
     with duckdb.connect() as con:
         row = con.execute("SELECT summary, authors, topics, formats, len(related_materials) FROM read_parquet(?)", [str(path)]).fetchone()
         assert row == (None, [], None, None, 2)
-    validate_receipt_bundle({"crs_reports": [path]}, [tmp_path / "etl_receipts.parquet"],
-                            [POLICIES["crs_reports"]])
+    assert not (tmp_path / "etl_receipts.parquet").exists()
 
 
 @pytest.mark.parametrize("change", ["race", "version", "id", "content", "missing", "list"])

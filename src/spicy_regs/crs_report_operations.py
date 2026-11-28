@@ -53,11 +53,11 @@ def prepare(
     *,
     operation: Literal["detail", "refresh", "reconcile"],
     prior_subject: Path,
-    prior_receipts: Path,
-    prior_generation_id: str,
     max_prior_bytes: int,
     max_prior_rows: int,
     max_requests: int,
+    prior_receipts: Path | None = None,
+    prior_generation_id: str | None = None,
     report: list[str] | None = None,
     latest: bool = False,
     max_details: int = 0,
@@ -89,9 +89,14 @@ def prepare(
         raise ValueError(
             "CRS local refresh requires an explicit date window; use reconcile for an unfiltered inventory"
         )
-    if not prior_subject.is_file() or not prior_receipts.is_file() or not prior_generation_id:
-        raise ValueError("CRS operations require a local selected subject/receipt pair and generation")
-    if output_dir.resolve() in {prior_subject.parent.resolve(), prior_receipts.parent.resolve()}:
+    if (prior_receipts is None) != (prior_generation_id is None):
+        raise ValueError("CRS explicit prior receipts require their generation identity")
+    if not prior_subject.is_file() or (prior_receipts is not None and not prior_receipts.is_file()):
+        raise ValueError("CRS operations require a local selected prior subject (and matching receipts if supplied)")
+    prior_dirs = {prior_subject.parent.resolve()}
+    if prior_receipts is not None:
+        prior_dirs.add(prior_receipts.parent.resolve())
+    if output_dir.resolve() in prior_dirs:
         raise ValueError("CRS candidate output must be separate from the selected prior")
     retained = _retained(retained_details)
     output_dir.mkdir(parents=True, exist_ok=True)

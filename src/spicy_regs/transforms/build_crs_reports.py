@@ -1,7 +1,7 @@
 """Transform: build ``crs_reports.parquet`` from the Congress.gov REST API.
 
-Produces a native subject table and shared receipts keyed on ``report_id`` and
-``update_date``, retaining each captured revision of the report's list metadata.
+Produces a native subject table keyed on ``report_id`` and ``update_date``,
+retaining each captured revision of the report's list metadata.
 
 Incremental discovery uses the prior selected generation's successful crawl
 cutoff with overlap, never a maximum timestamp among imported rows. Explicit
@@ -39,8 +39,16 @@ from spicy_regs.crs_report_detail import (
 )
 from spicy_regs.sources import r2
 from spicy_regs.sources.crs_reports import CrsReportDetailReader, CrsReportsReader
-from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
-from spicy_regs.transforms.government_source_shapes import GovernmentShapeError
+from spicy_regs.transforms.government_receipts import internal_prior
+from spicy_regs.transforms.government_source_shapes import (
+    CRS_DETAIL_WITNESSES_METADATA,
+    SUBJECT_SCHEMAS,
+    GovernmentShapeError,
+    encode_kv_json,
+    map_subject,
+    native_to_legacy_rows,
+    write_native_table,
+)
 from spicy_regs.transforms.parquet_rows import str_or_none
 
 OUTPUT = "crs_reports.parquet"
@@ -114,17 +122,18 @@ class _CrsRequests:
         return Charged()
 
 
-def _admit_literal_prior(path: Path, *, max_bytes: int, max_rows: int) -> None:
-    """Legacy processing inputs have no separate receipt member to restore."""
-    if path.stat().st_size > max_bytes:
-        raise ValueError("CRS prior bytes exceed the declared bound")
-    metadata = pq.read_metadata(path)
-    if metadata.num_rows > max_rows:
-        raise ValueError("CRS prior rows exceed the declared bound")
-    decoded = sum(metadata.row_group(i).column(j).total_uncompressed_size
-                  for i in range(metadata.num_row_groups) for j in range(metadata.num_columns))
-    if decoded > max_bytes:
-        raise ValueError("CRS decoded prior bytes exceed the declared bound")
+def _admit_literal_prior(path: Path, *, max_bytes: int, max_rows: int) -> dict:
+    """Bound a single prior subject file before reading it and record its exact identity."""
+    from spicy_regs.crs_file_preparation import admit_metadata_pair
+
+    admission = admit_metadata_pair(path, None, max_bytes=max_bytes, max_rows=max_rows)
+    return {
+        "decoded_bytes": admission["decoded_bytes"],
+        "members": [
+            {"name": path.name, **{key: member[key] for key in ("sha256", "bytes", "rows")}}
+            for member in admission["members"]
+        ],
+    }
 
 
 
@@ -141,7 +150,6 @@ def _discovery_state(evidence: CaptureEvidence | None) -> dict:
     return (evidence.inherited_event("crs-discovery") or {}) if evidence is not None else {}
 
 
-@receipt_builder
 def build_crs_reports(
     output_dir: Path, *, since: date | None = None, evidence: CaptureEvidence | None = None,
     detail_limit: int = 0, detail_api_key: str | None = None, detail_transport=None, retry_completed: bool = False,
@@ -178,13 +186,14 @@ def build_crs_reports(
     out_file = output_dir / OUTPUT
     prior_file = prior_subject or output_dir / "_crs_prior.parquet"
     prior_admission = None
+    restored_prior: Path | None = None
 
     def admit_prior(subject: Path, receipts: Path | None) -> None:
         from spicy_regs.crs_file_preparation import admit_metadata_pair, select_revisions
 
         nonlocal prior_admission
         if receipts is None:
-            _admit_literal_prior(subject, max_bytes=max_prior_bytes, max_rows=max_prior_rows)
+            prior_admission = _admit_literal_prior(subject, max_bytes=max_prior_bytes, max_rows=max_prior_rows)
         else:
             admission = admit_metadata_pair(subject, receipts, max_bytes=max_prior_bytes, max_rows=max_prior_rows)
             # Reuse admission's exact byte pins; published evidence keeps logical
@@ -192,8 +201,8 @@ def build_crs_reports(
             prior_admission = {"decoded_bytes": admission["decoded_bytes"], "members": [
                 {"name": path.name, **{key: member[key] for key in ("sha256", "bytes", "rows")}}
                 for path, member in zip((subject, receipts), admission["members"], strict=True)]}
-            if evidence is not None:
-                evidence.event("crs-prior-admission", **prior_admission)
+        if evidence is not None:
+            evidence.event("crs-prior-admission", **prior_admission)
         # Selection errors must precede receipt restoration, not only HTTP reads.
         if detail_reports is not None:
             select_revisions(pq.read_table(subject, columns=["report_id", "update_date"]).to_pylist(),
@@ -205,116 +214,132 @@ def build_crs_reports(
     have_prior = prior_file.exists() or (prior_subject is None and r2.download(OUTPUT, prior_file))
     if not refresh_list and (not have_prior or not detail_limit):
         raise ValueError("A detail-only build requires a selected local prior and positive detail_limit")
-    if have_prior:
-        prior_file = internal_prior("crs_reports", prior_file, receipt_path=prior_receipt_path,
-                                    generation_id=prior_generation_id, admit=admit_prior, work_dir=output_dir)
-        # Undated prior rows cannot be assigned revision identities. Preserve the
-        # prior and refuse before merging, rather than inventing a date.
-        if ("update_date" not in pq.read_schema(prior_file).names
-                or pq.read_table(prior_file, columns=["update_date"])["update_date"].null_count):
-            raise GovernmentShapeError("crs_reports: prior revisions require update_date; prior preserved")
-    if have_prior:
-        logger.info("CRS reports: merging against prior table {}", prior_file)
-    else:
-        logger.info("CRS reports: no prior table found — full backfill")
+    try:
+        if have_prior:
+            if prior_receipt_path is not None:
+                prior_file = internal_prior("crs_reports", prior_file, receipt_path=prior_receipt_path,
+                                            generation_id=prior_generation_id, admit=admit_prior, work_dir=output_dir)
+                if prior_file != prior_subject:
+                    restored_prior = prior_file
+            else:
+                admit_prior(prior_file, None)
+            # Undated prior rows cannot be assigned revision identities. Preserve the
+            # prior and refuse before merging, rather than inventing a date.
+            if ("update_date" not in pq.read_schema(prior_file).names
+                    or pq.read_table(prior_file, columns=["update_date"])["update_date"].null_count):
+                raise GovernmentShapeError("crs_reports: prior revisions require update_date; prior preserved")
+        if have_prior:
+            logger.info("CRS reports: merging against prior table {}", prior_file)
+        else:
+            logger.info("CRS reports: no prior table found — full backfill")
 
-    # Capture before discovery. A crawl is observed pages, not an atomic snapshot.
-    # The selected generation owns this cursor: a failed conversion cannot adopt it.
-    discovered_at = datetime.now(UTC).isoformat()
-    state = _discovery_state(evidence)
-    explicit_window = since is not None
-    if since is None and not reconcile and state.get("cursor"):
-        since = datetime.fromisoformat(state["cursor"]).date() - timedelta(days=OVERLAP_DAYS)
-    logger.info("CRS reports: list refresh={}, window starts {}", refresh_list, since or "the beginning")
+        # Capture before discovery. A crawl is observed pages, not an atomic snapshot.
+        # The selected generation owns this cursor: a failed conversion cannot adopt it.
+        discovered_at = datetime.now(UTC).isoformat()
+        state = _discovery_state(evidence)
+        explicit_window = since is not None
+        if since is None and not reconcile and state.get("cursor"):
+            since = datetime.fromisoformat(state["cursor"]).date() - timedelta(days=OVERLAP_DAYS)
+        logger.info("CRS reports: list refresh={}, window starts {}", refresh_list, since or "the beginning")
 
-    # 3. Fetch + shape into a "new rows" parquet.
-    requests = _CrsRequests(max_requests, max_list_bytes)
-    reader = CrsReportsReader(since=since, evidence=evidence, transport=requests.transport(list_transport, listing=True))
-    records = []
-    if refresh_list:
-        for doc in reader.iter_records():
-            if len(records) >= max_list_rows:
-                raise CrsOperationLimitError("CRS list rows exceed the declared bound; prior preserved")
-            records.append((_shape(doc), frozenset(doc)))
-    list_rows = len(records)
-    # One bounded table pass owns the source-specific merge. It distinguishes
-    # unrequested detail from authoritative explicit null/empty values.
-    merged = {(row["report_id"], row["update_date"]): {**dict.fromkeys(COLUMNS), **row}
-              for row in pq.read_table(prior_file).to_pylist()} if have_prior else {}
-    for row, fields in records:
-        key = (row["report_id"], row["update_date"])
-        witnesses = getattr(reader, "witnesses", {}).get(key)
-        if witnesses:
-            row["list_witness_json"] = json_text(witnesses)
-        prior = merged.get(key)
-        if prior:
-            source = merge_list_observation(
-                {field: prior.get(column) for column, field in LIST_SOURCE_FIELDS.items()},
-                {field: row[column] for column, field in LIST_SOURCE_FIELDS.items() if field in fields},
-            )
-            row.update({column: source.get(field) for column, field in LIST_SOURCE_FIELDS.items()})
-            for name in DETAIL_COLUMNS:
-                row[name] = prior.get(name)
-            old_witnesses = json.loads(prior.get("list_witness_json") or "[]")
-            fresh_witnesses = getattr(reader, "witnesses", {}).get(key, [])
-            for witness in fresh_witnesses:
-                if witness not in old_witnesses:
-                    old_witnesses.append(witness)
-            row["list_witness_json"] = json_text(old_witnesses) if old_witnesses else None
-        merged[key] = row
-    failed_details_this_run = 0
-    if detail_limit:
-        from spicy_regs.source_evidence import acquisition_evidence
+        # 3. Fetch + shape into merged rows.
+        requests = _CrsRequests(max_requests, max_list_bytes)
+        reader = CrsReportsReader(since=since, evidence=evidence, transport=requests.transport(list_transport, listing=True))
+        records = []
+        if refresh_list:
+            for doc in reader.iter_records():
+                if len(records) >= max_list_rows:
+                    raise CrsOperationLimitError("CRS list rows exceed the declared bound; prior preserved")
+                records.append((_shape(doc), frozenset(doc)))
+        list_rows = len(records)
+        # One bounded table pass owns the source-specific merge. It distinguishes
+        # unrequested detail from authoritative explicit null/empty values.
+        merged = {(row["report_id"], row["update_date"]): {**dict.fromkeys(COLUMNS), **row}
+                  for row in native_to_legacy_rows("crs_reports", prior_file)} if have_prior else {}
+        for row, fields in records:
+            key = (row["report_id"], row["update_date"])
+            witnesses = getattr(reader, "witnesses", {}).get(key)
+            if witnesses:
+                row["list_witness_json"] = json_text(witnesses)
+            prior = merged.get(key)
+            if prior:
+                source = merge_list_observation(
+                    {field: prior.get(column) for column, field in LIST_SOURCE_FIELDS.items()},
+                    {field: row[column] for column, field in LIST_SOURCE_FIELDS.items() if field in fields},
+                )
+                row.update({column: source.get(field) for column, field in LIST_SOURCE_FIELDS.items()})
+                for name in DETAIL_COLUMNS:
+                    row[name] = prior.get(name)
+                old_witnesses = json.loads(prior.get("list_witness_json") or "[]")
+                fresh_witnesses = getattr(reader, "witnesses", {}).get(key, [])
+                for witness in fresh_witnesses:
+                    if witness not in old_witnesses:
+                        old_witnesses.append(witness)
+                row["list_witness_json"] = json_text(old_witnesses) if old_witnesses else None
+            merged[key] = row
+        failed_details_this_run = 0
+        if detail_limit:
+            from spicy_regs.source_evidence import acquisition_evidence
 
-        latest_revisions = {}
-        for key, row in sorted(merged.items()):
-            latest_revisions[row["report_id"]] = key
-        from spicy_regs.crs_file_preparation import select_revisions
+            latest_revisions = {}
+            for key, row in sorted(merged.items()):
+                latest_revisions[row["report_id"]] = key
+            from spicy_regs.crs_file_preparation import select_revisions
 
-        candidates = (select_revisions(list(merged.values()), detail_reports, latest=latest)
-                      if detail_reports is not None else [merged[key] for key in latest_revisions.values()])
-        selected = [row for row in candidates if retry_completed
-                    or row.get("detail_state") != "ok" or row.get("detail_attempt_state") != "ok"]
-        selected = selected[:detail_limit]
-        if retained_details is not None and any(row["report_id"] not in retained_details for row in selected):
-            raise ValueError("CRS selected detail cohort has missing retained originals")
-        context = nullcontext(evidence) if evidence is not None else acquisition_evidence("crs-reports", output_dir=output_dir)
-        with context as detail_evidence:
-            detail_reader = CrsReportDetailReader(evidence=detail_evidence, api_key=detail_api_key,
-                                                 transport=requests.transport(detail_transport), retained=retained_details)
-            for selected_row in selected:
-                # The shared selector returns a copy. Mutate the retained revision.
-                row = merged[(selected_row["report_id"], selected_row["update_date"])]
-                outcome = detail_reader.read(row)
-                if outcome["state"] == "revision_mismatch":
-                    detail_evidence.event("crs-detail-revision-mismatch", report_id=row["report_id"],
-                                          update_date=row["update_date"], witnesses=outcome["witnesses"])
-                    raise GovernmentShapeError("CRS detail revision mismatch; prior preserved")
-                if outcome["state"] == "ok":
-                    if any(field in outcome["report"] and row.get(column) is not None
-                           and outcome["report"][field] != row[column] for column, field in
-                           (("title", "title"), ("report_type", "contentType"), ("status", "status"),
-                            ("published_date", "publishDate"))):
-                        raise GovernmentShapeError("CRS incompatible list/detail metadata; prior preserved")
-                    check_detail_replacement(row, outcome["report"])
-                    row.update(qualified_detail(outcome["report"], outcome["witnesses"]))
-                else:
-                    failed_details_this_run += 1
-                    row.update(detail_attempt_state="failed", detail_error=outcome["error"],
-                               detail_attempt_witness_json=json_text(outcome["witnesses"]))
-    rows = sorted(merged.values(), key=lambda row: (row["update_date"] or "", row["report_id"] or ""), reverse=True)
-    new_file = output_dir / "_crs_new.parquet"
-    table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
-    pq.write_table(table, new_file, compression="zstd")
-    logger.info("CRS reports: read {:,} list rows; prepared {:,} retained revisions", list_rows, len(rows))
+            candidates = (select_revisions(list(merged.values()), detail_reports, latest=latest)
+                          if detail_reports is not None else [merged[key] for key in latest_revisions.values()])
+            selected = [row for row in candidates if retry_completed
+                        or row.get("detail_state") != "ok" or row.get("detail_attempt_state") != "ok"]
+            selected = selected[:detail_limit]
+            if retained_details is not None and any(row["report_id"] not in retained_details for row in selected):
+                raise ValueError("CRS selected detail cohort has missing retained originals")
+            context = nullcontext(evidence) if evidence is not None else acquisition_evidence("crs-reports", output_dir=output_dir)
+            with context as detail_evidence:
+                detail_reader = CrsReportDetailReader(evidence=detail_evidence, api_key=detail_api_key,
+                                                     transport=requests.transport(detail_transport), retained=retained_details)
+                for selected_row in selected:
+                    # The shared selector returns a copy. Mutate the retained revision.
+                    row = merged[(selected_row["report_id"], selected_row["update_date"])]
+                    outcome = detail_reader.read(row)
+                    if outcome["state"] == "revision_mismatch":
+                        detail_evidence.event("crs-detail-revision-mismatch", report_id=row["report_id"],
+                                              update_date=row["update_date"], witnesses=outcome["witnesses"])
+                        raise GovernmentShapeError("CRS detail revision mismatch; prior preserved")
+                    if outcome["state"] == "ok":
+                        if any(field in outcome["report"] and row.get(column) is not None
+                               and outcome["report"][field] != row[column] for column, field in
+                               (("title", "title"), ("report_type", "contentType"), ("status", "status"),
+                                ("published_date", "publishDate"))):
+                            raise GovernmentShapeError("CRS incompatible list/detail metadata; prior preserved")
+                        check_detail_replacement(row, outcome["report"])
+                        row.update(qualified_detail(outcome["report"], outcome["witnesses"]))
+                    else:
+                        failed_details_this_run += 1
+                        row.update(detail_attempt_state="failed", detail_error=outcome["error"],
+                                   detail_attempt_witness_json=json_text(outcome["witnesses"]))
+        rows = sorted(merged.values(), key=lambda row: (row["update_date"] or "", row["report_id"] or ""), reverse=True)
+        mapped: list[dict] = []
+        detail_witnesses: dict[str, str] = {}
+        for row in rows:
+            if row.get("update_date") in (None, ""):
+                raise GovernmentShapeError("crs_reports: update_date is required")
+            subject = map_subject("crs_reports", row)
+            mapped.append(subject)
+            if (witness := row.get("detail_witness_json")) is not None:
+                stamp = subject["update_date"].astimezone(UTC).isoformat().replace("+00:00", "Z")
+                detail_witnesses[f"{subject['report_id']}@{stamp}"] = str(witness)
+        mapped.sort(key=lambda row: (row["update_date"], row["report_id"]), reverse=True)
+        metadata = {CRS_DETAIL_WITNESSES_METADATA: encode_kv_json(detail_witnesses)} if detail_witnesses else None
+        # Atomically replace only after every source-specific compatibility check.
+        write_native_table(mapped, out_file, SUBJECT_SCHEMAS["crs_reports"], metadata=metadata)
+        logger.info("CRS reports: read {:,} list rows; prepared {:,} retained revisions", list_rows, len(mapped))
 
-    # Atomically replace only after every source-specific compatibility check.
-    new_file.replace(out_file)
-
-    # Housekeeping: drop scratch files so they aren't mistaken for outputs.
-    for scratch in (prior_file, new_file):
-        if scratch != prior_subject:
-            scratch.unlink(missing_ok=True)
+        # Housekeeping: drop scratch files so they aren't mistaken for outputs.
+        if prior_file != prior_subject:
+            prior_file.unlink(missing_ok=True)
+    finally:
+        if restored_prior is not None and restored_prior != prior_subject:
+            restored_prior.unlink(missing_ok=True)
 
     total = pq.ParquetFile(out_file).metadata.num_rows
     logger.info("CRS reports: {:,} rows", total)

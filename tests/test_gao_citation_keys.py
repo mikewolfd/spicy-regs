@@ -137,5 +137,7 @@ def test_native_dictionary_has_exact_policy_columns_and_new_key_meaning():
     prose = load_descriptions()["gao_reports"]["columns"]
     assert set(prose) == set(POLICIES["gao_reports"].subject_schema.names)
     assert "NULL" in prose["citation_product_id"] and "Blank" in prose["citation_product_id"]
+    from spicy_regs import subject_catalog
+
     root = Path(__file__).parents[1] / "src/spicy_regs"
-    assert json.loads((root / "etl_policies/gao_reports.json").read_text()) == POLICIES["gao_reports"].descriptor()
+    assert subject_catalog.descriptor_of(json.loads((root / "etl_policies/gao_reports.json").read_text())) == POLICIES["gao_reports"].descriptor()

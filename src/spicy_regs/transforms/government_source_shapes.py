@@ -8,9 +8,12 @@ No network access or publication occurs here.
 
 from __future__ import annotations
 
+import base64
+import gzip
 import hashlib
 import json
 import re
+from pathlib import Path
 from urllib.parse import urlsplit
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation, localcontext
@@ -727,3 +730,184 @@ def map_subject(dataset: str, row: Mapping[str, Any], *, generation_id: str | No
     if dataset == "gao_reports":
         subject["citation_product_id"] = citation_product_id(subject)
     return subject
+
+
+GAO_READINGS_METADATA = b"spicy_regs.gao_reports.readings"
+GAO_DECISION_RULE_METADATA = b"spicy_regs.gao_decisions.outcome_rule"
+CRS_DETAIL_WITNESSES_METADATA = b"spicy_regs.crs_reports.detail_witnesses"
+_GAO_INT_COLUMNS = frozenset({"recommendation_count", "matters_for_congress_count", "page_count"})
+
+
+def encode_kv_json(payload: Any) -> bytes:
+    """Compact gzipped JSON encoded as ASCII base64 for Parquet schema KV metadata."""
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    return base64.b64encode(gzip.compress(raw, mtime=0))
+
+
+def decode_kv_json(raw: bytes | None) -> Any:
+    """Inverse of :func:`encode_kv_json`."""
+    return json.loads(gzip.decompress(base64.b64decode(raw))) if raw else None
+
+
+def is_native_table(path: Path, dataset: str) -> bool:
+    """Whether ``path`` carries the typed ``SUBJECT_SCHEMAS[dataset]`` shape rather than a legacy text schema."""
+    import pyarrow.parquet as pq
+
+    schema = pq.read_schema(path)
+    if schema.metadata is not None and schema.metadata.get(b"government_etl_policy") == b"1":
+        return True
+    legacy = pa.schema([(c, pa.int64() if c in _GAO_INT_COLUMNS else pa.string()) for c in LEGACY_COLUMNS[dataset]])
+    return not schema.equals(legacy, check_metadata=False) and schema.equals(
+        SUBJECT_SCHEMAS[dataset], check_metadata=False
+    )
+
+
+def write_native_table(
+    rows: list[dict[str, Any]],
+    out_file: Path,
+    schema: pa.Schema,
+    *,
+    metadata: Mapping[bytes, bytes] | None = None,
+    row_group_size: int = 50_000,
+) -> Path:
+    """Atomically write ``rows`` to ``out_file`` under exact Arrow ``schema`` and optional extra KV metadata."""
+    import pyarrow.parquet as pq
+
+    target = schema.with_metadata({**(schema.metadata or {}), **(metadata or {})}) if metadata else schema
+    staged = out_file.with_name("." + out_file.name + ".partial")
+    try:
+        table = pa.Table.from_pylist(rows, schema=target) if rows else target.empty_table()
+        pq.write_table(table, staged, compression="zstd", row_group_size=row_group_size)
+        staged.replace(out_file)
+    except BaseException:
+        staged.unlink(missing_ok=True)
+        raise
+    return out_file
+
+
+def write_duckdb_native(
+    con: Any,
+    query: str,
+    out_file: Path,
+    schema: pa.Schema,
+    *,
+    metadata: Mapping[bytes, bytes] | None = None,
+    row_group_size: int = 50_000,
+) -> Path:
+    """Stream DuckDB ``query`` into ``out_file`` under exact Arrow ``schema`` (with optional extra KV metadata)."""
+    import pyarrow.parquet as pq
+
+    target = schema.with_metadata({**(schema.metadata or {}), **(metadata or {})}) if metadata else schema
+    staged = out_file.with_name("." + out_file.name + ".partial")
+    try:
+        wrote = False
+        with pq.ParquetWriter(staged, target, compression="zstd") as writer:
+            for batch in con.execute(query).to_arrow_reader(row_group_size):
+                if batch.num_rows:
+                    writer.write_table(pa.Table.from_batches([batch]).cast(target))
+                    wrote = True
+            if not wrote:
+                writer.write_table(target.empty_table())
+        staged.replace(out_file)
+    except BaseException:
+        staged.unlink(missing_ok=True)
+        raise
+    return out_file
+
+
+def ensure_native_prior(
+    dataset: str, prior_file: Path, scratch_path: Path, *, generation_id: str | None = None
+) -> Path:
+    """Return ``prior_file`` directly when already native; otherwise map a legacy test prior into ``scratch_path``."""
+    import pyarrow.parquet as pq
+
+    if is_native_table(prior_file, dataset):
+        return prior_file
+    schema = SUBJECT_SCHEMAS[dataset]
+    with pq.ParquetFile(prior_file) as source, pq.ParquetWriter(scratch_path, schema, compression="zstd") as writer:
+        wrote = False
+        for batch in source.iter_batches(batch_size=20_000):
+            mapped = [map_subject(dataset, row, generation_id=generation_id) for row in batch.to_pylist()]
+            if mapped:
+                writer.write_table(pa.Table.from_pylist(mapped, schema=schema))
+                wrote = True
+        if not wrote:
+            writer.write_table(schema.empty_table())
+    return scratch_path
+
+
+def _decimal_text(value: Decimal) -> str:
+    text = format(value, "f")
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def native_to_legacy_rows(dataset: str, path: Path) -> list[dict[str, Any]]:
+    """Read ``path`` as legacy literal row dicts without receipts (handles both native and legacy Parquet)."""
+    import pyarrow.parquet as pq
+
+    if not is_native_table(path, dataset):
+        return pq.read_table(path).to_pylist()
+    table = pq.read_table(path)
+    meta = table.schema.metadata or {}
+    readings = decode_kv_json(meta.get(GAO_READINGS_METADATA)) if dataset == "gao_reports" else None
+    crs_witnesses = decode_kv_json(meta.get(CRS_DETAIL_WITNESSES_METADATA)) if dataset == "crs_reports" else None
+    decision_rule = (
+        meta[GAO_DECISION_RULE_METADATA].decode()
+        if dataset == "gao_decisions" and GAO_DECISION_RULE_METADATA in meta
+        else None
+    )
+    fields = list(table.schema)
+    legacy_cols = LEGACY_COLUMNS[dataset]
+    rows: list[dict[str, Any]] = []
+    for row in table.to_pylist():
+        out: dict[str, Any] = dict.fromkeys(legacy_cols)
+        for field in fields:
+            name, value = field.name, row[field.name]
+            if name in ("citation_product_id", "generation_id", "extraction_results"):
+                continue
+            if pa.types.is_list(field.type):
+                target = name + "_json"
+                if value is None:
+                    out[target] = None
+                elif dataset == "crs_reports":
+                    out[target] = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                else:
+                    out[target] = json.dumps(value, ensure_ascii=False)
+            elif pa.types.is_date(field.type):
+                out[name] = value.isoformat() if value is not None else None
+            elif pa.types.is_timestamp(field.type):
+                out[name] = value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z") if value is not None else None
+            elif pa.types.is_boolean(field.type):
+                out[name] = None if value is None else ("true" if value else "false")
+            elif pa.types.is_integer(field.type):
+                out[name] = value if name in _GAO_INT_COLUMNS else (None if value is None else str(value))
+            elif pa.types.is_decimal(field.type):
+                out[name] = None if value is None else _decimal_text(value)
+            else:
+                out[name] = value
+        if readings and (extra := readings.get(out["report_id"])):
+            out.update(extra)
+        if dataset == "gao_decisions" and out.get("outcome") is not None:
+            if decision_rule is not None:
+                out["outcome_rule"] = decision_rule
+            else:
+                from spicy_docs.interpretation.gao_decisions import decision_outcome
+
+                out["outcome_rule"] = decision_outcome(out.get("decision_status")).rule
+        if dataset == "crs_reports" and isinstance(row.get("detail_fields"), list):
+            from spicy_regs.crs_report_detail import SOURCE_FIELDS
+
+            null_fields = {
+                entry["name"]
+                for entry in row["detail_fields"]
+                if isinstance(entry, dict) and entry.get("state") == "null"
+            }
+            for column, source_name in SOURCE_FIELDS.items():
+                if column.endswith("_json") and out.get(column) is None and source_name in null_fields:
+                    out[column] = "null"
+        if crs_witnesses:
+            key = f"{out['report_id']}@{out['update_date']}"
+            if key in crs_witnesses:
+                out["detail_witness_json"] = crs_witnesses[key]
+        rows.append(out)
+    return rows

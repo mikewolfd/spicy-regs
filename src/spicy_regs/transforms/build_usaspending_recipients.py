@@ -35,7 +35,12 @@ from loguru import logger
 
 from spicy_regs.transforms.parquet_rows import str_or_none
 from spicy_regs.sources import r2
-from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
+from spicy_regs.transforms.government_source_shapes import (
+    SUBJECT_SCHEMAS,
+    ensure_native_prior,
+    map_subject,
+    write_duckdb_native,
+)
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -172,7 +177,6 @@ def _funded(record: Mapping[str, Any]) -> bool:
     return isinstance(amount, int | float | Decimal) and not isinstance(amount, bool) and amount > 0
 
 
-@receipt_builder
 def build_usaspending_recipients(
     output_dir: Path, *, max_pages: int | None = None, evidence: CaptureEvidence | None = None,
     every_funded: bool = False,
@@ -180,24 +184,28 @@ def build_usaspending_recipients(
     """Build ``usaspending_recipients.parquet`` (the selected ranking merged with the prior table)."""
     import duckdb
 
+    schema = SUBJECT_SCHEMAS["usaspending_recipients"]
     out_file = output_dir / OUTPUT
     prior_file = output_dir / "_usaspending_prior.parquet"
+    prior_native = output_dir / "_usaspending_prior_native.parquet"
 
     # 1. Pull the prior table (best effort — absence just means a clean build).
     have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
-    if have_prior:
-        prior_file = internal_prior("usaspending_recipients", prior_file)
-    if have_prior:
-        logger.info("USASpending recipients: merging against prior table {}", prior_file)
+    selected_prior = ensure_native_prior("usaspending_recipients", prior_file, prior_native) if have_prior else None
+    if selected_prior is not None:
+        logger.info("USASpending recipients: merging against prior table {}", selected_prior)
     else:
         logger.info("USASpending recipients: no prior table found — clean build")
 
-    # 2. Fetch + shape into a "new rows" parquet.
-    rows = [_shape(doc) for doc in _iter_recipient_rows(
-        max_pages=max_pages, include_observation=True, evidence=evidence, every_funded=every_funded,
-    )]
+    # 2. Fetch + shape + map into a native "new rows" parquet.
+    rows = [
+        map_subject("usaspending_recipients", _shape(doc))
+        for doc in _iter_recipient_rows(
+            max_pages=max_pages, include_observation=True, evidence=evidence, every_funded=every_funded,
+        )
+    ]
     new_file = output_dir / "_usaspending_new.parquet"
-    table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
+    table = pa.Table.from_pylist(rows, schema=schema) if rows else schema.empty_table()
     pq.write_table(table, new_file, compression="zstd")
     logger.info("USASpending recipients: fetched {:,} recipients this run", len(rows))
 
@@ -205,31 +213,24 @@ def build_usaspending_recipients(
     spill_dir = output_dir / ".duckdb_tmp"
     spill_dir.mkdir(exist_ok=True)
     con = duckdb.connect()
-    con.execute("SET memory_limit='4GB'")
-    con.execute("SET preserve_insertion_order=false")
-    con.execute("SET threads=2")
-    con.execute(f"SET temp_directory='{spill_dir}'")
+    try:
+        con.execute("SET memory_limit='4GB'")
+        con.execute("SET preserve_insertion_order=false")
+        con.execute("SET threads=2")
+        con.execute(f"SET temp_directory='{spill_dir}'")
 
-    cols = ", ".join(COLUMNS)
-    if have_prior:
-        prior_columns = set(pq.read_schema(prior_file).names)
-        # Only the additive observation fields may be absent in a legacy file.
-        # Never stamp carried records with this run's time or capture digest.
-        prior_cols = ", ".join(
-            f"CAST(NULL AS VARCHAR) AS {col}" if col not in prior_columns and col in
-            ("observed_at", "source_capture_sha256") else col for col in COLUMNS
-        )
-        union = (
-            f"SELECT {prior_cols}, 0 AS _src FROM read_parquet('{prior_file}') "
-            f"UNION ALL BY NAME "
-            f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
-        )
-    else:
-        union = f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
-
-    con.execute(
-        f"""
-        COPY (
+        cols = ", ".join(f'"{c}"' for c in schema.names)
+        new_path = str(new_file).replace("'", "''")
+        if selected_prior is not None:
+            prior_path = str(selected_prior).replace("'", "''")
+            union = (
+                f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_path}') "
+                f"UNION ALL BY NAME "
+                f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_path}')"
+            )
+        else:
+            union = f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_path}')"
+        query = f"""
             SELECT {cols} FROM (
                 SELECT {cols}, ROW_NUMBER() OVER (
                     PARTITION BY recipient_id ORDER BY _src DESC
@@ -238,14 +239,14 @@ def build_usaspending_recipients(
                 WHERE recipient_id IS NOT NULL
             )
             WHERE _rn = 1
-            ORDER BY TRY_CAST(total_award_amount AS DOUBLE) DESC NULLS LAST, recipient_id
-        ) TO '{out_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
+            ORDER BY CAST(total_award_amount AS DOUBLE) DESC NULLS LAST, recipient_id
         """
-    )
-    con.close()
+        write_duckdb_native(con, query, out_file, schema)
+    finally:
+        con.close()
 
     # Housekeeping: drop scratch files so they aren't mistaken for outputs.
-    for scratch in (prior_file, new_file):
+    for scratch in (prior_file, prior_native, new_file):
         scratch.unlink(missing_ok=True)
 
     total = pq.ParquetFile(out_file).metadata.num_rows

@@ -585,7 +585,11 @@ def test_a_table_points_at_its_receipt_in_at_most_one_sentence():
     errors = dd.receipt_pointer_errors("crs_reports", entry)
     assert len(errors) == 1 and "in 2 sentences (summary, columns.report_id)" in errors[0], errors
     broken = {table: dict(value) for table, value in dd.load_descriptions().items()}
-    broken["crs_reports"] = {**broken["crs_reports"], "data_quality": "Dated 2026-10-05: more is kept in the receipt."}
+    broken["crs_reports"] = {
+        **broken["crs_reports"],
+        "summary": broken["crs_reports"]["summary"] + " Source locators remain in receipts.",
+        "data_quality": "Dated 2026-10-05: more is kept in the receipt.",
+    }
     assert any(e.startswith("[crs_reports] points readers to its receipt in 2 sentences")
                for e in dd.check_descriptions(dd.expected_schemas(), broken))
 
@@ -634,9 +638,8 @@ def test_a_view_points_at_a_receipt_in_at_most_one_sentence_too():
         fields = dd.receipt_pointers({"summary": spec.meaning, "columns": columns})
         assert len(fields) <= 1, (spec.name, fields)
         pointing |= {spec.name} if fields else set()
-    # Offered document URLs are now main fields. Native observation evidence
-    # still points once to retained receipts; artifacts need no receipt key.
-    assert pointing == {"fcc_native_observations"}
+    # Offered document URLs and filing page URLs are derived from main fields; no view points at receipts.
+    assert pointing == set()
 
 
 # --------------------------------------------------------------------------- #

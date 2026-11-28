@@ -257,12 +257,11 @@ def test_build_fcc_proceedings_matches_receipt_route_without_writing_receipts(tm
     import pyarrow.parquet as pq
 
     from spicy_regs.pipelines.rollups.fcc_proceedings import FccProceedingsRollup
-    from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup, GovernmentTableRollup
+    from spicy_regs.pipelines.rollups.government import GovernmentTableRollup
     from spicy_regs.transforms import build_fcc_ecfs as fcc
     from spicy_regs.transforms.government_receipts import migrate_outputs
 
     assert issubclass(FccProceedingsRollup, GovernmentTableRollup)
-    assert not issubclass(FccProceedingsRollup, GovernmentReceiptRollup)
 
     fixture = json.loads((_FIXTURES / "proceeding_96_82.json").read_text())["record"]
     documents = [

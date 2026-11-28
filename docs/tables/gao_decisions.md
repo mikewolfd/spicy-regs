@@ -4,7 +4,7 @@
 
 **Government Accountability Office legal decisions**
 
-One GAO legal decision page, identified by its stated number and URL. A page can list several B-numbers, and one number can have several pages. Completed listing walks refresh named decisions; retained page captions can add the full number list and decision date. `outcome` classifies source decision-status text. Native `/3` rows expose `listing_page`; earlier schemas retain it in receipts.
+One GAO legal decision page, identified by its stated number and URL. A page can list several B-numbers, and one number can have several pages. Completed listing walks refresh named decisions; retained page captions can add the full number list and decision date. `outcome` classifies source decision-status text. Rows expose `listing_page`.
 
 **Coverage.** True range from 2009 on, within completed GAO Month in Review and Annual Index walks. Includes numbered legal decisions and Contract Appeals Board decisions; major-rule reports belong to `gao_reports`. Unnumbered entries are excluded. Year scopes can span several months. Missing rows alone cannot distinguish an unread scope from a completed listing with no decisions. *(measured 2026-10-03)*
 

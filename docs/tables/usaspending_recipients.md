@@ -6,7 +6,7 @@
 
 One USAspending recipient and rollup level, keyed by `recipient_id`. The public recipient API ranks trailing-12-month federal awards: daily reads refresh the top 10,000 and weekly walks select the positive-amount tail. Rows outside a selection retain prior amounts. UEI supports related SAM registrations; names are matching candidates. Parent, child and recipient levels must not be added together.
 
-**Coverage.** Not a range. Weekly walks select recipients with positive trailing-12-month awards; daily reads refresh the top of the ranking. Recipients outside a run's selection keep earlier amounts, so reporting periods can differ. Observation time and source digest belong to receipts when retained; older evidence may lack them. Absence does not prove the recipient has no federal awards. *(measured 2026-09-24)*
+**Coverage.** Not a range. Weekly walks select recipients with positive trailing-12-month awards; daily reads refresh the top of the ranking. Recipients outside a run's selection keep earlier amounts, so reporting periods can differ. Observation time and source digest belong to retained capture evidence when available; older runs may lack them. Absence does not prove the recipient has no federal awards. *(measured 2026-09-24)*
 
 - **Parquet file:** `usaspending_recipients.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -19,5 +19,5 @@ One USAspending recipient and rollup level, keyed by `recipient_id`. The public 
 | `uei` | `VARCHAR` | SAM.gov Unique Entity Identifier (UEI), when supplied. Links to related SAM registrations; older records can lack it. |
 | `duns` | `VARCHAR` | Legacy Data Universal Numbering System (DUNS) identifier, when supplied. UEI replaced it; newer records can lack it. |
 | `name` | `VARCHAR` | Publisher-stated recipient name. Name matching identifies candidates; it does not establish organization identity. |
-| `recipient_level` | `VARCHAR` | Publisher rollup level: P (parent), C (child) or R (recipient). One UEI can have several levels; their amounts do not sum and can describe different observations. A child's awards can appear under several parents. Compare matching levels and periods using receipt evidence when available; list amounts can differ from a profile page. |
-| `total_award_amount` | `DECIMAL(38,6)` | Trailing-12-month federal award dollars reported by the recipient-list endpoint at its last read. Rows outside the latest selection can retain older amounts. Observation time and source digest are in retained receipt evidence when available, not main columns. |
+| `recipient_level` | `VARCHAR` | Publisher rollup level: P (parent), C (child) or R (recipient). One UEI can have several levels; their amounts do not sum and can describe different observations. A child's awards can appear under several parents. Compare matching levels and periods using retained capture evidence when available; list amounts can differ from a profile page. |
+| `total_award_amount` | `DECIMAL(38,6)` | Trailing-12-month federal award dollars reported by the recipient-list endpoint at its last read. Rows outside the latest selection can retain older amounts. Observation time and source digest are in retained capture evidence when available, not main columns. |

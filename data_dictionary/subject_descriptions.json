@@ -2185,8 +2185,8 @@
       "uei": "SAM.gov Unique Entity Identifier (UEI), when supplied. Links to related SAM registrations; older records can lack it.",
       "duns": "Legacy Data Universal Numbering System (DUNS) identifier, when supplied. UEI replaced it; newer records can lack it.",
       "name": "Publisher-stated recipient name. Name matching identifies candidates; it does not establish organization identity.",
-      "recipient_level": "Publisher rollup level: P (parent), C (child) or R (recipient). One UEI can have several levels; their amounts do not sum and can describe different observations. A child's awards can appear under several parents. Compare matching levels and periods using receipt evidence when available; list amounts can differ from a profile page.",
-      "total_award_amount": "Trailing-12-month federal award dollars reported by the recipient-list endpoint at its last read. Rows outside the latest selection can retain older amounts. Observation time and source digest are in retained receipt evidence when available, not main columns."
+      "recipient_level": "Publisher rollup level: P (parent), C (child) or R (recipient). One UEI can have several levels; their amounts do not sum and can describe different observations. A child's awards can appear under several parents. Compare matching levels and periods using retained capture evidence when available; list amounts can differ from a profile page.",
+      "total_award_amount": "Trailing-12-month federal award dollars reported by the recipient-list endpoint at its last read. Rows outside the latest selection can retain older amounts. Observation time and source digest are in retained capture evidence when available, not main columns."
     }
   },
   "fec_collections": {

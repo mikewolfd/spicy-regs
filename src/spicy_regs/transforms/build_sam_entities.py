@@ -46,8 +46,13 @@ from loguru import logger
 from spicy_regs.transforms.parquet_rows import str_or_none
 from spicy_regs.env_values import first_env
 from spicy_regs.sources import r2
-from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
-from spicy_regs.transforms.table_merge import merge_local_prior, retired_rows
+from spicy_regs.transforms.government_source_shapes import (
+    SUBJECT_SCHEMAS,
+    ensure_native_prior,
+    map_subject,
+    write_duckdb_native,
+)
+from spicy_regs.transforms.table_merge import retired_rows
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -291,7 +296,6 @@ def _shape(doc: dict) -> dict:
     }
 
 
-@receipt_builder
 def build_sam_entities(
     output_dir: Path,
     *,
@@ -312,21 +316,22 @@ def build_sam_entities(
     """
     import duckdb
 
+    schema = SUBJECT_SCHEMAS["sam_entities"]
     out_file = output_dir / OUTPUT
     prior_file = output_dir / "_sam_prior.parquet"
+    prior_native = output_dir / "_sam_prior_native.parquet"
 
     # 1. Pull the prior table (best effort — absence just means a fresh seed).
     have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
-    if have_prior:
-        prior_file = internal_prior("sam_entities", prior_file)
-    if have_prior:
-        logger.info("SAM entities: merging against prior table {}", prior_file)
+    selected_prior = ensure_native_prior("sam_entities", prior_file, prior_native) if have_prior else None
+    if selected_prior is not None:
+        logger.info("SAM entities: merging against prior table {}", selected_prior)
     else:
         logger.info("SAM entities: no prior table found — seeding a new table")
 
-    # 2. Fetch + shape into a "new rows" parquet.
+    # 2. Fetch + shape + map into a native "new rows" parquet.
     rows = [
-        _shape(doc)
+        map_subject("sam_entities", _shape(doc))
         for doc in _iter_sam_entities(
             evidence=evidence,
             mode=mode,
@@ -338,7 +343,7 @@ def build_sam_entities(
         )
     ]
     new_file = output_dir / "_sam_new.parquet"
-    table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
+    table = pa.Table.from_pylist(rows, schema=schema) if rows else schema.empty_table()
     pq.write_table(table, new_file, compression="zstd")
     logger.info("SAM entities: fetched {:,} entities this run", len(rows))
 
@@ -346,42 +351,59 @@ def build_sam_entities(
     spill_dir = output_dir / ".duckdb_tmp"
     spill_dir.mkdir(exist_ok=True)
     con = duckdb.connect()
-    con.execute("SET memory_limit='4GB'")
-    con.execute("SET preserve_insertion_order=false")
-    con.execute("SET threads=2")
-    con.execute(f"SET temp_directory='{spill_dir}'")
+    try:
+        con.execute("SET memory_limit='4GB'")
+        con.execute("SET preserve_insertion_order=false")
+        con.execute("SET threads=2")
+        con.execute(f"SET temp_directory='{spill_dir}'")
 
-    # An unbounded extract year is SAM's whole active set for that year: it replaces the year's rows.
-    retire = None
-    if mode == "extract" and max_records is None:
-        years = _extract_years(since_year, until_year, year_windows)
-        retire = "TRUE" if years == [None] else (
-            "substr(registration_date, 1, 4) IN (" + ", ".join(f"'{year}'" for year in years) + ")"
-        )
-        if have_prior:
-            retired = retired_rows(con, identity=IDENTITY, prior_file=prior_file, new_file=new_file, retire=retire)
-            logger.info("SAM entities: retiring {:,} registrations the completed years no longer hold", len(retired))
-            if evidence is not None:
-                evidence.event(
-                    "rows-retired", stage="sam", table="sam_entities", key=list(IDENTITY), rows=retired,
-                    reason="an unbounded extract year is SAM's complete active set for that registrationDate year",
-                    scope={"registration_date_years": years},
-                )
+        # An unbounded extract year is SAM's whole active set for that year: it replaces the year's rows.
+        retire = None
+        if mode == "extract" and max_records is None:
+            years = _extract_years(since_year, until_year, year_windows)
+            retire = "TRUE" if years == [None] else (
+                "substr(CAST(registration_date AS VARCHAR), 1, 4) IN ("
+                + ", ".join(f"'{year}'" for year in years)
+                + ")"
+            )
+            if selected_prior is not None:
+                retired = retired_rows(con, identity=IDENTITY, prior_file=selected_prior, new_file=new_file, retire=retire)
+                logger.info("SAM entities: retiring {:,} registrations the completed years no longer hold", len(retired))
+                if evidence is not None:
+                    evidence.event(
+                        "rows-retired", stage="sam", table="sam_entities", key=list(IDENTITY), rows=retired,
+                        reason="an unbounded extract year is SAM's complete active set for that registrationDate year",
+                        scope={"registration_date_years": years},
+                    )
 
-    merge_local_prior(
-        con,
-        columns=COLUMNS,
-        identity=IDENTITY,
-        order_by="legal_business_name, uei, entity_eft_indicator",
-        prior_file=prior_file if have_prior else None,
-        new_file=new_file,
-        out_file=out_file,
-        retire=retire,
-    )
-    con.close()
+        cols = ", ".join(f'"{c}"' for c in schema.names)
+        new_path = str(new_file).replace("'", "''")
+        if selected_prior is not None:
+            prior_path = str(selected_prior).replace("'", "''")
+            union = (
+                f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_path}') "
+                + (f"WHERE ({retire}) IS NOT TRUE " if retire else "")
+                + f"UNION ALL BY NAME SELECT {cols}, 1 AS _src FROM read_parquet('{new_path}')"
+            )
+        else:
+            union = f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_path}')"
+        query = f"""
+            SELECT {cols} FROM (
+                SELECT {cols}, ROW_NUMBER() OVER (
+                    PARTITION BY "uei", "entity_eft_indicator" ORDER BY _src DESC
+                ) AS _rn
+                FROM ({union})
+                WHERE "uei" IS NOT NULL
+            )
+            WHERE _rn = 1
+            ORDER BY legal_business_name, uei, entity_eft_indicator
+        """
+        write_duckdb_native(con, query, out_file, schema)
+    finally:
+        con.close()
 
     # Housekeeping: drop scratch files so they aren't mistaken for outputs.
-    for scratch in (prior_file, new_file):
+    for scratch in (prior_file, prior_native, new_file):
         scratch.unlink(missing_ok=True)
 
     total = pq.ParquetFile(out_file).metadata.num_rows

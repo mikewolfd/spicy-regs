@@ -16,10 +16,11 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_regs.etl_receipts import read_with_receipts, validate_receipt_bundle
+from spicy_regs.etl_receipts import read_with_receipts
 from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.transforms.build_crs_reports import _SCHEMA, CrsOperationLimitError, _shape, build_crs_reports
 from spicy_regs.transforms.government_receipts import POLICIES, migrate_outputs
+from spicy_regs.transforms.government_source_shapes import native_to_legacy_rows
 from tests.test_crs_report_detail import DETAIL, LIST
 
 
@@ -149,32 +150,42 @@ def test_installed_local_command_enriches_exact_old_revision_and_repeats_without
             ("R1", datetime(2026, 10, 2, tzinfo=UTC), 3, None, None),
             ("R2", datetime(2026, 10, 1, tzinfo=UTC), 2, None, None),
         ]
-    receipts = pq.read_table(output / "etl_receipts.parquet").to_pylist()
-    unchanged = {row["record_id"]: row for row in pq.read_table(prior[1]).to_pylist()}
-    assert sum(row == unchanged.get(row["record_id"]) for row in receipts) == 2
-    second = tmp_path / "unchanged"
-    repeat = command.copy()
-    repeat[3] = str(second)
-    repeat[repeat.index("--prior-subject") + 1] = str(native)
-    repeat[repeat.index("--prior-receipts") + 1] = str(output / "etl_receipts.parquet")
-    generation = json.loads((output / ".government-etl-build.json").read_text())["generation_id"]
+    assert not (output / "etl_receipts.parquet").exists()
+    assert not (output / ".government-etl-build.json").exists()
     if unselected_failed:
-        [failed] = [
-            row["raw_record"]
-            for row in read_with_receipts(
-                [native], [output / "etl_receipts.parquet"], POLICIES["crs_reports"], generation_id=generation
-            )
-            if row["raw_record"]["report_id"] == "R2"
-        ]
-        assert failed == failed_raw  # Includes the original failed-attempt witness.
-    repeat[repeat.index("--prior-generation-id") + 1] = generation
+        [failed] = [row for row in native_to_legacy_rows("crs_reports", native) if row["report_id"] == "R2"]
+        assert failed["detail_attempt_state"] == "failed"
+        assert failed["detail_error"] == "prior source unavailable"
+    second = tmp_path / "unchanged"
+    repeat = [
+        sys.executable,
+        "-m",
+        "spicy_regs.crs_report_operations",
+        str(second),
+        "--operation",
+        "detail",
+        "--prior-subject",
+        str(native),
+        "--max-prior-bytes",
+        str(1024 * 1024),
+        "--max-prior-rows",
+        "10",
+        "--max-requests",
+        "0",
+        "--max-details",
+        "1",
+        "--report",
+        "R1@2026-10-01T00:00:00Z",
+        "--retained-details",
+        str(selection),
+    ]
     result = subprocess.run(repeat, check=False, capture_output=True, text=True, env=dict(os.environ), timeout=90)
     assert result.returncode == 0, result.stderr
     repeated_status = json.loads(result.stdout)["coverage"]
     assert repeated_status["detail_attempted"] == repeated_status["detail_failed"] == 0
     assert repeated_status["retained_detail_failed"] == int(unselected_failed)
-    assert pq.read_table(second / "crs_reports.parquet").to_pylist() == pq.read_table(native).to_pylist()
-    assert pq.read_table(second / "etl_receipts.parquet").to_pylist() == receipts
+    assert pq.read_table(second / "crs_reports.parquet").equals(pq.read_table(native))
+    assert not (second / "etl_receipts.parquet").exists()
 
 
 @pytest.mark.parametrize(
@@ -238,7 +249,6 @@ def test_failed_explicit_retry_preserves_qualified_values_clocks_and_unselected_
     qualified = selected_build(
         prior, tmp_path / "qualified", retained_details={"R1": (original, "sha256:" + hashlib.sha256(body).hexdigest())}
     )
-    metadata = json.loads((qualified.parent / ".government-etl-build.json").read_text())
     output = tmp_path / "failed"
     output.mkdir()
     asked = []
@@ -253,8 +263,6 @@ def test_failed_explicit_retry_preserves_qualified_values_clocks_and_unselected_
     path = build_crs_reports(
         output,
         prior_subject=qualified,
-        prior_receipt_path=qualified.parent / "etl_receipts.parquet",
-        prior_generation_id=metadata["generation_id"],
         refresh_list=False,
         detail_limit=1,
         detail_reports=["R1@2026-10-01T00:00:00Z"],
@@ -275,7 +283,7 @@ def test_failed_explicit_retry_preserves_qualified_values_clocks_and_unselected_
     journal = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
     discovery = [event for event in journal if event["event"] == "crs-discovery"][-1]
     assert discovery["cursor"] == cursor and discovery["mode"] == "detail-only"
-    validate_receipt_bundle({"crs_reports": [path]}, [output / "etl_receipts.parquet"], [POLICIES["crs_reports"]])
+    assert not (output / "etl_receipts.parquet").exists()
 
 
 @pytest.mark.parametrize("limit", ["requests", "bytes", "rows"])

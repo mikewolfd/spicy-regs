@@ -213,8 +213,12 @@ def test_an_unchanged_row_keeps_its_prior_receipt_verbatim_across_a_rebuild(tmp_
     assert receipts[0]["generation_id"] == "first"
 
 
-def test_complete_generation_requires_paired_receipts_and_verifies(tmp_path):
+def test_complete_generation_requires_paired_receipts_and_verifies(tmp_path, monkeypatch):
+    from spicy_regs import subject_catalog
+
     dataset = "crs_reports"
+    retired_without_crs = subject_catalog.retired_receipt_datasets() - {dataset}
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired_without_crs)
     path = literal(tmp_path / "build", dataset, [{"report_id": "R", "update_date": "2026-07-17T22:38:55Z",
                                                 "status": "Active", "version": "3"}])
     migrate_outputs((path,), generation_id="complete")
@@ -298,6 +302,7 @@ def test_empty_processing_observations_survive_incremental_rebuild(tmp_path):
 
 def test_later_listing_keeps_held_gao_caption_and_domain_status(tmp_path, monkeypatch):
     from importlib import import_module
+    from spicy_regs.transforms.government_source_shapes import native_to_legacy_rows
 
     module = import_module("spicy_regs.transforms.build_gao_reports")
     dataset = "gao_decisions"
@@ -321,6 +326,8 @@ def test_later_listing_keeps_held_gao_caption_and_domain_status(tmp_path, monkey
         ],
     )
     migrate_outputs((path,), generation_id="caption")
+    (tmp_path / "etl_receipts.parquet").unlink()
+    (tmp_path / BUILD_METADATA).unlink()
     import shutil
 
     shutil.copyfile(path, tmp_path / "_gao_decisions_prior.parquet")
@@ -337,7 +344,8 @@ def test_later_listing_keeps_held_gao_caption_and_domain_status(tmp_path, monkey
         "b_numbers_json": '["B-1"]',
         "source": "gao_listing",
     }
-    output = module._build_decisions(tmp_path, [fresh], receipt_generation_id="listing")
+    output = module._build_decisions(tmp_path, [fresh])
+    assert not (tmp_path / "etl_receipts.parquet").exists()
     [subject] = pq.read_table(output).to_pylist()
     assert subject["title"] == "Fresh title"
     assert subject["decided_date"].isoformat() == "2026-01-02"
@@ -345,24 +353,20 @@ def test_later_listing_keeps_held_gao_caption_and_domain_status(tmp_path, monkey
     assert subject["decision_status"] == "We deny the protest." and subject["outcome"] == "denied"
     assert subject["b_numbers_truncated"] is False
     assert "outcome_rule" not in subject
-    [joined] = read_with_receipts(
-        [output], [tmp_path / "etl_receipts.parquet"], POLICIES[dataset], generation_id="listing"
-    )
+    [restored] = native_to_legacy_rows(dataset, output)
     from spicy_docs.interpretation.gao_decisions import GAO_OUTCOME_RULE
 
-    assert joined["raw_record"]["outcome_rule"] == GAO_OUTCOME_RULE
+    assert restored["outcome_rule"] == GAO_OUTCOME_RULE
 
 
-def test_gao_prior_published_without_the_cut_flag_is_read_once_and_rewritten_with_it(tmp_path, monkeypatch):
+def test_gao_prior_published_without_the_cut_flag_is_read_once_and_rewritten_with_it(tmp_path):
     """gao-reports published gao_decisions under government-sources/1 on 2026-10-04, the flag only in its receipts."""
     import json
     import shutil
-    from importlib import import_module
 
     from spicy_regs.etl_receipts import ReceiptContext, write_dataset
     from spicy_regs.transforms.government_receipts import EARLIER_POLICIES, _digest
 
-    module = import_module("spicy_regs.transforms.build_gao_reports")
     dataset = "gao_decisions"
     earlier = next(p for p in EARLIER_POLICIES[dataset] if p.policy_version == "government-sources/1")
     assert earlier.policy_version != POLICIES[dataset].policy_version
@@ -399,9 +403,14 @@ def test_gao_prior_published_without_the_cut_flag_is_read_once_and_rewritten_wit
             }
         )
     )
-    monkeypatch.setattr(module.r2, "download", lambda *_: False)
+    @receipt_builder(dataset=dataset)
+    def upgrade(directory: Path) -> Path:
+        restored = internal_prior(dataset, prior)
+        target = directory / (dataset + ".parquet")
+        shutil.copyfile(restored, target)
+        return target
 
-    output = module._build_decisions(tmp_path, [], receipt_generation_id="upgrade")
+    output = upgrade(tmp_path, receipt_generation_id="upgrade")
 
     assert pq.read_schema(output).equals(SUBJECT_SCHEMAS[dataset])
     [row] = pq.read_table(output).to_pylist()
@@ -533,7 +542,15 @@ def test_gao_reports_prior_published_before_the_letter_columns_is_read_once_and_
     monkeypatch.setattr(module, "GaoReportsReader", NoFeed)
     monkeypatch.setattr(module.r2, "download", lambda *_: False)
 
-    output, _ = module.build_gao_reports(tmp_path, receipt_generation_id="upgrade")
+    @receipt_builder(dataset=dataset)
+    def upgrade(directory: Path) -> Path:
+        restored = internal_prior(dataset, prior)
+        target = directory / (dataset + ".parquet")
+        full_rows = [{**dict.fromkeys(module.COLUMNS), **row} for row in pq.read_table(restored).to_pylist()]
+        pq.write_table(pa.Table.from_pylist(full_rows, schema=module._SCHEMA), target)
+        return target
+
+    output = upgrade(tmp_path, receipt_generation_id="upgrade")
 
     assert pq.read_schema(output).equals(SUBJECT_SCHEMAS[dataset])
     [row] = pq.read_table(output).to_pylist()
@@ -554,65 +571,37 @@ def test_gao_reports_prior_published_before_the_letter_columns_is_read_once_and_
         # No identity can link this raw input to a successful conversion: retain it unchanged.
         assert [item for item in receipt_rows if item["outcome"] == "refused"] == [refused]
 
-    # The run that holds the letters' capture: the same row, now under the current policy, takes its letter.
+    # The run that holds the letters' capture: the same row, now under the receiptless builder, takes its letter.
+    (tmp_path / "etl_receipts.parquet").unlink()
+    (tmp_path / BUILD_METADATA).unlink()
     output.rename(prior)
     letters = capture(tmp_path / "letters", {PRODUCTS + "gao-04-193r": page("gao-04-193r")})
-    output, _ = module.build_gao_reports(tmp_path, receipt_generation_id="letters", major_rule_letters=(letters,))
+    output, _ = module.build_gao_reports(tmp_path, major_rule_letters=(letters,))
+    assert not (tmp_path / "etl_receipts.parquet").exists()
     [row] = pq.read_table(output).to_pylist()
     assert (row["major_rule_rins"], row["major_rule_fr_citations"]) == (["0910-AC40"], ["68-58894"])
     assert row["major_rule_agency"].startswith("Department of Health and Human Services")
     assert {name: row[name] for name in earlier.subject_schema.names} == subject
 
 
-def test_acquisition_failure_receipt_pins_shared_evidence_without_exception_text(tmp_path):
-    from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup
-    from spicy_regs.transforms.government_receipts import _digest
-
-    class FailedCrs(GovernmentReceiptRollup):
-        name = "crs-failure-test"
-        output = "crs_reports.parquet"
-        inputs = ()
-        retain_source_evidence = True
-
-        def build(self, output_dir):
-            raise RuntimeError("an arbitrary message that must not enter receipts")
-
-    pipeline = FailedCrs(output_dir=tmp_path, skip_upload=True)
-    with pytest.raises(RuntimeError, match="arbitrary message"):
-        pipeline.run()
-    evidence = pipeline.source_evidence
-    assert evidence is not None
-    receipts = evidence.directory / "etl-failure/etl_receipts.parquet"
-    [attempt] = read_attempts([receipts], POLICIES["crs_reports"], generation_id=pipeline.receipt_generation_id)
-    assert attempt["outcome"] == "error"
-    assert attempt["diagnostics"] == {"stage": "rollup", "error_type": "RuntimeError"}
-    assert attempt["witnesses"][0]["sha256"] == _digest(evidence.artifact_dir / "artifact.json")
-    assert b"arbitrary message" not in receipts.read_bytes()
-
-
-def test_government_table_rollup_enforces_retired_receipts_declaration():
+def test_government_table_rollup_enforces_retired_receipts_declaration(monkeypatch):
     """GovernmentTableRollup mirrors SubjectTableRollup: every subclass must declare only retired-receipt datasets."""
+    from spicy_regs import subject_catalog
     from spicy_regs.pipelines.rollups.crs_reports import CrsReportsRollup
     from spicy_regs.pipelines.rollups.fcc_filings import FccFilingsRollup
     from spicy_regs.pipelines.rollups.fcc_proceedings import FccProceedingsRollup
     from spicy_regs.pipelines.rollups.gao_recommendations import GaoRecommendationsRollup
     from spicy_regs.pipelines.rollups.gao_reports import GaoReportsRollup
-    from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup, GovernmentTableRollup
+    from spicy_regs.pipelines.rollups.government import GovernmentTableRollup
     from spicy_regs.pipelines.rollups.lobbying_filings import LobbyingFilingsRollup, LobbyingRetainedRebuild
     from spicy_regs.pipelines.rollups.sam_entities import SamEntitiesRollup
     from spicy_regs.pipelines.rollups.usaspending_recipients import UsaSpendingRecipientsRollup
-    from spicy_regs.subject_catalog import retired_receipt_datasets
 
-    retired = retired_receipt_datasets()
-    for rollup in (FccProceedingsRollup, LobbyingFilingsRollup, LobbyingRetainedRebuild):
-        assert issubclass(rollup, GovernmentTableRollup)
-        assert not issubclass(rollup, GovernmentReceiptRollup)
-        assert rollup.receipt_policies == ()
-        keys = rollup.outputs or (rollup.output,)
-        assert all(isinstance(key, str) for key in keys)
-        assert {key.removesuffix(".parquet") for key in keys if isinstance(key, str)} <= retired
-
+    retired = subject_catalog.retired_receipt_datasets()
     for rollup in (
+        FccProceedingsRollup,
+        LobbyingFilingsRollup,
+        LobbyingRetainedRebuild,
         CrsReportsRollup,
         FccFilingsRollup,
         GaoRecommendationsRollup,
@@ -620,11 +609,16 @@ def test_government_table_rollup_enforces_retired_receipts_declaration():
         SamEntitiesRollup,
         UsaSpendingRecipientsRollup,
     ):
-        assert issubclass(rollup, GovernmentReceiptRollup)
-        assert not issubclass(rollup, GovernmentTableRollup)
-        assert rollup.receipt_policies
+        assert issubclass(rollup, GovernmentTableRollup)
+        assert rollup.receipt_policies == ()
+        keys = rollup.outputs or (rollup.output,)
+        assert all(isinstance(key, str) for key in keys)
+        assert {key.removesuffix(".parquet") for key in keys if isinstance(key, str)} <= retired
 
-    with pytest.raises(ValueError, match=r"UnguardedCrs: \['crs_reports'\] still publish receipts; use GovernmentReceiptRollup"):
+    partially_retired = retired - {"crs_reports", "fcc_filings"}
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: partially_retired)
+
+    with pytest.raises(ValueError, match=r"UnguardedCrs: \['crs_reports'\] still publish receipts; retire their policies first"):
         class UnguardedCrs(GovernmentTableRollup):  # noqa: F841
             name = "crs-reports"
             output = "crs_reports.parquet"
@@ -632,7 +626,7 @@ def test_government_table_rollup_enforces_retired_receipts_declaration():
             def build(self, output_dir):
                 raise NotImplementedError
 
-    with pytest.raises(ValueError, match=r"MixedGovernment: \['fcc_filings'\] still publish receipts; use GovernmentReceiptRollup"):
+    with pytest.raises(ValueError, match=r"MixedGovernment: \['fcc_filings'\] still publish receipts; retire their policies first"):
         class MixedGovernment(GovernmentTableRollup):  # noqa: F841
             name = "mixed-government"
             outputs = ("fcc_proceedings.parquet", "fcc_filings.parquet")

@@ -12,5 +12,6 @@
   "receipt_only": false,
   "nullable_identity_fields": [
     "entity_eft_indicator"
-  ]
+  ],
+  "receipts_retired": true
 }

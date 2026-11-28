@@ -33,6 +33,7 @@ from contextlib import closing
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -40,8 +41,13 @@ from loguru import logger
 
 from spicy_regs.env_values import first_env
 from spicy_regs.sources import r2
-from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
-from spicy_regs.transforms.government_source_shapes import LEGACY_COLUMNS, SUBJECT_SCHEMAS, map_subject
+from spicy_regs.transforms.government_source_shapes import (
+    LEGACY_COLUMNS,
+    SUBJECT_SCHEMAS,
+    ensure_native_prior,
+    map_subject,
+    write_duckdb_native,
+)
 from spicy_regs.transforms.parquet_rows import str_or_none, write_rows
 from spicy_regs.transforms.table_merge import merge_local_prior
 
@@ -388,6 +394,7 @@ def _merge_incremental(
     rows: Iterable[dict],
     prior_file: Path,
     have_prior: bool,
+    generation_id: str | None = None,
 ) -> Path:
     """Stage bounded fresh-row batches, then replace the output after a successful dedup merge."""
     import duckdb
@@ -397,6 +404,7 @@ def _merge_incremental(
     staged = output_dir / f".{output}.partial"
     enriched_new = output_dir / f".{output}.diagnostics.parquet"
     aligned_prior = output_dir / f".{output}.aligned-prior.parquet"
+    native = bool(schema.metadata and schema.metadata.get(b"government_etl_policy") == b"1")
     try:
         write_rows(rows, new_file, schema)
         logger.info("FCC {}: staged {:,} fresh rows", output, pq.ParquetFile(new_file).metadata.num_rows)
@@ -410,42 +418,83 @@ def _merge_incremental(
             con.execute("SET threads=2")
             con.execute("SET temp_directory=?", [str(spill_dir)])
             selected_prior = prior_file if have_prior else None
-            if selected_prior is not None:
-                held = set(pq.read_schema(selected_prior).names)
-                if any(column not in held for column in columns):
-                    projection = ", ".join(
-                        f'"{column}"' if column in held else f'NULL::VARCHAR AS "{column}"' for column in columns
-                    )
-                    prior_path = str(selected_prior).replace("'", "''")
-                    con.execute(f"COPY (SELECT {projection} FROM read_parquet('{prior_path}')) TO ? (FORMAT PARQUET)",
-                                [str(aligned_prior)])
-                    selected_prior = aligned_prior
-            selected_new = new_file
-            if selected_prior is not None and "pdf_extraction_results_json" in columns:
-                # A declaration change invalidates earlier URL/body association. Same declarations
-                # retain their diagnostic observations even when the native page is refreshed.
+            if native:
+                cols = ", ".join(f'"{c}"' for c in columns)
                 new_path = str(new_file).replace("'", "''")
-                prior_path = str(selected_prior).replace("'", "''")
-                con.execute(
-                    f"COPY (SELECT n.* REPLACE (coalesce(n.pdf_extraction_results_json, "
-                    "CASE WHEN n.documents_json IS NOT DISTINCT FROM p.documents_json "
-                    "THEN p.pdf_extraction_results_json::VARCHAR END) AS pdf_extraction_results_json) "
-                    f"FROM read_parquet('{new_path}') n LEFT JOIN read_parquet('{prior_path}') p "
-                    "ON n.id_submission=p.id_submission) TO ? (FORMAT PARQUET)", [str(enriched_new)]
+                if selected_prior is not None:
+                    prior_path = str(selected_prior).replace("'", "''")
+                    if "extraction_results" in columns:
+                        fresh_sql = (
+                            "SELECT n.* REPLACE (coalesce(n.extraction_results, "
+                            "CASE WHEN n.documents IS NOT DISTINCT FROM p.documents "
+                            "THEN p.extraction_results END) AS extraction_results) "
+                            f"FROM read_parquet('{new_path}') n "
+                            f"LEFT JOIN read_parquet('{prior_path}') p ON n.\"{key}\" = p.\"{key}\""
+                        )
+                    else:
+                        fresh_sql = f"SELECT {cols} FROM read_parquet('{new_path}')"
+                    union_sql = (
+                        f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_path}') "
+                        f"UNION ALL BY NAME SELECT {cols}, 1 AS _src FROM ({fresh_sql})"
+                    )
+                else:
+                    union_sql = f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_path}')"
+                if generation_id is not None and "generation_id" in columns:
+                    escaped_gen = generation_id.replace("'", "''")
+                    select_cols = ", ".join(
+                        f"'{escaped_gen}'::VARCHAR AS \"generation_id\"" if c == "generation_id" else f'"{c}"'
+                        for c in columns
+                    )
+                else:
+                    select_cols = cols
+                query = (
+                    f"SELECT {select_cols} FROM ("
+                    f'SELECT {cols}, ROW_NUMBER() OVER (PARTITION BY "{key}" ORDER BY _src DESC) AS _rn '
+                    f'FROM ({union_sql}) WHERE "{key}" IS NOT NULL'
+                    f") WHERE _rn = 1 ORDER BY {order_by} DESC, \"{key}\""
                 )
-                selected_new = enriched_new
-            merge_local_prior(
-                con,
-                columns=columns,
-                identity=key,
-                order_by=f"{order_by} DESC, {key}",
-                prior_file=selected_prior,
-                new_file=selected_new,
-                out_file=staged,
-            )
+                write_duckdb_native(con, query, out_file, schema)
+            else:
+                if selected_prior is not None:
+                    held = set(pq.read_schema(selected_prior).names)
+                    if any(column not in held for column in columns):
+                        projection = ", ".join(
+                            f'"{column}"' if column in held else f'NULL::VARCHAR AS "{column}"' for column in columns
+                        )
+                        prior_path = str(selected_prior).replace("'", "''")
+                        con.execute(
+                            f"COPY (SELECT {projection} FROM read_parquet('{prior_path}')) TO ? (FORMAT PARQUET)",
+                            [str(aligned_prior)],
+                        )
+                        selected_prior = aligned_prior
+                selected_new = new_file
+                if selected_prior is not None and "pdf_extraction_results_json" in columns:
+                    # A declaration change invalidates earlier URL/body association. Same declarations
+                    # retain their diagnostic observations even when the native page is refreshed.
+                    new_path = str(new_file).replace("'", "''")
+                    prior_path = str(selected_prior).replace("'", "''")
+                    con.execute(
+                        f"COPY (SELECT n.* REPLACE (coalesce(n.pdf_extraction_results_json, "
+                        "CASE WHEN n.documents_json IS NOT DISTINCT FROM p.documents_json "
+                        "THEN p.pdf_extraction_results_json::VARCHAR END) AS pdf_extraction_results_json) "
+                        f"FROM read_parquet('{new_path}') n LEFT JOIN read_parquet('{prior_path}') p "
+                        "ON n.id_submission=p.id_submission) TO ? (FORMAT PARQUET)",
+                        [str(enriched_new)],
+                    )
+                    selected_new = enriched_new
+                merge_local_prior(
+                    con,
+                    columns=columns,
+                    identity=key,
+                    order_by=f"{order_by} DESC, {key}",
+                    prior_file=selected_prior,
+                    new_file=selected_new,
+                    out_file=staged,
+                )
         finally:
             con.close()
-        staged.replace(out_file)
+        if not native:
+            staged.replace(out_file)
     finally:
         new_file.unlink(missing_ok=True)
         staged.unlink(missing_ok=True)
@@ -556,13 +605,13 @@ def build_fcc_proceedings(output_dir: Path, *, evidence: CaptureEvidence | None 
     return out_file
 
 
-@receipt_builder
 def build_fcc_filings(
     output_dir: Path,
     *,
     evidence: CaptureEvidence | None = None,
     since: date | None = None,
     proceedings: tuple[str, ...] = (),
+    generation_id: str | None = None,
 ) -> Path:
     """Build ``fcc_filings.parquet`` (incremental merge with the prior table).
 
@@ -571,45 +620,54 @@ def build_fcc_filings(
     ``evidence``, every ECFS response the reader receives is retained, without
     the key, so a generation can be replayed from its own captures.
     """
+    generation_id = generation_id or uuid4().hex
     prior_file = output_dir / "_fcc_filings_prior.parquet"
+    prior_native = output_dir / ".fcc_filings_prior_native.parquet"
+    schema = SUBJECT_SCHEMAS["fcc_filings"]
 
     have_prior = prior_file.exists() or r2.download(FILINGS_OUTPUT, prior_file)
-    if have_prior:
-        prior_file = internal_prior("fcc_filings", prior_file)
-    if since is None:
-        prior_max = _prior_max_date(prior_file, "date_received") if have_prior else None
-        if prior_max:
-            since = prior_max - timedelta(days=OVERLAP_DAYS)
-        else:
-            since = date.today() - timedelta(days=FILINGS_FIRST_RUN_DAYS)
-            logger.warning(
-                "FCC filings: no prior table — bounding the first run to the last {} days "
-                "(since {}). Pass FCC_SINCE / FCC_PROCEEDINGS for a deeper, scoped backfill.",
-                FILINGS_FIRST_RUN_DAYS,
-                since,
-            )
-    logger.info("FCC filings: fetching filings received since {} (proceedings={})", since, proceedings or "all")
+    resolved_prior = prior_file
+    try:
+        if have_prior:
+            resolved_prior = ensure_native_prior("fcc_filings", prior_file, prior_native, generation_id=generation_id)
+        if since is None:
+            prior_max = _prior_max_date(resolved_prior, "date_received") if have_prior else None
+            if prior_max:
+                since = prior_max - timedelta(days=OVERLAP_DAYS)
+            else:
+                since = date.today() - timedelta(days=FILINGS_FIRST_RUN_DAYS)
+                logger.warning(
+                    "FCC filings: no prior table — bounding the first run to the last {} days "
+                    "(since {}). Pass FCC_SINCE / FCC_PROCEEDINGS for a deeper, scoped backfill.",
+                    FILINGS_FIRST_RUN_DAYS,
+                    since,
+                )
+        logger.info("FCC filings: fetching filings received since {} (proceedings={})", since, proceedings or "all")
 
-    transport = None
-    if evidence is not None:
-        evidence.credential = _resolve_api_key() or ""
-        evidence.event("selection", stage="fcc-filings", since=since.isoformat(), proceedings=list(proceedings))
-        transport = evidence.transport(
-            stage="fcc-filings-response", max_bytes=MAX_PAGE_BYTES, response_header_names=("total",)
-        )
-    with closing(_fetch_fcc("filings", since=since, proceedings=proceedings, transport=transport)) as source:
-        out = _merge_incremental(
-            output_dir,
-            output=FILINGS_OUTPUT,
-            scratch_prefix="_fcc_filings",
-            columns=FILING_COLUMNS,
-            schema=_FILING_SCHEMA,
-            key="id_submission",
-            order_by="date_received",
-            rows=(_shape_filing(f) for f in source),
-            prior_file=prior_file,
-            have_prior=have_prior,
-        )
+        transport = None
+        if evidence is not None:
+            evidence.credential = _resolve_api_key() or ""
+            evidence.event("selection", stage="fcc-filings", since=since.isoformat(), proceedings=list(proceedings))
+            transport = evidence.transport(
+                stage="fcc-filings-response", max_bytes=MAX_PAGE_BYTES, response_header_names=("total",)
+            )
+        with closing(_fetch_fcc("filings", since=since, proceedings=proceedings, transport=transport)) as source:
+            out = _merge_incremental(
+                output_dir,
+                output=FILINGS_OUTPUT,
+                scratch_prefix="_fcc_filings",
+                columns=tuple(schema.names),
+                schema=schema,
+                key="id_submission",
+                order_by="date_received",
+                rows=(map_subject("fcc_filings", _shape_filing(f), generation_id=generation_id) for f in source),
+                prior_file=resolved_prior,
+                have_prior=have_prior,
+                generation_id=generation_id,
+            )
+        prior_file.unlink(missing_ok=True)
+    finally:
+        prior_native.unlink(missing_ok=True)
     total = pq.ParquetFile(out).metadata.num_rows
     logger.info("FCC filings: {:,} rows", total)
     return out

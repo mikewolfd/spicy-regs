@@ -249,24 +249,22 @@ def test_usaspending_observation_and_old_schema_merge(tmp_path, monkeypatch):
     monkeypatch.setattr(usa, '_iter_recipient_rows', lambda **kw: real(
         **kw, transport=httpx.MockTransport(lambda r: httpx.Response(200, content=raw, headers={'content-type': 'application/json'}))))
     output = usa.build_usaspending_recipients(tmp_path, evidence=evidence)
+    assert not (tmp_path / 'etl_receipts.parquet').exists()
     from tests.government_fakes import literal_table
     rows = {r['recipient_id']: r for r in literal_table(output).to_pylist()}
-    assert rows['old-R']['observed_at'] is None
-    assert rows['old-R']['source_capture_sha256'] is None
+    assert rows['old-R']['name'] == 'Old' and rows['old-R']['total_award_amount'] == '4'
     observed = rows['fresh-R']
     assert observed['name'] == 'After' and observed['total_award_amount'] == '9.5'
     # One retained copy per response: the tee's, which the owner's capture digest names.
     [capture] = captures(evidence)
     assert capture['stage'] == 'usaspending-response'
-    assert observed['source_capture_sha256'] == capture['sha256']
     assert payload(evidence, capture) == raw
-    # The row's time is the owner's completed read, never before the tee saw the request.
-    assert datetime.fromisoformat(observed['observed_at']) >= datetime.fromisoformat(capture['observed_at'])
-    # ...and the journal states that exact time for the same digest, so the row is reproducible from evidence.
+    # The journal records the page-read completion time and digest for the retained response.
     events = [json.loads(line) for line in (evidence.artifact_dir / 'journal.jsonl').read_text().splitlines()]
     [read] = [e for e in events if e['event'] == 'page-read']
-    assert (read['sha256'], read['observed_at']) == (observed['source_capture_sha256'], observed['observed_at'])
-    # A subsequent successful empty selection must preserve the existing row times.
+    assert read['sha256'] == capture['sha256']
+    assert datetime.fromisoformat(read['observed_at']) >= datetime.fromisoformat(capture['observed_at'])
+    # A subsequent successful empty selection preserves the existing rows unchanged.
     import shutil
     shutil.copyfile(output, prior)
     monkeypatch.setattr(usa, '_iter_recipient_rows', lambda **kw: iter(()))
