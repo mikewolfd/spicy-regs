@@ -49,7 +49,7 @@ RESTORATION_FILES = {
                    "transforms/regulations_shape.py", "schemas/regulations_subjects.py",
                    "sources/regulatory_catalog.py"),
     "fec": ("transforms/fec_identity_receipts.py", "transforms/fec_identity_context_fields.py",
-            "transforms/build_fec_committees.py"),
+            "transforms/build_fec_committees.py", "pipelines/rollups/fec_tables.py"),
 }
 
 

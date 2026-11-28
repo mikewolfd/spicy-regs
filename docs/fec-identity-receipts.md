@@ -79,14 +79,15 @@ financial checks. They do not select amendments, infer donor identity, exclude
 transactions automatically or turn captured previews into financial totals.
 
 The scheduled committee, candidate-history, committee-history, source-catalog
-and organization-link rollups build through this receipt writer
-(`FecReceiptRollup`), and `build-fec-observations` writes its subjects and
-receipts the same way. The shared dictionary and the public MCP/view catalog
+and organization-link rollups publish directly to native subject tables without
+per-row receipts (`FecTableRollup`; their final pre-retirement receipt
+generations are pinned in `docs/pins/receipt-archive.json`), while
+`build-fec-observations` continues to write its subjects and receipts through
+`IdentityReceiptWriter`. The shared dictionary and the public MCP/view catalog
 describe the migrated subjects: native list columns replace the old
 array-expansion views, and the old processing-control views are not registered
-against them. Read processing values through explicit internal receipt reads.
-A receipt-only dataset such as `fec_source_catalog` emits only receipt rows and
-seals as a generation with no subject table.
+against them. Read processing values on unretired datasets through explicit
+internal receipt reads.
 
 ## Relationship endpoints
 

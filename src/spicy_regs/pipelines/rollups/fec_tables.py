@@ -131,6 +131,9 @@ class FecTableRollup(RollupPipeline):
             if path.is_symlink() or not path.is_file():
                 raise ValueError(f"Required published input unavailable: {key}")
             local_inputs.append(path)
+        for key in self.remote_inputs:
+            if (output_dir / key).is_symlink():
+                raise ValueError(f"Local remote input must not be a symlink: {key}")
 
         prior_mode: str | None = None
         local_prior: Path | None = None
@@ -166,7 +169,7 @@ class FecTableRollup(RollupPipeline):
                 shutil.copyfile(path, stage / path.name)
             for key in self.remote_inputs:
                 candidate = output_dir / key
-                if candidate.is_file() and not candidate.is_symlink() and not (stage / key).exists():
+                if candidate.is_file() and not (stage / key).exists():
                     _link_or_copy(candidate, stage / key)
             if table == "fec_committees":
                 from spicy_regs.transforms.build_fec_committees import _SCHEMA

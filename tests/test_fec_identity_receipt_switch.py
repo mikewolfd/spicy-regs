@@ -17,7 +17,7 @@ from spicy_regs.pipelines.rollups.fec_candidate_history import FecCandidateHisto
 from spicy_regs.pipelines.rollups.fec_committee_history import FecCommitteeHistoryRollup
 from spicy_regs.pipelines.rollups.fec_committees import FecCommitteesRollup
 from spicy_regs.pipelines.rollups.fec_source_catalog import FecSourceCatalogRollup
-from spicy_regs.pipelines.rollups.fec_tables import FecTableRollup, published_as_fec_source
+from spicy_regs.pipelines.rollups.fec_tables import FecTableRollup, published_as_fec_source, write_fec_table
 from spicy_regs.pipelines.rollups.org_committee_links import OrgCommitteeLinksRollup
 from spicy_regs.receipt_switch import receipt_files, receipt_free_prior, table_differences
 from spicy_regs.source_evidence import CaptureEvidence
@@ -74,7 +74,7 @@ def _specs(root: Path) -> list[dict]:
 
 def test_fec_committees_full_walk_and_receiptless_incremental_parity(tmp_path, monkeypatch):
     monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
-    seen_since: list[object] = []
+    seen_since: list[date | None] = []
 
     def stub_walk(rows):
         def walk(*, capture_dir, resume=None, min_last_file_date=None):
@@ -242,3 +242,159 @@ def test_fec_table_rollup_guards_and_published_prior_round_trip(tmp_path, monkey
     }], schema=subject_schema("fec_committee_history")), hist_in)
     hist_out = published_as_fec_source("fec_committee_history", hist_in, tmp_path / "hist_prior.parquet")
     assert pq.read_table(hist_out).to_pylist()[0]["cycle"] == "2026"
+
+    # (a) SelectedPriors.get resolves retired published fec_committees and fec_committee_history via _published.
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+    from spicy_regs.selected_generations import SelectedDataset
+    from spicy_regs.sources.publication import empty_index
+
+    published_by_dataset = {"fec_committees": comm_in, "fec_committee_history": hist_in}
+    priors = SelectedPriors(tmp_path / "priors", index=empty_index(), public_url="")
+    monkeypatch.setattr(
+        priors.selected,
+        "select",
+        lambda ds, ranged=False, last_receipts=False: SelectedDataset(ds, (published_by_dataset[ds],), None, None),
+    )
+    comm_restored = pq.read_table(priors.get("fec_committees")).to_pylist()[0]
+    hist_restored = pq.read_table(priors.get("fec_committee_history")).to_pylist()[0]
+    assert comm_restored["first_file_date"] == "2020-01-02" and json.loads(comm_restored["cycles_json"]) == [2020, 2026]
+    assert hist_restored["cycle"] == "2026" and hist_restored["connected_organization_name"] == "ORG"
+
+    # (c) write_fec_table refuses null/duplicate identities and cleans up temporary files without touching destination.
+    from spicy_regs.transforms.build_fec_committees import _SCHEMA, _shape
+
+    dest = tmp_path / "target.parquet"
+    dest.write_bytes(b"original-bytes")
+    for label, raw_rows, match in (
+        ("null", [_shape({**_C1, "committee_id": None})], "null record identity"),
+        ("dup", [_shape(_C1), _shape(_C1)], "duplicate record identity"),
+    ):
+        bad_src = tmp_path / f"{label}.parquet"
+        pq.write_table(pa.Table.from_pylist(raw_rows, schema=_SCHEMA), bad_src)
+        with pytest.raises(ValueError, match=match):
+            write_fec_table("fec_committees", bad_src, dest)
+        assert dest.read_bytes() == b"original-bytes"
+        assert not list(tmp_path.glob(".target.parquet.*.tmp"))
+
+    # Local remote_inputs symlink is refused rather than silently skipped.
+    sym_dir = tmp_path / "sym-links"
+    sym_dir.mkdir()
+    pq.write_table(pq.read_table(comm_in), sym_dir / "fec_committees.parquet")
+    pq.write_table(pq.read_table(hist_in), sym_dir / "fec_committee_history.parquet")
+    (sym_dir / "comments.parquet").symlink_to(tmp_path / "nonexistent.parquet")
+    with pytest.raises(ValueError, match="must not be a symlink: comments.parquet"):
+        OrgCommitteeLinksRollup().build(sym_dir)
+
+
+def test_hosted_remote_prior_and_org_links_priming(tmp_path, monkeypatch):
+    import hashlib
+    import shutil
+    from spicy_regs.sources import publication, r2
+    from spicy_regs.transforms import build_org_committee_links as links_mod
+
+    def _family_entry(family: str, key: str, path: Path, digit: str) -> dict:
+        from spicy_regs.native_types import described_schema
+
+        digest = "sha256:" + digit * 64
+        sha = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+        return {
+            "artifactDigest": digest,
+            "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:" + digit * 64,
+            "prefix": f"generations/{family}/{digit * 64}",
+            "publishedAt": "2026-11-28T00:00:00Z",
+            "tables": {
+                key: {
+                    "sha256": sha,
+                    "byteSize": path.stat().st_size,
+                    "rows": pq.ParquetFile(path).metadata.num_rows,
+                    "columns": described_schema(pq.read_schema(path)),
+                }
+            },
+        }
+
+    # Seed published receiptless tables offline first.
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    monkeypatch.setattr(committees_mod, "iter_fec_committee_records", lambda **kw: (row for row in [_C1, _C2]))
+    monkeypatch.setenv("FEC_COMMITTEES_FULL_WALK", "true")
+    seed_comm = tmp_path / "seed-comm"
+    FecCommitteesRollup(output_dir=seed_comm, skip_upload=True).run()
+    comm_file = seed_comm / "fec_committees.parquet"
+
+    hist_file = tmp_path / "fec_committee_history.parquet"
+    pq.write_table(pa.Table.from_pylist([
+        {"committee_id": "C00030718", "cycle": 2026, "name": "NAR PAC", "treasurer_name": None, "street_1": None,
+         "street_2": None, "city": None, "state": "DC", "zip": None, "designation": "U", "committee_type": "Q",
+         "party": "DEM", "filing_frequency": "M", "organization_type": "T",
+         "connected_organization_name": "NATIONAL ASSOCIATION OF REALTORS", "candidate_id": None},
+    ], schema=subject_schema("fec_committee_history")), hist_file)
+
+    comments_file = tmp_path / "comments.parquet"
+    pq.write_table(pa.Table.from_pylist([
+        {"comment_id": "C-1", "docket_id": "EPA-1", "agency_code": "EPA", "organization": "National Association of Realtors",
+         "posted_date": "2026-03-01T12:00:00Z", "modify_date": "2026-03-01T12:00:00Z"},
+    ]), comments_file)
+
+    hosted_files = {
+        "fec_committees.parquet": comm_file,
+        "fec_committee_history.parquet": hist_file,
+        "comments.parquet": comments_file,
+    }
+    live_index = {
+        "format": "spicy-regs-publication",
+        "version": 2,
+        "families": {
+            "fec-committees": _family_entry("fec-committees", "fec_committees.parquet", comm_file, "a"),
+            "fec-committee-history": _family_entry("fec-committee-history", "fec_committee_history.parquet", hist_file, "b"),
+            "comments": _family_entry("comments", "comments.parquet", comments_file, "c"),
+        },
+    }
+    fetched: list[str] = []
+
+    def fake_fetch(public_url, member, local_path, remote_key):
+        fetched.append(remote_key)
+        Path(local_path).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(hosted_files[remote_key], local_path)
+        return True
+
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://data.example.dev")
+    monkeypatch.setattr(publication, "load_index", lambda _: live_index)
+    monkeypatch.setattr(publication, "fetch_member", fake_fetch)
+
+    # (b) FecCommitteesRollup remote-prior mode: reads published prior via R2, merges fresh row, excludes self from parents.
+    seen_since: list[date | None] = []
+
+    def remote_walk(*, capture_dir, resume=None, min_last_file_date=None):
+        seen_since.append(min_last_file_date)
+        Path(capture_dir).mkdir(parents=True, exist_ok=True)
+        return (row for row in [_C3])
+
+    monkeypatch.delenv("FEC_COMMITTEES_FULL_WALK", raising=False)
+    monkeypatch.setattr(committees_mod, "iter_fec_committee_records", remote_walk)
+    hosted_comm_out = tmp_path / "hosted-comm"
+    FecCommitteesRollup(output_dir=hosted_comm_out, skip_upload=True).run()
+    assert fetched == ["fec_committees.parquet"]
+    assert seen_since == [date(2026, 9, 18)]
+    [comm_spec] = _specs(hosted_comm_out)
+    assert "etlReceipts" not in comm_spec and "fec_committees.parquet" not in comm_spec.get("parents", {})
+    assert receipt_files(hosted_comm_out) == []
+    gen_comm = next((hosted_comm_out / "generations").glob("*/fec_committees.parquet"))
+    assert {r["committee_id"] for r in pq.read_table(gen_comm).to_pylist()} == {"C00030718", "C00104802", "C00999999"}
+
+    # (d) OrgCommitteeLinksRollup hosted R2_PUBLIC_URL priming: downloads receiptless inputs and pins all parents.
+    fetched.clear()
+    monkeypatch.setattr(
+        r2, "public_object_version", lambda url: {"etag": "etag-1", "bytes": comments_file.stat().st_size}
+    )
+    monkeypatch.setattr(links_mod, "comments_source", lambda _: str(comments_file))
+    hosted_links_out = tmp_path / "hosted-links"
+    OrgCommitteeLinksRollup(output_dir=hosted_links_out, skip_upload=True).run()
+    assert fetched == ["fec_committees.parquet", "fec_committee_history.parquet"]
+    [links_spec] = _specs(hosted_links_out)
+    assert "etlReceipts" not in links_spec and receipt_files(hosted_links_out) == []
+    assert set(links_spec["parents"]) == {"fec_committees.parquet", "fec_committee_history.parquet", "comments.parquet"}
+    assert links_spec["parents"]["fec_committees.parquet"]["family"] == "fec-committees"
+    assert links_spec["parents"]["fec_committee_history.parquet"]["family"] == "fec-committee-history"
+    assert links_spec["parents"]["comments.parquet"]["family"] == "comments"
+    gen_links = next((hosted_links_out / "generations").glob("*/org_committee_links.parquet"))
+    rows = pq.read_table(gen_links).to_pylist()
+    assert [(r["committee_id"], r["sponsor_name_match"]) for r in rows] == [("C00030718", "agrees")]
