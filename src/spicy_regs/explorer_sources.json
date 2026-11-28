@@ -170,6 +170,13 @@
       "kind": "government",
       "note": "Selected county and congressional district estimates and margins of error retain their source cells, vintage and variable metadata."
     },
+    "census-geocoder": {
+      "id": "census-geocoder",
+      "name": "U.S. Census Bureau Geocoder",
+      "url": "https://geocoding.geo.census.gov/geocoder/",
+      "kind": "government",
+      "note": "Bounded Census 2020 single-record address and coordinate lookups retain matched, unmatched, and ambiguous outcomes, exact decimal coordinates, and leading-zero geography codes."
+    },
     "treasury-fiscal": {
       "id": "treasury-fiscal",
       "name": "U.S. Treasury Fiscal Data",
@@ -530,6 +537,13 @@
       "sources": [
         "census-acs"
       ]
+    },
+    "census-geocoder": {
+      "sources": [
+        "census-geocoder"
+      ],
+      "transformation": "Retains bounded Census 2020 single-record address and coordinate lookup observations and returned geography layers with leading-zero codes and explicit match status.",
+      "evidence": "src/spicy_regs/pipelines/census_geocoder.py"
     },
     "treasury-fiscal": {
       "sources": [
