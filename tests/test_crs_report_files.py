@@ -383,7 +383,7 @@ def test_corrupt_completed_text_phase_refuses_and_preserves_admitted_generation(
     assert len(asked) == 1
 
 
-def test_publishable_flag_stamps_complete_family_and_refuses_zero_ok_bodies(tmp_path, source):
+def test_publishable_flag_stamps_complete_family_and_refuses_incomplete_runs(tmp_path, source, monkeypatch):
     _, transport = source
     local_only = files.build_crs_report_files(tmp_path / "local", [report()], transport=transport, allow_network=True)
     assert local_only["publication_status"] == "local-partial"
@@ -406,10 +406,63 @@ def test_publishable_flag_stamps_complete_family_and_refuses_zero_ok_bodies(tmp_
     assert root["spec"]["publicationStatus"] == "complete-family"
     assert root["spec"]["readSnapshot"]["format"] == "spicy-regs-publication"
 
+    # Zero ok bodies refuses AND seals CaptureEvidence as failed (never build-complete).
     unavailable = httpx.MockTransport(
         lambda _: httpx.Response(404, stream=httpx.ByteStream(b"missing"), headers={"Content-Type": "text/html"})
     )
-    with pytest.raises(ValueError, match="at least one ok body observation"):
+    empty_dir = tmp_path / "empty_pub"
+    with pytest.raises(ValueError, match="at least one ok body observation with completed text"):
         files.build_crs_report_files(
-            tmp_path / "empty_pub", [report()], allow_network=True, publishable=True, transport=unavailable
+            empty_dir, [report()], allow_network=True, publishable=True, transport=unavailable
         )
+    [ev_run] = list((empty_dir / "source-evidence").iterdir())
+    assert json.loads((ev_run / "run-outcome.json").read_text())["outcome"] == "failed"
+
+    # Transient text extraction error refuses under publishable=True and seals evidence failed.
+    err_dir = tmp_path / "text_err_pub"
+    monkeypatch.setattr(files, "extract_text", lambda *_: {
+        "text_content": None, "text_state": "error", "page_count": 0, "error": "transient reader failure"
+    })
+    with pytest.raises(ValueError, match="transient text extraction errors"):
+        files.build_crs_report_files(err_dir, [report()], allow_network=True, publishable=True, transport=transport)
+    [err_run] = list((err_dir / "source-evidence").iterdir())
+    assert json.loads((err_run / "run-outcome.json").read_text())["outcome"] == "failed"
+
+    # Missing read_index fails inside try/except so CaptureEvidence seals cleanly as failed.
+    bad_idx_dir = tmp_path / "bad_idx"
+    with pytest.raises(FileNotFoundError):
+        files.build_crs_report_files(
+            bad_idx_dir, [report()], publishable=True, read_index=tmp_path / "missing-index.json", transport=transport
+        )
+    [bad_run] = list((bad_idx_dir / "source-evidence").iterdir())
+    assert json.loads((bad_run / "run-outcome.json").read_text())["outcome"] == "failed"
+
+
+def test_cli_main_forwards_publishable_and_read_index(tmp_path, monkeypatch, capsys):
+    sel_path = tmp_path / "sel.json"
+    sel_path.write_text(json.dumps({"reports": [report()]}))
+    live_idx = tmp_path / "live.json"
+    live_idx.write_text(json.dumps({"format": "spicy-regs-publication", "version": 2, "families": {}}))
+    seen: dict = {}
+
+    def fake_build(output, reports, **kwargs):
+        seen["output"] = output
+        seen["reports"] = reports
+        seen["kwargs"] = kwargs
+        return {"status": "verified_publishable_candidate", "publication_status": "complete-family"}
+
+    monkeypatch.setattr(files, "build_crs_report_files", fake_build)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build_crs_report_files",
+            "--selection", str(sel_path),
+            "--output", str(tmp_path / "out"),
+            "--read-index", str(live_idx),
+            "--publishable",
+        ],
+    )
+    files.main()
+    assert seen["kwargs"]["publishable"] is True
+    assert seen["kwargs"]["read_index"] == live_idx
+    assert json.loads(capsys.readouterr().out)["publication_status"] == "complete-family"

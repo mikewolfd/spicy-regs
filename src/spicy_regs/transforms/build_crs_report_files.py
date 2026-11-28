@@ -390,13 +390,13 @@ def build_crs_report_files(
     generation_id = generation_id or uuid4().hex
     processor_pin = text_processor_pin()
     evidence = CaptureEvidence(output_dir, FAMILY)
-    read_snapshot = inherit_read_index(evidence, read_index)
     budget = CrsFileBudget(max_requests=1, max_bytes=max_file_bytes, timeout_seconds=60,
                            min_request_interval_seconds=0)
     requests = decoded_bytes = downloaded_bytes = 0
     reused_bodies = reused_text = 0
     recovered_captures = None
     try:
+        read_snapshot = inherit_read_index(evidence, read_index)
         with CrsFileAcquirer(budget=budget, transport=transport) as acquirer:
             for report, selection, metadata_digest in selected:
                 _check_metadata_original(evidence, report, selection, metadata_digest)
@@ -533,12 +533,15 @@ def build_crs_report_files(
                     # Replace only the exact association; distinct numbered files
                     # and metadata observations remain independently queryable.
                     _replace_association(rows, row, max_rows=max_prior_rows)
+        if publishable:
+            if any(row.get("text_state") == "error" for row in rows):
+                raise ValueError("Publishable crs_report_files candidate cannot include transient text extraction errors")
+            if not any(row.get("body_state") == "ok" and row.get("text_state") in {"ok", "empty"} for row in rows):
+                raise ValueError("Publishable crs_report_files candidate requires at least one ok body observation with completed text")
         evidence.finish()
     except BaseException as error:
         evidence.finish(error)
         raise
-    if publishable and not any(row.get("body_state") == "ok" for row in rows):
-        raise ValueError("Publishable crs_report_files candidate requires at least one ok body observation")
     bundle = output_dir / ("bundle-" + generation_id)
     subject = _write(rows, bundle, generation_id)
     generation = output_dir / ("generation-" + generation_id)
