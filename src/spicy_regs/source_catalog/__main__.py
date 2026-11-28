@@ -116,6 +116,10 @@ def main() -> None:
     create.add_argument("--publication-observation", type=Path, action="append", default=[])
     create.add_argument("--publication-reconciliation", type=Path)
     create.add_argument(
+        "--include-hosted-acquisitions", action="store_true",
+        help="Import durable hosted R2 receipts and missing originals into the local raw archive before indexing",
+    )
+    create.add_argument(
         "--acquisition-receipt", action="append",
         help="Index only this canonical raw-archive receipt key; repeat for a local holdings slice",
     )
@@ -199,6 +203,7 @@ def main() -> None:
             temp_store=args.temp_store,
             publication_reconciliation=args.publication_reconciliation,
             acquisition_receipts=args.acquisition_receipt,
+            include_hosted_acquisitions=args.include_hosted_acquisitions,
         )
     elif args.command == "refresh-metadata":
         from .maintenance import refresh_metadata

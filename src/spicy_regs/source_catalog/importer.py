@@ -647,6 +647,7 @@ def build(
     temp_store: str = "file",
     publication_reconciliation: Path | None = None,
     acquisition_receipts: Sequence[str] | None = None,
+    include_hosted_acquisitions: bool = False,
 ) -> dict:
     """Validate and install a local index; a receipt selection indexes only those captures."""
     if temp_store not in {"file", "memory"}:
@@ -654,9 +655,11 @@ def build(
     if (corpus / "raw/snapshot.json").is_file() or (corpus / "raw/acquisitions/sha256").is_dir():
         corpus = corpus / "raw"
     is_raw_archive = (corpus / "snapshot.json").is_file() or (corpus / "acquisitions/sha256").is_dir()
+    if include_hosted_acquisitions and not is_raw_archive:
+        raise ValueError("Hosted acquisitions require an existing local raw archive")
     if acquisition_receipts is not None and (
         not is_raw_archive or not acquisition_receipts or discovery or publication_observations
-        or publication_reconciliation is not None
+        or publication_reconciliation is not None or include_hosted_acquisitions
     ):
         raise ValueError("Selected acquisition receipts require a raw archive and a holdings-only build")
     if is_raw_archive and output.resolve().is_relative_to(corpus.resolve()):
@@ -673,6 +676,11 @@ def build(
             if (output.resolve() == selected.resolve()
                     or (output.exists() and selected.exists() and os.path.samefile(output, selected))):
                 raise ValueError('Build output is a selected catalog; prepare a separate candidate')
+    if include_hosted_acquisitions:
+        from .hosted_receipts import hosted_connection, import_hosted_receipts
+
+        client, bucket = hosted_connection()
+        import_hosted_receipts(corpus, client=client, bucket=bucket)
     output.parent.mkdir(parents=True, exist_ok=True)
     retained_output = output.exists()
     inputs = Inputs(corpus)
