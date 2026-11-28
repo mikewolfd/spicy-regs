@@ -192,6 +192,10 @@ BATCH_BYTES = 512 * 2**20
 #: The write connection's DuckDB budget and spill directory (``fill/spill``). A whole-table scan with eight threads ran
 #: out of memory at 4.6 GiB on 2026-09-28; one batch is at most about 512 MiB of compressed files.
 WRITE_RESOURCES = ExportResources(memory="6GB", threads=4)
+#: Disjoint ``comment_id`` hash buckets for duplicate checks and bounded joins/aggregations (must be a power of two).
+HASH_BUCKETS = 32
+#: Streaming Arrow record-batch size when writing partitioned Parquet intermediates and outputs directly.
+ARROW_BATCH_ROWS = 16_384
 
 
 class FillVerificationError(RuntimeError):
@@ -412,6 +416,54 @@ def _refuse_committed_failures(workdir: Path) -> None:
 # --------------------------------------------------------------------------- #
 # Prepare
 # --------------------------------------------------------------------------- #
+def _bucket_mask(buckets: int = HASH_BUCKETS) -> tuple[int, int]:
+    if buckets < 1 or (buckets & (buckets - 1)) != 0:
+        raise ValueError(f"HASH_BUCKETS must be a positive power of two: {buckets}")
+    return buckets, buckets - 1
+
+
+def _count_duplicate_comment_ids(con, relation: str, *, buckets: int = HASH_BUCKETS) -> int:
+    """Count distinct ``comment_id`` values (including NULL) appearing more than once, partitioned by hash bucket."""
+    count, mask = _bucket_mask(buckets)
+    null_count = con.execute(f"SELECT count(*) FROM {relation} WHERE comment_id IS NULL").fetchone()[0]
+    duplicated = 1 if null_count > 1 else 0
+    for bucket in range(count):
+        duplicated += con.execute(
+            f"SELECT count(*) FROM ("
+            f"SELECT comment_id FROM {relation} "
+            f"WHERE comment_id IS NOT NULL AND (hash(comment_id) & {mask}) = {bucket} "
+            f"GROUP BY 1 HAVING count(*) > 1)"
+        ).fetchone()[0]
+    return duplicated
+
+
+def _write_partitioned_parquet(
+    con,
+    target: Path,
+    bucket_sql,
+    *,
+    buckets: int = HASH_BUCKETS,
+    batch_size: int = ARROW_BATCH_ROWS,
+) -> None:
+    """Run ``bucket_sql(bucket, mask)`` across disjoint hash buckets and stream into one ZSTD Parquet file."""
+    import pyarrow.parquet as pq
+
+    count, mask = _bucket_mask(buckets)
+    writer: pq.ParquetWriter | None = None
+    try:
+        for bucket in range(count):
+            reader = con.execute(bucket_sql(bucket, mask)).to_arrow_reader(batch_size=batch_size)
+            if writer is None:
+                writer = pq.ParquetWriter(target, reader.schema, compression="zstd")
+            for batch in reader:
+                if batch.num_rows:
+                    writer.write_batch(batch)
+            del reader
+    finally:
+        if writer is not None:
+            writer.close()
+
+
 def prepare(
     workdir: Path, *, scope: dict[str, str] | None = None, reads: Path | None = None, profile: str = "all", con=None,
     resources: ExportResources | None = None,
@@ -454,32 +506,66 @@ def prepare(
         work.mkdir(exist_ok=True)
         index_file = work / "catalog-index.parquet"
         index = f"read_parquet({_sql(index_file)})"
-        cat_file, read_file, versions_file, differs_file = (
-            work / f"{name}.parquet" for name in ("catalog", "reads", "versions", "differs"))
-        catalog, read_rows, versions, differs = (
-            f"read_parquet({_sql(path)})" for path in (cat_file, read_file, versions_file, differs_file))
+        matched_index_file, candidates_file, cat_file, read_file, versions_file, differs_file = (
+            work / f"{name}.parquet"
+            for name in ("matched-index", "candidates", "catalog", "reads", "versions", "differs"))
+        matched_index, candidates_rel, catalog, read_rows, versions, differs = (
+            f"read_parquet({_sql(path)})"
+            for path in (matched_index_file, candidates_file, cat_file, read_file, versions_file, differs_file))
         # Resolve scope and versions before restoring any wide subject or receipt. The pinned native columns are
         # selection hints only; the existing strict receipt reader still verifies every possible fill row below.
         # Keep all scoped keys here so unread/other-version counts and duplicate detection do not shrink to fills.
         physical = source.replace("SELECT *", f"SELECT comment_id, modify_date, {FILE_COLUMN} AS _file", 1)
         con.execute(f"""COPY (SELECT comment_id, modify_date, _file FROM ({physical} WHERE {where}))
                         TO {_sql(index_file)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
-        duplicated = con.execute(f"SELECT count(*) FROM (SELECT comment_id FROM {index} GROUP BY 1 HAVING count(*) > 1)"
-                                 ).fetchone()[0]
+        catalog_rows = con.execute(f"SELECT count(*) FROM {index}").fetchone()[0]
+        duplicated = _count_duplicate_comment_ids(con, index)
         if duplicated:
             raise RuntimeError(f"{duplicated} comment ids appear more than once in the catalog; run the dedupe first")
+        # Restrict the narrow catalog index to comment_ids present in the reads across disjoint hash buckets so no
+        # downstream join or accounting query scans or builds hash state over the full unpartitioned catalog.
+        _write_partitioned_parquet(
+            con,
+            matched_index_file,
+            lambda b, m: (
+                f"SELECT c.comment_id, c.modify_date, c._file "
+                f"FROM (SELECT comment_id, modify_date, _file FROM {index} "
+                f"      WHERE comment_id IS NOT NULL AND (hash(comment_id) & {m}) = {b}) c "
+                f"SEMI JOIN (SELECT comment_id FROM {parts} "
+                f"           WHERE comment_id IS NOT NULL AND (hash(comment_id) & {m}) = {b}) s "
+                f"USING (comment_id)"
+            ),
+        )
+        index_file.unlink()
         values = ", ".join(f'CAST(s."{c}" AS VARCHAR) AS "{c}"' for c in columns)
+        source_cols = ", ".join(f'"{c}"' for c in columns)
         # The copies of the comments in scope, less their object keys: only a version read more than once can
         # conflict, so only those keys are read again, below.
-        con.execute(f"""COPY (SELECT s.comment_id, s.modify_date, {values} FROM {parts} s
-                              SEMI JOIN {index} c USING (comment_id))
-                        TO {_sql(read_file)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
+        _write_partitioned_parquet(
+            con,
+            read_file,
+            lambda b, m: (
+                f"SELECT s.comment_id, s.modify_date, {values} "
+                f"FROM (SELECT comment_id, modify_date, {source_cols} FROM {parts} "
+                f"      WHERE comment_id IS NOT NULL AND (hash(comment_id) & {m}) = {b}) s "
+                f"SEMI JOIN (SELECT comment_id FROM {matched_index} "
+                f"           WHERE (hash(comment_id) & {m}) = {b}) c "
+                f"USING (comment_id)"
+            ),
+        )
         # Per column: how many spellings the copies of one version state (NULL counted as one), and the value. All
         # but 842 of the re-read's 26.6M versions were read once and state one spelling each, so only versions read
         # more than once are aggregated: a DISTINCT count over every version ran out of 6 GB (2026-09-29).
         same = "m.comment_id = r.comment_id AND m.modify_date IS NOT DISTINCT FROM r.modify_date"
-        con.execute(f"""CREATE OR REPLACE TEMP TABLE _multi AS SELECT comment_id, modify_date FROM {read_rows}
-                        GROUP BY comment_id, modify_date HAVING count(*) > 1""")
+        buckets, mask = _bucket_mask()
+        con.execute(
+            f"CREATE OR REPLACE TEMP TABLE _multi AS SELECT comment_id, modify_date FROM {read_rows} WHERE false"
+        )
+        for bucket in range(buckets):
+            con.execute(
+                f"INSERT INTO _multi SELECT comment_id, modify_date FROM {read_rows} "
+                f"WHERE (hash(comment_id) & {mask}) = {bucket} GROUP BY comment_id, modify_date HAVING count(*) > 1"
+            )
         spell = ", ".join(
             f"""count(DISTINCT CASE WHEN "{c}" IS NULL THEN 'n' ELSE 'v' || "{c}" END) AS "n_{c}", """
             f"""any_value("{c}") AS "v_{c}\""""
@@ -508,9 +594,20 @@ def prepare(
                         TO {_sql(out / 'conflicts.parquet')} (FORMAT PARQUET)""")
         on_version = "v.comment_id = c.comment_id AND v.modify_date IS NOT DISTINCT FROM c.modify_date"
         has_value = " OR ".join(f'v."{c}" IS NOT NULL' for c in columns)
-        candidates = (f'SELECT c.comment_id FROM {index} c JOIN {versions} v ON {on_version} '
-                      f'WHERE {has_value}')
-        candidate_files = f'SELECT DISTINCT _file FROM {index} WHERE comment_id IN ({candidates})'
+        _write_partitioned_parquet(
+            con,
+            candidates_file,
+            lambda b, m: (
+                f"SELECT c.comment_id, c._file "
+                f"FROM (SELECT comment_id, modify_date, _file FROM {matched_index} "
+                f"      WHERE (hash(comment_id) & {m}) = {b}) c "
+                f"JOIN (SELECT comment_id, modify_date FROM {versions} v "
+                f"      WHERE ({has_value}) AND (hash(v.comment_id) & {m}) = {b}) v "
+                f"ON {on_version}"
+            ),
+        )
+        candidates = f"SELECT comment_id FROM {candidates_rel}"
+        candidate_files = f"SELECT DISTINCT _file FROM {candidates_rel}"
         from spicy_regs.sources.regulatory_catalog import processing_table
         processing = processing_table(con, COMMENT,
                                       where=f'comment_id IN ({candidates}) AND {FILE_COLUMN} IN ({candidate_files})',
@@ -527,9 +624,16 @@ def prepare(
             held = "".join(f', p."{c}" AS "held_{c}"' for c in additive)
             if additive:
                 held += ", p._promoted_v2"
-            con.execute(f"""COPY (SELECT p.comment_id, p.modify_date, {nulls}{held}, i._file
-                                  FROM {processing} p JOIN {index} i USING (comment_id))
-                            TO {_sql(cat_file)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
+            _write_partitioned_parquet(
+                con,
+                cat_file,
+                lambda b, m: (
+                    f"SELECT p.comment_id, p.modify_date, {nulls}{held}, i._file "
+                    f"FROM (SELECT * FROM {processing} WHERE (hash(comment_id) & {m}) = {b}) p "
+                    f"JOIN (SELECT comment_id, _file FROM {candidates_rel} WHERE (hash(comment_id) & {m}) = {b}) i "
+                    f"USING (comment_id)"
+                ),
+            )
         finally:
             con.execute(f"DROP TABLE {processing}")
         # Where a replaceable cell holds a value the version's agreed read differs from: whether the read only adds
@@ -539,23 +643,30 @@ def prepare(
         for c in additive:
             con.create_function(f"_additive_{c}", ADDITIVE[c], ["VARCHAR", "VARCHAR", "BOOLEAN"], "BOOLEAN",
                                 null_handling="special")
-        differing = [f"""SELECT c.comment_id, c.modify_date, '{c}' AS "column",
-                                _additive_{c}(v."{c}", c."held_{c}", c._promoted_v2) AS additive,
-                                c."held_{c}" AS held
-                         FROM {catalog} c JOIN {versions} v ON {on_version}
-                         WHERE c."held_{c}" IS NOT NULL AND v."{c}" IS NOT NULL AND v."{c}" <> c."held_{c}\""""
-                     for c in additive]
-        none = ('SELECT NULL::VARCHAR AS comment_id, NULL::VARCHAR AS modify_date, NULL::VARCHAR AS "column", '
-                "NULL::BOOLEAN AS additive, NULL::VARCHAR AS held WHERE false")
-        con.execute(f"COPY ({' UNION ALL '.join(differing) or none}) TO {_sql(differs_file)} "
-                    "(FORMAT PARQUET, COMPRESSION ZSTD)")
+        if additive:
+            _write_partitioned_parquet(
+                con,
+                differs_file,
+                lambda b, m: " UNION ALL ".join(
+                    f"""SELECT c.comment_id, c.modify_date, '{c}' AS "column",
+                               _additive_{c}(v."{c}", c."held_{c}", c._promoted_v2) AS additive,
+                               c."held_{c}" AS held
+                        FROM (SELECT comment_id, modify_date, "held_{c}", _promoted_v2 FROM {catalog}
+                              WHERE "held_{c}" IS NOT NULL AND (hash(comment_id) & {m}) = {b}) c
+                        JOIN (SELECT comment_id, modify_date, "{c}" FROM {versions}
+                              WHERE "{c}" IS NOT NULL AND (hash(comment_id) & {m}) = {b}) v
+                        ON {on_version}
+                        WHERE v."{c}" <> c."held_{c}\""""
+                    for c in additive
+                ),
+            )
+        else:
+            none = ('SELECT NULL::VARCHAR AS comment_id, NULL::VARCHAR AS modify_date, NULL::VARCHAR AS "column", '
+                    "NULL::BOOLEAN AS additive, NULL::VARCHAR AS held WHERE false")
+            con.execute(f"COPY ({none}) TO {_sql(differs_file)} (FORMAT PARQUET, COMPRESSION ZSTD)")
         con.execute(f"""COPY (SELECT comment_id, modify_date, "column" FROM {differs} WHERE NOT additive ORDER BY 1, 3)
                         TO {_sql(out / 'refusals.parquet')} (FORMAT PARQUET)""")
         replaces = {c: f"r_{c}.comment_id IS NOT NULL" for c in additive}
-        replaced = "".join(
-            f""" LEFT JOIN (SELECT comment_id, modify_date, held FROM {differs} WHERE "column" = '{c}' AND additive) r_{c}
-                 ON r_{c}.comment_id = c.comment_id AND r_{c}.modify_date IS NOT DISTINCT FROM c.modify_date"""
-            for c in additive)
         fills = {c: f"""(c."null_{c}" AND v."{c}" IS NOT NULL)""" for c in columns}
         changes = {c: f"({fills[c]} OR {replaces[c]})" if c in replaces else fills[c] for c in columns}
         # Only the value to write, NULL elsewhere: a write that overwrote instead of filling would blank a cell. A
@@ -564,17 +675,37 @@ def prepare(
         expected = "".join(f', r_{c}.held AS "_held_{c}"' for c in additive)
         # Unsorted: a sort of the 17.3M rows to fill (2026-10-03) spilled past 14 GB under a 3 GB budget, and a
         # batch reads this file filtered on ``_file`` whatever its order.
-        con.execute(f"""COPY (
-            SELECT c.comment_id, c.modify_date, c._file, {filled}{expected}
-            FROM {catalog} c JOIN {versions} v ON {on_version}{replaced}
-            WHERE {' OR '.join(changes.values())}
-        ) TO {_sql(out / 'fill.parquet')} (FORMAT PARQUET, COMPRESSION ZSTD)""")
-        counts = con.execute(f"""
-            SELECT count(*),
-                   count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM {read_rows} r WHERE r.comment_id = c.comment_id)),
-                   count(*) FILTER (WHERE EXISTS (SELECT 1 FROM {read_rows} r WHERE r.comment_id = c.comment_id)
-                                    AND NOT EXISTS (SELECT 1 FROM {versions} v WHERE {on_version}))
-            FROM {index} c""").fetchall()[0]
+        _write_partitioned_parquet(
+            con,
+            out / "fill.parquet",
+            lambda b, m: (
+                f"SELECT c.comment_id, c.modify_date, c._file, {filled}{expected} "
+                f"FROM (SELECT * FROM {catalog} WHERE (hash(comment_id) & {m}) = {b}) c "
+                f"JOIN (SELECT * FROM {versions} WHERE (hash(comment_id) & {m}) = {b}) v "
+                f"ON {on_version}"
+                + "".join(
+                    f""" LEFT JOIN (SELECT comment_id, modify_date, held FROM {differs}
+                                    WHERE "column" = '{c}' AND additive AND (hash(comment_id) & {m}) = {b}) r_{c}
+                         ON r_{c}.comment_id = c.comment_id AND r_{c}.modify_date IS NOT DISTINCT FROM c.modify_date"""
+                    for c in additive
+                )
+                + f" WHERE {' OR '.join(changes.values())}"
+            ),
+        )
+        # Exact accounting via set algebra on unique catalog comment_ids and unique (comment_id, modify_date) versions:
+        # avoids correlated EXISTS / LEFT_DELIM_JOIN hash deduplication over the full 27M-row catalog.
+        read_matched = con.execute(f"SELECT count(*) FROM {matched_index}").fetchone()[0]
+        version_matched = 0
+        for bucket in range(buckets):
+            version_matched += con.execute(
+                f"SELECT count(*) "
+                f"FROM (SELECT comment_id, modify_date FROM {matched_index} "
+                f"      WHERE (hash(comment_id) & {mask}) = {bucket}) c "
+                f"JOIN (SELECT comment_id, modify_date FROM {versions} "
+                f"      WHERE (hash(comment_id) & {mask}) = {bucket}) v "
+                f"ON {on_version}"
+            ).fetchone()[0]
+        counts = (catalog_rows, catalog_rows - read_matched, read_matched - version_matched)
         fill_rows = f"read_parquet({_sql(out / 'fill.parquet')})"
         # A fill cell is non-NULL exactly where its rule held, so the fill file counts its own cells: a NULL filled
         # where it carries no replaced value, a replacement where it does.
@@ -669,9 +800,7 @@ def prepare_empty_original_document_id(
                       FROM ({physical} WHERE {where}))
                 TO {_sql(index_file)} (FORMAT PARQUET, COMPRESSION ZSTD)"""
         )
-        duplicated = con.execute(
-            f"SELECT count(*) FROM (SELECT comment_id FROM {index} GROUP BY 1 HAVING count(*) > 1)"
-        ).fetchone()[0]
+        duplicated = _count_duplicate_comment_ids(con, index)
         if duplicated:
             raise RuntimeError(f"{duplicated} comment ids appear more than once in the catalog; run the dedupe first")
         con.execute(
