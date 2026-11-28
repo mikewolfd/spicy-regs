@@ -115,6 +115,38 @@ def test_selected_government_sources_preserve_selected_tables():
             }
 
 
+def test_census_geocoder_source_identity_and_transformation():
+    from spicy_regs.contract_types import described_schema
+    from spicy_regs.transforms.build_census_geocoder import SCHEMAS
+
+    digest = "sha256:" + "9" * 64
+    selected = {"format": "spicy-regs-publication", "version": 2, "families": {
+        "census-geocoder": {
+            "artifactDigest": digest,
+            "tables": {
+                name + ".parquet": {
+                    "columns": [list(pair) for pair in described_schema(schema)],
+                    "rows": 1, "byteSize": 100,
+                } for name, schema in SCHEMAS.items()
+            },
+        },
+    }}
+    bundle = build_bundle(selected, generated_at="2026-11-28T00:00:00Z")
+    assert bundle["publication"]["families"]["census-geocoder"] == digest
+    for name, schema in SCHEMAS.items():
+        table = bundle["tables"][name]
+        assert table["metadataStatus"] == "documented"
+        assert table["sourceStatus"] == "documented"
+        assert [(entry["id"], entry["url"]) for entry in table["sources"]] == [
+            ("census-geocoder", "https://geocoding.geo.census.gov/geocoder/"),
+        ]
+        assert table["family"] == "census-geocoder"
+        assert table["sourceEvidence"] == "src/spicy_regs/pipelines/census_geocoder.py"
+        assert "leading-zero" in (table["transformation"] or "")
+        assert table["publicationSchema"] == [list(pair) for pair in described_schema(schema)]
+        assert table["modelGenerated"] is False
+
+
 @pytest.fixture
 def measurement_refresh(tmp_path, monkeypatch):
     """Run the publisher with real construction/verifiers and tiny measured main files."""
