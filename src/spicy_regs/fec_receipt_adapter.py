@@ -10,6 +10,7 @@ import base64
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 
 from spicy_regs.runtime_bounds import checkpoint
 
@@ -42,11 +43,16 @@ def processing_declarations():
     return json.loads(files("spicy_regs").joinpath("fec_processing_schemas.json").read_text())
 
 
-def qualified_views(scope, *, legacy_associations=False):
+def qualified_views(scope, *, legacy_associations=False, package_root=None):
     from .relationship_views.fec_query_views import fec_query_views
     schemas = {name: tuple(c[0] for c in item["columns"]) for name, item in processing_declarations().items()}
-    specs = fec_query_views(**scope, processing_schemas=schemas, legacy_associations=legacy_associations)
-    root = Path(__file__).parent
+    specs = fec_query_views(
+        **scope,
+        processing_schemas=schemas,
+        legacy_associations=legacy_associations,
+        package_root=package_root,
+    )
+    root = Path(package_root) if package_root is not None else Path(__file__).parent
     return tuple(replace(spec, identities={**spec.identities, "policies": {
         **spec.identities["policies"], "fec-receipt-adapter/1": root / "fec_receipt_adapter.py",
         "shared-etl-receipts/1": root / "etl_receipts.py"}, "dictionaries": {
@@ -70,23 +76,110 @@ def receipt_owner(index, table):
     return owners[0] if owners else None
 
 
-def selected_qualified_views(native_specs, legacy_specs, index, local_native=None):
-    """Choose old filing rules only for inputs with no selected native layout.
+_V2_REFERENCE_TABLES = frozenset({
+    "fec_reference_filing_feed_items.parquet",
+    "fec_reference_source_pages.parquet",
+})
+_LEGACY_ONLY_TABLES = frozenset({
+    "fec_research_context_dispositions.parquet",
+    "fec_research_document_observations.parquet",
+    "fec_research_filing_feed_items.parquet",
+    "fec_research_response_outcomes.parquet",
+    "fec_research_source_pages.parquet",
+    "fec_retained_csv_observations.parquet",
+})
+_V2_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
+    "fec_filing_links.parquet": ("source_representation_role",),
+    "fec_filings.parquet": ("source_representation_role",),
+    "fec_registration_statements.parquet": ("source_representation_role",),
+    "fec_lobbyist_registrations.parquet": ("source_representation_role",),
+    "fec_quality_notices.parquet": ("source_representation_role",),
+    "fec_legal_matters.parquet": ("is_pending",),
+    "fec_agency_report_text.parquet": ("text_status",),
+}
+_LEGACY_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
+    "fec_filing_links.parquet": ("native_field_states_json",),
+    "fec_filings.parquet": ("native_field_states_json",),
+    "fec_registration_statements.parquet": ("native_field_states_json",),
+    "fec_lobbyist_registrations.parquet": ("native_field_states_json",),
+    "fec_quality_notices.parquet": ("native_field_states_json",),
+    "fec_legal_matters.parquet": ("pending_status", "published_status"),
+    "fec_agency_report_text.parquet": ("native_location_json",),
+}
 
-    The release receipt binds the resulting SQL and policy as well as the exact
-    subject membership. Partial native selection stays native and is refused by
-    prepare_qualified before any restoration.
+
+def _table_column_names(descriptor: Any) -> frozenset[str]:
+    if not isinstance(descriptor, Mapping):
+        return frozenset()
+    columns = descriptor.get("columns")
+    if not isinstance(columns, list):
+        return frozenset()
+    return frozenset(
+        pair[0]
+        for pair in columns
+        if isinstance(pair, (list, tuple)) and len(pair) == 2 and isinstance(pair[0], str)
+    )
+
+
+def is_v2_fec_query_family(entry: Mapping) -> bool:
+    """Whether a published family entry holds the receipts-free 50-table ``/2`` ``fec-query`` layout.
+
+    Genuine legacy Oct-3 54-table generations carry ``fec_research_*`` /
+    ``fec_retained_*`` tables and lack ``/2`` schema markers such as
+    ``fec_filing_links.source_representation_role``. Contradictory layouts
+    that mix retired legacy table names or legacy-only columns with ``/2``
+    reference tables or ``/2`` column markers fail closed.
+    """
+    tables = entry.get("tables")
+    if not isinstance(tables, Mapping) or not tables:
+        return False
+    keys = set(tables)
+    has_v2_tables = bool(keys & _V2_REFERENCE_TABLES)
+    has_legacy_tables = bool(keys & _LEGACY_ONLY_TABLES)
+    has_v2_columns = any(
+        set(required) <= _table_column_names(tables[table_key])
+        for table_key, required in _V2_COLUMN_MARKERS.items()
+        if table_key in tables
+    )
+    has_legacy_columns = any(
+        bool(set(forbidden) & _table_column_names(tables[table_key]))
+        for table_key, forbidden in _LEGACY_COLUMN_MARKERS.items()
+        if table_key in tables
+    )
+    if (has_v2_tables or has_v2_columns) and (has_legacy_tables or has_legacy_columns):
+        raise ValueError("Malformed fec-query family mixes legacy /1 and /2 schema layouts")
+    return has_v2_tables or has_v2_columns
+
+
+def selected_qualified_views(native_specs, legacy_specs, index, local_native=None):
+    """Choose ``/2`` SQL for native or receipts-free 50-table ``fec-query`` layouts.
+
+    Genuine legacy Oct-3 54-table generations (lacking both ``etlReceipts`` and
+    ``/2`` table/column markers) stay on ``legacy_specs``. Receipt restoration
+    is decided separately in :meth:`ReceiptAdapter.prepare_qualified`, so a
+    receipts-free ``/2`` ``fec-query`` generation runs ``/2`` SQL directly over
+    its published Parquet tables without reading ``etl_receipts.parquet``.
     """
     from .sources.publication import table_owner
 
     local_native = local_native or {}
     legacy = {spec.view.name: spec for spec in legacy_specs}
-    def native(table):
+
+    def uses_v2_sql(table):
         owner = table_owner(index, table + ".parquet")
-        return (table in local_native or receipt_owner(index, table) is not None
-                or (owner is not None and "etlReceipts" in owner[1]))
-    return tuple(spec if any(native(table) for table in spec.view.required)
-                 else legacy.get(spec.view.name, spec) for spec in native_specs)
+        if table in local_native or receipt_owner(index, table) is not None:
+            return True
+        if owner is None:
+            return False
+        if "etlReceipts" in owner[1]:
+            return True
+        return is_v2_fec_query_family(owner[1])
+
+    return tuple(
+        spec if any(uses_v2_sql(table) for table in spec.view.required)
+        else legacy.get(spec.view.name, spec)
+        for spec in native_specs
+    )
 
 
 class ReceiptAdapter:
@@ -288,18 +381,27 @@ class ReceiptAdapter:
                                       interpretation=interpretation if current else None)
 
     def prepare_qualified(self, spec, sql):
-        """Serve exact receipt-bound legacy inputs, or restore every native input.
+        """Serve receipt-free legacy or ``/2`` tables directly, or restore receipt-backed inputs.
 
-        A selected native owner with missing or malformed receipts never takes
-        the legacy path. Mixed dependencies use require_selected before writes.
+        A selected receipt-backed owner with missing or malformed receipts never
+        takes the direct path. A malformed receipt-free owner that mixes legacy
+        and ``/2`` schemas also fails closed. Mixed dependencies use
+        ``require_selected`` before any writes.
         """
         from .sources.publication import table_owner
 
-        def native(table):
+        def uses_receipts(table):
             owner = table_owner(self.index, table + ".parquet")
-            return (table in self.local_native or receipt_owner(self.index, table) is not None
-                    or (owner is not None and "etlReceipts" in owner[1]))
-        if not any(native(table) for table in spec.required):
+            if table in self.local_native or receipt_owner(self.index, table) is not None:
+                return True
+            if owner is None:
+                return False
+            if "etlReceipts" in owner[1]:
+                return True
+            is_v2_fec_query_family(owner[1])
+            return False
+
+        if not any(uses_receipts(table) for table in spec.required):
             return spec
         return self.prepare(spec, sql)
 

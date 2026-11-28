@@ -37,6 +37,10 @@ from .reference import REFERENCE_VIEWS
 from .uscode import USCODE_VIEWS
 
 RELATIONSHIP_VIEWS = (*CONGRESS_RELATIONSHIPS, *REGULATORY_RELATIONSHIPS, *ARTIFACT_TOPIC_RELATIONSHIPS)
+# Receipts-free 50-table fec_typed_schemas.json stores fec_legal_matters citations/subjects
+# inside native_facts_json (whereas fec_filing_report_observations and fec_filing_text_observations
+# store native STRUCT arrays), so legal child views default to FEC_DOCUMENT_QUERY_VIEWS while
+# install_relationship_views still admits native struct variants when present.
 _FEC_LEGAL_VIEW_NAMES = {"fec_legal_citations", "fec_legal_subjects"}
 FEC_QUERY_VIEWS = tuple(
     replace(

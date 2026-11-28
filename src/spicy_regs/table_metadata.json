@@ -6313,9 +6313,29 @@
         "description": "Literal supported source text at the stated locator, without inferring a legal conclusion or numerical measure."
       },
       {
-        "column_name": "native_location_json",
+        "column_name": "text_status",
         "column_type": "VARCHAR",
-        "description": "Native XML, HTML or Word coordinates for the emitted text or link, retaining row, cell or element addresses."
+        "description": "Build-time text classification: source_null, blank or reported. Blank and null observations remain available for diagnosis."
+      },
+      {
+        "column_name": "source_ordinal",
+        "column_type": "BIGINT",
+        "description": "Zero-based fragment position within this source report; use with parent record and selected generation."
+      },
+      {
+        "column_name": "native_element",
+        "column_type": "BIGINT",
+        "description": "Source document element position stated by the retained location evidence; NULL when unavailable."
+      },
+      {
+        "column_name": "native_line",
+        "column_type": "BIGINT",
+        "description": "Source document line position stated by retained evidence; NULL when unavailable."
+      },
+      {
+        "column_name": "native_column",
+        "column_type": "BIGINT",
+        "description": "Source document column position stated by retained evidence; NULL when unavailable."
       }
     ],
     "subject": "campaign_finance",
@@ -7874,11 +7894,6 @@
         "description": "Named, versioned source-to-field mapping used for this observation."
       },
       {
-        "column_name": "value_mapping_version",
-        "column_type": "VARCHAR",
-        "description": "Version of the exact monetary and date conversion rules used for supported values."
-      },
-      {
         "column_name": "mapping_status",
         "column_type": "VARCHAR",
         "description": "Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values."
@@ -7924,39 +7939,9 @@
         "description": "Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability."
       },
       {
-        "column_name": "correction_operation",
-        "column_type": "VARCHAR",
-        "description": "Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund."
-      },
-      {
-        "column_name": "correction_applicability_status",
-        "column_type": "VARCHAR",
-        "description": "Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total."
-      },
-      {
         "column_name": "current_record_status",
         "column_type": "VARCHAR",
         "description": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record."
-      },
-      {
-        "column_name": "filing_key",
-        "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
-      },
-      {
-        "column_name": "filing_link_status",
-        "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
-      },
-      {
-        "column_name": "currency",
-        "column_type": "VARCHAR",
-        "description": "Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately."
-      },
-      {
-        "column_name": "amount_kind",
-        "column_type": "VARCHAR",
-        "description": "Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission."
       },
       {
         "column_name": "source_namespace",
@@ -7974,11 +7959,6 @@
         "description": "Exact pointer within the provider-owned native record to the mapped value or metadata object."
       },
       {
-        "column_name": "original_result_pointer",
-        "column_type": "VARCHAR",
-        "description": "Original API results-array pointer retained separately from the provider wrapper's pointer."
-      },
-      {
         "column_name": "query_completeness",
         "column_type": "VARCHAR",
         "description": "Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query."
@@ -7987,16 +7967,6 @@
         "column_name": "registry_scope_status",
         "column_type": "VARCHAR",
         "description": "Explicit retained-observation scope; this table does not replace the broader current candidate/committee registry."
-      },
-      {
-        "column_name": "native_metadata_json",
-        "column_type": "VARCHAR",
-        "description": "Complete native metadata object retained for this observation, including fields outside the typed mapping."
-      },
-      {
-        "column_name": "native_field_states_json",
-        "column_type": "VARCHAR",
-        "description": "JSON map of field presence states such as source_missing, source_null, source_empty or reported."
       },
       {
         "column_name": "response_field",
@@ -8009,14 +7979,49 @@
         "description": "Distinguishes a result container from pagination/control metadata; neither is an invented entity record."
       },
       {
-        "column_name": "value_json",
-        "column_type": "VARCHAR",
-        "description": "Exact JSON value of the native response control or result container, including NULL and empty shapes."
-      },
-      {
         "column_name": "value_status",
         "column_type": "VARCHAR",
         "description": "Explicit interpretation or source-presence state for value; a NULL typed value must be read with this status."
+      },
+      {
+        "column_name": "api_version",
+        "column_type": "VARCHAR",
+        "description": "Literal API version string supplied by the captured response."
+      },
+      {
+        "column_name": "parsing_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source parsing: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "page",
+        "column_type": "BIGINT",
+        "description": "Nonnegative exact page number supplied in the captured pagination object; not inferred from result count."
+      },
+      {
+        "column_name": "per_page",
+        "column_type": "BIGINT",
+        "description": "Nonnegative exact requested page size reported by pagination; not proof that all rows were returned."
+      },
+      {
+        "column_name": "reported_count",
+        "column_type": "BIGINT",
+        "description": "Count explicitly supplied by the source for this group; NULL means no supported count, not zero."
+      },
+      {
+        "column_name": "reported_pages",
+        "column_type": "BIGINT",
+        "description": "Nonnegative exact total page count reported by the API at capture time."
+      },
+      {
+        "column_name": "observed_count",
+        "column_type": "BIGINT",
+        "description": "Number of results in the held API response array; the array remains source evidence and is not copied into this row."
+      },
+      {
+        "column_name": "is_count_exact",
+        "column_type": "BOOLEAN",
+        "description": "Native JSON boolean declaring whether the API count is exact; numeric or string booleans are refused."
       },
       {
         "column_name": "source_cycle",
@@ -8725,11 +8730,6 @@
         "description": "Named, versioned source-to-field mapping used for this observation."
       },
       {
-        "column_name": "value_mapping_version",
-        "column_type": "VARCHAR",
-        "description": "Version of the exact monetary and date conversion rules used for supported values."
-      },
-      {
         "column_name": "mapping_status",
         "column_type": "VARCHAR",
         "description": "Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values."
@@ -8775,39 +8775,9 @@
         "description": "Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability."
       },
       {
-        "column_name": "correction_operation",
-        "column_type": "VARCHAR",
-        "description": "Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund."
-      },
-      {
-        "column_name": "correction_applicability_status",
-        "column_type": "VARCHAR",
-        "description": "Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total."
-      },
-      {
         "column_name": "current_record_status",
         "column_type": "VARCHAR",
         "description": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record."
-      },
-      {
-        "column_name": "filing_key",
-        "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
-      },
-      {
-        "column_name": "filing_link_status",
-        "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
-      },
-      {
-        "column_name": "currency",
-        "column_type": "VARCHAR",
-        "description": "Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately."
-      },
-      {
-        "column_name": "amount_kind",
-        "column_type": "VARCHAR",
-        "description": "Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission."
       },
       {
         "column_name": "source_namespace",
@@ -8875,9 +8845,19 @@
         "description": "Literal JSON array of cycles stated by the API, retaining missing, NULL and empty distinctions."
       },
       {
+        "column_name": "cycles_status",
+        "column_type": "VARCHAR",
+        "description": "Source array state for cycles: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order."
+      },
+      {
         "column_name": "election_years_json",
         "column_type": "VARCHAR",
         "description": "Literal JSON array of election years supplied for this candidate observation."
+      },
+      {
+        "column_name": "election_years_status",
+        "column_type": "VARCHAR",
+        "description": "Source array state for election_years: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order."
       },
       {
         "column_name": "election_districts_json",
@@ -8885,9 +8865,19 @@
         "description": "Literal JSON array of election district values supplied for this candidate observation."
       },
       {
+        "column_name": "election_districts_status",
+        "column_type": "VARCHAR",
+        "description": "Source array state for election_districts: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order."
+      },
+      {
         "column_name": "inactive_election_years_json",
         "column_type": "VARCHAR",
         "description": "Literal JSON array of inactive election years supplied by the API."
+      },
+      {
+        "column_name": "inactive_election_years_status",
+        "column_type": "VARCHAR",
+        "description": "Source array state for inactive_election_years: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order."
       },
       {
         "column_name": "source_url",
@@ -8915,14 +8905,124 @@
         "description": "Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query."
       },
       {
-        "column_name": "native_metadata_json",
-        "column_type": "VARCHAR",
-        "description": "Complete native metadata object retained for this observation, including fields outside the typed mapping."
+        "column_name": "district_number",
+        "column_type": "BIGINT",
+        "description": "District number stated for the candidate, parsed as an integer without inferring a district."
       },
       {
-        "column_name": "native_field_states_json",
+        "column_name": "active_through",
+        "column_type": "INTEGER",
+        "description": "Last active year reported by the source; not an inferred termination date."
+      },
+      {
+        "column_name": "candidate_inactive",
+        "column_type": "BOOLEAN",
+        "description": "Source-reported candidate inactive flag. NULL indicates missing or unsupported source value."
+      },
+      {
+        "column_name": "has_raised_funds",
+        "column_type": "BOOLEAN",
+        "description": "Source-reported fundraising flag; it is not a computed total or complete-history assertion."
+      },
+      {
+        "column_name": "federal_funds_flag",
+        "column_type": "BOOLEAN",
+        "description": "Source-reported federal-funds flag; no eligibility determination is inferred."
+      },
+      {
+        "column_name": "first_file_date",
+        "column_type": "DATE",
+        "description": "First filing date as reported in this source observation, not independently reconstructed history."
+      },
+      {
+        "column_name": "last_file_date",
+        "column_type": "DATE",
+        "description": "Last filing date as reported in this source observation; later filings may exist."
+      },
+      {
+        "column_name": "last_f2_date",
+        "column_type": "DATE",
+        "description": "Last Form 2 date reported by the source, without a completeness assertion."
+      },
+      {
+        "column_name": "district_number_raw",
         "column_type": "VARCHAR",
-        "description": "JSON map of field presence states such as source_missing, source_null, source_empty or reported."
+        "description": "Literal source district number before conversion, including unsupported spellings."
+      },
+      {
+        "column_name": "district_number_status",
+        "column_type": "VARCHAR",
+        "description": "Conversion outcome for the district number: distinguishes a parsed value from missing, null, empty or unsupported source input."
+      },
+      {
+        "column_name": "active_through_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for active_through before conversion; consult active_through_status for interpretation."
+      },
+      {
+        "column_name": "active_through_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source active_through: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "candidate_inactive_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for candidate_inactive before conversion; consult candidate_inactive_status for interpretation."
+      },
+      {
+        "column_name": "candidate_inactive_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source candidate_inactive: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "has_raised_funds_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for has_raised_funds before conversion; consult has_raised_funds_status for interpretation."
+      },
+      {
+        "column_name": "has_raised_funds_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source has_raised_funds: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "federal_funds_flag_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for federal_funds_flag before conversion; consult federal_funds_flag_status for interpretation."
+      },
+      {
+        "column_name": "federal_funds_flag_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source federal_funds_flag: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "first_file_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for first_file_date before conversion; consult first_file_date_status for interpretation."
+      },
+      {
+        "column_name": "first_file_date_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source first_file_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "last_file_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for last_file_date before conversion; consult last_file_date_status for interpretation."
+      },
+      {
+        "column_name": "last_file_date_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source last_file_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "last_f2_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for last_f2_date before conversion; consult last_f2_date_status for interpretation."
+      },
+      {
+        "column_name": "last_f2_date_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source last_f2_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
       },
       {
         "column_name": "source_cycle",
@@ -9099,11 +9199,6 @@
         "description": "Named, versioned source-to-field mapping used for this observation."
       },
       {
-        "column_name": "value_mapping_version",
-        "column_type": "VARCHAR",
-        "description": "Version of the exact monetary and date conversion rules used for supported values."
-      },
-      {
         "column_name": "mapping_status",
         "column_type": "VARCHAR",
         "description": "Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values."
@@ -9149,39 +9244,9 @@
         "description": "Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability."
       },
       {
-        "column_name": "correction_operation",
-        "column_type": "VARCHAR",
-        "description": "Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund."
-      },
-      {
-        "column_name": "correction_applicability_status",
-        "column_type": "VARCHAR",
-        "description": "Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total."
-      },
-      {
         "column_name": "current_record_status",
         "column_type": "VARCHAR",
         "description": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record."
-      },
-      {
-        "column_name": "filing_key",
-        "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
-      },
-      {
-        "column_name": "filing_link_status",
-        "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
-      },
-      {
-        "column_name": "currency",
-        "column_type": "VARCHAR",
-        "description": "Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately."
-      },
-      {
-        "column_name": "amount_kind",
-        "column_type": "VARCHAR",
-        "description": "Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission."
       },
       {
         "column_name": "source_namespace",
@@ -9192,11 +9257,6 @@
         "column_name": "source_url",
         "column_type": "VARCHAR",
         "description": "Captured source URL for this observation; it does not assert current availability or body retrieval."
-      },
-      {
-        "column_name": "capture_json",
-        "column_type": "VARCHAR",
-        "description": "Retained capture request, source digest and scope metadata used to validate this history observation."
       },
       {
         "column_name": "history_scope_status",
@@ -9212,11 +9272,6 @@
         "column_name": "committee_id",
         "column_type": "VARCHAR",
         "description": "Literal FEC committee identifier as reported in this observation. Use cycle and source scope for historical joins."
-      },
-      {
-        "column_name": "cycle",
-        "column_type": "VARCHAR",
-        "description": "Cycle exactly as supplied by the history source; raw PostgreSQL text is retained without inferring a new integer value."
       },
       {
         "column_name": "name",
@@ -9289,9 +9344,19 @@
         "description": "Literal FEC candidate identifier when the source reports one. Syntax checks do not prove identity resolution or a target match."
       },
       {
-        "column_name": "native_fields",
-        "column_type": "STRUCT(CMTE_ID VARCHAR, CMTE_NM VARCHAR, TRES_NM VARCHAR, CMTE_ST1 VARCHAR, CMTE_ST2 VARCHAR, CMTE_CITY VARCHAR, CMTE_ST VARCHAR, CMTE_ZIP VARCHAR, CMTE_DSGN VARCHAR, CMTE_TP VARCHAR, CMTE_PTY_AFFILIATION VARCHAR, CMTE_FILING_FREQ VARCHAR, ORG_TP VARCHAR, CONNECTED_ORG_NM VARCHAR, CAND_ID VARCHAR)",
-        "description": "Named struct of every literal committee-master field in its verified header order. Original values remain text beside the source-owned committee-history mapping."
+        "column_name": "cycle",
+        "column_type": "INTEGER",
+        "description": "Cycle exactly as supplied by the history source; raw PostgreSQL text is retained without inferring a new integer value."
+      },
+      {
+        "column_name": "cycle_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for cycle before conversion; consult cycle_status for interpretation."
+      },
+      {
+        "column_name": "cycle_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source cycle: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
       }
     ],
     "subject": "campaign_finance",
@@ -9345,11 +9410,6 @@
         "description": "Named, versioned source-to-field mapping used for this observation."
       },
       {
-        "column_name": "value_mapping_version",
-        "column_type": "VARCHAR",
-        "description": "Version of the exact monetary and date conversion rules used for supported values."
-      },
-      {
         "column_name": "mapping_status",
         "column_type": "VARCHAR",
         "description": "Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values."
@@ -9395,39 +9455,9 @@
         "description": "Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability."
       },
       {
-        "column_name": "correction_operation",
-        "column_type": "VARCHAR",
-        "description": "Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund."
-      },
-      {
-        "column_name": "correction_applicability_status",
-        "column_type": "VARCHAR",
-        "description": "Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total."
-      },
-      {
         "column_name": "current_record_status",
         "column_type": "VARCHAR",
         "description": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record."
-      },
-      {
-        "column_name": "filing_key",
-        "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
-      },
-      {
-        "column_name": "filing_link_status",
-        "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
-      },
-      {
-        "column_name": "currency",
-        "column_type": "VARCHAR",
-        "description": "Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately."
-      },
-      {
-        "column_name": "amount_kind",
-        "column_type": "VARCHAR",
-        "description": "Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission."
       },
       {
         "column_name": "source_namespace",
@@ -9495,26 +9525,6 @@
         "description": "Source-stated filing frequency code; not proof that all required reports are retained."
       },
       {
-        "column_name": "first_file_date",
-        "column_type": "VARCHAR",
-        "description": "First filing date as reported in this source observation, not independently reconstructed history."
-      },
-      {
-        "column_name": "last_file_date",
-        "column_type": "VARCHAR",
-        "description": "Last filing date as reported in this source observation; later filings may exist."
-      },
-      {
-        "column_name": "cycles_json",
-        "column_type": "VARCHAR",
-        "description": "Literal JSON array of reported activity cycles, retaining missing, NULL and empty distinctions. Activity membership does not date the captured profile fields."
-      },
-      {
-        "column_name": "candidate_ids_json",
-        "column_type": "VARCHAR",
-        "description": "Literal JSON array of candidate IDs stated by the committee API; relationships require their own evidence and state checks."
-      },
-      {
         "column_name": "source_url",
         "column_type": "VARCHAR",
         "description": "Captured source URL for this observation; it does not assert current availability or body retrieval."
@@ -9540,19 +9550,184 @@
         "description": "Explicit retained-observation scope; this table does not replace the broader current candidate/committee registry."
       },
       {
-        "column_name": "native_metadata_json",
-        "column_type": "VARCHAR",
-        "description": "Complete native metadata object retained for this observation, including fields outside the typed mapping."
-      },
-      {
-        "column_name": "native_field_states_json",
-        "column_type": "VARCHAR",
-        "description": "JSON map of field presence states such as source_missing, source_null, source_empty or reported."
-      },
-      {
         "column_name": "committee_id_status",
         "column_type": "VARCHAR",
         "description": "State or syntax check of the reported committee ID; a valid shape is not a resolved identity."
+      },
+      {
+        "column_name": "affiliated_committee_name",
+        "column_type": "VARCHAR",
+        "description": "Literal affiliated committee or connected organization name stated by the API; a name is not a verified committee link or a substitute for bulk CONNECTED_ORG_NM."
+      },
+      {
+        "column_name": "organization_type",
+        "column_type": "VARCHAR",
+        "description": "Literal source organization-type code; interpretation follows the source namespace."
+      },
+      {
+        "column_name": "designated_agent_city",
+        "column_type": "VARCHAR",
+        "description": "Committee-designated agent city, exactly as stated by the source."
+      },
+      {
+        "column_name": "designated_agent_first_name",
+        "column_type": "VARCHAR",
+        "description": "Committee-designated agent first name, exactly as stated by the source."
+      },
+      {
+        "column_name": "designated_agent_last_name",
+        "column_type": "VARCHAR",
+        "description": "Committee-designated agent last name, exactly as stated by the source."
+      },
+      {
+        "column_name": "designated_agent_middle_name",
+        "column_type": "VARCHAR",
+        "description": "Committee-designated agent middle name, exactly as stated by the source."
+      },
+      {
+        "column_name": "designated_agent_name",
+        "column_type": "VARCHAR",
+        "description": "Committee-designated agent name, exactly as stated by the source."
+      },
+      {
+        "column_name": "designated_agent_phone_number",
+        "column_type": "VARCHAR",
+        "description": "Committee-designated agent phone number, exactly as stated by the source."
+      },
+      {
+        "column_name": "designated_agent_prefix",
+        "column_type": "VARCHAR",
+        "description": "Committee-designated agent prefix, exactly as stated by the source."
+      },
+      {
+        "column_name": "designated_agent_state",
+        "column_type": "VARCHAR",
+        "description": "Committee-designated agent state, exactly as stated by the source."
+      },
+      {
+        "column_name": "designated_agent_street1",
+        "column_type": "VARCHAR",
+        "description": "Committee-designated agent street1, exactly as stated by the source."
+      },
+      {
+        "column_name": "designated_agent_street2",
+        "column_type": "VARCHAR",
+        "description": "Committee-designated agent street2, exactly as stated by the source."
+      },
+      {
+        "column_name": "designated_agent_suffix",
+        "column_type": "VARCHAR",
+        "description": "Committee-designated agent suffix, exactly as stated by the source."
+      },
+      {
+        "column_name": "designated_agent_title",
+        "column_type": "VARCHAR",
+        "description": "Committee-designated agent title, exactly as stated by the source."
+      },
+      {
+        "column_name": "designated_agent_zip",
+        "column_type": "VARCHAR",
+        "description": "Committee-designated agent zip, exactly as stated by the source."
+      },
+      {
+        "column_name": "sponsor_candidate_list_json",
+        "column_type": "VARCHAR",
+        "description": "Source-listed sponsor candidate identifiers and names serialized in source order, preserving repetitions."
+      },
+      {
+        "column_name": "sponsor_candidate_list_status",
+        "column_type": "VARCHAR",
+        "description": "Source-list interpretation outcome; unsupported_shape means the source value did not match the declared candidate-list structure."
+      },
+      {
+        "column_name": "cycles_json",
+        "column_type": "VARCHAR",
+        "description": "Literal JSON array of reported activity cycles, retaining missing, NULL and empty distinctions. Activity membership does not date the captured profile fields."
+      },
+      {
+        "column_name": "cycles_status",
+        "column_type": "VARCHAR",
+        "description": "Source array state for cycles: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order."
+      },
+      {
+        "column_name": "candidate_ids_json",
+        "column_type": "VARCHAR",
+        "description": "Literal JSON array of candidate IDs stated by the committee API; relationships require their own evidence and state checks."
+      },
+      {
+        "column_name": "candidate_ids_status",
+        "column_type": "VARCHAR",
+        "description": "Source array state for candidate_ids: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order."
+      },
+      {
+        "column_name": "sponsor_candidate_ids_json",
+        "column_type": "VARCHAR",
+        "description": "Independent ordered array of source sponsor-candidate references; never pair positions with cycles or candidate_ids."
+      },
+      {
+        "column_name": "sponsor_candidate_ids_status",
+        "column_type": "VARCHAR",
+        "description": "Source array state for sponsor_candidate_ids: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order."
+      },
+      {
+        "column_name": "first_file_date",
+        "column_type": "DATE",
+        "description": "First filing date as reported in this source observation, not independently reconstructed history."
+      },
+      {
+        "column_name": "last_file_date",
+        "column_type": "DATE",
+        "description": "Last filing date as reported in this source observation; later filings may exist."
+      },
+      {
+        "column_name": "first_f1_date",
+        "column_type": "DATE",
+        "description": "First Form 1 date reported by the source, without a completeness assertion."
+      },
+      {
+        "column_name": "last_f1_date",
+        "column_type": "DATE",
+        "description": "Last Form 1 date reported by the source, without a completeness assertion."
+      },
+      {
+        "column_name": "first_file_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for first_file_date before conversion; consult first_file_date_status for interpretation."
+      },
+      {
+        "column_name": "first_file_date_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source first_file_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "last_file_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for last_file_date before conversion; consult last_file_date_status for interpretation."
+      },
+      {
+        "column_name": "last_file_date_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source last_file_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "first_f1_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for first_f1_date before conversion; consult first_f1_date_status for interpretation."
+      },
+      {
+        "column_name": "first_f1_date_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source first_f1_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "last_f1_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for last_f1_date before conversion; consult last_f1_date_status for interpretation."
+      },
+      {
+        "column_name": "last_f1_date_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source last_f1_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
       },
       {
         "column_name": "source_cycle",
@@ -12806,11 +12981,6 @@
         "description": "Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation."
       },
       {
-        "column_name": "source_pointer",
-        "column_type": "VARCHAR",
-        "description": "Exact pointer within the provider-owned native record to the mapped value or metadata object."
-      },
-      {
         "column_name": "source_authority",
         "column_type": "VARCHAR",
         "description": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions."
@@ -12821,9 +12991,24 @@
         "description": "Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision."
       },
       {
+        "column_name": "source_representation_role",
+        "column_type": "VARCHAR",
+        "description": "Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability."
+      },
+      {
+        "column_name": "current_record_status",
+        "column_type": "VARCHAR",
+        "description": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record."
+      },
+      {
         "column_name": "source_namespace",
         "column_type": "VARCHAR",
         "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
+      },
+      {
+        "column_name": "source_pointer",
+        "column_type": "VARCHAR",
+        "description": "Exact pointer within the provider-owned native record to the mapped value or metadata object."
       },
       {
         "column_name": "filing_key",
@@ -12834,16 +13019,6 @@
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
         "description": "The stating filing's own `filing_link_status`, copied from `fec_filings` onto each link it states: `native_file_number` where that filing states its FEC file number, `unresolved_no_file_number` where it does not. It says nothing about the referenced filing; see `target_resolution_status`."
-      },
-      {
-        "column_name": "native_field_states_json",
-        "column_type": "VARCHAR",
-        "description": "JSON map of field presence states such as source_missing, source_null, source_empty or reported."
-      },
-      {
-        "column_name": "current_record_status",
-        "column_type": "VARCHAR",
-        "description": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record."
       },
       {
         "column_name": "source_filing_record_id",
@@ -13238,11 +13413,6 @@
         "description": "Date parsed from the effective date stated on the source form. NULL requires the source value and conversion status; capture time is not substituted."
       },
       {
-        "column_name": "native_fields",
-        "column_type": "STRUCT(\"position\" INTEGER, definition_label VARCHAR, definition_cell VARCHAR, presence VARCHAR, raw_value VARCHAR, body_reference_json VARCHAR)[]",
-        "description": "Ordered native fields as structs of position, definition_label, definition_cell, presence, raw_value and body_reference_json. Preserves every source value, including undefined positions and missing/null/empty states."
-      },
-      {
         "column_name": "reported_measures",
         "column_type": "STRUCT(native_position INTEGER, native_label VARCHAR, definition_cell VARCHAR, raw_value VARCHAR, \"value\" DECIMAL(38,9), value_status VARCHAR, quantity_kind VARCHAR, measure_role VARCHAR, period_basis VARCHAR)[]",
         "description": "Ordered measure structs: native_position, native_label, definition_cell, raw_value, exact decimal value, value_status, quantity_kind, measure_role and period_basis. Parent totals/subtotals are not added to itemized children."
@@ -13334,11 +13504,6 @@
         "description": "Named, versioned source-to-field mapping used for this observation."
       },
       {
-        "column_name": "value_mapping_version",
-        "column_type": "VARCHAR",
-        "description": "Version of the exact monetary and date conversion rules used for supported values."
-      },
-      {
         "column_name": "mapping_status",
         "column_type": "VARCHAR",
         "description": "Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values."
@@ -13384,19 +13549,14 @@
         "description": "Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability."
       },
       {
-        "column_name": "correction_operation",
-        "column_type": "VARCHAR",
-        "description": "Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund."
-      },
-      {
-        "column_name": "correction_applicability_status",
-        "column_type": "VARCHAR",
-        "description": "Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total."
-      },
-      {
         "column_name": "current_record_status",
         "column_type": "VARCHAR",
         "description": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record."
+      },
+      {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
       },
       {
         "column_name": "filing_key",
@@ -13407,21 +13567,6 @@
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
         "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
-      },
-      {
-        "column_name": "currency",
-        "column_type": "VARCHAR",
-        "description": "Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately."
-      },
-      {
-        "column_name": "amount_kind",
-        "column_type": "VARCHAR",
-        "description": "Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission."
-      },
-      {
-        "column_name": "source_namespace",
-        "column_type": "VARCHAR",
-        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
       },
       {
         "column_name": "definition_set_id",
@@ -13487,11 +13632,6 @@
         "column_name": "source_cycle",
         "column_type": "INTEGER",
         "description": "Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year."
-      },
-      {
-        "column_name": "native_fields",
-        "column_type": "STRUCT(\"position\" INTEGER, definition_label VARCHAR, definition_cell VARCHAR, presence VARCHAR, raw_value VARCHAR, body_reference_json VARCHAR)[]",
-        "description": "Ordered native narrative fields as structs of position, definition_label, definition_cell, presence, raw_value and body_reference_json, preserving literal source values and states."
       },
       {
         "column_name": "text_fragments",
@@ -13575,11 +13715,6 @@
         "description": "Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation."
       },
       {
-        "column_name": "source_pointer",
-        "column_type": "VARCHAR",
-        "description": "Exact pointer within the provider-owned native record to the mapped value or metadata object."
-      },
-      {
         "column_name": "source_authority",
         "column_type": "VARCHAR",
         "description": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions."
@@ -13590,29 +13725,24 @@
         "description": "Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision."
       },
       {
-        "column_name": "source_namespace",
+        "column_name": "source_representation_role",
         "column_type": "VARCHAR",
-        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
-      },
-      {
-        "column_name": "filing_key",
-        "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
-      },
-      {
-        "column_name": "filing_link_status",
-        "column_type": "VARCHAR",
-        "description": "Set when the row is mapped: `native_file_number` where the filing states its own FEC file number (then `filing_key` is set), `unresolved_no_file_number` where it does not. It does not look up any other filing."
-      },
-      {
-        "column_name": "native_field_states_json",
-        "column_type": "VARCHAR",
-        "description": "JSON map of field presence states such as source_missing, source_null, source_empty or reported."
+        "description": "Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability."
       },
       {
         "column_name": "current_record_status",
         "column_type": "VARCHAR",
         "description": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record."
+      },
+      {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
+      },
+      {
+        "column_name": "source_pointer",
+        "column_type": "VARCHAR",
+        "description": "Exact pointer within the provider-owned native record to the mapped value or metadata object."
       },
       {
         "column_name": "report_number",
@@ -13680,21 +13810,6 @@
         "description": "Source-supplied expanded report type label."
       },
       {
-        "column_name": "report_year",
-        "column_type": "VARCHAR",
-        "description": "Year reported for the filing/report, preserved independently of cycle and transaction date."
-      },
-      {
-        "column_name": "reported_cycle",
-        "column_type": "VARCHAR",
-        "description": "Cycle exactly as reported in a native field; kept separate from the selection's source_cycle."
-      },
-      {
-        "column_name": "election_year",
-        "column_type": "VARCHAR",
-        "description": "Election year stated by the source, distinct from source cycle, fiscal year and capture time."
-      },
-      {
         "column_name": "means_filed",
         "column_type": "VARCHAR",
         "description": "Source-stated filing channel or method; file format alone does not prove amendment scope."
@@ -13728,21 +13843,6 @@
         "column_name": "amendment_number",
         "column_type": "VARCHAR",
         "description": "Source-stated amendment number, distinct from a proven replacement order or complete chain."
-      },
-      {
-        "column_name": "is_amended",
-        "column_type": "VARCHAR",
-        "description": "Literal API amendment state at capture time; it does not establish a complete retained amendment chain."
-      },
-      {
-        "column_name": "most_recent",
-        "column_type": "VARCHAR",
-        "description": "Literal publisher most-recent flag captured for this observation; not an independently qualified current selection."
-      },
-      {
-        "column_name": "pages",
-        "column_type": "VARCHAR",
-        "description": "Page count stated in filing metadata; no PDF-body processing is implied."
       },
       {
         "column_name": "office",
@@ -13783,6 +13883,16 @@
         "column_name": "pdf_url",
         "column_type": "VARCHAR",
         "description": "Source-reported PDF URL, retained as metadata while body processing remains deferred."
+      },
+      {
+        "column_name": "filing_key",
+        "column_type": "VARCHAR",
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+      },
+      {
+        "column_name": "filing_link_status",
+        "column_type": "VARCHAR",
+        "description": "Set when the row is mapped: `native_file_number` where the filing states its own FEC file number (then `filing_key` is set), `unresolved_no_file_number` where it does not. It does not look up any other filing."
       },
       {
         "column_name": "filer_entity_type",
@@ -13928,6 +14038,96 @@
         "column_name": "load_timestamp",
         "column_type": "DATE",
         "description": "Date parsed from the date component of the source load timestamp; the full native timestamp remains in load_timestamp_raw. NULL requires the source value and conversion status; capture time is not substituted."
+      },
+      {
+        "column_name": "pages",
+        "column_type": "BIGINT",
+        "description": "Page count stated in filing metadata; no PDF-body processing is implied."
+      },
+      {
+        "column_name": "report_year",
+        "column_type": "INTEGER",
+        "description": "Year reported for the filing/report, preserved independently of cycle and transaction date."
+      },
+      {
+        "column_name": "reported_cycle",
+        "column_type": "INTEGER",
+        "description": "Cycle exactly as reported in a native field; kept separate from the selection's source_cycle."
+      },
+      {
+        "column_name": "election_year",
+        "column_type": "INTEGER",
+        "description": "Election year stated by the source, distinct from source cycle, fiscal year and capture time."
+      },
+      {
+        "column_name": "is_amended",
+        "column_type": "BOOLEAN",
+        "description": "Literal API amendment state at capture time; it does not establish a complete retained amendment chain."
+      },
+      {
+        "column_name": "most_recent",
+        "column_type": "BOOLEAN",
+        "description": "Literal publisher most-recent flag captured for this observation; not an independently qualified current selection."
+      },
+      {
+        "column_name": "pages_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for pages before conversion; consult pages_status for interpretation."
+      },
+      {
+        "column_name": "pages_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source pages: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "report_year_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for report_year before conversion; consult report_year_status for interpretation."
+      },
+      {
+        "column_name": "report_year_status",
+        "column_type": "VARCHAR",
+        "description": "Whether the CSV source report year has an exact four-digit spelling, is missing, or is unsupported."
+      },
+      {
+        "column_name": "reported_cycle_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for reported_cycle before conversion; consult reported_cycle_status for interpretation."
+      },
+      {
+        "column_name": "reported_cycle_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source reported_cycle: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "election_year_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for election_year before conversion; consult election_year_status for interpretation."
+      },
+      {
+        "column_name": "election_year_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source election_year: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "is_amended_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for is_amended before conversion; consult is_amended_status for interpretation."
+      },
+      {
+        "column_name": "is_amended_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source is_amended: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "most_recent_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for most_recent before conversion; consult most_recent_status for interpretation."
+      },
+      {
+        "column_name": "most_recent_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source most_recent: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
       }
     ],
     "subject": "campaign_finance",
@@ -14057,16 +14257,6 @@
         "description": "SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness."
       },
       {
-        "column_name": "context_sha256",
-        "column_type": "VARCHAR",
-        "description": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output."
-      },
-      {
-        "column_name": "source_context_pointer",
-        "column_type": "VARCHAR",
-        "description": "Exact JSON pointer into the retained collection context to the native fact represented by this observation."
-      },
-      {
         "column_name": "observed_at_json",
         "column_type": "VARCHAR",
         "description": "Acquisition time from the original's acquisition receipt in the raw archive, as JSON."
@@ -14075,16 +14265,6 @@
         "column_name": "worksheet_name",
         "column_type": "VARCHAR",
         "description": "Literal worksheet title that supplies this historical statistical observation."
-      },
-      {
-        "column_name": "worksheet_member",
-        "column_type": "VARCHAR",
-        "description": "Exact ZIP member name of the worksheet source, preserving its address within the workbook."
-      },
-      {
-        "column_name": "worksheet_sha256",
-        "column_type": "VARCHAR",
-        "description": "Digest of the retained worksheet member bytes."
       },
       {
         "column_name": "row_grain",
@@ -14170,11 +14350,6 @@
         "column_name": "reported_date_status",
         "column_type": "VARCHAR",
         "description": "Source-presence or conversion state for reported_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
-      },
-      {
-        "column_name": "native_cells_json",
-        "column_type": "VARCHAR",
-        "description": "Exact retained source cells and addresses supporting this row; includes literal text and available worksheet/formula context."
       },
       {
         "column_name": "worksheet_ordinal",
@@ -16094,19 +16269,19 @@
         "description": "Literal source audit identifier; it does not replace the namespaced matter identity."
       },
       {
-        "column_name": "reported_cycle",
+        "column_name": "reported_cycle_status",
         "column_type": "VARCHAR",
-        "description": "Cycle exactly as reported in a native field; kept separate from the selection's source_cycle."
+        "description": "Interpretation of source reported_cycle: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
       },
       {
-        "column_name": "pending_status",
+        "column_name": "is_pending_status",
         "column_type": "VARCHAR",
-        "description": "Native pending state retained as an observation rather than an inferred current disposition."
+        "description": "Interpretation of source is_pending: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
       },
       {
-        "column_name": "published_status",
+        "column_name": "is_published_status",
         "column_type": "VARCHAR",
-        "description": "Native publication state reported for the matter; not this application's publication state."
+        "description": "Interpretation of source is_published: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
       },
       {
         "column_name": "current_state_status",
@@ -16167,6 +16342,131 @@
         "column_name": "currency",
         "column_type": "VARCHAR",
         "description": "Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately."
+      },
+      {
+        "column_name": "challenge_outcome_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source challenge_outcome: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "civil_penalty_payment_status_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source civil_penalty_payment_status: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "report_type_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source report_type: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "mur_type_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source mur_type: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "committee_description_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source committee_description: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "committee_designation_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source committee_designation: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "committee_type_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source committee_type: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "rm_id_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source rm_id: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "rm_number_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source rm_number: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "report_year_status",
+        "column_type": "VARCHAR",
+        "description": "Whether the CSV source report year has an exact four-digit spelling, is missing, or is unsupported."
+      },
+      {
+        "column_name": "is_open_for_comment_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source is_open_for_comment: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "reported_cycle",
+        "column_type": "INTEGER",
+        "description": "Cycle exactly as reported in a native field; kept separate from the selection's source_cycle."
+      },
+      {
+        "column_name": "is_pending",
+        "column_type": "BOOLEAN",
+        "description": "Source-reported pending flag for this legal matter; not an independently determined legal status."
+      },
+      {
+        "column_name": "is_published",
+        "column_type": "BOOLEAN",
+        "description": "Source-reported publication flag for this legal matter; not proof that a document body was acquired."
+      },
+      {
+        "column_name": "challenge_outcome",
+        "column_type": "VARCHAR",
+        "description": "Literal administrative challenge outcome reported by the source."
+      },
+      {
+        "column_name": "civil_penalty_payment_status",
+        "column_type": "VARCHAR",
+        "description": "Literal source-reported civil-penalty payment status; distinct from the parsing status of this field."
+      },
+      {
+        "column_name": "report_type",
+        "column_type": "VARCHAR",
+        "description": "Source-reported report classification, interpreted within its namespace rather than as a universal period code."
+      },
+      {
+        "column_name": "mur_type",
+        "column_type": "VARCHAR",
+        "description": "Literal Matter Under Review type stated by the source."
+      },
+      {
+        "column_name": "committee_description",
+        "column_type": "VARCHAR",
+        "description": "Source-provided description of the committee associated with this legal matter."
+      },
+      {
+        "column_name": "committee_designation",
+        "column_type": "VARCHAR",
+        "description": "Literal designation of the committee referenced by this legal matter."
+      },
+      {
+        "column_name": "committee_type",
+        "column_type": "VARCHAR",
+        "description": "Single-letter committee type code (e.g. `P` presidential, `H` House, `S` Senate, `N`/`Q`/`O` PAC variants)."
+      },
+      {
+        "column_name": "rm_id",
+        "column_type": "VARCHAR",
+        "description": "Source rulemaking identifier, preserved exactly as text; distinct from native_matter_id and rm_number."
+      },
+      {
+        "column_name": "rm_number",
+        "column_type": "VARCHAR",
+        "description": "Source rulemaking number including its literal prefix; distinct from rm_id and native_matter_id."
+      },
+      {
+        "column_name": "report_year",
+        "column_type": "INTEGER",
+        "description": "Year reported for the filing/report, preserved independently of cycle and transaction date."
+      },
+      {
+        "column_name": "is_open_for_comment",
+        "column_type": "BOOLEAN",
+        "description": "Source-reported comment-window flag; it is not recalculated using the current clock."
       },
       {
         "column_name": "final_determination_amount",
@@ -17937,11 +18237,6 @@
         "description": "Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation."
       },
       {
-        "column_name": "source_pointer",
-        "column_type": "VARCHAR",
-        "description": "Exact pointer within the provider-owned native record to the mapped value or metadata object."
-      },
-      {
         "column_name": "source_authority",
         "column_type": "VARCHAR",
         "description": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions."
@@ -17952,29 +18247,24 @@
         "description": "Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision."
       },
       {
-        "column_name": "source_namespace",
+        "column_name": "source_representation_role",
         "column_type": "VARCHAR",
-        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
-      },
-      {
-        "column_name": "filing_key",
-        "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
-      },
-      {
-        "column_name": "filing_link_status",
-        "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
-      },
-      {
-        "column_name": "native_field_states_json",
-        "column_type": "VARCHAR",
-        "description": "JSON map of field presence states such as source_missing, source_null, source_empty or reported."
+        "description": "Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability."
       },
       {
         "column_name": "current_record_status",
         "column_type": "VARCHAR",
         "description": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record."
+      },
+      {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
+      },
+      {
+        "column_name": "source_pointer",
+        "column_type": "VARCHAR",
+        "description": "Exact pointer within the provider-owned native record to the mapped value or metadata object."
       },
       {
         "column_name": "committee_id",
@@ -18251,11 +18541,6 @@
         "description": "Named, versioned source-to-field mapping used for this observation."
       },
       {
-        "column_name": "value_mapping_version",
-        "column_type": "VARCHAR",
-        "description": "Version of the exact monetary and date conversion rules used for supported values."
-      },
-      {
         "column_name": "mapping_status",
         "column_type": "VARCHAR",
         "description": "Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values."
@@ -18301,39 +18586,9 @@
         "description": "Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability."
       },
       {
-        "column_name": "correction_operation",
-        "column_type": "VARCHAR",
-        "description": "Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund."
-      },
-      {
-        "column_name": "correction_applicability_status",
-        "column_type": "VARCHAR",
-        "description": "Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total."
-      },
-      {
         "column_name": "current_record_status",
         "column_type": "VARCHAR",
         "description": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record."
-      },
-      {
-        "column_name": "filing_key",
-        "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
-      },
-      {
-        "column_name": "filing_link_status",
-        "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
-      },
-      {
-        "column_name": "currency",
-        "column_type": "VARCHAR",
-        "description": "Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately."
-      },
-      {
-        "column_name": "amount_kind",
-        "column_type": "VARCHAR",
-        "description": "Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission."
       },
       {
         "column_name": "source_namespace",
@@ -18344,11 +18599,6 @@
         "column_name": "source_url",
         "column_type": "VARCHAR",
         "description": "Captured source URL for this observation; it does not assert current availability or body retrieval."
-      },
-      {
-        "column_name": "capture_json",
-        "column_type": "VARCHAR",
-        "description": "Retained capture request, source digest and scope metadata used to validate this history observation."
       },
       {
         "column_name": "history_scope_status",
@@ -18366,24 +18616,489 @@
         "description": "Literal FEC committee identifier as reported in this observation. Use cycle and source scope for historical joins."
       },
       {
-        "column_name": "cycle",
+        "column_name": "name",
         "column_type": "VARCHAR",
+        "description": "Committee name as registered with the FEC."
+      },
+      {
+        "column_name": "treasurer_name",
+        "column_type": "VARCHAR",
+        "description": "Name of the committee's treasurer."
+      },
+      {
+        "column_name": "organization_type",
+        "column_type": "VARCHAR",
+        "description": "Literal source organization-type code; interpretation follows the source namespace."
+      },
+      {
+        "column_name": "organization_type_full",
+        "column_type": "VARCHAR",
+        "description": "Source-provided expansion of its organization-type code."
+      },
+      {
+        "column_name": "street_1",
+        "column_type": "VARCHAR",
+        "description": "The first street line of the committee's address (`CMTE_ST1`); NULL when blank."
+      },
+      {
+        "column_name": "street_2",
+        "column_type": "VARCHAR",
+        "description": "The second street line (`CMTE_ST2`); NULL when blank."
+      },
+      {
+        "column_name": "city",
+        "column_type": "VARCHAR",
+        "description": "The address city (`CMTE_CITY`); NULL when blank."
+      },
+      {
+        "column_name": "state",
+        "column_type": "VARCHAR",
+        "description": "Two-letter state associated with the committee. Often null."
+      },
+      {
+        "column_name": "state_full",
+        "column_type": "VARCHAR",
+        "description": "Source-provided state name corresponding to the source state code."
+      },
+      {
+        "column_name": "zip",
+        "column_type": "VARCHAR",
+        "description": "The address ZIP code as filed (`CMTE_ZIP`); NULL when blank."
+      },
+      {
+        "column_name": "treasurer_city",
+        "column_type": "VARCHAR",
+        "description": "Source-reported city for the committee treasurer in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "treasurer_name_1",
+        "column_type": "VARCHAR",
+        "description": "Source-reported first name component for the committee treasurer in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "treasurer_name_2",
+        "column_type": "VARCHAR",
+        "description": "Source-reported second name component for the committee treasurer in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "treasurer_name_middle",
+        "column_type": "VARCHAR",
+        "description": "Source-reported middle name component for the committee treasurer in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "treasurer_phone",
+        "column_type": "VARCHAR",
+        "description": "Source-reported phone number for the committee treasurer in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "treasurer_name_prefix",
+        "column_type": "VARCHAR",
+        "description": "Source-reported name prefix for the committee treasurer in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "treasurer_state",
+        "column_type": "VARCHAR",
+        "description": "Source-reported state for the committee treasurer in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "treasurer_street_1",
+        "column_type": "VARCHAR",
+        "description": "Source-reported first street-address line for the committee treasurer in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "treasurer_street_2",
+        "column_type": "VARCHAR",
+        "description": "Source-reported second street-address line for the committee treasurer in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "treasurer_name_suffix",
+        "column_type": "VARCHAR",
+        "description": "Source-reported name suffix for the committee treasurer in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "treasurer_name_title",
+        "column_type": "VARCHAR",
+        "description": "Source-reported title for the committee treasurer in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "treasurer_zip",
+        "column_type": "VARCHAR",
+        "description": "Source-reported postal code for the committee treasurer in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "custodian_city",
+        "column_type": "VARCHAR",
+        "description": "Source-reported city for the committee custodian in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "custodian_name_1",
+        "column_type": "VARCHAR",
+        "description": "Source-reported first name component for the committee custodian in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "custodian_name_2",
+        "column_type": "VARCHAR",
+        "description": "Source-reported second name component for the committee custodian in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "custodian_name_middle",
+        "column_type": "VARCHAR",
+        "description": "Source-reported middle name component for the committee custodian in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "custodian_name_full",
+        "column_type": "VARCHAR",
+        "description": "Source-reported full name for the committee custodian in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "custodian_phone",
+        "column_type": "VARCHAR",
+        "description": "Source-reported phone number for the committee custodian in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "custodian_name_prefix",
+        "column_type": "VARCHAR",
+        "description": "Source-reported name prefix for the committee custodian in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "custodian_state",
+        "column_type": "VARCHAR",
+        "description": "Source-reported state for the committee custodian in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "custodian_street_1",
+        "column_type": "VARCHAR",
+        "description": "Source-reported first street-address line for the committee custodian in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "custodian_street_2",
+        "column_type": "VARCHAR",
+        "description": "Source-reported second street-address line for the committee custodian in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "custodian_name_suffix",
+        "column_type": "VARCHAR",
+        "description": "Source-reported name suffix for the committee custodian in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "custodian_name_title",
+        "column_type": "VARCHAR",
+        "description": "Source-reported title for the committee custodian in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "custodian_zip",
+        "column_type": "VARCHAR",
+        "description": "Source-reported postal code for the committee custodian in this observation; preserve source spelling and do not infer person identity."
+      },
+      {
+        "column_name": "email",
+        "column_type": "VARCHAR",
+        "description": "Public contact email stated in this source observation; not verified current contact information."
+      },
+      {
+        "column_name": "fax",
+        "column_type": "VARCHAR",
+        "description": "Public fax number stated in this source observation, preserved as text."
+      },
+      {
+        "column_name": "website",
+        "column_type": "VARCHAR",
+        "description": "Source-reported website URL; no successful retrieval or present-day affiliation is asserted."
+      },
+      {
+        "column_name": "form_type",
+        "column_type": "VARCHAR",
+        "description": "Literal filing form or record-type code from the source layout; does not prove submission conformance."
+      },
+      {
+        "column_name": "leadership_pac",
+        "column_type": "VARCHAR",
+        "description": "Literal source leadership-PAC code. It is not a boolean; native codes remain distinct."
+      },
+      {
+        "column_name": "lobbyist_registrant_pac",
+        "column_type": "VARCHAR",
+        "description": "Literal source lobbyist/registrant-PAC code. It is not a boolean; native codes remain distinct."
+      },
+      {
+        "column_name": "party_type",
+        "column_type": "VARCHAR",
+        "description": "Literal party-type code supplied in the source history row."
+      },
+      {
+        "column_name": "party_type_full",
+        "column_type": "VARCHAR",
+        "description": "Source-provided description of its party-type code."
+      },
+      {
+        "column_name": "designation",
+        "column_type": "VARCHAR",
+        "description": "Single-letter committee designation code (e.g. `P` principal campaign committee, `A` authorized, `U` unauthorized, `J` joint fundraiser)."
+      },
+      {
+        "column_name": "designation_full",
+        "column_type": "VARCHAR",
+        "description": "Source-provided description of the committee designation."
+      },
+      {
+        "column_name": "committee_type",
+        "column_type": "VARCHAR",
+        "description": "Single-letter committee type code (e.g. `P` presidential, `H` House, `S` Senate, `N`/`Q`/`O` PAC variants)."
+      },
+      {
+        "column_name": "committee_type_full",
+        "column_type": "VARCHAR",
+        "description": "Human-readable committee type (e.g. `Presidential`, `PAC - Qualified`)."
+      },
+      {
+        "column_name": "filing_frequency",
+        "column_type": "VARCHAR",
+        "description": "Single-letter filing frequency code (e.g. `A` administratively terminated, `M` monthly, `Q` quarterly, `T` terminated)."
+      },
+      {
+        "column_name": "party",
+        "column_type": "VARCHAR",
+        "description": "Political party code, when set (e.g. `DEM`, `REP`, `W`). Often null for non-party committees."
+      },
+      {
+        "column_name": "party_full",
+        "column_type": "VARCHAR",
+        "description": "Human-readable political party (e.g. `DEMOCRATIC PARTY`, `WRITE-IN`). Often null."
+      },
+      {
+        "column_name": "affiliated_committee_name",
+        "column_type": "VARCHAR",
+        "description": "Literal affiliated committee name stated by the source; a name is not a verified committee link."
+      },
+      {
+        "column_name": "former_committee_name",
+        "column_type": "VARCHAR",
+        "description": "Former committee name stated by the source, without an inferred effective period."
+      },
+      {
+        "column_name": "former_candidate_id",
+        "column_type": "VARCHAR",
+        "description": "Literal former candidate identifier; no target existence or unique-person claim."
+      },
+      {
+        "column_name": "former_candidate_name",
+        "column_type": "VARCHAR",
+        "description": "Former candidate name stated by the source; not a resolved identity."
+      },
+      {
+        "column_name": "cycle",
+        "column_type": "INTEGER",
         "description": "Cycle exactly as supplied by the history source; raw PostgreSQL text is retained without inferring a new integer value."
       },
       {
-        "column_name": "derivation_json",
+        "column_name": "qualifying_date",
+        "column_type": "DATE",
+        "description": "Qualification calendar date as stated by the source; no independent legal determination."
+      },
+      {
+        "column_name": "first_file_date",
+        "column_type": "DATE",
+        "description": "First filing date as reported in this source observation, not independently reconstructed history."
+      },
+      {
+        "column_name": "last_file_date",
+        "column_type": "DATE",
+        "description": "Last filing date as reported in this source observation; later filings may exist."
+      },
+      {
+        "column_name": "last_f1_date",
+        "column_type": "DATE",
+        "description": "Last Form 1 date reported by the source, without a completeness assertion."
+      },
+      {
+        "column_name": "last_cycle_has_financial",
+        "column_type": "INTEGER",
+        "description": "Last source-reported cycle with financial activity; not derived from transaction rows."
+      },
+      {
+        "column_name": "last_cycle_has_activity",
+        "column_type": "INTEGER",
+        "description": "Last source-reported cycle with activity; not a completeness assertion."
+      },
+      {
+        "column_name": "is_active",
+        "column_type": "BOOLEAN",
+        "description": "Source-reported active flag in this dated observation; not a present-day registry decision."
+      },
+      {
+        "column_name": "convert_to_pac_flag",
+        "column_type": "BOOLEAN",
+        "description": "Source-reported conversion-to-PAC flag, preserving null or unsupported values."
+      },
+      {
+        "column_name": "former_candidate_election_year",
+        "column_type": "INTEGER",
+        "description": "Election year reported for the former candidate association."
+      },
+      {
+        "column_name": "first_f1_date",
+        "column_type": "DATE",
+        "description": "First Form 1 date reported by the source, without a completeness assertion."
+      },
+      {
+        "column_name": "cycle_raw",
         "column_type": "VARCHAR",
-        "description": "Retained evidence for the SQL/PostgreSQL derivation, including source column definitions; distinct from original dump bytes."
+        "description": "Literal source value for cycle before conversion; consult cycle_status for interpretation."
       },
       {
-        "column_name": "raw_copy_fields",
-        "column_type": "VARCHAR[]",
-        "description": "Ordered literal PostgreSQL COPY field strings, preserving original NULL markers and escaping beside named decoded fields."
+        "column_name": "cycle_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source cycle: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
       },
       {
-        "column_name": "native_fields",
-        "column_type": "STRUCT(idx VARCHAR, \"cycle\" VARCHAR, committee_id VARCHAR, \"name\" VARCHAR, treasurer_name VARCHAR, treasurer_text VARCHAR, organization_type VARCHAR, organization_type_full VARCHAR, street_1 VARCHAR, street_2 VARCHAR, city VARCHAR, state VARCHAR, state_full VARCHAR, zip VARCHAR, treasurer_city VARCHAR, treasurer_name_1 VARCHAR, treasurer_name_2 VARCHAR, treasurer_name_middle VARCHAR, treasurer_phone VARCHAR, treasurer_name_prefix VARCHAR, treasurer_state VARCHAR, treasurer_street_1 VARCHAR, treasurer_street_2 VARCHAR, treasurer_name_suffix VARCHAR, treasurer_name_title VARCHAR, treasurer_zip VARCHAR, custodian_city VARCHAR, custodian_name_1 VARCHAR, custodian_name_2 VARCHAR, custodian_name_middle VARCHAR, custodian_name_full VARCHAR, custodian_phone VARCHAR, custodian_name_prefix VARCHAR, custodian_state VARCHAR, custodian_street_1 VARCHAR, custodian_street_2 VARCHAR, custodian_name_suffix VARCHAR, custodian_name_title VARCHAR, custodian_zip VARCHAR, email VARCHAR, fax VARCHAR, website VARCHAR, form_type VARCHAR, leadership_pac VARCHAR, lobbyist_registrant_pac VARCHAR, party_type VARCHAR, party_type_full VARCHAR, qualifying_date VARCHAR, first_file_date VARCHAR, last_file_date VARCHAR, last_f1_date VARCHAR, designation VARCHAR, designation_full VARCHAR, committee_type VARCHAR, committee_type_full VARCHAR, filing_frequency VARCHAR, party VARCHAR, party_full VARCHAR, cycles VARCHAR, candidate_ids VARCHAR, affiliated_committee_name VARCHAR, last_cycle_has_financial VARCHAR, cycles_has_financial VARCHAR, last_cycle_has_activity VARCHAR, cycles_has_activity VARCHAR, is_active VARCHAR, sponsor_candidate_ids VARCHAR, convert_to_pac_flag VARCHAR, former_committee_name VARCHAR, former_candidate_id VARCHAR, former_candidate_name VARCHAR, former_candidate_election_year VARCHAR, first_f1_date VARCHAR)",
-        "description": "Named source fields retained as a struct. PostgreSQL NULL, array text, date text and boolean text remain literal; no current-profile inference."
+        "column_name": "qualifying_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for qualifying_date before conversion; consult qualifying_date_status for interpretation."
+      },
+      {
+        "column_name": "qualifying_date_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source qualifying_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "first_file_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for first_file_date before conversion; consult first_file_date_status for interpretation."
+      },
+      {
+        "column_name": "first_file_date_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source first_file_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "last_file_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for last_file_date before conversion; consult last_file_date_status for interpretation."
+      },
+      {
+        "column_name": "last_file_date_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source last_file_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "last_f1_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for last_f1_date before conversion; consult last_f1_date_status for interpretation."
+      },
+      {
+        "column_name": "last_f1_date_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source last_f1_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "last_cycle_has_financial_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for last_cycle_has_financial before conversion; consult last_cycle_has_financial_status for interpretation."
+      },
+      {
+        "column_name": "last_cycle_has_financial_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source last_cycle_has_financial: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "last_cycle_has_activity_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for last_cycle_has_activity before conversion; consult last_cycle_has_activity_status for interpretation."
+      },
+      {
+        "column_name": "last_cycle_has_activity_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source last_cycle_has_activity: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "is_active_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for is_active before conversion; consult is_active_status for interpretation."
+      },
+      {
+        "column_name": "is_active_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source is_active: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "convert_to_pac_flag_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for convert_to_pac_flag before conversion; consult convert_to_pac_flag_status for interpretation."
+      },
+      {
+        "column_name": "convert_to_pac_flag_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source convert_to_pac_flag: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "former_candidate_election_year_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for former_candidate_election_year before conversion; consult former_candidate_election_year_status for interpretation."
+      },
+      {
+        "column_name": "former_candidate_election_year_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source former_candidate_election_year: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "first_f1_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for first_f1_date before conversion; consult first_f1_date_status for interpretation."
+      },
+      {
+        "column_name": "first_f1_date_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source first_f1_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "cycles_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of election-cycle years the committee was active in (e.g. `[2018, 2020, 2022]`)."
+      },
+      {
+        "column_name": "cycles_status",
+        "column_type": "VARCHAR",
+        "description": "Source array state for cycles: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order."
+      },
+      {
+        "column_name": "candidate_ids_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of OpenFEC candidate IDs associated with the committee (e.g. `[\"P00008052\"]`). Often `[]`."
+      },
+      {
+        "column_name": "candidate_ids_status",
+        "column_type": "VARCHAR",
+        "description": "Source array state for candidate_ids: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order."
+      },
+      {
+        "column_name": "cycles_has_financial_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered source array of cycles marked as having financial activity; not independently verified completeness."
+      },
+      {
+        "column_name": "cycles_has_financial_status",
+        "column_type": "VARCHAR",
+        "description": "Source array state for cycles_has_financial: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order."
+      },
+      {
+        "column_name": "cycles_has_activity_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered source array of cycles marked as having activity; not independently verified completeness."
+      },
+      {
+        "column_name": "cycles_has_activity_status",
+        "column_type": "VARCHAR",
+        "description": "Source array state for cycles_has_activity: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order."
+      },
+      {
+        "column_name": "sponsor_candidate_ids_json",
+        "column_type": "VARCHAR",
+        "description": "Independent ordered array of source sponsor-candidate references; never pair positions with cycles or candidate_ids."
+      },
+      {
+        "column_name": "sponsor_candidate_ids_status",
+        "column_type": "VARCHAR",
+        "description": "Source array state for sponsor_candidate_ids: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order."
       }
     ],
     "subject": "campaign_finance",
@@ -18522,11 +19237,6 @@
         "description": "Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation."
       },
       {
-        "column_name": "source_pointer",
-        "column_type": "VARCHAR",
-        "description": "Exact pointer within the provider-owned native record to the mapped value or metadata object."
-      },
-      {
         "column_name": "source_authority",
         "column_type": "VARCHAR",
         "description": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions."
@@ -18537,29 +19247,24 @@
         "description": "Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision."
       },
       {
-        "column_name": "source_namespace",
+        "column_name": "source_representation_role",
         "column_type": "VARCHAR",
-        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
-      },
-      {
-        "column_name": "filing_key",
-        "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
-      },
-      {
-        "column_name": "filing_link_status",
-        "column_type": "VARCHAR",
-        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
-      },
-      {
-        "column_name": "native_field_states_json",
-        "column_type": "VARCHAR",
-        "description": "JSON map of field presence states such as source_missing, source_null, source_empty or reported."
+        "description": "Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability."
       },
       {
         "column_name": "current_record_status",
         "column_type": "VARCHAR",
         "description": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record."
+      },
+      {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
+      },
+      {
+        "column_name": "source_pointer",
+        "column_type": "VARCHAR",
+        "description": "Exact pointer within the provider-owned native record to the mapped value or metadata object."
       },
       {
         "column_name": "committee_id",
@@ -19557,11 +20262,6 @@
         "description": "Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation."
       },
       {
-        "column_name": "source_pointer",
-        "column_type": "VARCHAR",
-        "description": "Exact pointer within the provider-owned native record to the mapped value or metadata object."
-      },
-      {
         "column_name": "source_authority",
         "column_type": "VARCHAR",
         "description": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions."
@@ -19572,29 +20272,24 @@
         "description": "Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision."
       },
       {
-        "column_name": "source_namespace",
+        "column_name": "source_representation_role",
         "column_type": "VARCHAR",
-        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
-      },
-      {
-        "column_name": "filing_key",
-        "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
-      },
-      {
-        "column_name": "filing_link_status",
-        "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
-      },
-      {
-        "column_name": "native_field_states_json",
-        "column_type": "VARCHAR",
-        "description": "JSON map of field presence states such as source_missing, source_null, source_empty or reported."
+        "description": "Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability."
       },
       {
         "column_name": "current_record_status",
         "column_type": "VARCHAR",
         "description": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record."
+      },
+      {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
+      },
+      {
+        "column_name": "source_pointer",
+        "column_type": "VARCHAR",
+        "description": "Exact pointer within the provider-owned native record to the mapped value or metadata object."
       },
       {
         "column_name": "committee_id",
@@ -19737,16 +20432,6 @@
         "description": "The candidate's reported postal code, preserving leading zeroes."
       },
       {
-        "column_name": "election_year",
-        "column_type": "VARCHAR",
-        "description": "Election year stated by the source, distinct from source cycle, fiscal year and capture time."
-      },
-      {
-        "column_name": "report_year",
-        "column_type": "VARCHAR",
-        "description": "Year reported for the filing/report, preserved independently of cycle and transaction date."
-      },
-      {
         "column_name": "form_type",
         "column_type": "VARCHAR",
         "description": "Literal filing form or record-type code from the source layout; does not prove submission conformance."
@@ -19785,6 +20470,36 @@
         "column_name": "receipt_date",
         "column_type": "DATE",
         "description": "The day FEC received the statement, as the source states it. On a Form 2 (candidate) row the year must be the row's own `report_year`; on a Form 1 (committee) row, a two-digit year (FEC's file writes `31-DEC-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`24` is 2024). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; capture time is never substituted."
+      },
+      {
+        "column_name": "election_year",
+        "column_type": "INTEGER",
+        "description": "Election year stated by the source, distinct from source cycle, fiscal year and capture time."
+      },
+      {
+        "column_name": "report_year",
+        "column_type": "INTEGER",
+        "description": "Year reported for the filing/report, preserved independently of cycle and transaction date."
+      },
+      {
+        "column_name": "election_year_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for election_year before conversion; consult election_year_status for interpretation."
+      },
+      {
+        "column_name": "election_year_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source election_year: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "report_year_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source value for report_year before conversion; consult report_year_status for interpretation."
+      },
+      {
+        "column_name": "report_year_status",
+        "column_type": "VARCHAR",
+        "description": "Whether the CSV source report year has an exact four-digit spelling, is missing, or is unsupported."
       }
     ],
     "subject": "campaign_finance",
@@ -20287,6 +21002,154 @@
       "measures": "Source-specific monetary measures as a list of structs: native_field, raw_value, exact DECIMAL value, value_status and unit. Unnest with record_id; never add parent summaries to their itemized details. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
   },
+  "fec_reference_filing_feed_items": {
+    "table": "fec_reference_filing_feed_items",
+    "label": "FEC filing feed items",
+    "row_unit": "feed items",
+    "category": "reference_data",
+    "summary": "One RSS item of the retained original FEC filing feed, keyed by guid within that capture. Inspect literal title, link, GUID and publication text. A feed item is not a resolved filing submission or a complete current filing population. Each row is its own witness; source_sha256 names the original and guid the item in it.",
+    "coverage": "Sampled. Supported observations from retained FEC filing RSS item metadata. The retained originals are named in fec_original_selection.json with their acquisition receipts; this declaration does not establish complete FEC history or current publication.",
+    "kind": "sampled",
+    "measured_on": "2026-10-01",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "record_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic key from the retained original's SHA-256 and this row's native position in it (fec-original-tables/1); repeated captures remain distinct from a single economic event."
+      },
+      {
+        "column_name": "mapping_version",
+        "column_type": "VARCHAR",
+        "description": "Named, versioned rule that built this row from its retained original."
+      },
+      {
+        "column_name": "collection_id",
+        "column_type": "VARCHAR",
+        "description": "Capture collection that retained the original, the lowest id when one original was captured in several parts. Join fec_collections in the selected source generation; it is not the part that held this row."
+      },
+      {
+        "column_name": "source_authority",
+        "column_type": "VARCHAR",
+        "description": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Captured source URL for this observation; it does not assert current availability or body retrieval."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness."
+      },
+      {
+        "column_name": "observed_at_json",
+        "column_type": "VARCHAR",
+        "description": "Acquisition time from the original's acquisition receipt in the raw archive, as JSON."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "Source title or explicitly labeled mapper title; consult title_basis or title_status when present."
+      },
+      {
+        "column_name": "link",
+        "column_type": "VARCHAR",
+        "description": "Literal RSS item link retained from the source feed."
+      },
+      {
+        "column_name": "guid",
+        "column_type": "VARCHAR",
+        "description": "Source RSS item GUID, scoped to the feed; not promoted to a filing number or a globally resolved identity."
+      },
+      {
+        "column_name": "published_at_raw",
+        "column_type": "VARCHAR",
+        "description": "Publication timestamp exactly as supplied by the RSS item; distinct from filing receipt date."
+      },
+      {
+        "column_name": "current_record_status",
+        "column_type": "VARCHAR",
+        "description": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record."
+      },
+      {
+        "column_name": "reported_filer_id",
+        "column_type": "VARCHAR",
+        "description": "Literal identifier labelled CommitteeId in the source feed; candidate filings can carry candidate identifiers under this label."
+      },
+      {
+        "column_name": "committee_id",
+        "column_type": "VARCHAR",
+        "description": "OpenFEC committee identifier (e.g. `C00684373`). Committee join key; this feed row is identified separately. Joins `fec_committee_history.committee_id` for per-cycle names and the connected organization."
+      },
+      {
+        "column_name": "candidate_id",
+        "column_type": "VARCHAR",
+        "description": "Literal candidate identifier reported by API metadata or a verified named bulk field such as CAND_ID. Blanks and aggregate codes remain literal; an ID-shaped aggregate value does not establish a person. Names are not converted to identifiers."
+      },
+      {
+        "column_name": "source_label_status",
+        "column_type": "VARCHAR",
+        "description": "Whether the feed's CommitteeId label contains a committee identifier, a candidate identifier, a missing value or an unsupported spelling."
+      },
+      {
+        "column_name": "filing_id",
+        "column_type": "VARCHAR",
+        "description": "Source-reported sub_id of a filing metadata row when present; not an inferred original-file number. Amendment/current-record meaning remains in native metadata."
+      },
+      {
+        "column_name": "form_type",
+        "column_type": "VARCHAR",
+        "description": "Literal filing form or record-type code from the source layout; does not prove submission conformance."
+      },
+      {
+        "column_name": "report_type",
+        "column_type": "VARCHAR",
+        "description": "Source-reported report classification, interpreted within its namespace rather than as a universal period code."
+      },
+      {
+        "column_name": "coverage_start_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal CoverageFrom value from the feed's explicitly labelled metadata."
+      },
+      {
+        "column_name": "coverage_end_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal CoverageThrough value from the feed's explicitly labelled metadata."
+      },
+      {
+        "column_name": "parsing_status",
+        "column_type": "VARCHAR",
+        "description": "Interpretation of source parsing: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause."
+      },
+      {
+        "column_name": "filing_link_status",
+        "column_type": "VARCHAR",
+        "description": "Source feed assertion only; the value does not qualify a filing match or establish the target exists."
+      },
+      {
+        "column_name": "coverage_start_date",
+        "column_type": "DATE",
+        "description": "Build-parsed CoverageFrom date; requires exact MM/DD/YYYY spelling and a valid calendar date."
+      },
+      {
+        "column_name": "coverage_end_date",
+        "column_type": "DATE",
+        "description": "Build-parsed CoverageThrough date; requires exact MM/DD/YYYY spelling and a valid calendar date."
+      },
+      {
+        "column_name": "published_at",
+        "column_type": "TIMESTAMP WITH TIME ZONE",
+        "description": "Build-parsed feed publication instant from an exact four-digit-year GMT timestamp; invalid input remains null with parsing status."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One RSS item occurrence in a captured source feed.",
+    "identity_columns": [
+      "record_id"
+    ]
+  },
   "fec_research_meeting_observations": {
     "table": "fec_research_meeting_observations",
     "label": "FEC meeting table observations",
@@ -20328,16 +21191,6 @@
         "description": "SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness."
       },
       {
-        "column_name": "context_sha256",
-        "column_type": "VARCHAR",
-        "description": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output."
-      },
-      {
-        "column_name": "source_context_pointer",
-        "column_type": "VARCHAR",
-        "description": "Exact JSON pointer into the retained collection context to the native fact represented by this observation."
-      },
-      {
         "column_name": "observed_at_json",
         "column_type": "VARCHAR",
         "description": "Acquisition time from the original's acquisition receipt in the raw archive, as JSON."
@@ -20373,11 +21226,6 @@
         "description": "Source links with their labels and exact native locations; metadata does not imply body retrieval."
       },
       {
-        "column_name": "native_cells_json",
-        "column_type": "VARCHAR",
-        "description": "Exact retained source cells and addresses supporting this row; includes literal text and available worksheet/formula context."
-      },
-      {
         "column_name": "table_ordinal",
         "column_type": "INTEGER",
         "description": "Zero-based ordinal of the source HTML table containing this observation."
@@ -20403,377 +21251,13 @@
       "date_kind": "Whether the meeting dates represent one date, separately listed dates, or the two endpoints of a range."
     }
   },
-  "fec_research_context_dispositions": {
-    "table": "fec_research_context_dispositions",
-    "label": "FEC source processing results",
-    "row_unit": "processing results",
-    "category": "diagnostics",
-    "summary": "Records what processing a saved source file or request produced, including empty, refused and unsupported inputs.",
-    "coverage": "Sampled. Supported observations from selected retained source documentation, response, research and statistical contexts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
-    "kind": "sampled",
-    "measured_on": "2026-10-01",
-    "data_quality": null,
-    "columns": [
-      {
-        "column_name": "collection_id",
-        "column_type": "VARCHAR",
-        "description": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity."
-      },
-      {
-        "column_name": "mapping_status",
-        "column_type": "VARCHAR",
-        "description": "Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values."
-      },
-      {
-        "column_name": "mapping_reason",
-        "column_type": "VARCHAR",
-        "description": "Concrete reason for the retained context's mapping, reference-only classification or source-reader refusal."
-      },
-      {
-        "column_name": "source_url",
-        "column_type": "VARCHAR",
-        "description": "Captured source URL for this observation; it does not assert current availability or body retrieval."
-      },
-      {
-        "column_name": "context_sha256",
-        "column_type": "VARCHAR",
-        "description": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output."
-      },
-      {
-        "column_name": "source_fact_count",
-        "column_type": "VARCHAR",
-        "description": "Count of native context facts examined for this disposition; not a source population count or an emitted transaction count."
-      },
-      {
-        "column_name": "outputs_json",
-        "column_type": "VARCHAR",
-        "description": "JSON object recording emitted table counts for this context; an empty output has an explicit mapping reason."
-      }
-    ],
-    "subject": "campaign_finance",
-    "grain": "One explicit mapping disposition for a retained collection context.",
-    "identity_columns": [
-      "collection_id"
-    ]
-  },
-  "fec_research_document_observations": {
-    "table": "fec_research_document_observations",
-    "label": "FEC research document and case references",
-    "category": "discovery_leads",
-    "summary": "One source document/case-reference metadata occurrence in retained context. Preserves publisher, authority, native document reference, dates and URL without inferring an FEC matter join. Bodies remain explicitly deferred or reference-only as supported by the retained evidence. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.",
-    "coverage": "Sampled. Supported observations from retained court-case/report references and third-party DocumentCloud metadata. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
-    "kind": "sampled",
-    "measured_on": "2026-10-01",
-    "data_quality": null,
-    "columns": [
-      {
-        "column_name": "record_id",
-        "column_type": "VARCHAR",
-        "description": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event."
-      },
-      {
-        "column_name": "mapping_version",
-        "column_type": "VARCHAR",
-        "description": "Named, versioned source-to-field mapping used for this observation."
-      },
-      {
-        "column_name": "collection_id",
-        "column_type": "VARCHAR",
-        "description": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity."
-      },
-      {
-        "column_name": "source_authority",
-        "column_type": "VARCHAR",
-        "description": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions."
-      },
-      {
-        "column_name": "source_url",
-        "column_type": "VARCHAR",
-        "description": "Captured source URL for this observation; it does not assert current availability or body retrieval."
-      },
-      {
-        "column_name": "source_sha256",
-        "column_type": "VARCHAR",
-        "description": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest."
-      },
-      {
-        "column_name": "context_sha256",
-        "column_type": "VARCHAR",
-        "description": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output."
-      },
-      {
-        "column_name": "source_context_pointer",
-        "column_type": "VARCHAR",
-        "description": "Exact JSON pointer into the retained collection context to the native fact represented by this observation."
-      },
-      {
-        "column_name": "observed_at_json",
-        "column_type": "VARCHAR",
-        "description": "Retained capture time value(s) as JSON without collapsing separately observed captures."
-      },
-      {
-        "column_name": "document_native_id",
-        "column_type": "VARCHAR",
-        "description": "Literal identifier in the research publisher's document system; it is not automatically an FEC matter/document key."
-      },
-      {
-        "column_name": "title",
-        "column_type": "VARCHAR",
-        "description": "Source title or explicitly labeled mapper title; consult title_basis or title_status when present."
-      },
-      {
-        "column_name": "description",
-        "column_type": "VARCHAR",
-        "description": "Literal source description or narrative associated with this observation."
-      },
-      {
-        "column_name": "canonical_url",
-        "column_type": "VARCHAR",
-        "description": "Source-supplied canonical research document URL; no inferred FEC case association."
-      },
-      {
-        "column_name": "source_publisher",
-        "column_type": "VARCHAR",
-        "description": "Publisher named by the retained research metadata, kept distinct from source_authority."
-      },
-      {
-        "column_name": "source_created_at",
-        "column_type": "VARCHAR",
-        "description": "Creation time stated by the research publisher; not a date of the underlying FEC event."
-      },
-      {
-        "column_name": "source_updated_at",
-        "column_type": "VARCHAR",
-        "description": "Update time stated by the research publisher; not a current-version selection rule."
-      },
-      {
-        "column_name": "original_extension",
-        "column_type": "VARCHAR",
-        "description": "Original file extension reported in research metadata, without body parsing or format validation."
-      },
-      {
-        "column_name": "body_status",
-        "column_type": "VARCHAR",
-        "description": "Explicit body availability or processing status. A PDF link remains deferred; metadata does not imply extracted content."
-      },
-      {
-        "column_name": "fec_relationship_status",
-        "column_type": "VARCHAR",
-        "description": "Explicit resolution state of any FEC relationship; third-party metadata does not establish an FEC matter join."
-      },
-      {
-        "column_name": "native_metadata_json",
-        "column_type": "VARCHAR",
-        "description": "Complete native metadata object retained for this observation, including fields outside the typed mapping."
-      }
-    ],
-    "subject": "campaign_finance",
-    "grain": "One source document/case-reference metadata occurrence in retained context.",
-    "identity_columns": [
-      "record_id"
-    ]
-  },
-  "fec_research_filing_feed_items": {
-    "table": "fec_research_filing_feed_items",
-    "label": "FEC filing feed items",
-    "category": "query_data",
-    "summary": "One RSS item occurrence in a captured source feed. Inspect literal title, link, GUID, publication text and native fields. A feed item is not a resolved filing submission or a complete current filing population. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.",
-    "coverage": "Sampled. Supported observations from retained FEC filing RSS item metadata. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
-    "kind": "sampled",
-    "measured_on": "2026-10-01",
-    "data_quality": null,
-    "columns": [
-      {
-        "column_name": "record_id",
-        "column_type": "VARCHAR",
-        "description": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event."
-      },
-      {
-        "column_name": "mapping_version",
-        "column_type": "VARCHAR",
-        "description": "Named, versioned source-to-field mapping used for this observation."
-      },
-      {
-        "column_name": "collection_id",
-        "column_type": "VARCHAR",
-        "description": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity."
-      },
-      {
-        "column_name": "source_authority",
-        "column_type": "VARCHAR",
-        "description": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions."
-      },
-      {
-        "column_name": "source_url",
-        "column_type": "VARCHAR",
-        "description": "Captured source URL for this observation; it does not assert current availability or body retrieval."
-      },
-      {
-        "column_name": "source_sha256",
-        "column_type": "VARCHAR",
-        "description": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest."
-      },
-      {
-        "column_name": "context_sha256",
-        "column_type": "VARCHAR",
-        "description": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output."
-      },
-      {
-        "column_name": "source_context_pointer",
-        "column_type": "VARCHAR",
-        "description": "Exact JSON pointer into the retained collection context to the native fact represented by this observation."
-      },
-      {
-        "column_name": "observed_at_json",
-        "column_type": "VARCHAR",
-        "description": "Retained capture time value(s) as JSON without collapsing separately observed captures."
-      },
-      {
-        "column_name": "title",
-        "column_type": "VARCHAR",
-        "description": "Source title or explicitly labeled mapper title; consult title_basis or title_status when present."
-      },
-      {
-        "column_name": "link",
-        "column_type": "VARCHAR",
-        "description": "Literal RSS item link retained from the source feed."
-      },
-      {
-        "column_name": "guid",
-        "column_type": "VARCHAR",
-        "description": "Source RSS item GUID, scoped to the feed; not promoted to a filing number or a globally resolved identity."
-      },
-      {
-        "column_name": "published_at_raw",
-        "column_type": "VARCHAR",
-        "description": "Publication timestamp exactly as supplied by the RSS item; distinct from filing receipt date."
-      },
-      {
-        "column_name": "description",
-        "column_type": "VARCHAR",
-        "description": "Literal source description or narrative associated with this observation."
-      },
-      {
-        "column_name": "native_fields_json",
-        "column_type": "VARCHAR",
-        "description": "Retained native field values for the source row or feed item, including fields beyond the typed mapping."
-      },
-      {
-        "column_name": "source_parts_json",
-        "column_type": "VARCHAR",
-        "description": "Exact native RSS parts and addresses retained to locate each item field."
-      },
-      {
-        "column_name": "current_record_status",
-        "column_type": "VARCHAR",
-        "description": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record."
-      }
-    ],
-    "subject": "campaign_finance",
-    "grain": "One RSS item occurrence in a captured source feed.",
-    "identity_columns": [
-      "record_id"
-    ]
-  },
-  "fec_research_response_outcomes": {
-    "table": "fec_research_response_outcomes",
-    "label": "FEC API request outcomes",
-    "row_unit": "response outcomes",
-    "category": "diagnostics",
-    "summary": "Saved FEC API response outcomes, including empty results, refusals and errors. These do not establish that the full query was collected.",
-    "coverage": "Sampled. Supported observations from selected rejected, empty or otherwise limited OpenFEC contexts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
-    "kind": "sampled",
-    "measured_on": "2026-10-01",
-    "data_quality": null,
-    "columns": [
-      {
-        "column_name": "record_id",
-        "column_type": "VARCHAR",
-        "description": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event."
-      },
-      {
-        "column_name": "mapping_version",
-        "column_type": "VARCHAR",
-        "description": "Named, versioned source-to-field mapping used for this observation."
-      },
-      {
-        "column_name": "collection_id",
-        "column_type": "VARCHAR",
-        "description": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity."
-      },
-      {
-        "column_name": "source_authority",
-        "column_type": "VARCHAR",
-        "description": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions."
-      },
-      {
-        "column_name": "source_url",
-        "column_type": "VARCHAR",
-        "description": "Captured source URL for this observation; it does not assert current availability or body retrieval."
-      },
-      {
-        "column_name": "source_sha256",
-        "column_type": "VARCHAR",
-        "description": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest."
-      },
-      {
-        "column_name": "context_sha256",
-        "column_type": "VARCHAR",
-        "description": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output."
-      },
-      {
-        "column_name": "source_context_pointer",
-        "column_type": "VARCHAR",
-        "description": "Exact JSON pointer into the retained collection context to the native fact represented by this observation."
-      },
-      {
-        "column_name": "observed_at_json",
-        "column_type": "VARCHAR",
-        "description": "Retained capture time value(s) as JSON without collapsing separately observed captures."
-      },
-      {
-        "column_name": "profile_refusal",
-        "column_type": "VARCHAR",
-        "description": "Source-reader refusal retained for this context, even where the native response exposes useful outcome metadata."
-      },
-      {
-        "column_name": "query_completeness",
-        "column_type": "VARCHAR",
-        "description": "Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query."
-      },
-      {
-        "column_name": "payload_shape",
-        "column_type": "VARCHAR",
-        "description": "Observed native response shape, distinguishing result arrays, error objects and unsupported structures."
-      },
-      {
-        "column_name": "outcome_status",
-        "column_type": "VARCHAR",
-        "description": "Explicit retained response outcome, including rejection or empty payload. Neither establishes a completed successful query by itself."
-      },
-      {
-        "column_name": "native_payload_json",
-        "column_type": "VARCHAR",
-        "description": "Native response body facts already retained in collection context; no new request or fabricated entity row."
-      },
-      {
-        "column_name": "observed_payload_records",
-        "column_type": "INTEGER",
-        "description": "Count of result entries actually visible in the retained payload, distinct from a claimed complete query population."
-      }
-    ],
-    "subject": "campaign_finance",
-    "grain": "One retained response/context outcome observation.",
-    "identity_columns": [
-      "record_id"
-    ]
-  },
-  "fec_research_source_pages": {
-    "table": "fec_research_source_pages",
+  "fec_reference_source_pages": {
+    "table": "fec_reference_source_pages",
     "label": "FEC source documentation pages",
-    "category": "query_data",
-    "summary": "One source-documentation page observation with build-extracted body text, content status and retained links. Complete original page context remains available through exact context evidence. Source documentation explains forms and access routes without becoming financial transactions or legal events. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.",
-    "coverage": "Sampled. Supported observations from retained form pages and other useful structured source documentation. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+    "row_unit": "source pages",
+    "category": "reference_data",
+    "summary": "One source-documentation page, read from the whole retained original, with build-extracted body text, content status and links contained in that body. Source documentation explains forms and access routes without becoming financial transactions or legal events. Only captures whose acquisition receipt shows a complete response below HTTP 400 and whose page body extracts cleanly are published; the 6 visually reviewed HTTP-200 pages excluded for unsupported body boundaries (4 Oversight.gov search/filter portals covered by fec_oversight_recommendations, 1 DocQuery PDF image-viewer frame shell, and 1 C00341529 committee filing-directory table) are recorded with explicit per-SHA dispositions in fec_original_selection.json (docs/fec-source-pages-visual-review.md, ss-j4vz).",
+    "coverage": "Sampled. Supported observations from retained form pages and other useful structured source documentation. The retained originals are named in fec_original_selection.json with their acquisition receipts; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
     "data_quality": null,
@@ -20781,17 +21265,17 @@
       {
         "column_name": "record_id",
         "column_type": "VARCHAR",
-        "description": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event."
+        "description": "Deterministic key from the retained original's SHA-256 and this row's native position in it (fec-original-tables/1); repeated captures remain distinct from a single economic event."
       },
       {
         "column_name": "mapping_version",
         "column_type": "VARCHAR",
-        "description": "Named, versioned source-to-field mapping used for this observation."
+        "description": "Named, versioned rule that built this row from its retained original."
       },
       {
         "column_name": "collection_id",
         "column_type": "VARCHAR",
-        "description": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity."
+        "description": "Capture collection that retained the original, the lowest id when one original was captured in several parts. Join fec_collections in the selected source generation; it is not the part that held this row."
       },
       {
         "column_name": "source_authority",
@@ -20806,22 +21290,12 @@
       {
         "column_name": "source_sha256",
         "column_type": "VARCHAR",
-        "description": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest."
-      },
-      {
-        "column_name": "context_sha256",
-        "column_type": "VARCHAR",
-        "description": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output."
-      },
-      {
-        "column_name": "source_context_pointer",
-        "column_type": "VARCHAR",
-        "description": "Exact JSON pointer into the retained collection context to the native fact represented by this observation."
+        "description": "SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness."
       },
       {
         "column_name": "observed_at_json",
         "column_type": "VARCHAR",
-        "description": "Retained capture time value(s) as JSON without collapsing separately observed captures."
+        "description": "Acquisition time from the original's acquisition receipt in the raw archive, as JSON."
       },
       {
         "column_name": "page_type",
@@ -20836,7 +21310,7 @@
       {
         "column_name": "text",
         "column_type": "VARCHAR",
-        "description": "Literal supported source text at the stated locator, without inferring a legal conclusion or numerical measure."
+        "description": "Build-extracted body text of the page. Original page text and context remain at the evidence reference."
       },
       {
         "column_name": "content_scope",
@@ -20844,170 +21318,18 @@
         "description": "Scope of retained page content; text, headings and links are source documentation rather than inferred transactions."
       },
       {
+        "column_name": "content_status",
+        "column_type": "VARCHAR",
+        "description": "Page body disposition; always body_extracted, because only HTTP < 400 pages whose body extracted cleanly are published. Failed captures (8 HTTP-500, 1 receiptless) and the 6 visually reviewed HTTP-200 exclusions recorded in fec_original_selection.json are refused rather than emitted as rows."
+      },
+      {
         "column_name": "links_json",
         "column_type": "VARCHAR",
         "description": "Source links with their labels and exact native locations; metadata does not imply body retrieval."
-      },
-      {
-        "column_name": "times_json",
-        "column_type": "VARCHAR",
-        "description": "Literal time elements and native attributes retained from the source page."
-      },
-      {
-        "column_name": "headings_json",
-        "column_type": "VARCHAR",
-        "description": "Ordered source headings with their native context, preserving document structure."
       }
     ],
     "subject": "campaign_finance",
-    "grain": "One supported source-documentation page observation from retained context.",
-    "identity_columns": [
-      "record_id"
-    ]
-  },
-  "fec_retained_csv_observations": {
-    "table": "fec_retained_csv_observations",
-    "label": "FEC CSV context observations",
-    "category": "bounded_samples",
-    "summary": "One physical CSV row exposed by retained collection context. Preserves source values, amounts and dates under the context's actual coverage status. A complete retained prefix is still not an asserted complete source population or current financial total. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id. Every row has the amount status `exact`.",
-    "coverage": "Sampled. Supported observations from supported retained CSV context rows with exact native fields and addresses. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
-    "kind": "sampled",
-    "measured_on": "2026-10-01",
-    "data_quality": null,
-    "columns": [
-      {
-        "column_name": "record_id",
-        "column_type": "VARCHAR",
-        "description": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event."
-      },
-      {
-        "column_name": "mapping_version",
-        "column_type": "VARCHAR",
-        "description": "Named, versioned source-to-field mapping used for this observation."
-      },
-      {
-        "column_name": "collection_id",
-        "column_type": "VARCHAR",
-        "description": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity."
-      },
-      {
-        "column_name": "source_authority",
-        "column_type": "VARCHAR",
-        "description": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions."
-      },
-      {
-        "column_name": "source_url",
-        "column_type": "VARCHAR",
-        "description": "Captured source URL for this observation; it does not assert current availability or body retrieval."
-      },
-      {
-        "column_name": "source_sha256",
-        "column_type": "VARCHAR",
-        "description": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest."
-      },
-      {
-        "column_name": "context_sha256",
-        "column_type": "VARCHAR",
-        "description": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output."
-      },
-      {
-        "column_name": "source_context_pointer",
-        "column_type": "VARCHAR",
-        "description": "Exact JSON pointer into the retained collection context to the native fact represented by this observation."
-      },
-      {
-        "column_name": "observed_at_json",
-        "column_type": "VARCHAR",
-        "description": "Retained capture time value(s) as JSON without collapsing separately observed captures."
-      },
-      {
-        "column_name": "observation_type",
-        "column_type": "VARCHAR",
-        "description": "Type of retained CSV context row, preserving its source-specific population and meaning."
-      },
-      {
-        "column_name": "reporting_committee_id",
-        "column_type": "VARCHAR",
-        "description": "Literal FEC ID of the reporting committee where that source field identifies a committee. It does not by itself identify the sender or recipient of money."
-      },
-      {
-        "column_name": "reporting_committee_name",
-        "column_type": "VARCHAR",
-        "description": "Reporting committee name exactly as supplied by the retained CSV source."
-      },
-      {
-        "column_name": "counterparty_name",
-        "column_type": "VARCHAR",
-        "description": "The counterparty's name as reported, without a name-based identity merge."
-      },
-      {
-        "column_name": "transaction_id",
-        "column_type": "VARCHAR",
-        "description": "Literal transaction identifier within its source filing/layout scope; not a globally unique transaction or economic-event key."
-      },
-      {
-        "column_name": "native_sub_id",
-        "column_type": "VARCHAR",
-        "description": "Literal source sub_id retained separately from typed identity and transaction ID."
-      },
-      {
-        "column_name": "amount_raw",
-        "column_type": "VARCHAR",
-        "description": "Literal source value before conversion for amount. Preserves spelling, signs and empty values; the typed value and its status are separate."
-      },
-      {
-        "column_name": "amount_status",
-        "column_type": "VARCHAR",
-        "description": "Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
-      },
-      {
-        "column_name": "date_raw",
-        "column_type": "VARCHAR",
-        "description": "Literal date field of the retained CSV context row before source-specific interpretation."
-      },
-      {
-        "column_name": "date_status",
-        "column_type": "VARCHAR",
-        "description": "Conversion state for the reported transaction/context date; distinguishes exact values, source NULL/empty and invalid or unsupported spelling."
-      },
-      {
-        "column_name": "native_fields_json",
-        "column_type": "VARCHAR",
-        "description": "Retained native field values for the source row or feed item, including fields beyond the typed mapping."
-      },
-      {
-        "column_name": "native_row_locator_json",
-        "column_type": "VARCHAR",
-        "description": "Exact original CSV row and field coordinates retained by the source context."
-      },
-      {
-        "column_name": "coverage_status",
-        "column_type": "VARCHAR",
-        "description": "Explicit completeness/retention scope of the context rows; a retained prefix does not become complete source history."
-      },
-      {
-        "column_name": "current_total_status",
-        "column_type": "VARCHAR",
-        "description": "Explicit limitation or refusal for current financial totals; historical/context observations are not silently treated as a current population."
-      },
-      {
-        "column_name": "amount",
-        "column_type": "DECIMAL(38,9)",
-        "description": "Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations."
-      },
-      {
-        "column_name": "reported_date",
-        "column_type": "DATE",
-        "description": "Date parsed from the date stated for this historical/context observation. NULL requires the source value and conversion status; capture time is not substituted."
-      },
-      {
-        "column_name": "source_row_ordinal",
-        "column_type": "INTEGER",
-        "description": "Native row ordinal supplied by the retained CSV context."
-      }
-    ],
-    "subject": "campaign_finance",
-    "grain": "One physical CSV row exposed by retained collection context.",
+    "grain": "One supported source-documentation page from its retained original.",
     "identity_columns": [
       "record_id"
     ]

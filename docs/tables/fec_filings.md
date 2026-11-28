@@ -24,14 +24,12 @@ One retained metadata observation of a submitted report or statement version. Us
 | `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
 | `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
 | `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_pointer` | `VARCHAR` | Exact pointer within the provider-owned native record to the mapped value or metadata object. |
 | `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
 | `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
-| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
-| `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
-| `filing_link_status` | `VARCHAR` | Set when the row is mapped: `native_file_number` where the filing states its own FEC file number (then `filing_key` is set), `unresolved_no_file_number` where it does not. It does not look up any other filing. |
-| `native_field_states_json` | `VARCHAR` | JSON map of field presence states such as source_missing, source_null, source_empty or reported. |
+| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
 | `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
+| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
+| `source_pointer` | `VARCHAR` | Exact pointer within the provider-owned native record to the mapped value or metadata object. |
 | `report_number` | `VARCHAR` | Literal source file/report number, retained separately from source row, image and transaction identifiers. A filing join requires a qualified number namespace. |
 | `source_record_identifier` | `VARCHAR` | Source-reported row identifier such as sub_id; it is not promoted to a global event key or file number. |
 | `native_filer_id` | `VARCHAR` | Literal filer identifier as supplied by the source; filer_entity_type and filer_id_status govern interpretation. |
@@ -45,9 +43,6 @@ One retained metadata observation of a submitted report or statement version. Us
 | `document_type_full` | `VARCHAR` | Source-supplied expanded document type label. |
 | `report_type` | `VARCHAR` | Source-reported report classification, interpreted within its namespace rather than as a universal period code. |
 | `report_type_full` | `VARCHAR` | Source-supplied expanded report type label. |
-| `report_year` | `VARCHAR` | Year reported for the filing/report, preserved independently of cycle and transaction date. |
-| `reported_cycle` | `VARCHAR` | Cycle exactly as reported in a native field; kept separate from the selection's source_cycle. |
-| `election_year` | `VARCHAR` | Election year stated by the source, distinct from source cycle, fiscal year and capture time. |
 | `means_filed` | `VARCHAR` | Source-stated filing channel or method; file format alone does not prove amendment scope. |
 | `beginning_image_number` | `VARCHAR` | First image number reported for the filing; not a financial record key. |
 | `ending_image_number` | `VARCHAR` | Last image number reported for the filing; does not prove retained body coverage. |
@@ -55,9 +50,6 @@ One retained metadata observation of a submitted report or statement version. Us
 | `amendment_indicator` | `VARCHAR` | Literal source amendment flag. It does not by itself prove the amendment chain, replacement scope or current record. |
 | `amendment_version` | `VARCHAR` | Amendment version as stated by the source; no automatic current-version selection. |
 | `amendment_number` | `VARCHAR` | Source-stated amendment number, distinct from a proven replacement order or complete chain. |
-| `is_amended` | `VARCHAR` | Literal API amendment state at capture time; it does not establish a complete retained amendment chain. |
-| `most_recent` | `VARCHAR` | Literal publisher most-recent flag captured for this observation; not an independently qualified current selection. |
-| `pages` | `VARCHAR` | Page count stated in filing metadata; no PDF-body processing is implied. |
 | `office` | `VARCHAR` | Source-reported office code or label; source-specific meanings remain distinct. |
 | `state` | `VARCHAR` | State value reported by the source for this entity; not necessarily the election state or transaction jurisdiction. |
 | `party` | `VARCHAR` | Source-reported political-party code or label within the native layout. |
@@ -66,6 +58,8 @@ One retained metadata observation of a submitted report or statement version. Us
 | `csv_url` | `VARCHAR` | Source-reported CSV representation URL; not proof of equivalence to other retained representations. |
 | `html_url` | `VARCHAR` | Source-reported HTML representation URL; availability is not checked by this field. |
 | `pdf_url` | `VARCHAR` | Source-reported PDF URL, retained as metadata while body processing remains deferred. |
+| `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
+| `filing_link_status` | `VARCHAR` | Set when the row is mapped: `native_file_number` where the filing states its own FEC file number (then `filing_key` is set), `unresolved_no_file_number` where it does not. It does not look up any other filing. |
 | `filer_entity_type` | `VARCHAR` | Source-specific classification of the filer, preserving committee and other reporting entities. |
 | `filer_id_status` | `VARCHAR` | State or syntax check of the native filer ID; not an independently resolved identity. |
 | `reporting_committee_id` | `VARCHAR` | Literal FEC ID of the reporting committee where that source field identifies a committee. It does not by itself identify the sender or recipient of money. |
@@ -95,3 +89,21 @@ One retained metadata observation of a submitted report or statement version. Us
 | `coverage_end_date` | `DATE` | Build-parsed CoverageThrough date; requires exact MM/DD/YYYY spelling and a valid calendar date. |
 | `update_date` | `DATE` | Date parsed from the source-stated update date, not a current-selection rule. NULL requires the source value and conversion status; capture time is not substituted. |
 | `load_timestamp` | `DATE` | Date parsed from the date component of the source load timestamp; the full native timestamp remains in load_timestamp_raw. NULL requires the source value and conversion status; capture time is not substituted. |
+| `pages` | `BIGINT` | Page count stated in filing metadata; no PDF-body processing is implied. |
+| `report_year` | `INTEGER` | Year reported for the filing/report, preserved independently of cycle and transaction date. |
+| `reported_cycle` | `INTEGER` | Cycle exactly as reported in a native field; kept separate from the selection's source_cycle. |
+| `election_year` | `INTEGER` | Election year stated by the source, distinct from source cycle, fiscal year and capture time. |
+| `is_amended` | `BOOLEAN` | Literal API amendment state at capture time; it does not establish a complete retained amendment chain. |
+| `most_recent` | `BOOLEAN` | Literal publisher most-recent flag captured for this observation; not an independently qualified current selection. |
+| `pages_raw` | `VARCHAR` | Literal source value for pages before conversion; consult pages_status for interpretation. |
+| `pages_status` | `VARCHAR` | Interpretation of source pages: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
+| `report_year_raw` | `VARCHAR` | Literal source value for report_year before conversion; consult report_year_status for interpretation. |
+| `report_year_status` | `VARCHAR` | Whether the CSV source report year has an exact four-digit spelling, is missing, or is unsupported. |
+| `reported_cycle_raw` | `VARCHAR` | Literal source value for reported_cycle before conversion; consult reported_cycle_status for interpretation. |
+| `reported_cycle_status` | `VARCHAR` | Interpretation of source reported_cycle: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
+| `election_year_raw` | `VARCHAR` | Literal source value for election_year before conversion; consult election_year_status for interpretation. |
+| `election_year_status` | `VARCHAR` | Interpretation of source election_year: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
+| `is_amended_raw` | `VARCHAR` | Literal source value for is_amended before conversion; consult is_amended_status for interpretation. |
+| `is_amended_status` | `VARCHAR` | Interpretation of source is_amended: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
+| `most_recent_raw` | `VARCHAR` | Literal source value for most_recent before conversion; consult most_recent_status for interpretation. |
+| `most_recent_status` | `VARCHAR` | Interpretation of source most_recent: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |

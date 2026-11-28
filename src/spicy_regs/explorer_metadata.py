@@ -106,10 +106,12 @@ def publication_descriptions(live: dict, *, index: dict | None = None) -> dict:
         for name in sorted(missing & set(curated)):
             descriptions[name] = _table_description(curated[name], live[name]["schema"])
     if index is not None:
+        from .fec_receipt_adapter import is_v2_fec_query_family
         from .sources.publication import table_owner
         legacy = {name for name in live if name.startswith("fec_")
                   and (owner := table_owner(index, name + ".parquet")) is not None
-                  and "etlReceipts" not in owner[1]}
+                  and "etlReceipts" not in owner[1]
+                  and not is_v2_fec_query_family(owner[1])}
         if legacy:
             from .data_dictionary import DEFAULT_DESCRIPTIONS, selected_dictionary_definitions
             selected, schemas = selected_dictionary_definitions(index, legacy, DEFAULT_DESCRIPTIONS)

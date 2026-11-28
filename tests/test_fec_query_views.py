@@ -107,24 +107,25 @@ def test_installed_serving_selection_preserves_all_historical_sql_and_dependenci
     from spicy_regs.fec_receipt_adapter import qualified_views
 
     scope = mcp_server.FEC_QUERY_SCOPE
-    # Accepted joint descriptor 08a4e8fdf4bcf6b9daeb50640e9f13665c3f93735a8e35014535ddc6207a8082
-    # preserves the historical witnesses while selecting the compatible observations representation.
-    historical = "sha256:9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0"
-    selected = "sha256:4cb0dffa91c278eb4e7a6048e266a5e4389748666428a82bc58c35ee3fe77f2f"
-    assert scope["source_generation_pin"] == historical
+    # Wave 2 ss-42nr / ss-j9k3: source_generation_pin and selected_observations_pin
+    # both point to the sealed cp1252-repaired receipts-free fec-observations generation.
+    selected = "sha256:2e3d7f6dc55359145a4dd9079bd489e7d337c6976a1c33644ad92b810ed4a237"
+    assert scope["source_generation_pin"] == selected
     assert scope["selected_observations_pin"] == selected
-    prior_scope = {key: value for key, value in scope.items() if key != "selected_observations_pin"}
+    assert "sha256:7da6a9d5d0ff6540915bcb25f6c0b9bad6a253bd3ea217208303424003d628f5" in scope["population"]
+    assert "2026-11-27T22:11:58.786346+00:00" in scope["as_of"]
+    implied_scope = {key: value for key, value in scope.items() if key != "selected_observations_pin"}
     for actual, legacy in ((mcp_server.FEC_QUALIFIED_VIEWS, False), (mcp_server.FEC_LEGACY_QUALIFIED_VIEWS, True)):
-        prior = qualified_views(prior_scope, legacy_associations=legacy)
-        assert [s.view.name for s in actual] == [s.view.name for s in prior]
-        for current, previous in zip(actual, prior, strict=True):
+        implied = qualified_views(implied_scope, legacy_associations=legacy)
+        assert [s.view.name for s in actual] == [s.view.name for s in implied]
+        for current, previous in zip(actual, implied, strict=True):
             assert current.view.query({}) == previous.view.query({})
             assert current.view.required == previous.view.required
             assert current.population == previous.population and current.as_of == previous.as_of
             assert current.evidence_generations == {"fec-observations": selected}
-            assert previous.evidence_generations == {"fec-observations": historical}
+            assert previous.evidence_generations == {"fec-observations": selected}
         evidence_sql = next(s.view.query({}) for s in actual if s.view.name == "fec_account_transfers_evidence")
-        assert historical in evidence_sql and selected not in evidence_sql
+        assert selected in evidence_sql
 
 
 @pytest.mark.parametrize("fault", ["old_selection", "next_selection", "old_receipt", "query_changed", "not_retained"])

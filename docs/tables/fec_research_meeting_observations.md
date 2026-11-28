@@ -21,8 +21,6 @@ One native HTML table row describing a meeting listing, read from the retained o
 | `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
 | `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
 | `source_sha256` | `VARCHAR` | SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness. |
-| `context_sha256` | `VARCHAR` | Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output. |
-| `source_context_pointer` | `VARCHAR` | Exact JSON pointer into the retained collection context to the native fact represented by this observation. |
 | `observed_at_json` | `VARCHAR` | Acquisition time from the original's acquisition receipt in the raw archive, as JSON. |
 | `meeting_type` | `VARCHAR` | Meeting classification explicitly stated by the retained HTML table. |
 | `title_raw` | `VARCHAR` | Meeting title exactly as retained in the source row, including cancellation language. |
@@ -30,6 +28,5 @@ One native HTML table row describing a meeting listing, read from the retained o
 | `dates_json` | `VARCHAR` | Literal date cells and available date interpretations for the meeting row; multiple dates remain separate. |
 | `date_status` | `VARCHAR` | Conversion state for the reported transaction/context date; distinguishes exact values, source NULL/empty and invalid or unsupported spelling. |
 | `links_json` | `VARCHAR` | Source links with their labels and exact native locations; metadata does not imply body retrieval. |
-| `native_cells_json` | `VARCHAR` | Exact retained source cells and addresses supporting this row; includes literal text and available worksheet/formula context. |
 | `table_ordinal` | `INTEGER` | Zero-based ordinal of the source HTML table containing this observation. |
 | `table_row` | `INTEGER` | Native row address in the retained HTML table; use native_cells_json for exact cell evidence. |
