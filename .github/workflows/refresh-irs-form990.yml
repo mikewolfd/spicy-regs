@@ -1,0 +1,460 @@
+name: Refresh — irs_form990
+# Manual-dispatch refresh workflow for the irs-form990 family (ss-umeo).
+# irs-form990 stays in LOCAL_FAMILIES and publishes receipts-free,
+# submission_year-partitioned Parquet tables through publish-local-generation
+# using spicy_regs.pipelines.irs_form990 (discover + sync-build) with closed-year
+# R2 partition carry-forward and dual-tier evidence (policy="full" for annual
+# index CSVs, policy="hash_only" for sequentially streamed bulk XML ZIPs).
+# Default skip_upload=true performs a bounded build, admission, and dry run into
+# $RUNNER_TEMP without touching R2.
+on:
+  workflow_dispatch:
+    inputs:
+      years:
+        description: 'Comma-separated IRS TEOS submission years to discover and sync (e.g. 2026 or 2023,2024,2025,2026)'
+        required: false
+        default: '2026'
+        type: string
+      max_zips:
+        description: 'Optional cap on ZIP archives streamed per year (0 = all ZIPs for each requested year)'
+        required: false
+        default: '0'
+        type: string
+      expect_prior:
+        description: 'Optional live irs-form990 digest (8-64 hex chars) required when skip_upload is false; blank re-reads live publication.v2.json'
+        required: false
+        default: ''
+        type: string
+      skip_upload:
+        description: 'Build and validate candidate generation (including dry-run publish) without publishing to R2'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-irs-form990
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free preinstalled toolchains on Linux runners
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install pinned dependencies
+        run: uv sync --frozen
+
+      - name: Retain invocation scope
+        env:
+          WORKFLOW_INPUTS: ${{ toJSON(inputs) }}
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          python3 - <<'PY'
+          import datetime
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          receipt = {
+              "started_at": datetime.datetime.now(datetime.UTC).isoformat(),
+              "family": "irs-form990",
+              "code_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "workflow_revision": os.environ["GITHUB_SHA"],
+              "run_id": os.environ["GITHUB_RUN_ID"],
+              "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "inputs": json.loads(os.environ["WORKFLOW_INPUTS"]),
+          }
+          Path("output/invocation.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Validate inputs
+        id: validate
+        env:
+          IRS990_YEARS: ${{ inputs.years }}
+          IRS990_MAX_ZIPS: ${{ inputs.max_zips }}
+          IRS990_EXPECT_PRIOR: ${{ inputs.expect_prior }}
+          SKIP_UPLOAD: ${{ inputs.skip_upload }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          WORK_DIR="$RUNNER_TEMP/irs-form990"
+          rm -rf "$WORK_DIR"
+          mkdir -p "$WORK_DIR"
+          uv run --frozen python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          raw_years = [item.strip() for item in os.environ.get("IRS990_YEARS", "").split(",") if item.strip()]
+          if not raw_years:
+              raise SystemExit("years is required: specify one or more IRS submission years (e.g. 2026)")
+          years: list[int] = []
+          for item in raw_years:
+              if not re.fullmatch(r"20\d{2}", item):
+                  raise SystemExit(f"Invalid IRS Form 990 submission year: {item!r}")
+              year = int(item)
+              if not 2011 <= year <= 2099:
+                  raise SystemExit(f"IRS Form 990 submission year out of range: {year}")
+              if year in years:
+                  raise SystemExit(f"Duplicate IRS Form 990 submission year: {year}")
+              years.append(year)
+
+          raw_max_zips = os.environ.get("IRS990_MAX_ZIPS", "0").strip() or "0"
+          if not re.fullmatch(r"\d+", raw_max_zips):
+              raise SystemExit(f"Invalid max_zips: {raw_max_zips!r}")
+          max_zips = int(raw_max_zips)
+          if max_zips < 0 or max_zips > 500:
+              raise SystemExit(f"max_zips must be between 0 and 500, got {max_zips}")
+
+          skip_upload = os.environ.get("SKIP_UPLOAD", "true").strip().lower()
+          if skip_upload not in {"true", "false"}:
+              raise SystemExit(f"Invalid skip_upload value: {skip_upload!r}")
+          if max_zips > 0 and skip_upload == "false":
+              raise SystemExit(
+                  f"Refusing live publish (skip_upload=false) with truncated max_zips={max_zips}; "
+                  "set max_zips=0 for live publishes"
+              )
+
+          expect_prior = os.environ.get("IRS990_EXPECT_PRIOR", "").strip()
+          if expect_prior and not re.fullmatch(r"(sha256:)?[0-9a-f]{8,64}", expect_prior):
+              raise SystemExit("expect_prior must be 8-64 lowercase hex chars (optional sha256: prefix)")
+
+          work_dir = Path(os.environ["RUNNER_TEMP"]) / "irs-form990"
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
+              out.write(f"work_dir={work_dir}\n")
+              out.write(f"years_csv={','.join(str(y) for y in sorted(years))}\n")
+              out.write(f"max_zips={max_zips}\n")
+          PY
+
+      - name: Read live publication index and mirror prior partitions
+        id: live
+        env:
+          WORK_DIR: ${{ steps.validate.outputs.work_dir }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicygov.ai') }}
+          WORKFLOW_USER_AGENT: 'SpicyGov/1.0 (https://spicygov.ai; refresh-irs-form990)'
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          INDEX_URL="${R2_PUBLIC_URL%/}/publication.v2.json"
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+            --retry 3 --connect-timeout 30 --max-time 60 \
+            -H "User-Agent: $WORKFLOW_USER_AGENT" \
+            -H "Cache-Control: no-cache" \
+            --output "$WORK_DIR/live-publication.v2.json" "$INDEX_URL"
+          LIVE_PRESENT=$(uv run --frozen python - "$WORK_DIR/live-publication.v2.json" <<'PY'
+          import sys
+          from pathlib import Path
+          from spicy_regs.sources import publication
+
+          index = publication.parse_index(Path(sys.argv[1]).read_bytes())
+          print("true" if "irs-form990" in index["families"] else "false")
+          PY
+          )
+          READ_INDEX=""
+          CARRY_GEN=""
+          CARRY_SUMMARY=""
+          if [ "$LIVE_PRESENT" = "true" ]; then
+            SPICY_REGS_R2_URL="$R2_PUBLIC_URL" uv run --frozen spicy-regs mirror "$WORK_DIR/live-mirror" \
+              --family irs-form990 --min-free-gib 4 > "$WORK_DIR/mirror-output.jsonl"
+            IFS=$'\t' read -r READ_INDEX CARRY_GEN <<< "$(uv run --frozen python - "$WORK_DIR/live-mirror" "$WORK_DIR/mirror-output.jsonl" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          lines = [json.loads(line) for line in Path(sys.argv[2]).read_text(encoding="utf-8").splitlines() if line.strip()]
+          snapshot = next(item["snapshot"] for item in reversed(lines) if "snapshot" in item)
+          prefix = next(
+              item["prefix"]
+              for item in reversed(lines)
+              if item.get("family") == "irs-form990" and isinstance(item.get("prefix"), str) and item["prefix"]
+          )
+          print(f"{root / snapshot}\t{root / prefix}")
+          PY
+            )"
+            # Fetch and cryptographically verify prior irs990-population-summary.json when mirrored prior is partitioned.
+            CARRY_SUMMARY=$(uv run --frozen python - "$CARRY_GEN" "$R2_PUBLIC_URL" "$WORK_DIR/prior-summary.json" "$WORKFLOW_USER_AGENT" <<'PY'
+          import hashlib
+          import json
+          import re
+          import sys
+          from pathlib import Path
+          import httpx
+
+          carry_gen = Path(sys.argv[1])
+          base_url = sys.argv[2].rstrip("/")
+          dest_path = Path(sys.argv[3])
+          ua = sys.argv[4]
+
+          filings_dir = carry_gen / "irs990_filings"
+          is_partitioned = filings_dir.is_dir() and any(filings_dir.glob("submission_year=*/part-*.parquet"))
+          if not is_partitioned:
+              print("")
+              raise SystemExit(0)
+
+          art_path = carry_gen / "artifact.json"
+          if not art_path.is_file():
+              raise SystemExit(f"Mirrored partitioned prior generation is missing artifact.json: {art_path}")
+          art = json.loads(art_path.read_text(encoding="utf-8"))
+          ev = next((item for item in art.get("inputs", ()) if item.get("role") == "source-evidence"), None)
+          if not ev or not isinstance(ev.get("artifactDigest"), str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", ev["artifactDigest"]):
+              raise SystemExit("Mirrored partitioned prior generation lacks a valid source-evidence digest")
+          ev_hex = ev["artifactDigest"].removeprefix("sha256:")
+
+          with httpx.Client(headers={"User-Agent": ua}, timeout=60, follow_redirects=False) as client:
+              journal_url = f"{base_url}/source-evidence/{ev_hex}/journal.jsonl"
+              jresp = client.get(journal_url)
+              if jresp.status_code != 200:
+                  raise SystemExit(f"Failed to fetch prior source-evidence journal ({jresp.status_code}): {journal_url}")
+              summary_event = None
+              for line in jresp.text.splitlines():
+                  if not line.strip():
+                      continue
+                  event = json.loads(line)
+                  if event.get("event") == "retained-file" and event.get("stage") == "irs990-population-summary":
+                      summary_event = event
+              if not isinstance(summary_event, dict):
+                  raise SystemExit("Prior partitioned source-evidence journal lacks an irs990-population-summary receipt")
+              blob_member = summary_event.get("blob_member")
+              expected_sha = summary_event.get("sha256")
+              if not isinstance(blob_member, str) or not re.fullmatch(r"blobs/sha256/[0-9a-f]{64}", blob_member):
+                  raise SystemExit(f"Invalid prior summary blob_member in evidence journal: {blob_member!r}")
+              if not isinstance(expected_sha, str) or expected_sha != "sha256:" + blob_member.removeprefix("blobs/sha256/"):
+                  raise SystemExit(f"Prior summary sha256 {expected_sha!r} disagrees with blob_member {blob_member!r}")
+              summary_url = f"{base_url}/source-evidence/{blob_member}"
+              sresp = client.get(summary_url)
+              if sresp.status_code != 200:
+                  raise SystemExit(f"Failed to fetch prior irs990-population-summary ({sresp.status_code}): {summary_url}")
+              actual_sha = "sha256:" + hashlib.sha256(sresp.content).hexdigest()
+              if actual_sha != expected_sha:
+                  raise SystemExit(f"Prior summary SHA-256 mismatch: expected {expected_sha}, got {actual_sha}")
+              parsed = json.loads(sresp.content.decode("utf-8"))
+              if not isinstance(parsed, dict) or parsed.get("format") != "spicy-irs-form990-population-summary" or not isinstance(parsed.get("years"), dict):
+                  raise SystemExit("Prior irs990-population-summary JSON has unexpected format")
+              dest_path.write_bytes(sresp.content)
+              print(dest_path)
+          PY
+            )
+          fi
+          echo "read_index=$READ_INDEX" >> "$GITHUB_OUTPUT"
+          echo "carry_gen=$CARRY_GEN" >> "$GITHUB_OUTPUT"
+          echo "carry_summary=$CARRY_SUMMARY" >> "$GITHUB_OUTPUT"
+
+      - name: Discover official IRS TEOS index and archive URLs
+        env:
+          WORK_DIR: ${{ steps.validate.outputs.work_dir }}
+          YEARS_CSV: ${{ steps.validate.outputs.years_csv }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          uv run --frozen python -m spicy_regs.pipelines.irs_form990 discover \
+            --years "$YEARS_CSV" \
+            --output "$WORK_DIR/discovery-manifest.json"
+          mkdir -p output
+          cp "$WORK_DIR/discovery-manifest.json" output/discovery-manifest.json
+
+      - name: Stream build and validate candidate generation
+        id: build
+        env:
+          WORK_DIR: ${{ steps.validate.outputs.work_dir }}
+          READ_INDEX: ${{ steps.live.outputs.read_index }}
+          CARRY_GEN: ${{ steps.live.outputs.carry_gen }}
+          CARRY_SUMMARY: ${{ steps.live.outputs.carry_summary }}
+          MAX_ZIPS: ${{ steps.validate.outputs.max_zips }}
+          SKIP_UPLOAD: ${{ inputs.skip_upload }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          SYNC_ARGS=(
+            --manifest "$WORK_DIR/discovery-manifest.json"
+            --output-dir "$WORK_DIR/build"
+            --max-zips "$MAX_ZIPS"
+          )
+          if [ "$SKIP_UPLOAD" = "true" ]; then
+            export SPICYGOV_RAW_ROOT="$WORK_DIR/raw-archive"
+            SYNC_ARGS+=(--archive-root "$WORK_DIR/raw-archive")
+          else
+            unset SPICYGOV_RAW_ROOT
+          fi
+          if [ -n "$READ_INDEX" ]; then
+            SYNC_ARGS+=(--read-index "$READ_INDEX")
+          fi
+          if [ -n "$CARRY_GEN" ]; then
+            SYNC_ARGS+=(--carry-forward-generation "$CARRY_GEN")
+          fi
+          if [ -n "$CARRY_SUMMARY" ]; then
+            SYNC_ARGS+=(--carry-forward-summary "$CARRY_SUMMARY")
+          fi
+
+          uv run --frozen python -m spicy_regs.pipelines.irs_form990 sync-build "${SYNC_ARGS[@]}" \
+            | tee "$WORK_DIR/build-result.json"
+
+          # Reclaim mirrored prior Parquet bytes before running the 40 GiB-floored --dry-run check.
+          rm -rf "$WORK_DIR/live-mirror"
+          df -h /
+
+          mkdir -p output
+          cp "$WORK_DIR/build/irs990-population-summary.json" output/irs990-population-summary.json
+          if [ -f "$WORK_DIR/build/quarantined-anomalies.json" ]; then
+            cp "$WORK_DIR/build/quarantined-anomalies.json" output/quarantined-anomalies.json
+          fi
+
+          uv run --frozen python - "$WORK_DIR/build-result.json" "$WORK_DIR/build/generation" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          from rulespec_artifacts import LocalMemberSource, admit_artifact
+          from spicy_regs import local_publication
+
+          lines = [line for line in Path(sys.argv[1]).read_text(encoding="utf-8").splitlines() if line.strip()]
+          result = json.loads(lines[-1])
+          generation_dir = Path(sys.argv[2])
+          evidence_dir = Path(result["sourceEvidence"])
+
+          root = local_publication._candidate(generation_dir, "irs-form990", (evidence_dir,))
+          admitted = admit_artifact(LocalMemberSource(generation_dir))
+          if admitted.pin.artifact_digest != result["artifactDigest"]:
+              raise SystemExit("Admitted generation digest differs from build output")
+          if "etlReceipts" in root["spec"]:
+              raise SystemExit("irs-form990 must publish receipts-free (unexpected etlReceipts in spec)")
+          for table_key, table_spec in root["spec"]["tables"].items():
+              if table_spec.get("partitionColumns") != ["submission_year"]:
+                  raise SystemExit(f"Expected submission_year partitioning on {table_key}, got {table_spec.get('partitionColumns')!r}")
+          filings_rows = result.get("rows", {}).get("irs990_filings", 0)
+          if not isinstance(filings_rows, int) or filings_rows <= 0:
+              raise SystemExit(f"Expected positive irs990_filings rows, got {filings_rows!r}")
+
+          validation = {
+              "status": "candidate_validated",
+              "family": "irs-form990",
+              "artifact_digest": admitted.pin.artifact_digest,
+              "logical_id": admitted.pin.logical_id,
+              "publication_status": root["spec"]["publicationStatus"],
+              "tables": sorted(root["spec"]["tables"].keys()),
+              "partition_columns": {k: v.get("partitionColumns") for k, v in sorted(root["spec"]["tables"].items())},
+              "rows": result["rows"],
+              "submission_years": result["submissionYears"],
+              "telemetry": result["telemetry"],
+              "skip_upload": os.environ.get("SKIP_UPLOAD") == "true",
+          }
+          Path("output/candidate-validation.json").write_text(json.dumps(validation, indent=2) + "\n", encoding="utf-8")
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
+              out.write(f"generation_dir={generation_dir}\n")
+              out.write(f"evidence_dir={evidence_dir}\n")
+              out.write(f"artifact_digest={admitted.pin.artifact_digest}\n")
+          PY
+
+          if [ "$SKIP_UPLOAD" = "true" ] && [ "$MAX_ZIPS" = "0" ]; then
+            DRY_ARGS=(
+              --generation "$WORK_DIR/build/generation"
+              --family irs-form990
+              --evidence "$(python3 -c 'import json; print(json.loads(open("'"$WORK_DIR/build-result.json"'").read().splitlines()[-1])["sourceEvidence"])')"
+              --output "$WORK_DIR/dry-run-receipt"
+              --dry-run
+              --scratch-raw
+              --live-index "$WORK_DIR/live-publication.v2.json"
+            )
+            uv run --frozen publish-local-generation "${DRY_ARGS[@]}"
+            mkdir -p output/dry-run-receipt
+            cp "$WORK_DIR/dry-run-receipt/dry-run.json" output/dry-run-receipt/dry-run.json
+          fi
+          df -h /
+
+      - name: Publish candidate generation
+        if: inputs.skip_upload == false
+        env:
+          WORK_DIR: ${{ steps.validate.outputs.work_dir }}
+          GENERATION_DIR: ${{ steps.build.outputs.generation_dir }}
+          EVIDENCE_DIR: ${{ steps.build.outputs.evidence_dir }}
+          EXPECT_PRIOR: ${{ inputs.expect_prior }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicygov.ai') }}
+          WORKFLOW_USER_AGENT: 'SpicyGov/1.0 (https://spicygov.ai; refresh-irs-form990)'
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          INDEX_URL="${R2_PUBLIC_URL%/}/publication.v2.json"
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+            --retry 3 --connect-timeout 30 --max-time 60 \
+            -H "User-Agent: $WORKFLOW_USER_AGENT" \
+            -H "Cache-Control: no-cache" \
+            --output "$WORK_DIR/live-before-publish.v2.json" "$INDEX_URL"
+          LIVE_PRIOR=$(uv run --frozen python - "$WORK_DIR/live-before-publish.v2.json" <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+          from spicy_regs.sources import publication
+
+          index = publication.parse_index(Path(sys.argv[1]).read_bytes())
+          live = index["families"].get("irs-form990")
+          expected = os.environ.get("EXPECT_PRIOR", "").strip().removeprefix("sha256:")
+          held = live["artifactDigest"].removeprefix("sha256:") if live else ""
+          if expected and (not held or not held.startswith(expected)):
+              raise SystemExit(
+                  f"Live irs-form990 digest {held or 'absent'} does not match expect_prior {expected}"
+              )
+          print(held)
+          PY
+          )
+          PUBLISH_ARGS=(
+            --generation "$GENERATION_DIR"
+            --family irs-form990
+            --evidence "$EVIDENCE_DIR"
+            --output "$WORK_DIR/publish-receipt"
+          )
+          if [ -n "$LIVE_PRIOR" ]; then
+            PUBLISH_ARGS+=(--expect-prior "$LIVE_PRIOR")
+          fi
+          uv run --frozen publish-local-generation "${PUBLISH_ARGS[@]}"
+          mkdir -p output/publish-receipt
+          cp "$WORK_DIR/publish-receipt/receipt.json" output/publish-receipt/receipt.json
+
+      - name: Retain invocation and audit receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: refresh-irs-form990-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            output/invocation.json
+            output/discovery-manifest.json
+            output/irs990-population-summary.json
+            output/quarantined-anomalies.json
+            output/candidate-validation.json
+            output/dry-run-receipt/
+            output/publish-receipt/
+          if-no-files-found: ignore
+          retention-days: 30

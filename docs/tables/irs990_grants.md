@@ -4,9 +4,9 @@
 
 **IRS Form 990 Schedule I domestic organization grants**
 
-Repeated Schedule I Part II domestic organization grant entries; cash and noncash assistance remain separate.
+Repeated Schedule I Part II domestic organization grant entries partitioned by submission_year; cash and noncash assistance remain separate.
 
-**Coverage.** Sampled. Explicit filing identities from one retained IRS annual index and selected official XML archive; only declared Form 990 versions and selected fields are interpreted. Other schedules remain native XML. No historical census, donor completeness, Forms 8871/8872 or Form 990-EZ/PF/N interpretation. *(measured 2026-11-13)*
+**Coverage.** Window. Multi-year Form 990 streaming population across official IRS TEOS annual indexes and bulk XML archives for visually qualified schema cohorts (2020v4.* through 2025v4.*), partitioned by submission_year. Covers Schedule I Part II domestic organization recipients only (excluding Schedule I Part III individuals, Schedule F foreign grants, 990-EZ, 990-PF, 990-T, 990-N, and Section 527 irs-527). Unallocated differences against Part I grants_paid_usd stay explicit. *(measured 2026-11-28)*
 
 - **Parquet file:** `irs990_grants.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -17,16 +17,17 @@ Repeated Schedule I Part II domestic organization grant entries; cash and noncas
 | --- | --- | --- |
 | `filing_id` | `VARCHAR` | Literal IRS OBJECT_ID identifying this return; distinct from organization EIN. Amended returns remain separate filings. |
 | `ein` | `VARCHAR` | Filing organization EIN as nine-character text with leading zeros retained. |
-| `source_xpath` | `VARCHAR` | Namespace-independent positional XPath of the complete repeated entry in the retained original XML member. |
+| `source_xpath` | `VARCHAR` | Namespace-independent positional XPath of the complete repeated entry in the original XML member. |
 | `recipient_ein` | `VARCHAR` | Literal RecipientEIN; absent remains NULL. No inferred recipient identity. |
 | `recipient_name` | `VARCHAR` | Schedule I recipient business name lines joined with a space; exact separate source lines remain in native_entry_json. |
 | `purpose` | `VARCHAR` | Literal PurposeOfGrantTxt for this repeated Schedule I domestic-organization recipient entry. |
 | `cash_raw` | `VARCHAR` | Literal XML spelling of Schedule I Part II cash grant; NULL may mean absent or empty as its status records. |
-| `cash_status` | `VARCHAR` | exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build. |
+| `cash_status` | `VARCHAR` | exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax quarantines or refuses the build. |
 | `noncash_raw` | `VARCHAR` | Literal XML spelling of Schedule I Part II noncash assistance; NULL may mean absent or empty as its status records. |
-| `noncash_status` | `VARCHAR` | exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build. |
+| `noncash_status` | `VARCHAR` | exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax quarantines or refuses the build. |
 | `native_entry_json` | `VARCHAR` | Complete original entry with expanded XML names, literal values, attributes, repeated children and XML positions. |
-| `source_locator_json` | `VARCHAR` | Retained annual index and ZIP descriptors, original and XML member SHA-256 digests, member name and index row. XML positions are namespace-independent positional XPath. |
+| `source_locator_json` | `VARCHAR` | Annual index and TEOS XML archive descriptors, original archive and XML member SHA-256 digests, member name and index row. XML positions are namespace-independent positional XPath. |
+| `submission_year` | `INTEGER` | Annual IRS TEOS index submission year (partition column). Distinct from tax year, tax period and observation time. |
 | `entry_ordinal` | `INTEGER` | One-based occurrence within this filing; repeated names and recipients remain distinct entries. |
 | `cash_usd` | `DECIMAL(38,0)` | Schedule I Part II cash grant in reported whole US dollars as exact decimal(38,0); no scaling, currency conversion or invented zero. |
 | `noncash_usd` | `DECIMAL(38,0)` | Schedule I Part II noncash assistance in reported whole US dollars as exact decimal(38,0); no scaling, currency conversion or invented zero. |

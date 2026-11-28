@@ -2,11 +2,11 @@
 
 # `irs990_officers`
 
-**IRS Form 990 Part VII personnel entries**
+**IRS Form 990 Part VII personnel and institutional trustee entries**
 
-Repeated Part VII Section A personnel entries and separately reported compensation.
+Repeated Part VII Section A officer, director, trustee, key-employee, and corporate-trustee entries with separately reported compensation, partitioned by submission_year.
 
-**Coverage.** Sampled. Explicit filing identities from one retained IRS annual index and selected official XML archive; only declared Form 990 versions and selected fields are interpreted. Other schedules remain native XML. No historical census, donor completeness, Forms 8871/8872 or Form 990-EZ/PF/N interpretation. *(measured 2026-11-13)*
+**Coverage.** Window. Multi-year Form 990 streaming population across official IRS TEOS annual indexes and bulk XML archives for visually qualified schema cohorts (2020v4.* through 2025v4.*), partitioned by submission_year. Form 990-EZ, 990-PF, 990-T, 990-N, and Section 527 (irs-527) are excluded. *(measured 2026-11-28)*
 
 - **Parquet file:** `irs990_officers.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -17,17 +17,19 @@ Repeated Part VII Section A personnel entries and separately reported compensati
 | --- | --- | --- |
 | `filing_id` | `VARCHAR` | Literal IRS OBJECT_ID identifying this return; distinct from organization EIN. Amended returns remain separate filings. |
 | `ein` | `VARCHAR` | Filing organization EIN as nine-character text with leading zeros retained. |
-| `source_xpath` | `VARCHAR` | Namespace-independent positional XPath of the complete repeated entry in the retained original XML member. |
-| `person_name` | `VARCHAR` | Literal PersonNm for this Part VII Section A entry; not a resolved person identifier. An organization entry may have no person name. |
+| `source_xpath` | `VARCHAR` | Namespace-independent positional XPath of the complete repeated entry in the original XML member. |
+| `person_name` | `VARCHAR` | Literal PersonNm for this Part VII Section A entry; not a resolved person identifier. Corporate trustee entries populate business_name and leave person_name NULL. |
+| `business_name` | `VARCHAR` | Literal BusinessName lines joined with a space for corporate trustees or management companies reported in Part VII Section A; NULL for individual entries. Exact separate lines remain in native_entry_json. |
 | `title` | `VARCHAR` | Literal TitleTxt for this officer, director, trustee, employee or organization entry. |
 | `compensation_raw` | `VARCHAR` | Literal XML spelling of Part VII reportable compensation from the filing organization; NULL may mean absent or empty as its status records. |
-| `compensation_status` | `VARCHAR` | exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build. |
+| `compensation_status` | `VARCHAR` | exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax quarantines or refuses the build. |
 | `related_compensation_raw` | `VARCHAR` | Literal XML spelling of Part VII reportable compensation from related organizations; NULL may mean absent or empty as its status records. |
-| `related_compensation_status` | `VARCHAR` | exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build. |
+| `related_compensation_status` | `VARCHAR` | exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax quarantines or refuses the build. |
 | `other_compensation_raw` | `VARCHAR` | Literal XML spelling of Part VII other compensation; NULL may mean absent or empty as its status records. |
-| `other_compensation_status` | `VARCHAR` | exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build. |
+| `other_compensation_status` | `VARCHAR` | exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax quarantines or refuses the build. |
 | `native_entry_json` | `VARCHAR` | Complete original entry with expanded XML names, literal values, attributes, repeated children and XML positions. |
-| `source_locator_json` | `VARCHAR` | Retained annual index and ZIP descriptors, original and XML member SHA-256 digests, member name and index row. XML positions are namespace-independent positional XPath. |
+| `source_locator_json` | `VARCHAR` | Annual index and TEOS XML archive descriptors, original archive and XML member SHA-256 digests, member name and index row. XML positions are namespace-independent positional XPath. |
+| `submission_year` | `INTEGER` | Annual IRS TEOS index submission year (partition column). Distinct from tax year, tax period and observation time. |
 | `entry_ordinal` | `INTEGER` | One-based occurrence within this filing; repeated names and recipients remain distinct entries. |
 | `compensation_usd` | `DECIMAL(38,0)` | Part VII reportable compensation from the filing organization in reported whole US dollars as exact decimal(38,0); no scaling, currency conversion or invented zero. |
 | `related_compensation_usd` | `DECIMAL(38,0)` | Part VII reportable compensation from related organizations in reported whole US dollars as exact decimal(38,0); no scaling, currency conversion or invented zero. |

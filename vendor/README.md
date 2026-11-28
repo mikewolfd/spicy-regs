@@ -45,7 +45,19 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
   598,325 bytes). Pinned only under the optional `ddk-bridge` extra and dependency group so base
   CLI/MCP installs and `source-readers` remain untouched.
 
-- **Selected House disbursements date-adjudication provider** `spicy_docs-0.85.0+readers.20261128.1` is built from
+- **Selected IRS Form 990 streaming reader provider** `spicy_docs-0.85.0+readers.20261128.2` is built from
+  `96e6a824675d1e58fe36980f22df96db0ec44d45` (tree `83a9d62b6cc631e3dba0815a8a439e36d04022ca`,
+  `mikewolfd/spicy-docs#61` on `fork/main`). It adds the single-pass Expat streaming IRS Form 990
+  reader (`scan_form990_return`, `iter_archive_returns`, `load_index_map`, `parse_downloads_page`),
+  expanded multi-GB TEOS archive/index bounds and 2019–2026 URL patterns, explicit `990T` and
+  `redacted_fewer` `documentCnt` handling, and complete archive disposition accounting (`ss-umeo`)
+  atop `.20261128.1` (with wheel metadata version bumped to `0.85.0+readers.20261128.2` in clean
+  `git archive` staging). Two clean `git archive` builds are byte-identical (`sha256:e58cdf47...`).
+  See [the receipt](spicy_docs-0.85.0+readers.20261128.2.json) for source, wheel and RECORD identity.
+  The superseded `.20261128.1` wheel is recoverable from this adoption commit's parent;
+  its receipt remains.
+
+- **Prior House disbursements date-adjudication provider** `spicy_docs-0.85.0+readers.20261128.1` is built from
   `72ec8253a1c71752c391caa0f118c38452fef671` (tree `64498e5a39fdf222ca85a24e0191c005381a29eb`,
   `mikewolfd/spicy-docs#60` on `fork/main`). It applies the independently adjudicated `ss-9uvk`
   House CSV disbursement date rules (6 promoted `high`-confidence corrections across Pingree,
