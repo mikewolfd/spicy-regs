@@ -48,6 +48,7 @@ from contextlib import nullcontext
 from os import getenv
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from time import monotonic
 from typing import Annotated, Any, ClassVar
 from uuid import uuid4
 
@@ -57,16 +58,113 @@ from loguru import logger
 
 from spicy_regs.env_values import flag_env
 from spicy_regs.pipelines.base import Pipeline
+from spicy_regs.source_evidence import JOURNAL, CaptureEvidence
 from spicy_regs.sources import r2
 from spicy_regs.sources.publication import PublicationError
 
 
 class Unchanged(Exception):
-    """``build`` found the source holds nothing the published generation lacks.
+    """The builder found no new table data; the captured prior supplies the table bytes.
 
-    ``run`` then builds and publishes nothing and returns normally, so a scheduled run on a day without
-    news is green. Raise it only once every byte acquired is known to be published already.
+    This is not permission to discard new observations or skip the selection checks.
     """
+
+
+_SELECTION_EVENT = "rollup-selection"
+_CARRIED_EVIDENCE_EVENT = "rollup-carried-evidence"
+_BOOKKEEPING_EVENTS = frozenset({"run", "lineage", "build-outcome", _SELECTION_EVENT, _CARRIED_EVIDENCE_EVENT})
+
+
+def _journal_events(raw: bytes) -> list[dict]:
+    return [json.loads(line) for line in raw.splitlines()]
+
+
+def _evidence_records(events: list[dict]) -> list[tuple[bool, bytes]]:
+    """Ignore observation-instance IDs/clocks, not source versions, status, or selection."""
+    from rulespec_artifacts import canonical_json_bytes
+
+    records = []
+    for event in events:
+        name = event["event"]
+        if name in _BOOKKEEPING_EVENTS:
+            continue
+        record = {key: value for key, value in event.items() if key != "recorded_at"}
+        if name in {"capture", "retained-file"}:
+            record.pop("capture_id", None)
+        if name == "capture":
+            for key in ("observed_at", "archive_receipt_key"):
+                record.pop(key, None)
+            if "response_headers" in record:
+                record["response_headers"] = [
+                    item for item in record["response_headers"] if item[0].lower() != "date"
+                ]
+        if name == "retained-file" and "redirect_capture_id" in record:
+            # The official and redirect URLs plus the body pin are kept.
+            # A redirect adapter copies the capture's fresh ID and clock.
+            record.pop("redirect_capture_id")
+            record.pop("observed_at", None)
+        status = record.get("status_code")
+        refused = (
+            name in {"refusal", "capture-incomplete"}
+            or record.get("source_validation") == "refused"
+            or (isinstance(status, int) and status >= 400)
+        )
+        records.append((refused, canonical_json_bytes(record)))
+    return records
+
+
+class _RollupEvidence(CaptureEvidence):
+    """Keep inherited checkpoint queries working after an evidence-only publication."""
+
+    prior_root: dict | None = None
+    _carried_events: list[dict] | None = None
+
+    def _record_prior(self, prior_index, raw, root, *, public_url):
+        super()._record_prior(prior_index, raw, root, public_url=public_url)
+        self.prior_root = root
+
+    def prior_events(self) -> list[dict]:
+        from spicy_regs.sources.publication import load_evidence_journal
+
+        if self._prior_evidence is None:
+            return []
+        if self._prior_events is None:
+            url, pin = self._prior_evidence
+            if url is None:
+                return []
+            self._prior_events = _journal_events(load_evidence_journal(url, pin, predating_ok=True))
+        return self._prior_events
+
+    def _carried_pin(self) -> dict | None:
+        return next(
+            (event["pin"] for event in reversed(self.prior_events()) if event["event"] == _CARRIED_EVIDENCE_EVENT),
+            None,
+        )
+
+    def checkpoint_pin(self) -> dict | None:
+        if self._prior_evidence is None or not self.prior_events():
+            return None
+        return self._carried_pin() or {
+            key: self._prior_evidence[1][key] for key in ("logicalId", "artifactDigest")
+        }
+
+    def inherited_event(self, event: str, **match) -> dict | None:
+        from spicy_regs.sources.publication import load_evidence_journal
+
+        found = super().inherited_event(event, **match)
+        if found is not None or self._prior_evidence is None:
+            return found
+        carried = self._carried_pin()
+        url, _ = self._prior_evidence
+        if carried is None or url is None:
+            return None
+        if self._carried_events is None:
+            self._carried_events = _journal_events(load_evidence_journal(url, carried))
+        return next(
+            (row for row in reversed(self._carried_events)
+             if row["event"] == event and all(row.get(key) == value for key, value in match.items())),
+            None,
+        )
 
 
 class ResumeRefusedError(PublicationError):
@@ -273,7 +371,7 @@ class RollupPipeline(Pipeline):
         self.skip_upload = skip_upload
         self.resume = resume
         self.require_resume_candidate = require_resume_candidate
-        self.source_evidence = None
+        self.source_evidence: CaptureEvidence | None = None
         #: A failure ``build`` met and built around (one source refused, the rest was read): ``run`` publishes the
         #: generation and then raises it, so the run still fails.
         self.deferred_failure: BaseException | None = None
@@ -311,19 +409,13 @@ class RollupPipeline(Pipeline):
         if resume_requested and self._try_resume_generation(output_dir, require_candidate=require_candidate):
             return
 
-        from spicy_regs.source_evidence import CaptureEvidence
-
         if self.retain_source_evidence:
-            self.source_evidence = CaptureEvidence(output_dir, self.publication_family or self.name)
+            self.source_evidence = _RollupEvidence(output_dir, self.publication_family or self.name)
         self._resume_checked = True
         try:
             self._run_tables(output_dir)
             if self.deferred_failure is not None:
                 raise self.deferred_failure
-        except Unchanged as unchanged:
-            if self.source_evidence:
-                self.source_evidence.finish()
-            logger.info("Rollup {}: {}; nothing built or published", self.name, unchanged)
         except BaseException as error:
             if self.source_evidence:
                 self.source_evidence.finish(error)
@@ -435,6 +527,7 @@ class RollupPipeline(Pipeline):
         partitioned: Mapping[str, tuple[str, ...]],
         soft_inputs: Mapping[str, dict | None],
         remote_inputs: Mapping[str, dict],
+        invocation_scope: Mapping,
     ) -> Path:
         """Persist non-hidden, non-authoritative build-scope binding before upload starts."""
         from rulespec_artifacts import canonical_json_bytes
@@ -467,7 +560,7 @@ class RollupPipeline(Pipeline):
             "partitioned": {key: list(cols) for key, cols in sorted(partitioned.items())},
             "retain_source_evidence": bool(self.retain_source_evidence),
             "validation_identity": validation_identity(),
-            "invocation_scope": self.invocation_scope(),
+            "invocation_scope": dict(invocation_scope),
             "soft_inputs": dict(soft_inputs),
             "remote_inputs": dict(remote_inputs),
             "deferred_failure": deferred,
@@ -788,11 +881,106 @@ class RollupPipeline(Pipeline):
         logger.info("Done!")
         return True
 
+    def _selection_digest(self, invocation_scope: Mapping, soft_inputs: Mapping, remote_inputs: Mapping) -> str:
+        from rulespec_artifacts import canonical_json_bytes
+
+        scope = {
+            "pipeline": self._pipeline_class_name(),
+            "scope": invocation_scope,
+            "softInputs": soft_inputs,
+            "remoteInputs": remote_inputs,
+        }
+        return "sha256:" + hashlib.sha256(canonical_json_bytes(scope)).hexdigest()
+
+    def _compare_evidence(self, selection: str, *, early: bool) -> bool:
+        """Compare the current journal to the pinned prior, never to a mutable local cache."""
+        evidence = self.source_evidence
+        if (
+            not isinstance(evidence, _RollupEvidence)
+            or self.deferred_failure is not None
+            or (early and evidence._used_input_scope is not None)
+        ):
+            return False
+        current = _evidence_records(_journal_events((evidence.artifact_dir / JOURNAL).read_bytes()))
+        prior = evidence.prior_events()
+        if not any(
+            event["event"] == _SELECTION_EVENT and event.get("version") == 1 and event.get("sha256") == selection
+            for event in prior
+        ):
+            return False
+        previous = _evidence_records(prior)
+        # An early-return builder did not replay the whole previous build. Its
+        # observations are additions to inherited coverage, not a replacement.
+        if not early:
+            return current == previous
+        # In particular, do not hide a refusal that stopped recurring.
+        if [record for refused, record in current if refused] != [record for refused, record in previous if refused]:
+            return False
+        previous_iter = iter(previous)
+        return all(record in previous_iter for record in current)
+
+    def _report_unchanged(self, prior_index: dict, family: str, parents: Mapping, started: float) -> None:
+        from spicy_regs.sources import publication
+
+        if not self.skip_upload:
+            r2.require_credentials("Generation unchanged verification")
+            live_index, _ = publication._stored_index(r2.get_r2_client(), getenv("R2_BUCKET_NAME", "spicy-regs"))
+            publication._assert_family_unchanged(live_index, prior_index, family, exact=True)
+            publication._assert_parents_current(live_index, parents)
+            if self._observe_soft_inputs(live_index) != self._observe_soft_inputs(prior_index):
+                raise publication.PublicationError("Soft inputs moved while checking for unchanged outputs")
+        prior = prior_index["families"][family]
+        logger.info(
+            "Rollup {}: zero delta; skipped generation publish ({} table bytes not staged, {:.3f}s)",
+            self.name, sum(table["byteSize"] for table in prior["tables"].values()), monotonic() - started,
+        )
+
+    def _carry_unchanged(
+        self, signal: Unchanged, build_dir: Path, expected_keys: tuple[str, ...], *,
+        prior_index: dict, family: str, parents: Mapping, selection: str, public_url: str | None, started: float,
+    ) -> tuple[Path, ...] | None:
+        """Keep the pinned tables when an early-return builder has new evidence to publish."""
+        from spicy_regs.generations import implementation_id
+        from spicy_regs.sources import publication
+
+        evidence = self.source_evidence
+        if not isinstance(evidence, _RollupEvidence) or (self.skip_upload and evidence.prior_root is None):
+            # Read-only/ETL delegation, or an offline probe: the builder
+            # supplied no candidate and there is no pinned source baseline.
+            logger.info("Rollup {}: {}; no candidate built", self.name, signal)
+            return None
+        prior = prior_index["families"].get(family)
+        if (
+            prior is None or public_url is None or prior.get("etlReceipts")
+            or self.receipt_policies or set(expected_keys) != set(prior["tables"])
+        ):
+            raise publication.PublicationError("Unchanged hint cannot carry a different table or receipt family")
+        if evidence.prior_root is None:
+            raise publication.PublicationError("Unchanged hint has no verified prior root")
+        if (
+            evidence.prior_root["producer"]["implementationId"] == implementation_id()
+            and evidence.prior_root["spec"].get("parents", {}) == parents
+            and self._compare_evidence(selection, early=True)
+        ):
+            evidence.seal(outcome="build-complete")
+            self._report_unchanged(prior_index, family, parents, started)
+            return None
+        pin = evidence.checkpoint_pin()
+        if pin is not None:
+            evidence.event(_CARRIED_EVIDENCE_EVENT, pin=pin)
+        directory = build_dir / ".unchanged-tables"
+        directory.mkdir()
+        for key in expected_keys:
+            r2.download_members(key, directory)
+        return tuple(directory / (key.removesuffix(".parquet") if key in self.partitioned else key)
+                     for key in expected_keys)
+
     def _run_tables(self, output_dir: Path) -> None:
-        from rulespec_artifacts import publish_directory_no_replace
+        from rulespec_artifacts import LocalMemberSource, iter_member_descriptors, publish_directory_no_replace
         from spicy_regs.generations import build_generation, output_keys, verify_generation
         from spicy_regs.sources import publication
 
+        started = monotonic()
         read_operation = getattr(self, "_conversion_read_operation", None)
 
         output_dir = self.output_dir or (Path.cwd() / "output")
@@ -814,6 +1002,7 @@ class RollupPipeline(Pipeline):
                 ],
             )
             soft_inputs = self._observe_soft_inputs(prior_index)
+            invocation_scope = self.invocation_scope()
             if self.source_evidence:
                 self.source_evidence.inherit(prior_index, public_url=public_url)
             # Bespoke ingest builders also cache priors. An isolated build
@@ -827,25 +1016,47 @@ class RollupPipeline(Pipeline):
                 remote = self._observe_remote_inputs(build_dir, public_url)
                 logger.info("Building rollup {}...", self.output)
                 self._defer_native_selection = True
+                unchanged = None
                 try:
                     built = self.build(build_dir)
+                except Unchanged as signal:
+                    unchanged = signal
+                    built = ()
                 finally:
                     self._defer_native_selection = False
             if self._observe_remote_inputs(build_dir, public_url) != remote:
                 raise publication.PublicationError("A remote input changed while the rollup built; rebuild")
+            if self.invocation_scope() != invocation_scope:
+                raise publication.PublicationError("Invocation scope changed while the rollup built; rebuild")
             # Every other family's table the build fetched is a parent, read soft or undeclared included.
             parents |= remote | {key: read for key, read in reads.items()
                                  if key not in parents and not self._own(key, read.get("family"))}
+            family = self.publication_family or self.name
+            prior = prior_index["families"].get(family)
+            selection = self._selection_digest(invocation_scope, soft_inputs, remote)
+            if self.source_evidence is not None:
+                self.source_evidence.event(_SELECTION_EVENT, version=1, sha256=selection)
+                if self.deferred_failure is not None:
+                    self.source_evidence.refusal(self.deferred_failure, stage="rollup-deferred-failure")
             out_paths = built if isinstance(built, tuple) else (built,)
-            family = self.name
             expected_keys = tuple(
                 key for key in (self.outputs or (self.output,)) if key not in self.receipt_only_tables
             )
+            if unchanged is not None:
+                carried_paths = self._carry_unchanged(
+                    unchanged, build_dir, expected_keys, prior_index=prior_index, family=family, parents=parents,
+                    selection=selection, public_url=public_url, started=started,
+                )
+                if carried_paths is None:
+                    return
+                out_paths = carried_paths
             if len(out_paths) != len(expected_keys) or set(output_keys(out_paths, self.partitioned)) != set(
                 expected_keys
             ):
                 raise publication.PublicationError("Build outputs differ from its declared complete set")
-            carried_forward = {}
+            carried_forward = {
+                key: prior["artifactDigest"] for key in expected_keys if key not in self.partitioned
+            } if unchanged is not None and prior is not None else {}
             partitioned = dict(self.partitioned)
             publication_status = "complete-family"
             if self.publication_family:
@@ -857,6 +1068,7 @@ class RollupPipeline(Pipeline):
                         )
                     logger.warning("Retaining a local partial candidate; no complete publication family exists")
                     publication_status = "local-partial"
+                    family = self.name
                 else:
                     family = self.publication_family
                     expected_keys = tuple(prior["tables"])
@@ -909,6 +1121,26 @@ class RollupPipeline(Pipeline):
                 ),
             )
             destination = generations / artifact.pin.artifact_digest.removeprefix("sha256:")
+            evidence = self.source_evidence
+            prior_root = evidence.prior_root if isinstance(evidence, _RollupEvidence) else None
+            # An owned conversion needs its retained candidate even when public tables happen to match.
+            if (
+                unchanged is None and prior is not None and prior_root is not None and read_operation is None
+                and not invocation_scope.get("administration_policy", {}).get("force_publish")
+            ):
+                source = LocalMemberSource(directory)
+                candidate = publication.generation_entry(artifact, iter_member_descriptors(artifact, source))
+                if (
+                    candidate["tables"] == prior["tables"]
+                    and candidate.get("etlReceipts") == prior.get("etlReceipts")
+                    and prior_root["producer"] == artifact.root["producer"]
+                    and prior_root["spec"]["packages"] == artifact.root["spec"]["packages"]
+                    and prior_root["spec"].get("etlReceipts") == artifact.root["spec"].get("etlReceipts")
+                    and prior_root["spec"].get("parents", {}) == parents
+                    and self._compare_evidence(selection, early=False)
+                ):
+                    self._report_unchanged(prior_index, family, parents, started)
+                    return
             if destination.exists():
                 if read_operation is None:
                     verify_generation(destination, expected_pin=artifact.pin)
@@ -916,7 +1148,6 @@ class RollupPipeline(Pipeline):
                     read_operation.admit_generation(destination, expected_pin=artifact.pin)
             else:
                 publish_directory_no_replace(directory, destination)
-        from rulespec_artifacts import LocalMemberSource
         from spicy_regs.source_catalog.input_proof import save_input_proof
         from spicy_regs.source_evidence import EvidenceMemberSource
 
@@ -935,6 +1166,7 @@ class RollupPipeline(Pipeline):
             partitioned=partitioned,
             soft_inputs=soft_inputs,
             remote_inputs=remote,
+            invocation_scope=invocation_scope,
         )
         if self.skip_upload:
             logger.info("Verified local generation {}; upload skipped", destination)
