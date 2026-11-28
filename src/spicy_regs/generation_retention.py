@@ -15,6 +15,9 @@ generation something cites and the last ``KEEP_LAST`` per family. Kept:
   ``pins/spicy-generations.json``;
 * every generation holding a table the current rulemaking snapshot states as
   an input, by the table's sha256, so the snapshot's inputs stay readable;
+* every generation referenced by the live DDK catalog bridge pointer
+  (``ddk-catalogs/spicy-regs/current.json`` -> ``release.manifest.json``) or
+  by any configured ``ddk-release-lock-pins`` v1 consumer lock document;
 * the managed parents a kept generation records, transitively, so its inputs
   stay readable;
 * a generation that stopped being current less than ``GRACE`` ago, when its
@@ -39,6 +42,7 @@ execution leaves its record under ``RECORDS``.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -67,6 +71,11 @@ DOCSPEC_PINS = "https://raw.githubusercontent.com/mikewolfd/DocSpec/main/docs/pi
 ARCHIVE_PINS = "https://congressional-data.spicygov.ai/viewer-publications/pins/spicy-generations.json"
 ARCHIVE_S3_PINS = "s3://congressional-tech-raw/viewer-publications/pins/spicy-generations.json"
 DOCSPEC_PINS_FORMAT = "docspec-fork-generation-pins"
+DDK_BRIDGE_POINTER = "ddk-catalogs/spicy-regs/current.json"
+DDK_BRIDGE_RELEASES_PREFIX = "ddk-catalogs/spicy-regs/releases"
+DDK_BRIDGE_CATALOG_ID = "urn:spicy-regs:catalog:public"
+DDK_LOCK_PINS_FORMAT = "ddk-release-lock-pins"
+_HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 _KEY = re.compile(r"generations/([a-z][a-z0-9_-]*)/([0-9a-f]{64})/")
 _NAME = re.compile(r"[a-z][a-z0-9_-]*\Z")
 _HEX = re.compile(r"(?<![0-9a-f])[0-9a-f]{8,64}(?![0-9a-f])")
@@ -255,12 +264,224 @@ def _snapshot_inputs(client, bucket: str) -> tuple[str, dict[str, str], dict[str
     return head["snapshot_id"], {key: f"sha256:{value['sha256']}" for key, value in sources.items()}, native
 
 
+def _extract_ddk_manifest_generations(manifest_doc: Mapping, *, release_id: str, reason: str) -> dict[str, str]:
+    """Extract every ``generations/<family>/<sha256>/`` digest referenced by a DDK release manifest."""
+    if not isinstance(manifest_doc, Mapping) or manifest_doc.get("release_id") != release_id:
+        raise publication.PublicationError(
+            f"DDK release manifest release_id disagrees with expected {release_id[:12]}"
+        )
+    logical_tables = manifest_doc.get("logical_tables")
+    if not isinstance(logical_tables, Sequence) or isinstance(logical_tables, (str, bytes)):
+        raise publication.PublicationError(
+            f"DDK release manifest {release_id[:12]} is missing valid logical_tables"
+        )
+    kept: dict[str, str] = {}
+    for table in logical_tables:
+        if not isinstance(table, Mapping):
+            continue
+        members = table.get("members") or ()
+        if not isinstance(members, Sequence) or isinstance(members, (str, bytes)):
+            continue
+        for member in members:
+            if not isinstance(member, Mapping):
+                continue
+            for field_name in ("remote_key", "url", "external_url"):
+                value = member.get(field_name)
+                if not isinstance(value, str):
+                    continue
+                match = _KEY.search(value)
+                if match is not None:
+                    kept[match[2]] = reason
+                    break
+    return kept
+
+
+def _read_ddk_release_manifest_pins(
+    client,
+    bucket: str,
+    *,
+    manifest_key: str,
+    release_id: str,
+    reason: str,
+    expected_manifest_sha256: str | None = None,
+    expected_lock_sha256: str | None = None,
+) -> dict[str, str]:
+    """Read, verify, and extract kept generation digests from one DDK ``release.manifest.json`` (fail closed)."""
+    stored = publication._get_bounded(client, bucket, manifest_key)
+    if stored is None:
+        raise publication.PublicationError(
+            f"DDK catalog release {release_id[:12]} names a missing manifest: {manifest_key}"
+        )
+    raw_manifest = stored[0]
+    if expected_manifest_sha256 is not None:
+        actual_sha = hashlib.sha256(raw_manifest).hexdigest()
+        if actual_sha != expected_manifest_sha256:
+            raise publication.PublicationError(
+                f"DDK release manifest {manifest_key} sha256 {actual_sha[:12]} "
+                f"differs from expected {expected_manifest_sha256[:12]}"
+            )
+    try:
+        manifest_doc = json.loads(raw_manifest)
+    except (ValueError, TypeError) as exc:
+        raise publication.PublicationError(f"DDK release manifest {manifest_key} is not valid JSON") from exc
+
+    if expected_lock_sha256 is not None:
+        artifacts = manifest_doc.get("catalog_artifacts") if isinstance(manifest_doc, Mapping) else None
+        lock_entry = None
+        if isinstance(artifacts, Sequence) and not isinstance(artifacts, (str, bytes)):
+            for item in artifacts:
+                if isinstance(item, Mapping) and (
+                    item.get("name") == "catalog.lock.json"
+                    or str(item.get("remote_key", "")).endswith("/catalog.lock.json")
+                ):
+                    lock_entry = item
+                    break
+        if lock_entry is None or lock_entry.get("sha256") != expected_lock_sha256:
+            raise publication.PublicationError(
+                f"DDK release manifest {manifest_key} does not match expected lock_sha256 {expected_lock_sha256[:12]}"
+            )
+        lock_key = lock_entry.get("remote_key")
+        if not isinstance(lock_key, str) or not lock_key:
+            raise publication.PublicationError(f"DDK release manifest {manifest_key} lock entry lacks remote_key")
+        stored_lock = publication._get_bounded(client, bucket, lock_key)
+        if stored_lock is None:
+            raise publication.PublicationError(f"DDK release lock object is missing: {lock_key}")
+        actual_lock_sha = hashlib.sha256(stored_lock[0]).hexdigest()
+        if actual_lock_sha != expected_lock_sha256:
+            raise publication.PublicationError(
+                f"DDK release lock {lock_key} sha256 {actual_lock_sha[:12]} "
+                f"differs from expected {expected_lock_sha256[:12]}"
+            )
+
+    return _extract_ddk_manifest_generations(manifest_doc, release_id=release_id, reason=reason)
+
+
+def _ddk_bridge_pins(
+    client,
+    bucket: str,
+    *,
+    pointer_key: str = DDK_BRIDGE_POINTER,
+) -> dict[str, str]:
+    """Generations referenced by live ``ddk-catalogs/spicy-regs/current.json``; empty if absent, fail closed if corrupt."""
+    pointer = publication._get_bounded(client, bucket, pointer_key)
+    if pointer is None:
+        return {}
+    try:
+        head = json.loads(pointer[0])
+    except (ValueError, TypeError) as exc:
+        raise publication.PublicationError(f"DDK catalog pointer {pointer_key} is not valid JSON") from exc
+    if not isinstance(head, Mapping):
+        raise publication.PublicationError(f"DDK catalog pointer {pointer_key} must be a JSON object")
+    release_id = head.get("release_id")
+    if not isinstance(release_id, str) or not _HEX64.fullmatch(release_id):
+        raise publication.PublicationError(f"DDK catalog pointer {pointer_key} has invalid release_id: {release_id!r}")
+    reason = f"referenced by DDK catalog release {release_id[:12]}"
+    if "release_manifest" in head:
+        rm = head["release_manifest"]
+        if not isinstance(rm, Mapping) or not isinstance(rm.get("remote_key"), str) or not rm["remote_key"]:
+            raise publication.PublicationError(f"DDK catalog pointer {pointer_key} has invalid release_manifest")
+        expected_sha = rm.get("sha256")
+        if not isinstance(expected_sha, str) or not _HEX64.fullmatch(expected_sha):
+            raise publication.PublicationError(f"DDK catalog pointer {pointer_key} has invalid or missing manifest sha256")
+        return _read_ddk_release_manifest_pins(
+            client,
+            bucket,
+            manifest_key=rm["remote_key"],
+            release_id=release_id,
+            reason=reason,
+            expected_manifest_sha256=expected_sha,
+        )
+    return _extract_ddk_manifest_generations(head, release_id=release_id, reason=reason)
+
+
+def ddk_release_lock_pins(
+    raw: bytes,
+    *,
+    client,
+    bucket: str,
+    catalog_id: str = DDK_BRIDGE_CATALOG_ID,
+    release_prefix: str = DDK_BRIDGE_RELEASES_PREFIX,
+) -> dict[str, str]:
+    """Resolve ``ddk-release-lock-pins`` v1 bindings (``bound`` + ``retained``) into kept generation digests."""
+    try:
+        document = json.loads(raw)
+        if (
+            not isinstance(document, Mapping)
+            or document.get("format") != DDK_LOCK_PINS_FORMAT
+            or document.get("version") != 1
+            or not isinstance(document.get("catalogs"), Mapping)
+        ):
+            raise ValueError("not a ddk-release-lock-pins v1 document")
+    except (ValueError, TypeError) as exc:
+        raise publication.PublicationError("DDK lock pins are not a ddk-release-lock-pins v1 document") from exc
+
+    kept: dict[str, str] = {}
+    for name, entry in document["catalogs"].items():
+        if not isinstance(entry, Mapping):
+            raise publication.PublicationError(f"Invalid DDK lock pin catalog entry: {name!r}")
+        if entry.get("catalog_id") != catalog_id:
+            continue
+        bindings: list[tuple[str, Mapping]] = []
+        bound = entry.get("bound")
+        if not isinstance(bound, Mapping):
+            raise publication.PublicationError(f"DDK lock pin catalog {name!r} is missing valid 'bound' entry")
+        bindings.append(("bound", bound))
+        retained = entry.get("retained", ())
+        if isinstance(retained, (str, bytes)) or not isinstance(retained, Sequence):
+            raise publication.PublicationError(f"DDK lock pin catalog {name!r} has invalid 'retained' list")
+        for item in retained:
+            if not isinstance(item, Mapping):
+                raise publication.PublicationError(f"DDK lock pin catalog {name!r} has malformed retained entry")
+            bindings.append(("retained", item))
+
+        seen_releases: dict[str, tuple[str, str]] = {}
+        for role, binding in bindings:
+            rel_id = binding.get("release_id")
+            man_sha = binding.get("release_manifest_sha256")
+            lock_sha = binding.get("lock_sha256")
+            if (
+                not isinstance(rel_id, str)
+                or not _HEX64.fullmatch(rel_id)
+                or not isinstance(man_sha, str)
+                or not _HEX64.fullmatch(man_sha)
+                or not isinstance(lock_sha, str)
+                or not _HEX64.fullmatch(lock_sha)
+            ):
+                raise publication.PublicationError(
+                    f"DDK lock pin catalog {name!r} ({role}) requires 64-hex release_id, release_manifest_sha256, lock_sha256"
+                )
+            prior_digests = seen_releases.get(rel_id)
+            if prior_digests is not None:
+                if prior_digests != (man_sha, lock_sha):
+                    raise publication.PublicationError(
+                        f"DDK lock pin catalog {name!r} ({role}) repeats release {rel_id[:12]} "
+                        "with conflicting release_manifest_sha256 or lock_sha256"
+                    )
+                continue
+            seen_releases[rel_id] = (man_sha, lock_sha)
+            manifest_key = f"{release_prefix.rstrip('/')}/{rel_id}/catalog/release.manifest.json"
+            reason = f"DDK release-lock pin ({name} {rel_id[:12]})"
+            for digest, pin_reason in _read_ddk_release_manifest_pins(
+                client,
+                bucket,
+                manifest_key=manifest_key,
+                release_id=rel_id,
+                reason=reason,
+                expected_manifest_sha256=man_sha,
+                expected_lock_sha256=lock_sha,
+            ).items():
+                kept.setdefault(digest, pin_reason)
+    return kept
+
+
 def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapping[str, str],
-         archive: Mapping[str, str] | None = None, now: datetime) -> dict:
+         archive: Mapping[str, str] | None = None, ddk_locks: Mapping[str, str] | None = None,
+         now: datetime) -> dict:
     """Mark every generation kept or deletable under decision 36 and return the plan as a JSON-able record."""
     from rulespec_artifacts import expected_artifact_digest, parse_canonical_json
 
     archive_map = dict(archive or {})
+    ddk_lock_map = dict(ddk_locks or {})
     index, etag = publication._stored_index(client, bucket)
     generations, stray = inventory(client, bucket)
     roots: dict[str, dict | None] = {}
@@ -322,6 +543,11 @@ def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapp
         keep(digest, reason)
     for digest, reason in archive_map.items():
         keep(digest, reason)
+    ddk_bridge_map = _ddk_bridge_pins(client, bucket)
+    for digest, reason in ddk_bridge_map.items():
+        keep(digest, reason)
+    for digest, reason in ddk_lock_map.items():
+        keep(digest, reason)
     snapshot_id, inputs, native_inputs = _snapshot_inputs(client, bucket)
     for name, digest in native_inputs.items():
         if digest not in generations or not generations[digest].has_members:
@@ -364,6 +590,7 @@ def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapp
         },
         "unlisted_docspec_pins": sorted(set(docspec) - set(generations)),
         "unlisted_archive_pins": sorted(set(archive_map) - set(generations)),
+        "unlisted_ddk_pins": sorted((set(ddk_bridge_map) | set(ddk_lock_map)) - set(generations)),
         "stray_keys": stray,
         "delete": [g.prefix for g in deleted],
         "families": dict(sorted(families.items())),
@@ -417,6 +644,8 @@ def summary(record: Mapping) -> list[str]:
         lines.append(f"\nDocSpec pins no longer stored: {', '.join(d[:8] for d in record['unlisted_docspec_pins'])}")
     if record.get("unlisted_archive_pins"):
         lines.append(f"\nArchive pins no longer stored: {', '.join(d[:8] for d in record['unlisted_archive_pins'])}")
+    if record.get("unlisted_ddk_pins"):
+        lines.append(f"\nDDK pins no longer stored: {', '.join(d[:8] for d in record['unlisted_ddk_pins'])}")
     if record["stray_keys"]:
         lines.append(f"\nKeys under {PREFIX} outside the generation layout, left alone: {len(record['stray_keys'])}")
     return lines
@@ -434,6 +663,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True, help="Write the JSON plan here")
     parser.add_argument("--docspec-pins", default=DOCSPEC_PINS, help="DocSpec's pin document, an s3:// URI, a URL, or a path")
     parser.add_argument("--archive-pins", default=ARCHIVE_PINS, help="Archive's pin document, an s3:// URI, a URL, or a path")
+    parser.add_argument(
+        "--ddk-lock-pins",
+        action="append",
+        default=[],
+        help="Optional ddk-release-lock-pins v1 document (s3:// URI, https:// URL, or local path; repeatable)",
+    )
     parser.add_argument("--execute", type=Path, help="A reviewed plan: delete what it and this fresh plan both mark")
     args = parser.parse_args(argv)
     bucket = getenv("R2_BUCKET_NAME")
@@ -442,12 +677,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     client = r2.get_r2_client()
     raw = _read_pin_source(args.docspec_pins, client=client)
     archive_raw = _read_pin_source(args.archive_pins, client=client)
+    ddk_locks: dict[str, str] = {}
+    for source in args.ddk_lock_pins:
+        lock_raw = _read_pin_source(source, client=client)
+        for digest, reason in ddk_release_lock_pins(lock_raw, client=client, bucket=bucket).items():
+            ddk_locks.setdefault(digest, reason)
     record = plan(
         client,
         bucket,
         notes=_notes(),
         docspec=docspec_pins(raw),
         archive=archive_pins(archive_raw),
+        ddk_locks=ddk_locks,
         now=datetime.now(timezone.utc),
     )
     args.output.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")

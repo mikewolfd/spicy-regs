@@ -49,8 +49,16 @@ def _publish(pipeline: type[RollupPipeline], tmp_path: Path, store, runs: int) -
     return digests
 
 
-def _plan(store, *, notes=(), docspec=None, archive=None, now=LATER) -> dict:
-    return retention.plan(store, "spicy-regs", notes=notes, docspec=docspec or {}, archive=archive or {}, now=now)
+def _plan(store, *, notes=(), docspec=None, archive=None, ddk_locks=None, now=LATER) -> dict:
+    return retention.plan(
+        store,
+        "spicy-regs",
+        notes=notes,
+        docspec=docspec or {},
+        archive=archive or {},
+        ddk_locks=ddk_locks or {},
+        now=now,
+    )
 
 
 def _kept(record: dict, family: str) -> dict[str, list[str]]:
@@ -338,3 +346,145 @@ def test_every_generation_code_names_is_pinned_under_docs():
         assert (pin["storedBytes"] is None) == (pin["storedAtListing"] != "members"), pin
     stored = {digest: retention.Generation(family, digest) for digest, family in named.items()}
     assert set(retention.note_pins(retention._notes(), stored)) == set(named)
+
+
+def _seed_ddk_release(remote, *, release_id: str, family: str, digest: str, write_pointer: bool = True) -> dict[str, str]:
+    lock_bytes = json.dumps({"release_id": release_id, "family": family}).encode()
+    lock_sha = hashlib.sha256(lock_bytes).hexdigest()
+    lock_key = f"ddk-catalogs/spicy-regs/releases/{release_id}/catalog/catalog.lock.json"
+    remote.objects[lock_key] = lock_bytes
+
+    manifest = {
+        "release_id": release_id,
+        "catalog_artifacts": [
+            {"name": "catalog.lock.json", "remote_key": lock_key, "sha256": lock_sha, "size": len(lock_bytes)}
+        ],
+        "logical_tables": [
+            {
+                "table_name": family,
+                "members": [
+                    {
+                        "remote_key": f"generations/{family}/{digest}/{family}.parquet",
+                        "url": f"https://data.spicygov.ai/generations/{family}/{digest}/{family}.parquet",
+                    }
+                ],
+            }
+        ],
+    }
+    manifest_bytes = json.dumps(manifest).encode()
+    manifest_sha = hashlib.sha256(manifest_bytes).hexdigest()
+    manifest_key = f"ddk-catalogs/spicy-regs/releases/{release_id}/catalog/release.manifest.json"
+    remote.objects[manifest_key] = manifest_bytes
+
+    if write_pointer:
+        pointer = {
+            "release_id": release_id,
+            "release_manifest": {
+                "remote_key": manifest_key,
+                "sha256": manifest_sha,
+                "size": len(manifest_bytes),
+            },
+        }
+        remote.objects[retention.DDK_BRIDGE_POINTER] = json.dumps(pointer).encode()
+    return {
+        "release_id": release_id,
+        "manifest_key": manifest_key,
+        "manifest_sha256": manifest_sha,
+        "lock_key": lock_key,
+        "lock_sha256": lock_sha,
+    }
+
+
+def test_ddk_bridge_current_pointer_keeps_referenced_generation_past_keep_last(tmp_path, remote):
+    digests = _publish(_Base, tmp_path, remote, 5)
+    release_id = "1" * 64
+    _seed_ddk_release(remote, release_id=release_id, family="base", digest=digests[0], write_pointer=True)
+
+    record = _plan(remote)
+    assert _kept(record, "base")[digests[0]] == [f"referenced by DDK catalog release {release_id[:12]}"]
+    assert record["delete"] == [f"generations/base/{digests[1]}"]
+    assert record["stray_keys"] == []
+    assert record["unlisted_ddk_pins"] == []
+    assert not any(key.startswith("ddk-catalogs/") for key in record["delete"])
+
+
+def test_ddk_bridge_missing_or_tampered_manifest_fails_closed(tmp_path, remote):
+    digests = _publish(_Base, tmp_path, remote, 5)
+    release_id = "2" * 64
+    seeded = _seed_ddk_release(remote, release_id=release_id, family="base", digest=digests[0], write_pointer=True)
+
+    # Missing release.manifest.json aborts prune planning.
+    del remote.objects[seeded["manifest_key"]]
+    with pytest.raises(pub.PublicationError, match="missing manifest"):
+        _plan(remote)
+
+    # Digest mismatch on release.manifest.json aborts prune planning.
+    remote.objects[seeded["manifest_key"]] = b'{"release_id": "tampered"}'
+    with pytest.raises(pub.PublicationError, match="sha256"):
+        _plan(remote)
+
+    # Compact pointer omitting release_manifest.sha256 fails closed.
+    remote.objects[retention.DDK_BRIDGE_POINTER] = json.dumps(
+        {"release_id": release_id, "release_manifest": {"remote_key": seeded["manifest_key"]}}
+    ).encode()
+    with pytest.raises(pub.PublicationError, match="missing manifest sha256"):
+        _plan(remote)
+
+
+def test_ddk_release_lock_pins_keep_bound_and_retained_generations_and_fail_closed(tmp_path, remote):
+    digests = _publish(_Base, tmp_path, remote, 5)
+    rel_bound = _seed_ddk_release(remote, release_id="3" * 64, family="base", digest=digests[0], write_pointer=False)
+    rel_retained = _seed_ddk_release(remote, release_id="4" * 64, family="base", digest=digests[1], write_pointer=False)
+
+    pin_doc = {
+        "format": retention.DDK_LOCK_PINS_FORMAT,
+        "version": 1,
+        "updated_at": "2026-11-28T06:00:00Z",
+        "catalogs": {
+            "spicy-regs": {
+                "catalog_id": retention.DDK_BRIDGE_CATALOG_ID,
+                "audience": "public",
+                "catalog_base_url": "https://data.spicygov.ai/ddk-catalogs/spicy-regs",
+                "bound": {
+                    "release_id": rel_bound["release_id"],
+                    "release_manifest_sha256": rel_bound["manifest_sha256"],
+                    "lock_sha256": rel_bound["lock_sha256"],
+                },
+                "retained": [
+                    {
+                        "release_id": rel_bound["release_id"],
+                        "release_manifest_sha256": rel_bound["manifest_sha256"],
+                        "lock_sha256": rel_bound["lock_sha256"],
+                    },
+                    {
+                        "release_id": rel_retained["release_id"],
+                        "release_manifest_sha256": rel_retained["manifest_sha256"],
+                        "lock_sha256": rel_retained["lock_sha256"],
+                    },
+                ],
+            }
+        },
+    }
+    resolved = retention.ddk_release_lock_pins(json.dumps(pin_doc).encode(), client=remote, bucket="spicy-regs")
+    assert set(resolved) == {digests[0], digests[1]}
+    record = _plan(remote, ddk_locks=resolved)
+    assert record["delete"] == []
+    assert _kept(record, "base")[digests[0]] == [f"DDK release-lock pin (spicy-regs {rel_bound['release_id'][:12]})"]
+    assert _kept(record, "base")[digests[1]] == [f"DDK release-lock pin (spicy-regs {rel_retained['release_id'][:12]})"]
+
+    # Repeated release_id in retained[] with conflicting digests fails closed instead of silently skipping.
+    conflict_retained = json.loads(json.dumps(pin_doc))
+    conflict_retained["catalogs"]["spicy-regs"]["retained"][0]["lock_sha256"] = "e" * 64
+    with pytest.raises(pub.PublicationError, match="conflicting"):
+        retention.ddk_release_lock_pins(json.dumps(conflict_retained).encode(), client=remote, bucket="spicy-regs")
+
+    # Tampered lock_sha256 fails closed.
+    bad_lock = json.loads(json.dumps(pin_doc))
+    bad_lock["catalogs"]["spicy-regs"]["bound"]["lock_sha256"] = "f" * 64
+    with pytest.raises(pub.PublicationError, match="lock_sha256"):
+        retention.ddk_release_lock_pins(json.dumps(bad_lock).encode(), client=remote, bucket="spicy-regs")
+
+    # Wrong format version fails closed.
+    with pytest.raises(pub.PublicationError, match="ddk-release-lock-pins v1"):
+        retention.ddk_release_lock_pins(b'{"format": "wrong", "version": 1}', client=remote, bucket="spicy-regs")
+
