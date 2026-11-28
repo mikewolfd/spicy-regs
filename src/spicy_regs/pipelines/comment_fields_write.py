@@ -1203,14 +1203,19 @@ def _verify_receipt_member(
     if not path.is_file() or path.is_symlink():
         raise RuntimeError(f"{label} is missing or invalid relative to the verified recovery receipt")
     abs_path = path.absolute()
-    if abs_path.is_relative_to(receipt_dir) and _has_symlink_under(receipt_dir, abs_path):
+    if abs_path.is_relative_to(receipt_dir):
+        matched_root = receipt_dir
+    elif abs_path.is_relative_to(receipt_root):
+        matched_root = receipt_root
+    else:
+        raise RuntimeError(f"{label} lies outside the verified recovery receipt root")
+    rel = abs_path.relative_to(matched_root)
+    if not rel.parts or ".." in rel.parts or _has_symlink_under(matched_root, abs_path):
         raise RuntimeError(f"{label} traverses a symlink inside the verified recovery receipt root")
     resolved = path.resolve(strict=True)
-    if not resolved.is_relative_to(receipt_root):
-        raise RuntimeError(f"{label} lies outside the verified recovery receipt root")
-    if _has_symlink_under(receipt_root, resolved):
-        raise RuntimeError(f"{label} traverses a symlink inside the verified recovery receipt root")
-    member_key = str(resolved.relative_to(receipt_root))
+    if not resolved.is_relative_to(receipt_root) or resolved.relative_to(receipt_root) != rel:
+        raise RuntimeError(f"{label} resolves outside or differently from the verified recovery receipt root")
+    member_key = str(rel)
     entry = pinned_files.get(member_key)
     if not isinstance(entry, dict):
         raise RuntimeError(f"{label} is absent from the verified recovery receipt")

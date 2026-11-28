@@ -1286,7 +1286,7 @@ def test_reconcile_refuses_uncommitted_pending_with_invalid_evidence(tmp_path, c
 @pytest.mark.parametrize(
     "tamper",
     ["missing_receipt_args", "missing_receipt_file", "wrong_receipt_sha", "unpinned_journal_tail",
-     "unpinned_preimage", "symlinked_preimage_parent"],
+     "unpinned_preimage", "symlinked_preimage_parent", "symlinked_internal_parent_alt_root"],
 )
 def test_reconcile_pending_requires_verified_receipt_at_writer_entrypoint(tmp_path, catalog, tamper):
     seed(catalog, [row("A")])
@@ -1300,6 +1300,14 @@ def test_reconcile_pending_requires_verified_receipt_at_writer_entrypoint(tmp_pa
         outside_preimage.write_bytes(b"retained preimage")
         linked_dir = path.parent / "linked"
         linked_dir.symlink_to(outside_dir)
+        preimage = linked_dir / "preimage.parquet"
+    elif tamper == "symlinked_internal_parent_alt_root":
+        real_dir = path.parent / "real"
+        real_dir.mkdir()
+        real_preimage = real_dir / "preimage.parquet"
+        real_preimage.write_bytes(b"retained preimage")
+        linked_dir = path.parent / "linked"
+        linked_dir.symlink_to(real_dir)
         preimage = linked_dir / "preimage.parquet"
     else:
         preimage = path.parent / "preimage.parquet"
@@ -1318,6 +1326,14 @@ def test_reconcile_pending_requires_verified_receipt_at_writer_entrypoint(tmp_pa
         receipt_path, receipt_sha = _write_reconcile_receipt(
             tmp_path, [cfw.fill_dir(tmp_path) / "prepare.json", path],
         )
+    elif tamper == "symlinked_internal_parent_alt_root":
+        cfw._append(path, pending)
+        receipt_path, receipt_sha = _write_reconcile_receipt(
+            tmp_path, [cfw.fill_dir(tmp_path) / "prepare.json", path, preimage.resolve()],
+        )
+        alt_root = tmp_path / "alt-alias"
+        alt_root.symlink_to(tmp_path)
+        receipt_path = alt_root / "recovery.json"
     else:
         cfw._append(path, pending)
         receipt_path, receipt_sha = _write_reconcile_receipt(
@@ -1338,8 +1354,8 @@ def test_reconcile_pending_requires_verified_receipt_at_writer_entrypoint(tmp_pa
     elif tamper == "unpinned_journal_tail":
         with pytest.raises(RuntimeError, match="differs from the pinned recovery receipt"):
             cfw.reconcile_pending(tmp_path, receipt_path=receipt_path, receipt_sha256=receipt_sha)
-    elif tamper == "symlinked_preimage_parent":
-        with pytest.raises(RuntimeError, match="symlink|outside"):
+    elif tamper in {"symlinked_preimage_parent", "symlinked_internal_parent_alt_root"}:
+        with pytest.raises(RuntimeError, match="symlink|outside|differently"):
             cfw.reconcile_pending(tmp_path, receipt_path=receipt_path, receipt_sha256=receipt_sha)
     else:
         with pytest.raises(RuntimeError, match="absent from the verified recovery receipt"):
