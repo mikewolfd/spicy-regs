@@ -129,8 +129,10 @@ def _digest(value: Any) -> str:
 def _cell_state(cell) -> tuple[str | None, str]:
     if cell is None:
         return None, "absent"
-    if cell.formula is not None:
+    if cell.formula is not None or cell.formula_attributes is not None:
         raise ValueError("CMS Part B supporting workbook must not contain formulas")
+    if cell.kind == "e":
+        raise ValueError("CMS Part B supporting workbook must not contain error cells")
     if cell.value is None:
         return None, "null"
     if cell.kind not in {"s", "inlineStr"} or not isinstance(cell.value, str):
@@ -150,8 +152,10 @@ def _sheet_rows(sheet, *, sheet_name: str, header_row: int, expected_headers: tu
             )
     rows: dict[int, dict[str, Any]] = {}
     for coord, cell in sheet.cells.items():
-        if cell.formula is not None:
+        if cell.formula is not None or cell.formula_attributes is not None:
             raise ValueError(f"CMS Part B sheet {sheet_name!r} contains a formula at {coord}")
+        if cell.kind == "e":
+            raise ValueError(f"CMS Part B sheet {sheet_name!r} contains an error cell at {coord}")
         match = _COORD_RE.fullmatch(coord)
         if match is None:
             raise ValueError(f"CMS Part B sheet {sheet_name!r} has invalid cell coordinate {coord!r}")

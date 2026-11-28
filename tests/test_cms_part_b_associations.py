@@ -112,7 +112,12 @@ def _xlsx_bytes(
                     if val is None:
                         cells_xml.append(f'<c r="{coord}"/>')
                     elif isinstance(val, tuple) and val[0] == "formula":
-                        cells_xml.append(f'<c r="{coord}" t="str"><f>{escape(val[1])}</f><v>{escape(val[2])}</v></c>')
+                        cells_xml.append(f'<c r="{coord}" t="str"><f>{escape(str(val[1]))}</f><v>{escape(str(val[2]))}</v></c>')
+                    elif isinstance(val, tuple) and val[0] == "shared_formula":
+                        s_idx = intern(str(val[1]))
+                        cells_xml.append(f'<c r="{coord}" t="s"><f t="shared" si="0"/><v>{s_idx}</v></c>')
+                    elif isinstance(val, tuple) and val[0] == "error":
+                        cells_xml.append(f'<c r="{coord}" t="e"><v>{escape(str(val[1]))}</v></c>')
                     elif isinstance(val, tuple) and val[0] == "num":
                         cells_xml.append(f'<c r="{coord}" t="n"><v>{escape(str(val[1]))}</v></c>')
                     else:
@@ -369,9 +374,11 @@ def test_querying_associations_leaves_part_b_spending_totals_unchanged(tmp_path,
 
     monkeypatch.setattr(mcp_server, "DATA_DIR", data_dir)
     with mcp_server._build_connection() as con:
-        baseline_total = con.execute(
+        baseline_row = con.execute(
             "SELECT SUM(total_spending_usd) FROM cms_part_b_drug_spending"
-        ).fetchone()[0]
+        ).fetchone()
+        assert baseline_row is not None
+        baseline_total = baseline_row[0]
         assert baseline_total == Decimal("10585009.060000000000")
 
         # Safe non-inflating query: aggregate manufacturer associations per (benefit_year, hcpcs_code)
@@ -403,13 +410,15 @@ def test_querying_associations_leaves_part_b_spending_totals_unchanged(tmp_path,
 
         # Explicitly demonstrate why associations live in a separate table: a naive flat join
         # would multiply 90371 by 4x and 90375 by 2x.
-        naive_inflated = con.execute(
+        naive_row = con.execute(
             """
             SELECT SUM(s.total_spending_usd)
             FROM cms_part_b_drug_spending AS s
             JOIN cms_part_b_manufacturer_associations AS m USING (benefit_year, hcpcs_code)
             """
-        ).fetchone()[0]
+        ).fetchone()
+        assert naive_row is not None
+        naive_inflated = naive_row[0]
         assert naive_inflated > baseline_total
 
 
@@ -494,3 +503,115 @@ def test_acquire_build_publish_and_dry_run_end_to_end(tmp_path, monkeypatch):
     assert receipt["etlReceipts"] is None
     assert receipt["tables"][module.MANUFACTURER_OUTPUT]["rows"] == 7
     assert receipt["tables"][module.DRUG_USE_OUTPUT]["rows"] == 3
+
+
+def test_refuses_shared_formula_follower_and_error_cell():
+    sheets_shared = _default_sheet_dicts()
+    sheets_shared[module.MANUFACTURER_SHEET][5]["E"] = ("shared_formula", "Grifols Therape")
+    with pytest.raises(ValueError, match="formula"):
+        module.parse_workbook(
+            _xlsx_bytes(sheets_shared),
+            year=2024,
+            source_workbook_url=WORKBOOK_URL,
+            source_resources_url=RESOURCES_URL,
+            source_release_logical_id=RELEASE_LOGICAL_ID,
+            source_release_digest=RELEASE_DIGEST,
+        )
+
+    sheets_err = _default_sheet_dicts()
+    sheets_err[module.MANUFACTURER_SHEET][5]["E"] = ("error", "#REF!")
+    with pytest.raises(ValueError, match="error cell"):
+        module.parse_workbook(
+            _xlsx_bytes(sheets_err),
+            year=2024,
+            source_workbook_url=WORKBOOK_URL,
+            source_resources_url=RESOURCES_URL,
+            source_release_logical_id=RELEASE_LOGICAL_ID,
+            source_release_digest=RELEASE_DIGEST,
+        )
+
+
+def test_expected_hcpcs_codes_guard():
+    wb = _xlsx_bytes(_default_sheet_dicts())
+    m_rows, d_rows = module.parse_workbook(
+        wb,
+        year=2024,
+        source_workbook_url=WORKBOOK_URL,
+        source_resources_url=RESOURCES_URL,
+        source_release_logical_id=RELEASE_LOGICAL_ID,
+        source_release_digest=RELEASE_DIGEST,
+        expected_hcpcs_codes={"90371", "90375", "Q4104"},
+    )
+    assert len(m_rows) == 7 and len(d_rows) == 3
+
+    with pytest.raises(ValueError, match="HCPCS"):
+        module.parse_workbook(
+            wb,
+            year=2024,
+            source_workbook_url=WORKBOOK_URL,
+            source_resources_url=RESOURCES_URL,
+            source_release_logical_id=RELEASE_LOGICAL_ID,
+            source_release_digest=RELEASE_DIGEST,
+            expected_hcpcs_codes={"90371", "90375"},
+        )
+
+
+def test_pipeline_archive_root_isolation_guards_and_failure_sealing(tmp_path):
+    wb = _xlsx_bytes(_default_sheet_dicts())
+    res = _resources_json(wb)
+    isolated_raw = tmp_path / "isolated-raw"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == RESOURCES_URL:
+            return httpx.Response(200, content=res, headers={"content-type": "application/json"})
+        if str(request.url) == WORKBOOK_URL:
+            return httpx.Response(
+                200,
+                content=wb,
+                headers={"content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+            )
+        return httpx.Response(404)
+
+    selection = assoc_pipeline.acquire(
+        RESOURCES_URL,
+        year=2024,
+        source_release_logical_id=RELEASE_LOGICAL_ID,
+        source_release_digest=RELEASE_DIGEST,
+        output_dir=tmp_path / "acq",
+        transport=httpx.MockTransport(handler),
+        archive_root=isolated_raw,
+    )
+    assert isolated_raw.exists()
+    build_dir = tmp_path / "candidate"
+    artifact, _ = assoc_pipeline.build(selection, build_dir, archive_root=isolated_raw)
+    assert artifact.pin.artifact_digest.startswith("sha256:")
+
+    # Existing output directory is refused.
+    with pytest.raises(ValueError, match="fresh output directory"):
+        assoc_pipeline.build(selection, build_dir, archive_root=isolated_raw)
+
+    # Mismatched workbook byte_size or URL fails closed and seals failure outcome.
+    bad_size = deepcopy(selection)
+    bad_size["workbook_capture"]["byte_size"] = len(wb) + 1
+    failed_dir = tmp_path / "failed-size"
+    with pytest.raises(ValueError, match="byte_size"):
+        assoc_pipeline.build(bad_size, failed_dir, archive_root=isolated_raw)
+    outcomes = list(failed_dir.glob("source-evidence/*/run-outcome.json"))
+    assert len(outcomes) == 1
+    assert json.loads(outcomes[0].read_text())["outcome"] != "build-complete"
+
+    bad_url = deepcopy(selection)
+    bad_url["workbook_capture"]["requested_url"] = "https://data.cms.gov/sites/default/files/other.xlsx"
+    with pytest.raises(ValueError, match="workbook URL"):
+        assoc_pipeline.build(bad_url, tmp_path / "failed-url", archive_root=isolated_raw)
+
+
+def test_select_workbook_resource_and_url_refusals():
+    with pytest.raises(ValueError, match="successful data resource list"):
+        assoc_pipeline.select_workbook_resource(b'{"meta": null, "data": []}', year=2024)
+    with pytest.raises(ValueError, match="data.cms.gov"):
+        assoc_pipeline._require_cms_url("https://data.cms.gov:443/data-api/v1/x", label="test")
+    with pytest.raises(ValueError, match="data.cms.gov"):
+        assoc_pipeline._require_cms_url("http://data.cms.gov/data-api/v1/x", label="test")
+    with pytest.raises(ValueError, match="data.cms.gov"):
+        assoc_pipeline._require_cms_url("https://evil.example/x", label="test")

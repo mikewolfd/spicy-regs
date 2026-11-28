@@ -15,7 +15,7 @@ import httpx
 from spicy_regs.contract_types import described_schema
 from spicy_regs.generations import build_generation
 from spicy_regs.pipelines.raw_releases import READ_INDEX_HELP, inherit_read_index, open_raw, raw_original
-from spicy_regs.source_evidence import CaptureEvidence, acquisition_evidence
+from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.transforms.build_cms_part_b_associations import (
     FAMILY,
     MAX_RESOURCES_BYTES,
@@ -34,7 +34,13 @@ def _require_cms_url(url: str, *, label: str) -> str:
     if not isinstance(url, str) or not url.strip():
         raise ValueError(f"CMS Part B {label} URL must be a non-empty HTTPS URL")
     parsed = urlsplit(url)
-    if parsed.scheme != "https" or parsed.hostname != _CMS_HOST or parsed.username or parsed.password:
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname != _CMS_HOST
+        or parsed.port is not None
+        or parsed.username
+        or parsed.password
+    ):
         raise ValueError(f"CMS Part B {label} URL must point directly to https://{_CMS_HOST}/")
     return url
 
@@ -47,7 +53,13 @@ def select_workbook_resource(resources_body: bytes, *, year: int) -> dict[str, A
         payload = json.loads(resources_body)
     except ValueError as exc:
         raise ValueError("CMS Part B dataset-resources payload is not valid JSON") from exc
-    if not isinstance(payload, dict) or not payload.get("meta", {}).get("success") or not isinstance(payload.get("data"), list):
+    meta = payload.get("meta") if isinstance(payload, dict) else None
+    if (
+        not isinstance(payload, dict)
+        or not isinstance(meta, dict)
+        or meta.get("success") is not True
+        or not isinstance(payload.get("data"), list)
+    ):
         raise ValueError("CMS Part B dataset-resources payload lacks a successful data resource list")
     year_token = str(year)
     matches = []
@@ -98,7 +110,8 @@ def acquire(
     headers = {"User-Agent": "spicy-regs/1.0", "Accept-Encoding": "identity"}
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    with acquisition_evidence(FAMILY, output_dir=output_dir) as evidence:
+    evidence = CaptureEvidence(output_dir, FAMILY, archive_root=archive_root)
+    try:
         def fetch(url: str, *, stage: str, max_bytes: int) -> tuple[bytes, dict[str, Any]]:
             retained = evidence.transport(transport, stage=stage, max_bytes=max_bytes)
             with httpx.Client(transport=retained, headers=headers, timeout=120.0, follow_redirects=False) as client:
@@ -125,6 +138,10 @@ def acquire(
                 f"Downloaded CMS Part B workbook size ({len(workbook_body)}) differs from "
                 f"dataset-resources fileSize ({resource['fileSize']})"
             )
+    except BaseException as error:
+        evidence.finish(error)
+        raise
+    evidence.finish()
 
     return {
         "format": FORMAT,
@@ -287,6 +304,7 @@ def main(argv: list[str] | None = None) -> None:
     acquisition.add_argument("--source-release-digest", required=True)
     acquisition.add_argument("--captures-out", required=True, type=Path)
     acquisition.add_argument("--output-dir", required=True, type=Path)
+    acquisition.add_argument("--archive-root", type=Path)
 
     candidate = commands.add_parser("build")
     candidate.add_argument("--captures", required=True, type=Path)
@@ -302,6 +320,7 @@ def main(argv: list[str] | None = None) -> None:
             source_release_logical_id=args.source_release_logical_id,
             source_release_digest=args.source_release_digest,
             output_dir=args.output_dir,
+            archive_root=args.archive_root,
         )
         args.captures_out.parent.mkdir(parents=True, exist_ok=True)
         args.captures_out.write_text(json.dumps(selection, indent=2, sort_keys=True) + "\n")
