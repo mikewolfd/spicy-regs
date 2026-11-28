@@ -6,12 +6,16 @@ import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs import cli, mcp_server
+from spicy_regs.citation_resolution import resolve_citations
 from spicy_regs.congress_receipts import write_congress_dataset
+from spicy_regs.etl_policy_registry import installed_policies
+from spicy_regs.generations import build_generation
 from spicy_regs.legislative_documents import field_registry
 from spicy_regs.legislative_rollups import LegislativeTableRollup
 from spicy_regs.local_data import local_selection
-from spicy_regs.selected_generations import SelectedDataset, SelectedInputs, remember_selection
+from spicy_regs.selected_generations import SelectedDataset, SelectedInputs, remember_generation, remember_selection
 from spicy_regs.transforms.table_merge import Partitioning, merge_partitioned_table, published_members
+from tests.test_citation_resolution import DIGESTS, occurrence
 from tests.test_congress_receipts import shaped
 from tests.test_subject_receipt_rollups import MixedRollup, mixed_builder
 
@@ -33,7 +37,7 @@ def connection(root, monkeypatch):
     return mcp_server._build_connection()
 
 
-def test_refused_candidate_and_loose_files_cannot_replace_selected_cli_rows(tmp_path, monkeypatch, capsys):
+def test_refused_candidate_and_same_name_loose_file_cannot_replace_selected_cli_rows(tmp_path, monkeypatch, capsys):
     selected = selected_family(tmp_path, monkeypatch)
     original = pq.read_table(selected.paths("members")[0]).to_pylist()
 
@@ -46,15 +50,92 @@ def test_refused_candidate_and_loose_files_cannot_replace_selected_cli_rows(tmp_
         MixedRollup(output_dir=tmp_path).build_receipts(tmp_path, bad)
     # Even a separate writer's broken convenience copy cannot redirect a consumer.
     shaped(tmp_path / "members.parquet", [{"bioguide_id": "unselected-candidate"}])
-    shaped(tmp_path / "extra.parquet", [{"value": "unselected"}])
     current = local_selection(tmp_path)
     assert pq.read_table(current.paths("members")[0]).to_pylist() == original
-    assert "extra" not in current.files
     cli.cmd_sample(Namespace(output_dir=str(tmp_path), data_type="members", agency=None, n=1))
     output = capsys.readouterr().out
     assert "native-selected" in output and "unselected-candidate" not in output
-    with pytest.raises(SystemExit):
-        cli.cmd_sample(Namespace(output_dir=str(tmp_path), data_type="extra", agency=None, n=1))
+
+
+def test_receipt_free_pin_preserves_loose_siblings_for_cli_and_mcp(tmp_path, monkeypatch, capsys):
+    generation = tmp_path / "generations" / "laws-generation"
+    generation.mkdir(parents=True)
+    pinned = shaped(generation / "laws.parquet", [{"law_id": "119-public-1"}])
+    loose = shaped(tmp_path / "members.parquet", [{"bioguide_id": "X"}])
+    partition = tmp_path / "bills" / "congress=119"
+    partition.mkdir(parents=True)
+    part = shaped(partition / "part-000000.parquet", [{"bill_id": "119-hr-1"}])
+    shaped(tmp_path / "laws.parquet", [{"law_id": "unselected"}])
+    assert local_selection(tmp_path).paths("members") == (loose,)
+
+    remember_selection(tmp_path, [SelectedDataset("laws", (pinned,), None, None)])
+
+    selection = local_selection(tmp_path)
+    assert set(selection.files) == {"laws", "members", "bills"}
+    assert selection.paths("members") == (loose,)
+    assert selection.paths("bills") == (part,)
+    assert selection.paths("laws") == (pinned,)
+    for table in ("members", "bills"):
+        cli.cmd_sample(Namespace(output_dir=str(tmp_path), data_type=table, agency=None, n=1))
+        assert f"Sample from {table} (1 total rows; local-unmanaged)" in capsys.readouterr().out
+    with connection(tmp_path, monkeypatch) as con:
+        assert con.execute("SELECT bioguide_id, bill_id, law_id FROM members, bills, laws").fetchall() == [
+            ("X", "119-hr-1", "119-public-1"),
+        ]
+        publications = mcp_server._publication_status(con)["publication"]
+        assert publications["members"] == publications["bills"] == {"status": "local_unversioned"}
+
+
+def test_local_mcp_resolves_public_law_against_receipt_free_pin(tmp_path, monkeypatch):
+    generation = tmp_path / "generations" / "law-generation"
+    generation.mkdir(parents=True)
+    law = shaped(generation / "laws.parquet", [
+        {"law_id": "114-public-254", "congress": "114", "law_type": "public", "number": "254"},
+    ])
+    remember_selection(tmp_path, [SelectedDataset("laws", (law,), None, None)])
+
+    with connection(tmp_path, monkeypatch) as con:
+        state = mcp_server._publication_status(con)
+        assert "etl_receipts" not in state["tables"]
+        result = resolve_citations(con, [occurrence()], state["publication"], source_digests=DIGESTS)
+        match, = result["occurrences"]
+        assert match["target_status"] == "found", match
+        assert match["target_snapshot"] == state["publication"]["laws"]
+        assert match["target_snapshot"]["status"] == "native_selected"
+        assert match["candidate_keys"] == [{"congress": "114", "law_type": "public", "number": "254"}]
+
+
+def test_mixed_generation_registration_updates_both_pins(tmp_path):
+    old_source = shaped(tmp_path / "old-source.parquet", [{"bioguide_id": "X"}])
+    old_member, old_receipts = write_congress_dataset(
+        old_source, tmp_path / "old", dataset="members", generation_id="old",
+    )
+    assert old_member is not None
+    old_law = shaped(tmp_path / "old" / "laws.parquet", [{"law_id": "119-public-1"}])
+    root = tmp_path / "output"
+    remember_selection(root, [
+        SelectedDataset("members", (old_member,), old_receipts, "old"),
+        SelectedDataset("laws", (old_law,), None, None),
+    ])
+    new_source = shaped(tmp_path / "new-source.parquet", [{"bioguide_id": "Y"}])
+    new_member, new_receipts = write_congress_dataset(
+        new_source, tmp_path / "new", dataset="members", generation_id="new",
+    )
+    assert new_member is not None
+    new_law = shaped(tmp_path / "new" / "laws.parquet", [{"law_id": "119-public-2"}])
+    generation = root / "generations" / "mixed"
+    artifact = build_generation(
+        generation, family="mixed", files=[new_member, new_law], expected_keys=["members.parquet", "laws.parquet"],
+        receipt_path=new_receipts, receipt_policies=[installed_policies()["members"]], receipt_generation_id="new",
+    )
+
+    remember_generation(root, generation, artifact)
+
+    selected = local_selection(root)
+    assert selected.native["members"] == SelectedDataset(
+        "members", (generation / "members.parquet",), generation / "etl_receipts.parquet", "new",
+    )
+    assert selected.native["laws"] == SelectedDataset("laws", (generation / "laws.parquet",), None, None)
 
 
 def test_mcp_captures_multiple_generations_and_scopes_shared_receipts(tmp_path, monkeypatch):
@@ -198,7 +279,6 @@ def test_earlier_gao_selection_reads_original_fields_and_refuses_unknown_or_mixe
     import duckdb
     import pyarrow as pa
     from spicy_regs.etl_receipts import ReceiptContext, receipt_policies, write_dataset
-    from spicy_regs.etl_policy_registry import installed_policies
     from spicy_regs.fec_receipt_adapter import ReceiptAdapter
 
     monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
@@ -212,7 +292,6 @@ def test_earlier_gao_selection_reads_original_fields_and_refuses_unknown_or_mixe
                                      tmp_path / "old", earlier)
     assert subject is not None
     from spicy_regs import subject_catalog
-    from spicy_regs.generations import build_generation
     # A new artifact declaring /2 must never admit the older subject shape.
     with monkeypatch.context() as unretired:
         retired = subject_catalog.retired_receipt_datasets() - {"gao_reports"}

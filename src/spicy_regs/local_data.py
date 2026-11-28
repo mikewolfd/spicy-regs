@@ -83,8 +83,8 @@ def _unique_pairs(pairs):
 def local_selection(output_dir: Path, *, admit_rows=True) -> LocalSelection:
     """Capture current once; a download batch exposes only its explicit selection.
 
-    A native build root uses its immutable saved selection. A directory without
-    a saved selection remains an explicit, unqualified local Parquet workspace.
+    In a local workspace, immutable selections take precedence for their datasets.
+    Other Parquet tables remain available as unversioned data.
     """
     root = output_dir.expanduser().absolute()
     configured = os.environ.get("SPICY_REGS_DOCSPEC_EXPORTS")
@@ -141,21 +141,38 @@ def local_selection(output_dir: Path, *, admit_rows=True) -> LocalSelection:
                 raise RuntimeError(f"Current download is missing a regular {name}.parquet")
             result[name] = (path, selection["status"])
     if not is_download:
-        for path in sorted(root.glob("*.parquet")):
-            if _NAME.fullmatch(path.stem) and path.is_file():
-                result.setdefault(path.stem, (path.resolve(), "local-unmanaged"))
+        _add_loose_tables(root, result, split)
     selection = LocalSelection(directory, result, index, is_download, split)
     for path in selection.receipts.values():
         file_signature(path)
     return selection
 
 
+def _add_loose_tables(root, files, split, *, excluded=()):
+    """Add loose single files and Hive-partitioned tables for unpinned names."""
+    for path in sorted(root.glob("*.parquet")):
+        if path.stem not in excluded and _NAME.fullmatch(path.stem) and path.is_file():
+            files.setdefault(path.stem, (path.resolve(), "local-unmanaged"))
+    for directory in sorted(root.iterdir()):
+        name = directory.name
+        if name in files or name in excluded or not _NAME.fullmatch(name) or directory.is_symlink() or not directory.is_dir():
+            continue
+        members = tuple(sorted(
+            path.resolve()
+            for partition in directory.glob("*=*")
+            if partition.is_dir() and not partition.is_symlink()
+            for path in partition.rglob("*.parquet")
+            if path.is_file() and not path.is_symlink()
+        ))
+        if members:
+            files[name] = (directory.resolve(), "local-unmanaged")
+            split[name] = members
 
 def _native_selection(root: Path, *, admit_rows=True) -> LocalSelection:
     from tempfile import TemporaryDirectory
     from spicy_regs.selected_generations import SelectedInputs
     from spicy_regs.etl_policy_registry import installed_policies
-    from spicy_regs.etl_receipts import (select_receipts, selected_subject_policy, validate_receipt_bundle,
+    from spicy_regs.etl_receipts import (RECEIPT_KEY, select_receipts, selected_subject_policy, validate_receipt_bundle,
                                          validate_publisher_generation)
 
     policies = installed_policies()
@@ -218,6 +235,7 @@ def _native_selection(root: Path, *, admit_rows=True) -> LocalSelection:
         for name in native:
             inputs.select(name, last_receipts=True)
         assert_local_members_unchanged(signatures)
+    _add_loose_tables(root, visible, parts, excluded=native.keys() | {Path(RECEIPT_KEY).stem})
     return LocalSelection(root, visible, empty_index(), False, parts, native, signatures)
 
 def _assert_exactly(directory: Path, files: tuple[Path, ...]) -> None:

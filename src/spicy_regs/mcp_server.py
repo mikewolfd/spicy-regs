@@ -1118,6 +1118,8 @@ def _build_connection_inputs(con, publication):
                         "native": {name: {"subjects": [str(p) for p in value.subjects],
                                            "receipts": str(value.receipts), "generation_id": value.generation_id}
                                    for name, value in local.native.items() if value.receipts is not None},
+                        "native_receipt_free": {name: value.generation_id for name, value in local.native.items()
+                                                if value.receipts is None},
                     }
                 )
             ],
@@ -1289,7 +1291,9 @@ def _build_connection_inputs(con, publication):
             if local is None and published is None and pinned is None and name in COMMENTS_EXPORT_TABLES:
                 exports.append(name)
         except duckdb.Error as exc:
-            required = published is not None or pinned is not None or (local is not None and (local.is_download or local.native or local.docspec))
+            required = published is not None or pinned is not None or (
+                local is not None and (local.is_download or name in local.native or local.docspec)
+            )
             # A remote legacy table is skipped only when it is absent; a throttled or failing read refuses the
             # build, so a refresh keeps the connection it would replace instead of serving one without the table.
             absent = local is not None or (isinstance(exc, duckdb.HTTPException) and exc.status_code == 404)
@@ -1600,7 +1604,9 @@ def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
                                                 if not local.get("receipt_rows_admitted", True) else
                                                 "Selected bytes and exact receipt joins verified; file changes checked around statements.")}
                         for name, value in local.get("native", {}).items()})
-    if local is not None:
+        managed.update({name: {"status": "native_selected", "generation_id": generation_id,
+                               "verification": "Selected bytes rehashed; file changes checked around statements."}
+                        for name, generation_id in local.get("native_receipt_free", {}).items()})
         managed.update(local.get("docspec", {}))
     receipt_families = _receipt_families(index, local)
     if "etl_receipts" in available and receipt_families:
