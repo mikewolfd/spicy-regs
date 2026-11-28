@@ -749,6 +749,100 @@ def test_a_hearing_read_before_the_committee_codes_column_is_read_once_more():
     assert "mods" not in RULE_VERSIONS["CRPT"]
 
 
+@pytest.mark.parametrize("bump_reader", [False, True], ids=["unrelated-wheel", "report-reader"])
+def test_crpt_checkpoint_selection_drains_only_for_a_report_reader_change(tmp_path, monkeypatch, bump_reader):
+    import httpx
+    import pyarrow as pa
+    from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer
+
+    from spicy_regs import generations
+    from spicy_regs.transforms import committee_report_reads as rules
+    from spicy_regs.transforms.table_merge import prior_scratch_path
+
+    count = 244
+    stamp = "2026-09-18T12:00:00Z"
+    packages = [f"CRPT-119hrpt{number}" for number in range(1, count + 1)]
+    legacy = ("5d310afbafcc", "ca5435a06866")
+    checkpoints = [
+        {"package_id": package_id, "last_modified": stamp, "outcome": "complete", "observed_at": OBSERVED_AT,
+         "rule_version": f"code={legacy[index % 2]};cbo=7967093c912f;sections=report-headings-003;"
+                         "parts=per-part-001;body=placeholder-pdf-002"}
+        for index, package_id in enumerate(packages)
+    ]
+    schema = pa.schema([(name, pa.string()) for name in rules.READ_COLUMNS])
+    pq.write_table(pa.Table.from_pylist(checkpoints, schema=schema), prior_scratch_path(tmp_path, rules.READS_TABLE))
+
+    class Listing(StubDiscovery):
+        def packages(self, url, *, max_pages=1):
+            yield _Page([{"packageId": pkg, "lastModified": stamp} for pkg in packages] if "/CRPT/" in url else [])
+
+    mods = (FIXTURES / f"mods-{CRPT_ID}.xml").read_bytes()
+    requests: list[str] = []
+
+    def serve(request):
+        assert request.headers["user-agent"]
+        path = request.url.path.split("/")
+        kind = path[-1]
+        requests.append(kind if kind in {"summary", "mods"} else "body")
+        if kind == "summary":
+            summary = json.dumps({"packageId": path[-2], "collectionCode": "CRPT", "lastModified": stamp}).encode()
+            return httpx.Response(200, stream=httpx.ByteStream(summary), headers={"Content-Type": "application/json"})
+        if kind == "mods":
+            return httpx.Response(200, stream=httpx.ByteStream(mods.replace(CRPT_ID.encode(), path[-2].encode())),
+                                  headers={"Content-Type": "application/xml"})
+        assert path[-2] == "html"
+        return httpx.Response(200, stream=httpx.ByteStream(REPORT_HTML), headers={"Content-Type": "text/html"})
+
+    def unrelated_change():
+        return "changed-only-spicy-docs-fec-reader"
+
+    monkeypatch.setattr(generations, "spicy_docs_code", unrelated_change)
+    monkeypatch.setattr(rules, "spicy_docs_code", unrelated_change, raising=False)
+    if bump_reader:
+        monkeypatch.setattr(rules, "REPORT_SECTION_READER_VERSION", "report-headings-test-bump")
+    monkeypatch.setitem(rules.RULE_VERSIONS, "CRPT", rules._crpt_rule_version())
+
+    coverage = {}
+    with GovInfoBodyAcquirer(budget=BUDGET, api_key="fixture-key", transport=httpx.MockTransport(serve)) as acquirer:
+        paths = build_committee_reports(tmp_path, reader=Listing(), acquirer=acquirer, hearings=StubHearings(),
+                                        download_prior=_no_prior, coverage=coverage)
+    assert coverage["listed"] == count
+    assert (coverage["pending"], coverage["deferred"], coverage["refused"], coverage["nothing_read"]) == (0, 0, 0, [])
+    reads = _tables(paths)[rules.READS_TABLE]
+    assert len(reads) == count
+    if bump_reader:
+        assert requests == ["summary", "mods", "body"] * count
+        assert {row["rule_version"] for row in reads} == {rules.RULE_VERSIONS["CRPT"]}
+        assert all(row["outcome"] == "complete" and row["last_modified"] == stamp for row in reads)
+    else:
+        assert requests == []
+        assert sorted(reads, key=lambda row: row["package_id"]) == sorted(checkpoints, key=lambda row: row["package_id"])
+
+
+@pytest.mark.parametrize("legacy_code", ["2836154256da", "5f4d981e1716"])
+def test_crpt_legacy_checkpoint_with_pre_correction_cbo_rule_remains_stale(legacy_code):
+    from spicy_regs.transforms.committee_report_reads import complete
+
+    assert not complete({"outcome": "complete", "rule_version":
+                         f"code={legacy_code};cbo=f8b3cdc069a9;sections=report-headings-003;"
+                         "parts=per-part-001;body=placeholder-pdf-002"}, "CRPT")
+
+
+def test_crpt_legacy_final_refusal_is_equivalent_only_at_its_revision_rule_and_bound(monkeypatch):
+    from spicy_regs.transforms import committee_report_reads as rules
+
+    stamp = "2026-09-18T12:00:00Z"
+    old = ("code=5d310afbafcc;cbo=7967093c912f;sections=report-headings-003;"
+           "parts=per-part-001;body=placeholder-pdf-002")
+    row = {"outcome": "refused_final", "rule_version": old + ";refused-under=size=200", "last_modified": stamp}
+    assert rules.settled(row, "CRPT", stamp, bounds="other", max_body_bytes=199)
+    assert not rules.settled(row, "CRPT", stamp, bounds="other", max_body_bytes=200)
+    assert not rules.settled(row, "CRPT", OBSERVED_AT, bounds="other", max_body_bytes=199)
+    monkeypatch.setattr(rules, "BODY_TEXT_DERIVATION_VERSION", "next")
+    monkeypatch.setitem(rules.RULE_VERSIONS, "CRPT", rules._crpt_rule_version())
+    assert not rules.settled(row, "CRPT", stamp, bounds="other", max_body_bytes=199)
+
+
 # --------------------------------------------------------------------------- #
 # hearing_bill_links.committee_system_code, keyed as committees.system_code is (round 6, L16).
 # --------------------------------------------------------------------------- #

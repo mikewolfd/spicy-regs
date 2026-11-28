@@ -1152,6 +1152,114 @@ def test_a_pdf_body_fills_the_page_columns_an_html_body_cannot(tmp_path):
     assert all(r["evidence_page"] is not None for r in _rows(citations)), "a paginated body attributes every cite"
 
 
+@pytest.mark.parametrize("custody", ["local", "legacy", "r2", "missing", "wrong-digest", "changed-summary", "r2-refused"])
+def test_processing_bump_rederives_the_verified_pdf_or_uses_the_regular_body_path(tmp_path, monkeypatch, custody):
+    import json
+    from contextlib import contextmanager
+
+    import httpx
+
+    from spicy_regs.source_evidence import CaptureEvidence, JOURNAL
+    from spicy_regs.transforms import build_print_citations as module
+
+    before_stamp = "2026-09-18T12:00:00Z"
+    title = "ACTIVITY REPORT FOR THE 119TH CONGRESS"
+    listing = _Reader({"CRPT": [_listing(CRPT_ID, title, before_stamp)]})
+    pdf = make_multiline_pdf(REPORT_PAGES)
+    stamp = before_stamp
+    govinfo_requests: list[str] = []
+
+    def serve(request):
+        assert request.headers["user-agent"]
+        path = request.url.path
+        govinfo_requests.append(path)
+        if path.endswith("/summary"):
+            summary = json.dumps({"packageId": CRPT_ID, "collectionCode": "CRPT", "lastModified": stamp,
+                                  "title": title, "dateIssued": "2026-01-05", "pages": len(REPORT_PAGES)}).encode()
+            return httpx.Response(200, headers={"content-type": "application/json"}, stream=httpx.ByteStream(summary))
+        if path.endswith("/mods"):
+            return httpx.Response(200, headers={"content-type": "application/xml"},
+                                  stream=httpx.ByteStream(_mods_bytes(CRPT_ID)))
+        assert path == f"/content/pkg/{CRPT_ID}/pdf/{CRPT_ID}.pdf"
+        return httpx.Response(200, headers={"content-type": "application/pdf"}, stream=httpx.ByteStream(pdf))
+
+    archive = tmp_path / "archive"
+    evidence = CaptureEvidence(tmp_path, "print-citations", archive_root=archive)
+    first_acquisition = evidence.transport(httpx.MockTransport(serve), stage="print-package", max_bytes=1 << 20)
+    with module._PrintBodyAcquirer(budget=BUDGET, api_key="test-key", transport=first_acquisition) as acquirer:
+        first = _build(tmp_path, listing, acquirer, evidence=evidence)
+    if custody == "legacy":
+        for path in first:
+            states = read_checkpoints(path, CHECKPOINT_NAMESPACE)
+            for state in states:
+                del state["source_url"]
+            table = pq.read_table(path)
+            pq.write_table(table.replace_schema_metadata(checkpoint_metadata(path, CHECKPOINT_NAMESPACE, states)), path)
+    before_rows = tuple(_rows(path) for path in first)
+    before_checks = tuple(read_checkpoints(path, CHECKPOINT_NAMESPACE) for path in first)
+    assert before_rows[2] and before_rows[3], "action and citation digests must actually be exercised"
+    source_sha256 = before_checks[0][0]["source_sha256"]
+    assert evidence.store.describe_blob(source_sha256)["bytes"] == len(pdf)
+    _publish_as_prior(first)
+    govinfo_requests.clear()
+
+    r2_requests: list[str] = []
+    if custody in {"r2", "wrong-digest", "r2-refused", "missing"}:
+        archive = tmp_path / "empty-archive"
+        monkeypatch.setenv("R2_PUBLIC_URL", "https://archive.example")
+    if custody == "changed-summary":
+        stamp = "2026-09-19T12:00:00Z"
+
+    @contextmanager
+    def retained_stream(method, url, *, headers, **_kwargs):
+        assert method == "GET" and headers["User-Agent"] == "spicy-regs"
+        assert url == f"https://archive.example/source-evidence/blobs/sha256/{source_sha256.removeprefix('sha256:')}"
+        r2_requests.append(url)
+        status = {"missing": 404, "r2-refused": 403}.get(custody, 200)
+        yield httpx.Response(status, request=httpx.Request(method, url), content=(
+            b"corrupt" if custody == "wrong-digest" else pdf
+        ))
+
+    monkeypatch.setattr(httpx, "stream", retained_stream)
+    monkeypatch.setattr(module, "PRINT_ACTION_RULE_SET_VERSION", "bumped-with-identical-rules")
+
+    coverage = {}
+    evidence = CaptureEvidence(tmp_path, "print-citations", archive_root=archive)
+    with module._PrintBodyAcquirer(budget=BUDGET, api_key="test-key", transport=httpx.MockTransport(serve)) as acquirer:
+        after = _build(tmp_path, listing, acquirer, evidence=evidence, coverage=coverage)
+    reuse = custody in {"local", "legacy", "r2"}
+    assert coverage["rederived"] == int(reuse)
+    assert len(govinfo_requests) == (2 if reuse or custody == "r2-refused" else 3)
+    assert sum(path.endswith(".pdf") for path in govinfo_requests) == int(not reuse and custody != "r2-refused")
+    assert len(r2_requests) == int(custody in {"r2", "missing", "wrong-digest", "r2-refused"})
+    assert coverage["refused"] == int(custody == "r2-refused")
+    assert tuple(_rows(path) for path in after[2:]) == before_rows[2:]
+    if stamp == before_stamp:
+        assert tuple(_rows(path) for path in after[:2]) == before_rows[:2]
+
+    for previous, path in zip(before_checks, after, strict=True):
+        checks = read_checkpoints(path, CHECKPOINT_NAMESPACE)
+        if not previous:
+            assert not checks
+            continue
+        [old], [new] = previous, checks
+        assert new["text_sha256"] == old["text_sha256"] and new["source_sha256"] == old["source_sha256"]
+        if custody == "r2-refused":
+            assert new == {**old, "pending_last_modified": stamp, "unread_at": new["unread_at"]}
+        else:
+            assert new["processing_version"] != old["processing_version"]
+            if custody == "legacy":
+                assert new["source_url"] == f"https://www.govinfo.gov/content/pkg/{CRPT_ID}/pdf/{CRPT_ID}.pdf"
+                del new["source_url"]
+            assert new == {**old, "last_modified": stamp, "processing_version": new["processing_version"],
+                           "read_at": new["read_at"]}
+    entries = [json.loads(line) for line in (evidence.artifact_dir / JOURNAL).read_text().splitlines()]
+    rederived = [entry for entry in entries if entry.get("stage") == "print-pdf-rederived"]
+    assert [entry["event"] for entry in rederived] == (["retained-file"] if reuse else [])
+    if reuse:
+        assert rederived[0]["sha256"] == source_sha256
+
+
 def test_a_cold_run_over_both_collections_publishes_rows_in_both(tmp_path):
     """Neither family may be starved by a shared cap, whatever the listing order.
 

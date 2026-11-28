@@ -154,8 +154,12 @@ DEFAULT_WINDOW_DAYS = 30
 #: the previous run's cutoff is still seen.
 OVERLAP_HOURS = 24
 
-#: ~3 requests each at ~3/s: 200 packages is ~3.5 minutes per collection.
-MAX_PACKAGES_PER_RUN = 200
+#: ~3 requests each (two keyed) at ~3/s. A 244-report reader refresh costs
+#: ~732 requests (~4.1 minutes paced), and fits under the CRPT cap. Raising
+#: only CRPT adds ~200 routine keyed requests at the cap; leave CHRG and its
+#: additional Congress.gov detail requests on their existing budget.
+MAX_PACKAGES_PER_RUN = 300
+MAX_HEARING_PACKAGES_PER_RUN = 200
 
 MAX_PAGES = 40
 
@@ -966,7 +970,7 @@ def build_committee_reports(
     reader: PackageDiscoverySource | None = None,
     acquirer: PackageBodySource | None = None,
     hearings: HearingDetailSource | None = None,
-    max_packages: int = MAX_PACKAGES_PER_RUN,
+    max_packages: int | None = None,
     download_prior: Callable[[str, Path], bool] = r2.download,
     evidence: CaptureEvidence | None = None,
     reread: Collection[str] = (),
@@ -1037,7 +1041,10 @@ def build_committee_reports(
         if reread
         else f"modified since {since}"
     )
-    logger.info("Committee reports: {}; cap {} per collection; agenda cap 0", mode_desc, max_packages)
+    caps = {"CRPT": MAX_PACKAGES_PER_RUN, "CHRG": MAX_HEARING_PACKAGES_PER_RUN}
+    if max_packages is not None:
+        caps = dict.fromkeys(caps, max_packages)
+    logger.info("Committee reports: {}; package caps {}; agenda cap 0", mode_desc, caps)
     observed_at = datetime.now(UTC).isoformat()
     if evidence:
         evidence.event(
@@ -1045,7 +1052,7 @@ def build_committee_reports(
             since=None if (reread or retained is not None) else since,
             reread=sorted(reread),
             retained_bundle_pins_sha256=None if retained is None else retained.pins_sha256,
-            max_packages_per_collection=max_packages,
+            max_packages_per_collection=caps,
             max_pages=MAX_PAGES,
             agenda_cap=0,
             checkpoint_observed_at=observed_at,
@@ -1192,6 +1199,7 @@ def build_committee_reports(
     else:
         assert reader is not None and acquirer is not None and hearings is not None
         for collection in ("CRPT", "CHRG"):
+            cap = caps[collection]
             if reread:
                 listed = {}
                 pending = {key: reads.get(key, {}).get("last_modified") for key in reread
@@ -1209,11 +1217,13 @@ def build_committee_reports(
                                 if not _settled(reads.get(key, {}), collection, modified)})
                 pending = dict(sorted(pending.items(), key=lambda item: _retry_order(reads.get(item[0], {}), item[1])))
             listed_count += len(listed)
-            deferred += max(0, len(pending) - max_packages)
+            deferred += max(0, len(pending) - cap)
             unchanged += len(listed) - sum(key in pending for key in listed)
+            queue = list(pending)
+            selected, held_back = queue[:cap], queue[cap:]
             if evidence:
                 evidence.event("package-selection", collection=collection, listed=listed,
-                               selected=list(pending)[:max_packages], deferred=list(pending)[max_packages:],
+                               selected=selected, deferred=held_back,
                                unchanged=[key for key in listed if key not in pending],
                                refused_final=sorted(key for key, row in reads.items() if key.startswith(collection + "-")
                                                     and row.get("outcome") == REFUSED_FINAL and key not in pending))
@@ -1221,8 +1231,8 @@ def build_committee_reports(
                 reads[package_id] = {"package_id": package_id, "last_modified": modified,
                                      "outcome": "pending", "rule_version": RULE_VERSIONS[collection],
                                      "observed_at": observed_at}
-            logger.info("{}: {} pending; {} deferred by package cap", collection, len(pending), max(0, len(pending) - max_packages))
-            attempted[collection] = list(pending)[:max_packages]
+            logger.info("{}: {} pending; {} deferred by package cap", collection, len(pending), len(held_back))
+            attempted[collection] = selected
             prior_hearing_rows = _prior_hearing_rows(prior_hearings, attempted[collection]) if collection == "CHRG" else {}
             for package_id in attempted[collection]:
                 state = reads[package_id]
@@ -1380,8 +1390,8 @@ def build_committee_reports(
                  f"{len(waiting)} hearing(s) not yet on Congress.gov, asked again until {DETAIL_GRACE_DAYS} days "
                  f"after GovInfo issued them: {', '.join(waiting[:20])}{' ...' if len(waiting) > 20 else ''}")
     # Pending work is retried by the next run without anyone acting, so it warns rather than fails the run:
-    # every spicy-docs release re-reads all CRPT checkpoints (``code=`` in RULE_VERSIONS), more than one
-    # night's cap, and one Congress.gov 500 left the run red for nights it had published (runs 42558022791,
+    # previously unrelated SpicyDocs builds re-read all CRPT checkpoints, more than one night's cap,
+    # and one Congress.gov 500 left the run red for nights it had published (runs 42558022791,
     # 42751350570, 42954778184). A package that never reads stays named here and in acquisition-coverage.
     pending = [key for key, row in reads.items()
                if not _settled(row, key.split("-", 1)[0]) and not awaited(row, key.split("-", 1)[0])]
@@ -1389,6 +1399,9 @@ def build_committee_reports(
     waiting_cap = sorted(key for key in pending if reads[key]["outcome"] == "pending")
     if pending:
         named = set([*retrying, *waiting_cap][:20])
+        pending_caps = {caps[key.split("-", 1)[0]] for key in waiting_cap or retrying}
+        cap_label = (f"{next(iter(pending_caps))}-package cap" if len(pending_caps) == 1
+                     else f"CRPT {caps['CRPT']}/CHRG {caps['CHRG']} package caps")
 
         def ids(keys: list[str]) -> str:
             shown = [key for key in keys if key in named]
@@ -1397,7 +1410,7 @@ def build_committee_reports(
 
         annotate("warning", "Committee reports: acquisition pending",
                  f"{len(pending)} package(s) pending, retried next run: {len(retrying)} refused ({ids(retrying)}), "
-                 f"{len(waiting_cap)} deferred by the {max_packages}-package cap ({ids(waiting_cap)})")
+                 f"{len(waiting_cap)} deferred by the {cap_label} ({ids(waiting_cap)})")
     discovery_state = "retained_bundle" if retained is not None else "not_requested" if reread else "complete"
     status = {"discovery": discovery_state, "since": None if (reread or retained is not None) else since,
               "until": until, "listed": listed_count, "unchanged": unchanged, "refused": refused, "deferred": deferred,
