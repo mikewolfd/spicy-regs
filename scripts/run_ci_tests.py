@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 
-PARTITION_COUNT = 4
+PARTITION_COUNT = 8
 
 
 def leaf_test_selection(event: str, base: str, head: str) -> tuple[list[str] | None, str]:

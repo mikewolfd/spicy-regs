@@ -91,7 +91,7 @@ def test_leaf_pr_runs_changed_tests_once_and_records_empty_partitions(repository
                               env=env, capture_output=True, text=True, timeout=30)
     assert decision.returncode == 0, decision.stdout + decision.stderr
     selected = []
-    for index in range(4):
+    for index in range(8):
         manifest_path = root / f'manifest-{index}.json'
         result = subprocess.run([sys.executable, '-B', str(SCRIPT), str(index), '--manifest', str(manifest_path), '-q'],
                                 cwd=root, env=env, capture_output=True, text=True, timeout=30)
@@ -110,7 +110,7 @@ def test_changed_module_without_default_tests_falls_back_to_full_collection(tmp_
     # Exercise the collection boundary without importing the repository's suite.
     from types import SimpleNamespace
 
-    paths = [f'tests/test_fixture_{number}.py' for number in range(16)]
+    paths = [f'tests/test_fixture_{number}.py' for number in range(48)]
     items = [SimpleNamespace(nodeid=path + '::test_current') for path in paths]
     partition.pytest_collection_modifyitems(SimpleNamespace(hook=SimpleNamespace(pytest_deselected=lambda **_: None)), items)
     manifest = json.loads((tmp_path / 'manifest.json').read_text())
@@ -153,7 +153,7 @@ def test_live_workflow_preserves_source_controls_and_scheduled_checks(repository
 def test_partitions_cover_default_collection_without_overlap(tmp_path):
     script = Path(__file__).resolve().parents[1] / 'scripts/run_ci_tests.py'
     (tmp_path / 'pytest.ini').write_text("[pytest]\naddopts = -m 'not integration'\nmarkers = integration: excluded live test\n")
-    fixture_names = [f'test_fixture_{number}.py' for number in range(16)] + ['test_scorecards.py']
+    fixture_names = [f'test_fixture_{number}.py' for number in range(48)] + ['test_scorecards.py']
     for name in fixture_names:
         (tmp_path / name).write_text(
             'import pytest\ndef test_current(): pass\n'
@@ -163,7 +163,7 @@ def test_partitions_cover_default_collection_without_overlap(tmp_path):
     matrix = re.search(r'partition: (\[.*\])', workflow)
     assert matrix is not None
     partitions = json.loads(matrix.group(1))
-    assert partitions == list(range(4))
+    assert partitions == list(range(8))
     assert 'python -B scripts/run_ci_tests.py' in workflow
     selected, collections = [], []
     for index in partitions:
@@ -176,7 +176,7 @@ def test_partitions_cover_default_collection_without_overlap(tmp_path):
         summary = json.loads(line.removeprefix('CI_PARTITION '))
         manifest = json.loads(path.read_text())
         assert summary['sha256'] == hashlib.sha256(path.read_bytes()).hexdigest()
-        assert summary['partitionCount'] == manifest['partitionCount'] == 4
+        assert summary['partitionCount'] == manifest['partitionCount'] == 8
         assert summary['selected'] == len(manifest['selectedNodeIds'])
         assert summary['collected'] == len(manifest['collectedNodeIds'])
         collections.append(set(manifest['collectedNodeIds']))
@@ -194,7 +194,7 @@ def test_partitions_cover_default_collection_without_overlap(tmp_path):
 def test_failure_stops_execution_but_manifest_retains_all_selected_tests(tmp_path):
     script = Path(__file__).resolve().parents[1] / 'scripts/run_ci_tests.py'
     file = 'test_failure.py'
-    partition = int.from_bytes(hashlib.sha256(file.encode()).digest(), 'big') % 4
+    partition = int.from_bytes(hashlib.sha256(file.encode()).digest(), 'big') % 8
     (tmp_path / file).write_text(
         'def test_first(): raise AssertionError("actual failure")\n'
         'def test_second(): raise AssertionError("should not execute")\n')
