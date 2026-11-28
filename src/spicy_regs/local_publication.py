@@ -45,6 +45,7 @@ LOCAL_FAMILIES = frozenset({
     "cms-part-b",
     "cms-part-d",
     "court-opinions",
+    "crs-report-files",
     "cms-medicare-provider",
     "executive-disclosures",
     "fec-election-results",
@@ -63,6 +64,7 @@ LOCAL_FAMILIES = frozenset({
     "sam-exclusions",
     "sam-opportunities",
     "sec-edgar",
+    "senate-disclosures",
     "table3-history",
     "foreign-assistance",
     "usaspending-awards",
@@ -105,6 +107,9 @@ def _family_schemas(family: str) -> dict | None:
     if family == "cms-part-d":
         from spicy_regs.transforms.build_cms_part_d import SCHEMA, TABLE
         return {TABLE: SCHEMA}
+    if family == "crs-report-files":
+        from spicy_regs.transforms.build_crs_report_files import DATASET, SCHEMA
+        return {DATASET: SCHEMA}
     if family == "executive-disclosures":
         from spicy_regs.transforms.build_executive_disclosures import SCHEMAS
         return SCHEMAS
@@ -161,6 +166,9 @@ def _family_schemas(family: str) -> dict | None:
         return {key: SCHEMAS[key] for key in (TABLES["opportunities"], SNAPSHOTS["opportunities"])}
     if family == "sec-edgar":
         from spicy_regs.transforms.build_sec_edgar import SCHEMAS
+        return SCHEMAS
+    if family == "senate-disclosures":
+        from spicy_regs.schemas.senate_disclosures import SCHEMAS
         return SCHEMAS
     if family == "table3-history":
         from spicy_regs.sources.table3_history import SCHEMAS
