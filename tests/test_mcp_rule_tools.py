@@ -748,3 +748,465 @@ def test_get_rule_text_tool_runs_through_server_and_enforces_strict_bounds(monke
         asyncio.run(server.call_tool("get_rule_text", {"document": "2026-18481", "max_chars": 10}))
     with pytest.raises(ToolError, match="offset"):
         asyncio.run(server.call_tool("get_rule_text", {"document": "2026-18481", "offset": -1}))
+
+
+# --- Offline-first get_rule_text (federal_register_document_bodies + EOs) ----
+
+
+def _offline_body_connection() -> duckdb.DuckDBPyConnection:
+    con = _native_rule_connection()
+    con.execute(
+        """
+        INSERT INTO federal_register
+        SELECT
+            '2025-01901',
+            'Executive Order on Regulatory Review',
+            'Presidential Document',
+            '2025-01-28',
+            NULL,
+            'Establishes regulatory review principles.',
+            []::STRUCT(title BIGINT, part VARCHAR, chapter VARCHAR)[],
+            []::VARCHAR[],
+            'https://www.federalregister.gov/d/2025-01901',
+            'https://www.federalregister.gov/documents/full_text/html/2025/01/28/2025-01901.html'
+        """
+    )
+    # Single-newline XML-derived body text matching spicy_docs.extraction.body_text output
+    xml_derived_rule_text = (
+        "DEPARTMENT OF COMMERCE\n"
+        "Decennial Census residence criteria\n"
+        "SUMMARY:\n"
+        "The Census Bureau is proposing to add two new parts.\n"
+        "DATES:\n"
+        "Comments must be received by October 13, 2026.\n"
+        "SUPPLEMENTARY INFORMATION:\n"
+        "Preamble text discussing the proposed rule.\n"
+        "1. Add part 60 to read as follows:\n"
+        "PART 60—RESIDENCE CRITERIA FOR THE DECENNIAL CENSUS\n"
+        "§ 60.1\n"
+        "Purpose.\n"
+        "This part sets forth the criteria.\n"
+        "§ 60.4\n"
+        "Foreign citizens in the United States.\n"
+        "(a) Citizens or lawful permanent residents.\n"
+        "[FR Doc. 2026-18481 Filed 9-9-26; 8:45 am]"
+    )
+    con.execute(
+        """
+        CREATE TABLE federal_register_document_bodies (
+            document_number VARCHAR,
+            publication_date DATE,
+            document_type VARCHAR,
+            title VARCHAR,
+            significant BOOLEAN,
+            source_record_id VARCHAR,
+            source_sha256 VARCHAR,
+            body_status VARCHAR,
+            body_format VARCHAR,
+            body_url VARCHAR,
+            body_sha256 VARCHAR,
+            text_sha256 VARCHAR,
+            body_observed_at VARCHAR,
+            text_derivation VARCHAR,
+            text_derivation_version VARCHAR,
+            body_failure_reason VARCHAR,
+            body_text VARCHAR
+        )
+        """
+    )
+    con.executemany(
+        "INSERT INTO federal_register_document_bodies VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            (
+                "2026-18481",
+                date(2026, 9, 10),
+                "Proposed Rule",
+                "Decennial Census residence criteria",
+                True,
+                "2026-18481@2026-09-10",
+                "sha256:" + "1" * 64,
+                "acquired",
+                "xml",
+                "https://www.federalregister.gov/documents/full_text/xml/2026/09/10/2026-18481.xml",
+                "sha256:" + "a" * 64,
+                "sha256:" + "b" * 64,
+                "2026-11-28T00:00:00Z",
+                "markup-reader",
+                "006",
+                None,
+                xml_derived_rule_text,
+            ),
+            (
+                "2026-20979",
+                date(2026, 10, 14),
+                "Rule",
+                "Feed additive",
+                True,
+                "2026-20979@2026-10-14",
+                "sha256:" + "2" * 64,
+                "refused",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "GovInfo returned 404",
+                None,
+            ),
+        ],
+    )
+    eo_text = (
+        "Executive Order 14199 of January 20, 2025\n"
+        "Executive Order on Regulatory Review\n"
+        "By the authority vested in me as President by the Constitution.\n"
+        "[FR Doc. 2025-01901 Filed 1-27-25; 8:45 am]"
+    )
+    con.execute(
+        """
+        CREATE TABLE executive_order_observations (
+            document_number VARCHAR,
+            publication_date DATE,
+            body_status VARCHAR,
+            body_url VARCHAR,
+            body_sha256 VARCHAR,
+            text_sha256 VARCHAR,
+            body_text VARCHAR
+        )
+        """
+    )
+    con.execute(
+        "INSERT INTO executive_order_observations VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+            "2025-01901",
+            date(2025, 1, 28),
+            "acquired",
+            "https://www.federalregister.gov/documents/full_text/xml/2025/01/28/2025-01901.xml",
+            "sha256:" + "c" * 64,
+            "sha256:" + "d" * 64,
+            eo_text,
+        ],
+    )
+    return con
+
+
+def test_get_rule_text_reads_significant_rule_offline_with_zero_http(monkeypatch):
+    def forbid_http(*_args, **_kwargs):
+        raise AssertionError("Outbound HTTP must not be called for offline acquired rule")
+
+    monkeypatch.setattr(mcp_rule_tools.httpx, "Client", forbid_http)
+    con = _offline_body_connection()
+
+    outline = mcp_rule_tools.get_rule_text(con, "2026-18481")
+    assert outline["mode"] == "outline"
+    assert outline["source_mode"] == "offline_table"
+    assert outline["source"] == "https://www.federalregister.gov/documents/full_text/xml/2026/09/10/2026-18481.xml"
+    assert outline["body_sha256"] == "sha256:" + "a" * 64
+    assert outline["text_sha256"] == "sha256:" + "b" * 64
+    assert outline["dates"] == "Comments must be received by October 13, 2026."
+    assert outline["parts"] == [{"part": "60", "title": "RESIDENCE CRITERIA FOR THE DECENNIAL CENSUS"}]
+    assert [(s["section"], s["title"]) for s in outline["sections"]] == [
+        ("60.1", "Purpose."),
+        ("60.4", "Foreign citizens in the United States."),
+    ]
+    assert "source_fallback" not in outline
+
+    sec = mcp_rule_tools.get_rule_text(con, "2026-18481", "60.4")
+    assert sec["source_mode"] == "offline_table"
+    assert "Citizens or lawful permanent residents." in sec["text"]
+    assert "60.1" not in sec["text"]
+
+    full = mcp_rule_tools.get_rule_text(con, "2026-18481", "full")
+    assert full["source_mode"] == "offline_table"
+    assert "DEPARTMENT OF COMMERCE" in full["text"]
+
+
+def test_get_rule_text_reads_executive_order_offline_with_zero_http(monkeypatch):
+    def forbid_http(*_args, **_kwargs):
+        raise AssertionError("Outbound HTTP must not be called for offline acquired executive order")
+
+    monkeypatch.setattr(mcp_rule_tools.httpx, "Client", forbid_http)
+    con = _offline_body_connection()
+
+    outline = mcp_rule_tools.get_rule_text(con, "2025-01901")
+    assert outline["mode"] == "outline"
+    assert outline["source_mode"] == "offline_table"
+    assert outline["source"] == "https://www.federalregister.gov/documents/full_text/xml/2025/01/28/2025-01901.xml"
+    assert outline["body_sha256"] == "sha256:" + "c" * 64
+    assert outline["text_sha256"] == "sha256:" + "d" * 64
+
+    full = mcp_rule_tools.get_rule_text(con, "2025-01901", "full")
+    assert full["source_mode"] == "offline_table"
+    assert "authority vested in me as President" in full["text"]
+
+
+def test_get_rule_text_falls_back_live_for_out_of_scope_notice_and_refused_body(monkeypatch):
+    seen_urls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_urls.append(str(request.url))
+        return httpx.Response(200, text=_GOVINFO_PAGE)
+
+    _patch_httpx(monkeypatch, handler)
+    con = _offline_body_connection()
+
+    # Out-of-scope Notice (not in federal_register_document_bodies) -> live GovInfo fallback
+    notice = mcp_rule_tools.get_rule_text(con, "2026-19999", "full")
+    assert "source_mode" not in notice
+    assert "body_sha256" not in notice
+    assert notice["source"] == "https://www.govinfo.gov/content/pkg/FR-2026-10-01/html/2026-19999.htm"
+    assert any("2026-19999" in u for u in seen_urls)
+
+    # Refused row (body_status='refused', body_text=NULL) -> live GovInfo fallback
+    refused = mcp_rule_tools.get_rule_text(con, "2026-20979", "full")
+    assert "source_mode" not in refused
+    assert any("2026-20979" in u for u in seen_urls)
+
+
+def test_mcp_server_get_rule_text_requests_offline_body_tables_and_serves_zero_http(monkeypatch):
+    con = _offline_body_connection()
+    observed_relations: list[set[str] | None] = []
+
+    def get_con():
+        observed_relations.append(mcp_server._requested_relations.get())
+        return con
+
+    def forbid_http(*_args, **_kwargs):
+        raise AssertionError("Outbound HTTP must not be called when offline table holds body")
+
+    monkeypatch.setattr(mcp_server, "_get_connection", get_con)
+    monkeypatch.setattr(mcp_rule_tools.httpx, "Client", forbid_http)
+    server = mcp_server.build_server()
+
+    result = asyncio.run(server.call_tool("get_rule_text", {"document": "2026-18481", "section": "full"}))
+    assert isinstance(result, CallToolResult)
+    data = result.structured_content
+    assert isinstance(data, dict)
+    assert data["source_mode"] == "offline_table"
+    assert "DEPARTMENT OF COMMERCE" in data["text"]
+    assert observed_relations and observed_relations[0] is not None
+    assert {"federal_register_document_bodies", "executive_order_observations"} <= observed_relations[0]
+
+
+def test_get_rule_text_xml_preamble_inline_mentions_do_not_hijack_sections(monkeypatch):
+    """BLOCKER 2 regression: real SpicyDocs XML body_text preamble <E>/<PRTPAGE/> mentions never hijack sections."""
+    from types import SimpleNamespace
+
+    from spicy_docs.extraction.body_text import body_text
+    from spicy_docs.transport.captured import CapturedBodyResponse
+
+    xml_bytes = (
+        b"<PRORULE>"
+        b"<PREAMB>"
+        b'<AGENCY TYPE="S">DEPARTMENT OF COMMERCE</AGENCY>'
+        b"<SUBJECT>Decennial Census residence criteria</SUBJECT>"
+        b'<SUM><HD SOURCE="HED">SUMMARY:</HD><P>The Census Bureau is proposing to add two new parts.</P></SUM>'
+        b'<EFFDATE><HD SOURCE="HED">DATES:</HD><P>Comments must be received by October 13, 2026.</P></EFFDATE>'
+        b"</PREAMB>"
+        b"<SUPLINF>"
+        b'<HD SOURCE="HED">SUPPLEMENTARY INFORMATION:</HD>'
+        b'<P>In the preamble we discuss <E T="03">&#xA7; 60.4</E> and its effect.</P>'
+        b'<P>See also <PRTPAGE P="57529"/>&#xA7; 60.2 for cross reference.</P>'
+        b'<REGTEXT TITLE="15" PART="60">'
+        b"<AMDPAR>1. Add part 60 to read as follows:</AMDPAR>"
+        b'<PART><HD SOURCE="HED">PART 60&#x2014;RESIDENCE CRITERIA</HD>'
+        b"<SECTION><SECTNO>&#xA7; 60.1</SECTNO><SUBJECT>Purpose.</SUBJECT>"
+        b"<P>This part sets forth the criteria.</P></SECTION>"
+        b"<SECTION><SECTNO>&#xA7; 60.4</SECTNO><SUBJECT>Foreign citizens in the United States.</SUBJECT>"
+        b"<P>(a) Citizens or lawful permanent residents. Counted at usual residence.</P></SECTION>"
+        b"</PART>"
+        b"</REGTEXT>"
+        b"</SUPLINF>"
+        b"<FRDOC>[FR Doc. 2026-18481 Filed 9-9-26; 8:45 am]</FRDOC>"
+        b"</PRORULE>"
+    )
+    url = "https://www.federalregister.gov/documents/full_text/xml/2026/09/10/2026-18481.xml"
+    capture = CapturedBodyResponse(
+        requested_url=url,
+        resolved_url=url,
+        status_code=200,
+        content_type="application/xml",
+        observed_at="2026-11-28T00:00:00Z",
+        content_encoding="identity",
+        method="GET",
+        body=xml_bytes,
+    )
+    derived = body_text(
+        SimpleNamespace(
+            format="xml",
+            body=SimpleNamespace(media_type="application/xml", byte_size=capture.byte_size),
+            body_capture=capture,
+        )
+    )
+    assert "\n\n" not in derived.text  # exercises the single-newline XML body_text branch
+
+    con = _offline_body_connection()
+    con.execute(
+        "UPDATE federal_register_document_bodies SET body_text = ? WHERE document_number = '2026-18481'",
+        [derived.text],
+    )
+
+    def forbid_http(*_args, **_kwargs):
+        raise AssertionError("Outbound HTTP must not be called for offline XML body")
+
+    monkeypatch.setattr(mcp_rule_tools.httpx, "Client", forbid_http)
+
+    outline = mcp_rule_tools.get_rule_text(con, "2026-18481")
+    assert outline["source_mode"] == "offline_table"
+    assert outline["dates"] == "Comments must be received by October 13, 2026."
+    assert outline["parts"] == [{"part": "60", "title": "RESIDENCE CRITERIA"}]
+    assert [(s["section"], s["title"], s["part"]) for s in outline["sections"]] == [
+        ("60.1", "Purpose.", "60"),
+        ("60.4", "Foreign citizens in the United States.", "60"),
+    ]
+
+    sec_60_4 = mcp_rule_tools.get_rule_text(con, "2026-18481", "60.4")
+    assert sec_60_4["source_mode"] == "offline_table"
+    assert "Foreign citizens in the United States." in sec_60_4["text"]
+    assert "Counted at usual residence." in sec_60_4["text"]
+    assert "and its effect" not in sec_60_4["text"]
+
+    missing_60_2 = mcp_rule_tools.get_rule_text(con, "2026-18481", "60.2")
+    assert "No section 60.2" in missing_60_2["error"]
+
+
+def test_labeled_paragraph_preserves_wrapped_note_prose_in_govinfo_pre():
+    """WARNING 1 regression: wrapped NOTE:/OMB: lines inside GovInfo <pre> paragraphs are never truncated."""
+    govinfo_with_note = (
+        "SUMMARY: The agency proposes an emissions standard.\n"
+        "NOTE: Additional compliance detail continues the summary.\n"
+        "OMB: Control number 2060-0001 applies to this collection.\n"
+        "\n"
+        "DATES: Comments are due October 13, 2026.\n"
+        "NOTE: Late comments may be considered to the extent practicable.\n"
+        "\n"
+        "SUPPLEMENTARY INFORMATION:\n"
+        "Further background."
+    )
+    summary = mcp_rule_tools._labeled_paragraph(govinfo_with_note, "SUMMARY")
+    assert summary is not None
+    assert "NOTE: Additional compliance detail continues the summary." in summary
+    assert "OMB: Control number 2060-0001 applies to this collection." in summary
+    assert "DATES:" not in summary
+
+    dates = mcp_rule_tools._labeled_paragraph(govinfo_with_note, "DATES")
+    assert dates is not None
+    assert "NOTE: Late comments may be considered to the extent practicable." in dates
+    assert "SUPPLEMENTARY INFORMATION:" not in dates
+
+
+def test_get_rule_text_matches_composite_document_number_and_publication_date(monkeypatch):
+    """Offline body lookup binds both document_number and publication_date for reused FR document numbers."""
+    con = _offline_body_connection()
+    con.execute(
+        "INSERT INTO federal_register_document_bodies VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            "2026-18481",
+            date(2026, 1, 5),
+            "Proposed Rule",
+            "Older printing with same document number",
+            True,
+            "2026-18481@2026-01-05",
+            "sha256:" + "0" * 64,
+            "acquired",
+            "xml",
+            "https://www.federalregister.gov/documents/full_text/xml/2026/01/05/2026-18481.xml",
+            "sha256:" + "e" * 64,
+            "sha256:" + "f" * 64,
+            "2026-01-06T00:00:00Z",
+            "markup-reader",
+            "006",
+            None,
+            "STALE OLD PRINTING TEXT THAT MUST NOT BE RETURNED",
+        ],
+    )
+
+    def forbid_http(*_args, **_kwargs):
+        raise AssertionError("Outbound HTTP must not be called")
+
+    monkeypatch.setattr(mcp_rule_tools.httpx, "Client", forbid_http)
+    full = mcp_rule_tools.get_rule_text(con, "2026-18481", "full")
+    assert full["publication_date"] == "2026-09-10"
+    assert full["source"] == "https://www.federalregister.gov/documents/full_text/xml/2026/09/10/2026-18481.xml"
+    assert full["body_sha256"] == "sha256:" + "a" * 64
+    assert "DEPARTMENT OF COMMERCE" in full["text"]
+    assert "STALE OLD PRINTING" not in full["text"]
+
+
+def test_get_rule_text_pre_publish_build_connection_falls_back_cleanly(tmp_path, monkeypatch):
+    """Pre-publish: real _build_connection skips absent managed_only body tables and falls back to live GovInfo."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from spicy_regs.generations import build_generation
+    from spicy_regs.sources import publication as pub
+    from tests.generation_fakes import Store
+    from tests.test_generation_mcp import connection_fixture
+    from tests.test_generation_publication import publish
+
+    fr_table = pa.Table.from_pylist(
+        [
+            {
+                "document_number": "2026-18481",
+                "title": "Decennial Census residence criteria",
+                "document_type": "Proposed Rule",
+                "publication_date": "2026-09-10",
+                "comments_close_on": "2026-10-13",
+                "abstract": "The Census Bureau is proposing to add two new parts.",
+                "cfr_references": [{"title": 15, "part": "60", "chapter": None}],
+                "regulation_id_numbers": ["0607-AA75"],
+                "html_url": "https://www.federalregister.gov/d/2026-18481",
+                "body_html_url": "https://www.federalregister.gov/documents/full_text/html/2026/09/10/2026-18481.html",
+            }
+        ],
+        schema=pa.schema(
+            [
+                ("document_number", pa.string()),
+                ("title", pa.string()),
+                ("document_type", pa.string()),
+                ("publication_date", pa.string()),
+                ("comments_close_on", pa.string()),
+                ("abstract", pa.string()),
+                (
+                    "cfr_references",
+                    pa.list_(pa.struct([("title", pa.int64()), ("part", pa.string()), ("chapter", pa.string())])),
+                ),
+                ("regulation_id_numbers", pa.list_(pa.string())),
+                ("html_url", pa.string()),
+                ("body_html_url", pa.string()),
+            ]
+        ),
+    )
+    src = tmp_path / "src"
+    src.mkdir()
+    fr_file = src / "federal_register.parquet"
+    pq.write_table(fr_table, fr_file)
+    gen_dir = tmp_path / "gen"
+    build_generation(gen_dir, family="federal-register", files=[fr_file], expected_keys=["federal_register.parquet"])
+    index = publish(Store(), gen_dir)
+    fr_member = pub.single_member(index, "federal_register.parquet").path
+
+    monkeypatch.setattr(mcp_server, "DATA_DIR", None)
+    built = connection_fixture(
+        monkeypatch,
+        index,
+        {fr_member: gen_dir / "federal_register.parquet"},
+        tables=("federal_register", "federal_register_document_bodies", "executive_order_observations"),
+    )
+    _patch_httpx(monkeypatch, lambda _request: httpx.Response(200, text=_GOVINFO_PAGE))
+
+    server = mcp_server.build_server()
+    try:
+        result = asyncio.run(server.call_tool("get_rule_text", {"document": "2026-18481", "section": "60.4"}))
+        assert isinstance(result, CallToolResult)
+        data = result.structured_content
+        assert isinstance(data, dict)
+        assert "error" not in data
+        assert "source_mode" not in data
+        assert "Not counted for" in data["text"]
+        assert built
+        assert not any("federal_register_document_bodies" in url for url in built[0].seen)
+    finally:
+        for con in built:
+            con.close()

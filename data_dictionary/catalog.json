@@ -8363,6 +8363,34 @@
       ]
     },
     {
+      "table": "federal_register_document_bodies",
+      "label": "Federal Register significant rule text",
+      "summary": "Offline full text and L1-05 source provenance for EO 12866 significant Federal Register Rules and Proposed Rules, derived from retained official publisher XML or GovInfo HTML renditions.",
+      "coverage": "Window. Every dated Federal Register Rule or Proposed Rule flagged significant (`document_type IN ('Rule', 'Proposed Rule') AND significant = true`) published on or after 2021-01-01, extended on weekdays. Explicitly excludes Notices, Presidential Documents (Executive Orders are held separately in `executive_order_observations`), non-significant or unflagged rules, and pre-2021 significant rules. Batch completion and population metadata are recorded in Parquet file metadata (`parquet_kv_metadata`, key `spicy_regs.federal_register_bodies.coverage`).",
+      "kind": "window",
+      "measured_on": "2026-11-28",
+      "data_quality": null,
+      "columns": [
+        "document_number",
+        "publication_date",
+        "document_type",
+        "title",
+        "significant",
+        "source_record_id",
+        "source_sha256",
+        "body_status",
+        "body_format",
+        "body_url",
+        "body_sha256",
+        "text_sha256",
+        "body_observed_at",
+        "text_derivation",
+        "text_derivation_version",
+        "body_failure_reason",
+        "body_text"
+      ]
+    },
+    {
       "table": "executive_disclosure_filings",
       "label": "Executive disclosure filing lookup",
       "summary": "Executive disclosure filing lookup for an explicitly selected public filing cohort.",

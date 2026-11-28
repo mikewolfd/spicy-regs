@@ -163,6 +163,21 @@ on:
         required: false
         default: ''
         type: string
+      fr_bodies_since:
+        description: 'Optional publication-date floor (YYYY-MM-DD) for federal-register-bodies; blank uses 2021-01-01'
+        required: false
+        default: ''
+        type: string
+      fr_bodies_max_new:
+        description: 'Optional batch cap on newly attempted documents for federal-register-bodies (e.g. 1000)'
+        required: false
+        default: ''
+        type: string
+      fr_bodies_retry_failed:
+        description: 'Re-attempt prior refused rows in federal-register-bodies'
+        required: false
+        default: false
+        type: boolean
       usaspending_every_funded:
         description: 'Walk every USAspending recipient funded in the trailing 12 months instead of the top pages'
         required: false
@@ -657,6 +672,9 @@ jobs:
           FR_SINCE: ${{ inputs.fr_since }}
           FR_UNTIL: ${{ inputs.fr_until }}
           FR_REQUEST_INTERVAL_SECONDS: ${{ inputs.fr_request_interval_seconds }}
+          FR_BODIES_SINCE: ${{ inputs.fr_bodies_since }}
+          FR_BODIES_MAX_NEW: ${{ inputs.fr_bodies_max_new }}
+          FR_BODIES_RETRY_FAILED: ${{ inputs.fr_bodies_retry_failed }}
           USASPENDING_EVERY_FUNDED: ${{ inputs.usaspending_every_funded }}
           LDA_FILING_YEAR: ${{ inputs.lda_filing_year }}
           FEC_COMMITTEES_FULL_WALK: ${{ inputs.fec_committees_full_walk }}

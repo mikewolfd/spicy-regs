@@ -38,6 +38,7 @@ on:
       - Rollup — fec_committees
       - Rollup — fec_financial_profiles
       - Rollup — federal_register
+      - Rollup — federal_register_document_bodies
       - Rollup — gao_recommendations
       - Rollup — gao_reports
       - Rollup — house_communications

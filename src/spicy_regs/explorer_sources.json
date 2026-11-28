@@ -528,6 +528,17 @@
         "register"
       ]
     },
+    "federal-register-bodies": {
+      "sources": [
+        "register",
+        "govinfo-register"
+      ],
+      "inputs": [
+        "federal_register"
+      ],
+      "transformation": "Selects EO 12866 significant Rules and Proposed Rules (publication_date >= 2021-01-01) from federal_register, acquires canonical publisher XML with bounded GovInfo HTML fallback through SpicyDocs body_captures, retains raw rendition bytes in source evidence, and derives plain text with explicit refused and missing_locator outcomes.",
+      "evidence": "src/spicy_regs/transforms/build_federal_register_bodies.py"
+    },
     "foreign-assistance": {
       "sources": [
         "foreign-assistance"
