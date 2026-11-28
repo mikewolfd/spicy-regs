@@ -33,7 +33,7 @@ from spicy_docs.sources import mirrulations
 from spicy_regs.manifest import Manifest
 from spicy_regs.pipelines.regulations_state import UnresolvedKeys, source_record_type
 from spicy_regs.pipelines.base import Pipeline
-from spicy_regs.pipelines.mirrulations_originals import MirrulationsOriginals
+from spicy_regs.pipelines.mirrulations_originals import CapturingReader, MirrulationsOriginals
 from spicy_regs.source_evidence import SourceEvidenceError
 from spicy_regs.pipelines.staging import stage_agencies
 from spicy_regs.schemas import RECORD_TYPES, RecordType
@@ -235,7 +235,8 @@ class RegulationsPipeline(Pipeline):
                 self._pending_text = PendingCommentText(output_dir, index=self._publication_index)
                 self._text_pool = resources.enter_context(
                     DerivedTextPool(
-                        lambda: originals.resource(mirrulations.s3_resource()),
+                        mirrulations.s3_resource,
+                        capture=originals.retain_attachment,
                         max_workers=self.text_workers,
                         on_fill=originals.expect_fill,
                     )
@@ -440,7 +441,7 @@ class RegulationsPipeline(Pipeline):
         shared: list = []
 
         def resource():
-            return shared[0] if shared else originals.resource(mirrulations.s3_resource())
+            return shared[0] if shared else mirrulations.s3_resource()
 
         read = mirrulations.reader_factory(
             [*source_types.values(), *([comment_type] if holding else [])],
@@ -455,14 +456,14 @@ class RegulationsPipeline(Pipeline):
         def reader(agency: str, rt: RecordType):
             keys = held.pop(agency, None) if held is not None and rt.name == "comments" else None
             if keys is None:
-                return read(agency, source_types[rt.name])
+                return CapturingReader(read(agency, source_types[rt.name]), originals)
             # The keys the first pass listed, built as reader_factory builds a reader (_ingest_comments_chunked too).
-            return mirrulations.MirrulationsReader(
-                originals.resource(mirrulations.s3_resource()), mirrulations.BUCKET, mirrulations.PREFIX, agency,
+            return CapturingReader(mirrulations.MirrulationsReader(
+                mirrulations.s3_resource(), mirrulations.BUCKET, mirrulations.PREFIX, agency,
                 source_types[rt.name], processed_keys=manifest, since_year=self.since_year, verbose=self.verbose,
                 key_lister=lambda: keys, unresolved_keys=unresolved.for_reader(agency, source_types[rt.name]),
                 validate_payload=self._validate_comment_payload,
-            )
+            ), originals)
 
         result = stage_agencies(
             agencies,
@@ -476,7 +477,7 @@ class RegulationsPipeline(Pipeline):
             assert held is not None
             # Every agency was listed by its readers above, so each answer comes from the scan's cache: the cached
             # list itself, which no reader mutates (each copies its keys), so it is kept without a copy.
-            shared.append(originals.resource(mirrulations.s3_resource()))
+            shared.append(mirrulations.s3_resource())
             for agency in agencies:
                 lister = read(agency, comment_type).key_lister
                 if lister is None:
@@ -595,8 +596,8 @@ class RegulationsPipeline(Pipeline):
         total = len(keys)
         for start in range(0, total, self.chunk_size):
             chunk = keys[start : start + self.chunk_size]
-            reader = mirrulations.MirrulationsReader(
-                self._originals().resource(resource),
+            reader = CapturingReader(mirrulations.MirrulationsReader(
+                resource,
                 mirrulations.BUCKET,
                 mirrulations.PREFIX,
                 agency,
@@ -604,7 +605,7 @@ class RegulationsPipeline(Pipeline):
                 key_lister=lambda: chunk,
                 unresolved_keys=[item for item in previous if item.key in chunk],
                 validate_payload=self._validate_comment_payload,
-            )
+            ), self._originals())
             records = list(transform.apply(reader.iter_records()))
             self._originals().commit(reader.last_keys)
             if records:

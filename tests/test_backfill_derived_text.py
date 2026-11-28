@@ -30,7 +30,7 @@ from spicy_regs.sources.regulatory_catalog import processing_table
 from tests.conftest import COMMENT_SCHEMA
 
 # Reuse the fake S3 surface from the derived-text unit tests.
-from tests.test_derived_text import ACF, _FakeS3Resource, _store
+from tests.test_derived_text import ACF, _FakeS3Resource, _store, derived_key
 
 
 def _factory(store: dict[str, bytes] | None = None, **kwargs):
@@ -611,3 +611,40 @@ def test_catalog_backfill_rederives_only_the_named_comments() -> None:
         assert out == {"ACF-2025-0038-0004": "Wisconsin DCF comment body", "ACF-2025-0038-0040": "stale"}
     finally:
         con.close()
+
+
+def test_backfill_retains_exact_attachment_bytes_before_replacing_parquet(tmp_path, monkeypatch):
+    from spicy_docs.storage.raw_archive import CentralRawArchiveStore
+
+    one = derived_key(*ACF, "pypdf", "0015", 1)
+    two = derived_key(*ACF, "pypdf", "0015", 2)
+    blank = derived_key(*ACF, "pypdf", "0020", 1)
+    bodies = {one: b"  text with \xff before decoding\r\n", two: b"", blank: b" \r\n"}
+    resource = _FakeS3Resource(bodies)
+    path = tmp_path / "comments.parquet"
+    _frame([
+        {"comment_id": f"{ACF[1]}-{comment}", "docket_id": ACF[1], "agency_code": ACF[0], "attachments_json": _attach()}
+        for comment in ("0015", "0020")
+    ]).write_parquet(path)
+    replace = type(path).replace
+
+    def checked_replace(self, target):
+        if target == path:
+            [journal] = list(tmp_path.glob("source-evidence/*/artifact/journal.jsonl"))
+            [outcome] = list(tmp_path.glob("source-evidence/*/run-outcome.json"))
+            assert json.loads(outcome.read_bytes())["outcome"] == "complete"
+            captured = {event["source_record_key"]: event for line in journal.read_text().splitlines()
+                        if (event := json.loads(line))["event"] == "retained-file"}
+            assert set(captured) == set(bodies)
+            store = CentralRawArchiveStore(create=False)
+            for key, raw in bodies.items():
+                with store.open(captured[key]["sha256"]) as content:
+                    assert content.read() == raw and captured[key]["byte_size"] == len(raw)
+        return replace(self, target)
+
+    monkeypatch.setattr(type(path), "replace", checked_replace)
+    stats = backfill_derived_text.backfill_comments_parquet(path, resource_factory=lambda: resource)
+    assert stats == _counts(2, derived=1, missing=1)
+    assert sorted(resource.gets) == sorted(bodies)
+    written = pl.read_parquet(path).sort("comment_id")
+    assert written["text_content"].to_list() == ["text with \ufffd before decoding", None]

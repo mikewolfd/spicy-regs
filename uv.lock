@@ -2070,10 +2070,10 @@ wheels = [
 
 [[package]]
 name = "rulespec-artifacts"
-version = "1.1.2"
-source = { path = "vendor/rulespec_artifacts-1.1.2-py3-none-any.whl" }
+version = "1.1.3"
+source = { path = "vendor/rulespec_artifacts-1.1.3-py3-none-any.whl" }
 wheels = [
-    { filename = "rulespec_artifacts-1.1.2-py3-none-any.whl", hash = "sha256:7d547cd432b1d533b93dcfd3802e4a0e179de6e89301fd6faa8bb917b99830ef" },
+    { filename = "rulespec_artifacts-1.1.3-py3-none-any.whl", hash = "sha256:c551f489c54ef912fdc33fb056d37e5f079bbeb1a8cb4e6f6e52844aecb333ca" },
 ]
 
 [[package]]
@@ -2229,15 +2229,15 @@ wheels = [
 
 [[package]]
 name = "spicy-docs"
-version = "0.85.0+readers.20261128.3"
-source = { path = "vendor/spicy_docs-0.85.0+readers.20261128.3-py3-none-any.whl" }
+version = "0.85.0+readers.20261128.5"
+source = { path = "vendor/spicy_docs-0.85.0+readers.20261128.5-py3-none-any.whl" }
 dependencies = [
     { name = "inflate64" },
     { name = "jsonschema" },
     { name = "rulespec-artifacts" },
 ]
 wheels = [
-    { filename = "spicy_docs-0.85.0+readers.20261128.3-py3-none-any.whl", hash = "sha256:b348259b3055c2de8526ff2f76028812c8000b43017f107ce0d10890243070cb" },
+    { filename = "spicy_docs-0.85.0+readers.20261128.5-py3-none-any.whl", hash = "sha256:724b326f7dbb6bbddeede14c9c8a1d1f8549466780f3168f65942056be051b4f" },
 ]
 
 [package.optional-dependencies]
@@ -2299,7 +2299,7 @@ requires-dist = [
     { name = "pypdf", marker = "extra == 'pdf-pypdf'", specifier = ">=6,<7" },
     { name = "pyyaml", marker = "extra == 'yaml'", specifier = ">=6,<7" },
     { name = "rapidocr-onnxruntime", marker = "extra == 'pdf-rapidocr'", specifier = ">=1.4.4,<2" },
-    { name = "rulespec-artifacts", specifier = "==1.1.2" },
+    { name = "rulespec-artifacts", specifier = "==1.1.3" },
     { name = "tqdm", marker = "extra == 'acquisition'" },
     { name = "warcio", marker = "extra == 'acquisition'", specifier = "==1.7.5" },
 ]
@@ -2396,10 +2396,10 @@ requires-dist = [
     { name = "python-dotenv" },
     { name = "pytz", specifier = ">=2026.4" },
     { name = "pyyaml" },
-    { name = "rulespec-artifacts", marker = "extra == 'source-readers'", path = "vendor/rulespec_artifacts-1.1.2-py3-none-any.whl" },
+    { name = "rulespec-artifacts", marker = "extra == 'source-readers'", path = "vendor/rulespec_artifacts-1.1.3-py3-none-any.whl" },
     { name = "sentence-transformers", marker = "extra == 'embed'" },
     { name = "smart-open", extras = ["s3"], marker = "extra == 'source-readers'", specifier = "==8.0.1" },
-    { name = "spicy-docs", extras = ["acquisition", "html", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local", "yaml"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.85.0+readers.20261128.3-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "html", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local", "yaml"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.85.0+readers.20261128.5-py3-none-any.whl" },
     { name = "torch", marker = "extra == 'embed'" },
     { name = "tqdm" },
 ]
@@ -2423,9 +2423,9 @@ docs = [{ name = "mkdocs-material" }]
 source-readers = [
     { name = "deltatrack", path = "vendor/deltatrack-0.1.0-py3-none-any.whl" },
     { name = "pypdf", specifier = "==6.14.2" },
-    { name = "rulespec-artifacts", path = "vendor/rulespec_artifacts-1.1.2-py3-none-any.whl" },
+    { name = "rulespec-artifacts", path = "vendor/rulespec_artifacts-1.1.3-py3-none-any.whl" },
     { name = "smart-open", extras = ["s3"], specifier = "==8.0.1" },
-    { name = "spicy-docs", extras = ["acquisition", "html", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local", "yaml"], path = "vendor/spicy_docs-0.85.0+readers.20261128.3-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "html", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local", "yaml"], path = "vendor/spicy_docs-0.85.0+readers.20261128.5-py3-none-any.whl" },
 ]
 
 [[package]]

@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any, Final
 from loguru import logger
 
 if TYPE_CHECKING:
-    from spicy_docs.sources.mirrulations import CommentDerivedText
+    from spicy_docs.sources.mirrulations import CommentDerivedText, DerivedAttachment
 
 #: ``text_extraction_status`` for text taken from Mirrulations' extraction rather than ours.
 DERIVED_STATUS: Final = "derived"
@@ -138,11 +138,13 @@ class DerivedCommentText:
     def __init__(
         self, s3_resource: Any, bucket: str | None = None, *,
         max_bytes: int = MAX_ATTACHMENT_BYTES, listings: DocketListings | None = None,
+        capture: Callable[[DerivedAttachment], None] | None = None,
     ) -> None:
         self._reader, self._failures = _mirrulations()
         self._resource = s3_resource
         self._bucket = self._reader.BUCKET if bucket is None else bucket
         self._max_bytes = max_bytes
+        self._capture = capture
         self._listings = listings if listings is not None else DocketListings()
 
     def listed(self, agency: str, docket_id: str) -> dict[str, CommentDerivedText]:
@@ -176,4 +178,7 @@ class DerivedCommentText:
             raise DerivedTextUnavailable(
                 f"{comment_id}: {exc}", phase="fetch", source_json=provenance_json(comment)
             ) from exc
+        if self._capture is not None:
+            for attachment in fetched.attachments:
+                self._capture(attachment)
         return derived_fill(fetched)

@@ -58,6 +58,7 @@ from spicy_regs.pipelines.comment_fields_write import (
     undo,
     write,
 )
+from spicy_regs.pipelines.mirrulations_originals import MirrulationsOriginals
 from spicy_regs.schemas import COMMENT
 from spicy_regs.transforms.regulations_shape import COMMENT_ATTACHMENT_ID, COMMENT_ATTACHMENT_METADATA
 
@@ -85,7 +86,7 @@ EXTRACTED_ATTRIBUTES = frozenset({
 PART_SCHEMA = {
     "key": pl.Utf8, "etag": pl.Utf8, "size": pl.Int64,
     **{c: t for c, t in COMMENT.schema.items() if c not in (*HOST_COLUMNS, "comment")},
-    "comment_sha256": pl.Utf8, "comment_length": pl.Int64, "attributes_json": pl.Utf8,
+    "comment_sha256": pl.Utf8, "comment_length": pl.Int64, "attributes_json": pl.Utf8, "source_sha256": pl.Utf8,
 }
 
 
@@ -333,22 +334,7 @@ def read(
             pinned or resource, mirrulations.BUCKET, mirrulations.PREFIX, agency, source,
             key_lister=lambda keys=keys: keys, download_workers=workers,
         )
-        rows, refused = [], []
-        try:
-            for keyed in reader.iter_keyed_records():
-                try:
-                    row = project(keyed)
-                    if pinned is not None and row["comment_id"] != comment_key_identity(keyed.key):
-                        refused.append({"key": keyed.key, "status": "identity-mismatch",
-                                        "reason": f"Source states a different comment_id: {row['comment_id']}"})
-                    else:
-                        rows.append(row)
-                except ValueError as error:  # the extract refuses a malformed value rather than coercing it
-                    refused.append({"key": keyed.key, "status": "refused", "reason": str(error)[:300]})
-        except mirrulations.MirrulationsAccessRefusedError:
-            if pinned is not None:
-                write_evidence(target, pinned.evidence({row["key"] for row in rows}, {}))
-            raise
+        rows, refused = _capture_chunk(workdir, reader, pinned, target, project, profile)
         transport = [o for o in reader.unresolved if o.status == mirrulations.STATUS_TRANSPORT]
         record = {"plan": plan_id, "agency": agency, "chunk": chunk, "keys": len(keys), "rows": len(rows),
                   "seconds": round(time.monotonic() - begun, 2),
@@ -391,6 +377,37 @@ def read(
             logger.warning("stopping after {} chunk {}: {}", agency, chunk, totals["stopped"])
             break
     return totals
+
+
+def _capture_chunk(workdir, reader, pinned, target, project, profile):
+    """Retain exactly what was read before a part can be committed."""
+    from spicy_docs.sources import mirrulations
+
+    rows, refused = [], []
+    try:
+        with MirrulationsOriginals(workdir, mirrulations.BUCKET, publish=False, track_keys=False) as originals:
+            for keyed in reader.iter_keyed_records():
+                version_id = pinned.observations[keyed.key].get("version_id") if pinned is not None else None
+                digest = originals.retain_keyed(keyed, version_id=version_id)
+                if pinned is not None:
+                    pinned.record_capture(keyed.key, digest)
+                try:
+                    row = project(keyed)
+                except ValueError as error:  # the extract refuses a malformed value rather than coercing it
+                    refused.append({"key": keyed.key, "status": "refused", "reason": str(error)[:300]})
+                    continue
+                if pinned is not None and row["comment_id"] != comment_key_identity(keyed.key):
+                    refused.append({"key": keyed.key, "status": "identity-mismatch",
+                                    "reason": f"Source states a different comment_id: {row['comment_id']}"})
+                    continue
+                if profile != "attachments":
+                    row["source_sha256"] = digest
+                rows.append(row)
+    except mirrulations.MirrulationsAccessRefusedError:
+        if pinned is not None:
+            write_evidence(target, pinned.evidence({row["key"] for row in rows}, {}))
+        raise
+    return rows, refused
 
 
 def status(workdir: Path) -> dict:
@@ -611,14 +628,15 @@ def build_attributes(workdir: Path, out: Path | None = None, *, fetch=None) -> d
     (:func:`~spicy_regs.transforms.regulations_attributes.merge_attribute_parts`): newest ``modifyDate``, then the
     smallest digest among tied copies. The parts keep no write time and no canonical record digest, so a tie takes the
     object's ETag (its MD5) as the content digest. Reviewed exclusions get no row, by the ETL's own check
-    (``ExcludeReviewedComments.excludes``): the parts keep no payload, so each copy of a reviewed comment is fetched
-    again by its key (``fetch``, the anonymous reader by default), and a reviewed comment whose content changed refuses
-    the seed. A record the contract refuses loses only its attributes row and is listed in ``attribute_refusals.json``.
+    (``ExcludeReviewedComments.excludes``): use the exact retained original named by each read part, never a second
+    publisher GET. A reviewed comment whose content changed refuses the seed. A record the contract refuses loses only
+    its attributes row and is listed in ``attribute_refusals.json``.
     """
     import pyarrow as pa
     import pyarrow.parquet as pq
     from spicy_docs.schemas.regulations_attribute_tables import project_comment_attributes
     from spicy_docs.schemas.tables import TableContractError
+    from spicy_docs.storage.raw_archive import CentralRawArchiveStore
 
     from spicy_regs.contract_types import arrow_schema
     from spicy_regs.transforms.regulations_attributes import _with_order_columns, contract, merge_attribute_parts
@@ -633,18 +651,32 @@ def build_attributes(workdir: Path, out: Path | None = None, *, fetch=None) -> d
     staging.mkdir(parents=True)
     schema = _with_order_columns(arrow_schema(contract(table)))
     exclusion = ExcludeReviewedComments()
-    if fetch is None:
-        from spicy_docs.sources import mirrulations
+    archive = None
 
-        resource = mirrulations.s3_resource()
-        fetch = lambda key: mirrulations.download_and_parse(resource, mirrulations.BUCKET, key, lambda d: d)  # noqa: E731
+    def reviewed_payload(row: dict) -> dict:
+        nonlocal archive
+        digest = row.get("source_sha256")
+        if digest is None:
+            if fetch is not None:  # Explicit legacy replay of a part produced before raw custody.
+                return fetch(row["key"])
+            raise ValueError(f"{row['key']} lacks a retained original; re-read into a new workdir")
+        if archive is None:
+            archive = CentralRawArchiveStore(create=False)
+        with archive.open(digest) as original:
+            body = original.read()
+        if "sha256:" + hashlib.sha256(body).hexdigest() != digest:
+            raise ValueError(f"{row['key']} differs from its retained original digest")
+        return json.loads(body)
+
     refused: list[dict] = []
     projected = 0
     for index, part in enumerate(sorted((workdir / "parts").glob("*/*.parquet"))):
         batch = []
         columns = ["key", "etag", "comment_id", "modify_date", "attributes_json"]
+        if "source_sha256" in pq.read_schema(part).names:
+            columns.append("source_sha256")
         for row in pq.read_table(part, columns=columns).to_pylist():
-            if row["comment_id"] in exclusion.decisions and exclusion.excludes(fetch(row["key"])):
+            if row["comment_id"] in exclusion.decisions and exclusion.excludes(reviewed_payload(row)):
                 continue
             try:
                 projected_row = project_comment_attributes(row["comment_id"], json.loads(row["attributes_json"]))

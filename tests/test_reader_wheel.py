@@ -33,6 +33,20 @@ def test_pinned_reader_wheel_matches_its_receipt():
         assert metadata["Name"] == "spicy-docs" and metadata["Version"] == version
 
 
+def test_pinned_rulespec_wheel_matches_its_receipt_and_reader_dependency():
+    root = Path(__file__).parents[1]
+    project = tomllib.loads((root / "pyproject.toml").read_text())
+    sources = project["tool"]["uv"]["sources"]
+    wheel = root / sources["rulespec-artifacts"]["path"]
+    version = wheel.name.removeprefix("rulespec_artifacts-").removesuffix("-py3-none-any.whl")
+    receipt = json.loads((root / f"vendor/rulespec_artifacts-{version}.json").read_text())
+    assert (receipt["filename"], receipt["version"]) == (wheel.name, version)
+    assert (receipt["byte_size"], receipt["sha256"]) == (wheel.stat().st_size, hashlib.sha256(wheel.read_bytes()).hexdigest())
+    with zipfile.ZipFile(root / sources["spicy-docs"]["path"]) as docs:
+        metadata = BytesParser().parsebytes(docs.read(next(n for n in docs.namelist() if n.endswith(".dist-info/METADATA"))))
+    assert f"rulespec-artifacts=={version}" in (metadata.get_all("Requires-Dist") or [])
+
+
 @pytest.mark.parametrize("existing", [None, "raw", "gzip"])
 def test_stream_capture_reuses_exact_original_without_duplicate_wrapper(tmp_path, existing):
     body = b"publisher bytes\r\n\x00" * 20

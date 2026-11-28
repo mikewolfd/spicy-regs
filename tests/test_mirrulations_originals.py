@@ -8,12 +8,16 @@ evidence publisher run.
 import hashlib
 import io
 import json
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from json import dumps
 from pathlib import Path
+from threading import Event
 
 import polars as pl
 import pytest
+from loguru import logger
 
 import spicy_docs.sources.mirrulations as mirrulations
 import spicy_regs.pipelines.mirrulations_originals as originals_module
@@ -96,7 +100,8 @@ class _Mirror:
 
 
 def _dockets(*ids: str) -> dict[str, bytes]:
-    return {_docket_key(i): dumps(_docket_payload(i, "2024-01-01")).encode() for i in ids}
+    return {_docket_key(i): b"\r\n " + dumps(_docket_payload(i, "2024-01-01"), indent=3).encode() + b" \r\n"
+            for i in ids}
 
 
 def _run(output: Path, **options) -> None:
@@ -220,11 +225,7 @@ def test_a_rollover_publish_failure_halts_before_another_download(tmp_path, monk
     # The first object retains; the second's rollover publication fails; nothing after it is read.
     assert mirror.gets == sorted(mirror.objects)[:2]
     assert _manifest_keys(tmp_path) == set()
-    failed = MirrulationsOriginals(tmp_path, mirrulations.BUCKET, publish=False)
-    failed.failure = "earlier"
-    with pytest.raises(RetentionHalted):
-        failed.resource(mirror).Object("b", next(iter(mirror.objects))).get()
-    assert len(mirror.gets) == 2, "a GET after a failure is refused before it reaches the mirror"
+
 
 
 def test_a_commit_whose_publication_fails_is_an_evidence_failure(tmp_path, monkeypatch, r2_store):
@@ -259,8 +260,7 @@ def test_an_unscoped_whole_mirror_reread_is_refused_before_any_read(tmp_path, mo
     RegulationsPipeline(**settings, allow_unbounded_originals=True).run()
 
 
-def test_the_real_derived_text_fetch_is_kept_through_the_wrapper(tmp_path):
-    """DerivedTextPool -> SpicyDocs fetch_derived_text -> pinned Object(...).get(IfMatch=...) is retained."""
+def test_the_real_derived_text_fetch_captures_exact_pinned_bytes(tmp_path):
     from tests.test_derived_text import ACF, _FakeS3Resource, _store, derived_key
     from spicy_regs.transforms.derived_text_pool import DerivedTextPool
 
@@ -279,8 +279,8 @@ def test_the_real_derived_text_fetch_is_kept_through_the_wrapper(tmp_path):
 
     comment = {"agency_code": ACF[0], "docket_id": ACF[1], "comment_id": f"{ACF[1]}-0015"}
     with MirrulationsOriginals(tmp_path, mirrulations.BUCKET, publish=False) as retention:
-        with DerivedTextPool(lambda: retention.resource(Recording(store)), max_workers=1,
-                             on_fill=retention.expect_fill) as pool:
+        with DerivedTextPool(lambda: Recording(store), max_workers=1,
+                             capture=retention.retain_attachment, on_fill=retention.expect_fill) as pool:
             (result,) = list(pool.map([comment]))
         assert result.fill is not None
         cited = {item["key"] for item in json.loads(result.fill.provenance)["attachments"]}
@@ -288,18 +288,18 @@ def test_the_real_derived_text_fetch_is_kept_through_the_wrapper(tmp_path):
         assert retention.retained == cited
         retention.commit()
 
-    assert {key for key, if_match in pinned if if_match} == cited, "the pinned GET went through the wrapper"
+    assert len(pinned) == len(cited) and {key for key, if_match in pinned if if_match} == cited
     for key in cited:
         assert _archived(store[key]) == store[key]
     (index,) = (tmp_path / "source-evidence").glob("*/originals-index.parquet")
     assert set(pl.read_parquet(index)["key"]) == cited
 
 
-def test_keys_the_resource_never_saw_are_not_retired(tmp_path, monkeypatch):
-    """If SpicyDocs stopped reading through the supplied resource, the conservation check refuses."""
+def test_keys_that_bypass_retention_are_not_retired(tmp_path, monkeypatch):
+    """If the reader bypasses retention, the conservation check still refuses."""
     mirror = _Mirror(_dockets("EPA-2024-0001"))
     monkeypatch.setattr(mirrulations, "s3_resource", lambda: mirror)
-    monkeypatch.setattr(originals_module.MirrulationsOriginals, "resource", lambda self, inner: inner)
+    monkeypatch.setattr(originals_module.MirrulationsOriginals, "retain_keyed", lambda self, record: None)
 
     with pytest.raises(SourceEvidenceError, match="without a retained original"):
         _run(tmp_path)
@@ -394,40 +394,79 @@ def test_derived_text_a_fill_cites_must_have_been_retained(tmp_path):
         retention.commit()
 
 
-class _StubObject:
-    def __init__(self, response: dict) -> None:
-        self.response, self.options = response, None
-
-    def get(self, **options) -> dict:
-        self.options = options
-        return self.response
-
-
-class _StubResource:
-    def __init__(self, response: dict) -> None:
-        self.object = _StubObject(response)
-
-    def Object(self, _bucket: str, _key: str) -> _StubObject:  # noqa: N802 - boto3 API
-        return self.object
+@pytest.mark.parametrize("raw_bytes", [None, b"oversized"])
+def test_missing_or_oversized_reader_bytes_fail_closed(tmp_path, monkeypatch, raw_bytes):
+    monkeypatch.setattr(originals_module, "MAX_OBJECT_BYTES", 4)
+    record = mirrulations.KeyedPayload("k", None, {}, raw_bytes=raw_bytes)
+    with pytest.raises(RetentionHalted), MirrulationsOriginals(tmp_path, "b", publish=False) as retention:
+        retention.retain_keyed(record)
+    assert retention.retained == set()
+    with pytest.raises(SourceEvidenceError, match="closed"):
+        retention.commit()
 
 
-def test_the_wrapper_hands_the_reader_a_streaming_body_and_keeps_only_whole_objects(tmp_path, monkeypatch):
-    from botocore.response import StreamingBody
+@pytest.mark.parametrize("fails", [False, True])
+def test_rollover_io_does_not_hold_state_lock_and_commit_waits(tmp_path, monkeypatch, fails):
+    monkeypatch.setattr(originals_module, "OBJECTS_PER_ARTIFACT", 2)
+    entered, release = Event(), Event()
+    committing = Event()
+    started_flushes = []
+    logs = []
+    logger_id = logger.add(lambda msg: logs.append(str(msg)), format="{message}")
+    outcome = pytest.raises(SourceEvidenceError, match="publishing originals") if fails else nullcontext()
 
-    retention = MirrulationsOriginals(tmp_path, mirrulations.BUCKET, publish=False)
-    whole = retention.resource(_StubResource({"Body": _Body(b"abc"), "ContentLength": 3})).Object("b", "k").get()
-    assert isinstance(whole["Body"], StreamingBody) and list(whole["Body"].iter_chunks()) == [b"abc"]
-    assert retention.retained == {"k"}
+    try:
+        with outcome, MirrulationsOriginals(tmp_path, "b", publish=False) as originals:
+            real_publish = originals._publish
+            real_wait = originals._state.wait_for
 
-    for options, response in [
-        ({"Range": "bytes=0-1"}, {"Body": _Body(b"ab"), "ContentLength": 2}),
-        ({}, {"Body": _Body(b"ab"), "ContentLength": 2, "ContentRange": "bytes 0-1/3"}),
-        ({}, {"Body": _Body(b""), "ContentLength": originals_module.MAX_OBJECT_BYTES + 1}),
-    ]:
-        stub = _StubResource(response)
-        assert retention.resource(stub).Object("b", "partial").get(**options) is response
-    assert retention.retained == {"k"}
-    retention.commit()
+            def publish(evidence, rows):
+                started_flushes.append([row["key"] for row in rows])
+                if len(started_flushes) == 1:
+                    entered.set()
+                    assert release.wait(10), "test did not release blocked publication"
+                    if fails:
+                        raise OSError("publisher unavailable")
+                real_publish(evidence, rows)
+
+            def observe_barrier(predicate, *args, **kwargs):
+                if originals._committing and originals._rolling:
+                    committing.set()
+                return real_wait(predicate, *args, **kwargs)
+
+            monkeypatch.setattr(originals, "_publish", publish)
+            monkeypatch.setattr(originals._state, "wait_for", observe_barrier)
+            for key in ("a", "b"):
+                originals.retain(key, key.encode(), {})
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                rollover = pool.submit(originals.retain, "c", b"c", {})
+                try:
+                    assert entered.wait(5)
+                    assert originals._lock.acquire(blocking=False), "rollover held the state lock during I/O"
+                    originals._lock.release()
+                    other = pool.submit(originals.retain, "d", b"d", {})
+                    assert other.result(timeout=5) == "sha256:" + hashlib.sha256(b"d").hexdigest()
+                    commit = pool.submit(originals.commit, ["a", "b", "d"])
+                    assert committing.wait(5), "commit did not wait for the detached batch"
+                    assert not commit.done() and started_flushes == [["a", "b"]]
+                finally:
+                    release.set()
+                if fails:
+                    with pytest.raises(RetentionHalted, match="publishing originals"):
+                        rollover.result(timeout=5)
+                else:
+                    rollover.result(timeout=5)
+                commit.result(timeout=5)
+    finally:
+        logger.remove(logger_id)
+    assert started_flushes == ([["a", "b"]] if fails else [["a", "b"], ["d"], ["c"]])
+    outcomes = [json.loads(path.read_bytes())["outcome"]
+                for path in tmp_path.glob("source-evidence/*/run-outcome.json")]
+    assert sorted(outcomes) == (["failed"] * 2 if fails else ["complete"] * 3)
+    telemetry = next(line.strip() for line in logs if "lock_wait_max_ms=" in line)
+    assert "objects=2" in telemetry and "lock_acquires=" in telemetry
+    print(telemetry)
 
 
 def test_large_passes_split_into_bounded_evidence_artifacts(tmp_path, monkeypatch, r2_store):
@@ -455,3 +494,15 @@ def test_the_scheduled_etl_passes_scratch_originals_that_the_cli_accepts():
         ["--use-iceberg", "--defer-comments-publication", "--skip-upload", "--scratch-originals"]
     )
     assert bound.arguments["scratch_originals"] is True and bound.arguments["use_iceberg"] is True
+
+
+def test_attribute_sweep_captures_the_same_read_used_for_projection(tmp_path, monkeypatch):
+    from spicy_regs.pipelines.attributes_sweep import sweep
+
+    mirror = _Mirror(_dockets("EPA-2024-0001"))
+    monkeypatch.setattr(mirrulations, "s3_resource", lambda: mirror)
+    counts = sweep(tmp_path, agencies=[AGENCY], download_workers=1)
+    assert counts == {"docket_attributes": 1, "document_attributes": 0}
+    assert mirror.gets == list(mirror.objects)
+    [event] = _retained_events(tmp_path)
+    assert _archived(mirror.objects[event["source_record_key"]]) == mirror.objects[event["source_record_key"]]

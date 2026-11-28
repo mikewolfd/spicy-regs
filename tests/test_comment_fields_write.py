@@ -829,7 +829,7 @@ def test_no_profile_stages_a_private_column_and_the_check_would_catch_one(tmp_pa
     assert staged - {"key"} <= set(COMMENT.schema) - {"comment"}
     assert not {c for c in staged if any(word in c for word in cf.PRIVATE_WORDS)}
     private = set(cf.PART_SCHEMA) - set(COMMENT.schema) - {"key"}
-    assert private == {"etag", "size", "comment_sha256", "comment_length", "attributes_json"}
+    assert private == {"etag", "size", "comment_sha256", "comment_length", "attributes_json", "source_sha256"}
     assert all(any(word in c for word in cf.PRIVATE_WORDS) for c in private)
     reads(tmp_path, [{"key": "a", "comment_id": "A", "attributes_json": '{"email": "x@example.org"}'}])
     monkeypatch.setitem(cfw.PROFILES, "leaky", ("attachments_json", "attributes_json"))
