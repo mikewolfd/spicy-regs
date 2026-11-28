@@ -223,12 +223,14 @@ def _verify_admitted_generation(artifact, source, table_info, admit_receipts, *,
     if spec["publicationStatus"] not in {"complete-family", "local-partial"}:
         raise ValueError("Invalid generation publication status")
     tables = spec["tables"]
-    from spicy_regs.sources.publication import member_table, parse_index, table_descriptor, table_entries
+    from spicy_regs.sources.publication import member_table, parse_read_snapshot, table_descriptor, table_entries
     from rulespec_artifacts import canonical_json_bytes
 
     snapshot = spec["readSnapshot"]
+    if not isinstance(snapshot, dict):
+        raise ValueError("Invalid generation readSnapshot")
     if snapshot:
-        parse_index(canonical_json_bytes(snapshot))
+        parse_read_snapshot(canonical_json_bytes(snapshot))
     _check_parents(spec.get("parents", {}), snapshot)
     carried = spec["carriedForward"]
     from spicy_regs.source_evidence import INPUT_ROLE, PRIOR_ROLE
@@ -349,6 +351,7 @@ def build_generation(
     owned_output_root: Path | None = None,
     read_operation=None,
     canonical_root: Path | None = None,
+    extra_snapshot_families: Sequence[str] = (),
 ):
     """Snapshot exactly one declared family into a new immutable artifact.
 
@@ -457,7 +460,7 @@ def build_generation(
     _write_generation_metadata(
         directory, family=family, tables=tables, members=members, read_snapshot=read_snapshot,
         carried_forward=carried_forward, publication_status=publication_status, inputs=inputs,
-        parents=parents, etl_receipts=receipt_spec,
+        parents=parents, etl_receipts=receipt_spec, extra_snapshot_families=extra_snapshot_families,
     )
     logger.info("Generation {}: preparation completed in {:.1f}s", family, monotonic() - preparation_started)
     admission_started = monotonic()
@@ -562,10 +565,18 @@ def _write_generation_metadata(
     publication_status: str = "complete-family", inputs=(), extra_packages: Sequence[str] = (),
     parents: Mapping[str, Mapping] | None = None,
     etl_receipts: Mapping | None = None,
+    extra_snapshot_families: Sequence[str] = (),
 ):
     """Write the existing manifest/root format; callers must then verify bytes."""
     from rulespec_artifacts import Producer, build_artifact_root, canonical_json_bytes, write_member_manifest
+    from spicy_regs.sources.publication import compact_read_snapshot
 
+    compact_snapshot = compact_read_snapshot(
+        read_snapshot,
+        family=family,
+        parents=parents,
+        extra_families=extra_snapshot_families,
+    )
     with (directory / MANIFEST).open("wb") as stream:
         manifest = write_member_manifest(
             stream, scope_kind="global", scope_id=family, object_key=MANIFEST, members=members
@@ -579,7 +590,7 @@ def _write_generation_metadata(
             "packages": {
                 name: version(name) for name in ("spicy-regs", "spicy-docs", "rulespec-artifacts", *extra_packages)
             },
-            "readSnapshot": dict(read_snapshot or {}),
+            "readSnapshot": compact_snapshot,
             "carriedForward": dict(carried_forward or {}),
             "publicationStatus": publication_status,
             **({"etlReceipts": dict(etl_receipts)} if etl_receipts is not None else {}),

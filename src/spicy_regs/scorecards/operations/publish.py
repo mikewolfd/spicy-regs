@@ -70,7 +70,12 @@ def main(argv=None):
     if family not in {"scorecards", "scorecard-analysis"}:
         raise ValueError("Scorecard commands publish only scorecard source or analysis families")
     prior = publication.parse_index(Path(prepared["read_snapshot_path"]).read_bytes())
-    if artifact.root["spec"].get("readSnapshot") != prior:
+    if not publication.read_snapshot_matches(
+        artifact.root["spec"].get("readSnapshot"),
+        prior,
+        family=family,
+        parents=artifact.root["spec"].get("parents"),
+    ):
         raise ValueError("Preparation read snapshot differs from the verified generation")
     load_dotenv(args.env_file)
     client, bucket = r2.verified_target_client()

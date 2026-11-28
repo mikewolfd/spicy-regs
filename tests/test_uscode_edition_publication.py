@@ -137,7 +137,9 @@ def test_append_preserves_order_and_values_without_copy_and_leaves_retired_recei
     result = addition.prepare_addition(**args)
     target = Path(result['generation'])
     artifact = generations.verify_generation(target)
-    assert artifact.root['spec']['readSnapshot'] == args['read_snapshot']
+    assert publication.read_snapshot_matches(artifact.root['spec']['readSnapshot'], args['read_snapshot'],
+                                             family=addition.FAMILY)
+    assert artifact.root['spec']['readSnapshot']['scope'] == publication.READ_SNAPSHOT_SCOPE
     assert artifact.root['spec']['publicationStatus'] == 'complete-family'
     assert 'etlReceipts' not in artifact.root['spec'] and not (target / 'etl_receipts.parquet').exists()
     assert any(i['role'] == 'prior-generation' and i['artifactDigest'] == args['expected_prior']

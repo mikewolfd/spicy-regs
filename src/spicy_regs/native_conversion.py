@@ -995,7 +995,13 @@ def resume_prepared(generation: Path, *, work: Path, allowed: Sequence[str], exp
             if family not in allowed:
                 raise ConversionRefused(f"{family} is not in this run's allow-list")
             old = captured["families"][family]
-            if (spec["publicationStatus"] != "complete-family" or spec["readSnapshot"] != _conversion_snapshot(captured, previous, operation)
+            if (spec["publicationStatus"] != "complete-family"
+                    or not publication.read_snapshot_matches(
+                        spec["readSnapshot"],
+                        _conversion_snapshot(captured, previous, operation),
+                        family=family,
+                        parents=spec.get("parents"),
+                    )
                     or "etlReceipts" in old or previous.get("family", family) != family
                     or previous.get("captured", {}).get("entry", old) != old):
                 raise ConversionRefused("Resume generation does not bind its captured complete prior")
@@ -1145,7 +1151,12 @@ def _verify_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
         if (artifact.pin.as_dict() != sealed["generationPin"]
                 or artifact.pin.artifact_digest != receipt["generation"]["artifactDigest"]
                 or spec["family"] != family or spec["publicationStatus"] != "complete-family"
-                or spec["readSnapshot"] != _conversion_snapshot(captured, receipt, read_operation)
+                or not publication.read_snapshot_matches(
+                    spec["readSnapshot"],
+                    _conversion_snapshot(captured, receipt, read_operation),
+                    family=family,
+                    parents=spec.get("parents"),
+                )
                 or spec["etlReceipts"]["generationId"] != receipt["generation"]["receiptGenerationId"]
                 or artifact.root["producer"]["implementationId"] != producer_implementation
                 or artifact.root["producer"]["verifierImplementationId"] != producer_implementation

@@ -212,6 +212,7 @@ def prepare_remote_generation(
     receipt_policies: Sequence | None = None, receipt_generation_id: str | None = None,
     parents: Mapping[str, Mapping] | None = None,
     bounded_receipts=False,
+    extra_snapshot_families: Sequence[str] = (),
 ):
     """Create and fully verify the standard artifact using pinned remote tables.
 
@@ -250,7 +251,7 @@ def prepare_remote_generation(
         directory, family=family, tables=tables, members=descriptors, read_snapshot=read_snapshot,
         carried_forward=carried_forward, publication_status=publication_status, inputs=inputs,
         extra_packages=("pyarrow", "duckdb", "smart-open", "wrapt"), etl_receipts=receipt_spec,
-        parents=parents,
+        parents=parents, extra_snapshot_families=extra_snapshot_families,
     )
     return _verify_remote(source, bounded_receipts=bounded_receipts)
 

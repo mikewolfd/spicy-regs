@@ -427,11 +427,19 @@ def generation_options(paths: Sequence[Path]) -> dict:
             'receipt_generation_id': ids.pop(), 'adopt_owned_receipt': True}
 
 
-def build_court_generation(directory: Path, *, family: str, files: Sequence[Path], **kwargs):
+def build_court_generation(
+    directory: Path,
+    *,
+    family: str,
+    files: Sequence[Path],
+    extra_snapshot_families: Sequence[str] = (),
+    **kwargs,
+):
     """Admit court subjects and receipts together, including standalone local builds."""
     from spicy_regs.generations import build_generation
     from spicy_regs.native_types import described_schema
     schemas = {path.stem: described_schema(SUBJECT_SCHEMAS[path.stem]) for path in files}
     return build_generation(directory, family=family, files=files,
                             expected_keys=[path.name for path in files], schemas=schemas,
+                            extra_snapshot_families=extra_snapshot_families,
                             **generation_options(files), **kwargs)

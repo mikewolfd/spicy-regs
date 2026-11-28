@@ -119,6 +119,7 @@ class CompletedSteps:
 def audit_assembly(admission_path, admission_digest, retained_path, retained_digest, checkpoint):
     """Read control files and file metadata, never rehash corpus payloads."""
     from spicy_regs import native_conversion as native
+    from spicy_regs.sources import publication
     from spicy_regs.transforms.fec_identity_receipts import dataset_policy
 
     admission = load_bound(admission_path, admission_digest)
@@ -164,7 +165,12 @@ def audit_assembly(admission_path, admission_digest, retained_path, retained_dig
     spec = root['spec']
     old = controls['capturedIndex']['families']['fec-observations']
     if (spec['family'] != 'fec-observations' or spec['publicationStatus'] != 'complete-family'
-            or spec['readSnapshot'] != controls['capturedIndex']
+            or not publication.read_snapshot_matches(
+                spec['readSnapshot'],
+                controls['capturedIndex'],
+                family='fec-observations',
+                parents=spec.get('parents'),
+            )
             or spec['etlReceipts']['generationId'] != header['generation_id']
             or header['identity']['captured_family'] != old
             or set(spec['tables']) != {name + '.parquet' for name in TABLES}):

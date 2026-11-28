@@ -171,7 +171,10 @@ def test_query_requires_explicit_filing_inputs_and_exact_native_parent(tmp_path,
         # The moved tables publish under their reference names only (ss-j4vz Q1).
         assert {'fec_reference_filing_feed_items.parquet', 'fec_reference_source_pages.parquet'} <= set(artifact.root['spec']['tables'])
         assert not {'fec_research_filing_feed_items.parquet', 'fec_research_source_pages.parquet'} & set(artifact.root['spec']['tables'])
-        assert artifact.root['spec']['readSnapshot'] == staged
+        assert publication.read_snapshot_matches(
+            artifact.root['spec']['readSnapshot'], staged, family='fec-query', parents=artifact.root['spec']['parents']
+        )
+        assert artifact.root['spec']['readSnapshot']['scope'] == publication.READ_SNAPSHOT_SCOPE
         assert set(artifact.root['spec']['parents']) == family_tables('fec-observations')
         for key, original in retained.items():
             if key not in REBUILT_TABLES['fec-query']:

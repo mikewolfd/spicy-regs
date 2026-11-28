@@ -27,8 +27,17 @@ read, row counts, and every byte digest. It uses the installed Rulespec artifact
 library for membership, canonical identity, manifests and verification.
 
 The resulting artifact records the host implementation digest, installed package
-versions, the captured publication index, any unchanged siblings carried
-forward by a partial writer, and its `parents`. A parent is each declared input
+versions, a compact snapshot of the captured publication index, any unchanged siblings carried
+forward by a partial writer, and its `parents`. In `spec.readSnapshot`, new generations write
+the `"scope": "referenced-families"` subset shape: `format`, `version`, `scope`, `indexSha256`
+(the SHA-256 of the full canonical captured `publication.v2.json` bytes), `indexFamilyCount`,
+and `families` restricted to the family's own prior entry (if present), any declared managed
+parent families, and explicit contextual entries where declared. Historical immutable roots
+that embedded the full `publication.v2.json` (or `{}`) remain valid under
+`publication.parse_read_snapshot`, while live `publication.v2.json` parsing via
+`publication.parse_index` stays strict and refuses compact snapshots. The live pointer retains
+its `INDEX_LIMIT` of 1 MiB and emits a non-blocking warning once a merged index reaches 80% of
+that cap (`838,861` bytes). A parent is each declared input
 the build read: the SHA-256 and size of its bytes (with its family and
 generation when a managed family published it, checked against the captured
 index), or for an input read in place over HTTP (`remote_inputs`) its storage
