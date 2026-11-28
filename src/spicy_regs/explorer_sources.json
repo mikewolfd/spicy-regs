@@ -565,6 +565,11 @@
         "cms"
       ]
     },
+    "cms-part-b-associations": {
+      "sources": [
+        "cms"
+      ]
+    },
     "cms-medicaid": {
       "sources": [
         "cms"
