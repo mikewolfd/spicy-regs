@@ -16,8 +16,16 @@ Implements the joint Congressional Archive / spicy-regs person-identity matching
   from ``University of California, Los Angeles``); strips only trailing place names cleanly
   (e.g., ``, Washington, DC``, ``, Cambridge, Massachusetts``), drops leading ``the``, and
   refuses empty or bare-title/private-citizen organizations.
-* **Date-overlap scoring**: compares CT witness hearing dates against matching LDA filing
-  periods (``first_quarter``..``fourth_quarter``, ``mid_year``, ``year_end``).
+* **Date-overlap scoring & blind-review precision guardrails**: compares CT witness hearing dates
+  against matching LDA filing periods (``first_quarter``..``fourth_quarter``, ``mid_year``,
+  ``year_end``) and enforces three deterministic auto-publish guardrails (routing failing pairs to
+  ``manual_review_quarantine``):
+  1. Require ``len(normalized_first_name) >= 2`` on both CT witness and LDA lobbyist records.
+  2. Cap auto-publish temporal gap at ``<= 5`` years (``max(0, lda_min_year - hearing_year,
+     hearing_year - lda_max_year) <= 5``).
+  3. Bound undated hearings via the parent hearing's 2-year Congress window when available and
+     apply the same ``<= 5``-year gap cap; if completely unbounded, require corroboration via
+     matching middle initial/name, matching generational suffix, or an eponymous registrant firm.
 * **Privacy boundary**: emits only public hearing witness appearances matched to registered
   Senate LDA lobbyists (``lda_lobbyist:<id>``) and validates every emitted candidate through
   :func:`spicy_regs.identity_review.person_candidate_digest` (strictly excluding commenters,
@@ -52,6 +60,23 @@ from spicy_regs.public_url import resolve_r2_base_url
 HYPHEN_POLICY = "space_before_punctuation"
 #: Default User-Agent sent to Cloudflare-fronted spicygov endpoints and DuckDB httpfs.
 DEFAULT_USER_AGENT = "spicy-regs-person-identity/1.0 (+https://spicygov.ai)"
+
+#: Deterministic auto-publish precision guardrails (blind Neon audit on person-identity-review/1).
+MIN_FIRST_NAME_LENGTH = 2
+MAX_AUTO_PUBLISH_GAP_YEARS = 5
+
+#: Auto-publish disposition values attached outside content-only ``candidate_digest``.
+DISPOSITION_QUALIFIED = "qualified"
+DISPOSITION_MANUAL_REVIEW_QUARANTINE = "manual_review_quarantine"
+
+#: Machine-readable quarantine reason codes for pairs routed to manual review.
+QUARANTINE_INITIAL_ONLY_FIRST_NAME = "initial_only_first_name"
+QUARANTINE_TEMPORAL_GAP_EXCEEDS_5Y = "temporal_gap_exceeds_5y"
+QUARANTINE_UNDATED_UNCORROBORATED = "undated_uncorroborated"
+QUARANTINE_NO_LDA_DATES = "no_lda_dates"
+
+#: Regex matching GovInfo Congressional Hearing package IDs (e.g. ``CHRG-107shrg87708``).
+_CHRG_CONGRESS_RE = re.compile(r"^CHRG-(\d{1,3})[a-z]", re.IGNORECASE)
 
 #: Generational suffixes extracted aside; differing stated suffixes block a merge.
 SUFFIXES = frozenset({"jr", "sr", "ii", "iii", "iv"})
@@ -172,6 +197,26 @@ _KNOWN_BARE_CITIES = frozenset({
     "reston", "fairfax", "cambridge", "new haven", "princeton", "palo alto", "berkeley",
 })
 
+#: Words that disqualify an organization from being treated as an eponymous firm
+#: (universities, foundations, government agencies, trade associations, unions, etc.).
+_NON_EPONYMOUS_INSTITUTION_TOKENS = frozenset({
+    "university", "college", "school", "hospital", "foundation", "museum", "library",
+    "department", "dept", "bureau", "agency", "administration", "commission", "committee",
+    "authority", "ministry", "association", "federation", "union", "society", "council",
+    "coalition", "alliance", "chamber", "board", "church", "diocese", "city", "county",
+    "state", "district", "republic", "kingdom", "institute", "institution", "center", "centre",
+})
+
+#: Generic English / institutional words that never trigger an eponymous-firm match as a solo surname.
+_NON_EPONYMOUS_SURNAME_TOKENS = _NON_CITY_WORDS | _NON_EPONYMOUS_INSTITUTION_TOKENS | frozenset({
+    "company", "associates", "consulting", "advisors", "strategies", "solutions", "global",
+    "capital", "public", "affairs", "government", "relations", "industries", "financial",
+    "media", "communications", "management", "technologies", "technology", "resources",
+    "medical", "first", "new", "north", "south", "east", "west", "central", "pacific",
+    "atlantic", "midwest", "western", "eastern", "northern", "southern", "firm", "counsel",
+    "office", "offices", "enterprise", "enterprises", "holding", "holdings", "ventures",
+})
+
 #: Exact calendar bounds for Senate LDA filing periods.
 LDA_FILING_PERIOD_BOUNDS: dict[str, tuple[tuple[int, int], tuple[int, int]]] = {
     "first_quarter": ((1, 1), (3, 31)),
@@ -192,6 +237,24 @@ class NormalizedName:
     suffix: str
     surname_first: bool
     tokens: tuple[str, ...]
+    given_tokens: tuple[str, ...] = ()
+    family_tokens: tuple[str, ...] = ()
+
+    @property
+    def first_name(self) -> str:
+        """Primary normalized given-name token (after honorific/period stripping)."""
+        return self.tokens[0] if self.tokens else ""
+
+    @property
+    def surname_tokens(self) -> tuple[str, ...]:
+        """Normalized family-name token sequence."""
+        if self.family_tokens:
+            return self.family_tokens
+        if len(self.tokens) >= 3 and self.tokens[-2] in SURNAME_PARTICLES:
+            return self.tokens[-2:]
+        if len(self.tokens) >= 2:
+            return (self.tokens[-1],)
+        return ()
 
 
 @dataclass(frozen=True)
@@ -205,6 +268,24 @@ class DateOverlap:
     lda_max_date: str | None
 
 
+@dataclass(frozen=True)
+class GuardrailEvaluation:
+    """Deterministic auto-publish guardrail verdict for one matched witness-lobbyist pair."""
+
+    disposition: str
+    quarantine_reasons: tuple[str, ...]
+    first_name_guard: str
+    hearing_congress: int | None
+    hearing_year_window: tuple[int, int] | None
+    temporal_bound_source: str
+    temporal_gap_years: int | None
+    undated_corroboration: tuple[str, ...]
+
+    @property
+    def qualified(self) -> bool:
+        return self.disposition == DISPOSITION_QUALIFIED
+
+
 @dataclass
 class _LobbyistBucket:
     """Aggregated LDA filing evidence for one ``(name_key, org_key, lobbyist_id)``."""
@@ -212,6 +293,9 @@ class _LobbyistBucket:
     lobbyist_id: str
     name_key: str
     org_key: str
+    first_tokens: set[str]
+    surname_tokens: set[tuple[str, ...]]
+    has_multi_token_given: bool
     middle_initials: set[str]
     suffixes: set[str]
     stated_names: Counter[str]
@@ -400,6 +484,8 @@ def normalize_lda_lobbyist_name(
         suffix=" ".join(sorted(all_suffixes)),
         surname_first=False,
         tokens=tuple(core),
+        given_tokens=tuple(given_toks),
+        family_tokens=tuple(family_toks),
     )
 
 
@@ -513,6 +599,209 @@ def normalize_organization(raw: str | None) -> str:
     if norm in NON_MERGEABLE_ORGS:
         return ""
     return norm
+
+
+def check_first_name_guard(
+    witness_first_name: str,
+    lda_first_names: str | Sequence[str] | set[str],
+    *,
+    min_length: int = MIN_FIRST_NAME_LENGTH,
+) -> tuple[bool, str]:
+    """Require ``len(normalized_first_name) >= min_length`` on both CT witness and LDA lobbyist."""
+    w_tok = witness_first_name.strip()
+    l_set = (
+        {lda_first_names.strip()} if isinstance(lda_first_names, str) and lda_first_names.strip() else
+        set() if isinstance(lda_first_names, str) else
+        {tok.strip() for tok in lda_first_names if tok and tok.strip()}
+    )
+    w_short = len(w_tok) < min_length
+    l_short = (not l_set) or any(len(tok) < min_length for tok in l_set)
+    if w_short and l_short:
+        return False, "quarantine_both_initial_only"
+    if w_short:
+        return False, "quarantine_witness_initial_only"
+    if l_short:
+        return False, "quarantine_lda_initial_only"
+    return True, "both_full"
+
+
+def congress_year_window(congress: int) -> tuple[int, int]:
+    """Return the inclusive 2-year calendar window ``(start_year, end_year)`` for a US Congress."""
+    if isinstance(congress, bool) or not isinstance(congress, int) or congress < 1:
+        raise ValueError(f"Congress number must be a positive integer, got {congress!r}")
+    start_year = 1787 + 2 * congress
+    return start_year, start_year + 1
+
+
+def extract_hearing_congress(witness: Mapping[str, Any]) -> int | None:
+    """Extract an authoritative US Congress number from CT witness/hearing metadata when present."""
+    for key in ("hearing_congress", "congress"):
+        raw = witness.get(key)
+        if isinstance(raw, bool) or raw is None:
+            continue
+        if isinstance(raw, int):
+            if 1 <= raw <= 200:
+                return raw
+            continue
+        if isinstance(raw, str) and raw.strip().isdigit():
+            val = int(raw.strip())
+            if 1 <= val <= 200:
+                return val
+
+    package_id = str(witness.get("package_id") or "").strip()
+    if package_id:
+        match = _CHRG_CONGRESS_RE.match(package_id)
+        if match is not None:
+            val = int(match.group(1))
+            if 1 <= val <= 200:
+                return val
+    return None
+
+
+def compute_temporal_gap_years(
+    hearing_year_window: tuple[int, int] | None,
+    filing_years: Sequence[int],
+) -> int | None:
+    """Compute minimum calendar-year gap between a hearing year/window and LDA filing years.
+
+    For a single-year hearing window ``(y, y)``, reduces identically to
+    ``max(0, min(filing_years) - y, y - max(filing_years))``.
+    For a 2-year Congress window ``(s, e)``, computes
+    ``max(0, min(filing_years) - e, s - max(filing_years))``.
+    """
+    if hearing_year_window is None or not filing_years:
+        return None
+    win_start, win_end = hearing_year_window
+    lda_min = min(filing_years)
+    lda_max = max(filing_years)
+    return max(0, lda_min - win_end, win_start - lda_max)
+
+
+def is_eponymous_firm_match(
+    surname_tokens: Sequence[str],
+    org_key: str,
+    *,
+    matched_roles: Sequence[str] | set[str] | frozenset[str] = ("registrant",),
+) -> bool:
+    """Return True when ``org_key`` is an eponymous registrant firm bearing the person's surname."""
+    if "registrant" not in matched_roles:
+        return False
+    s_toks = tuple(tok.strip().casefold() for tok in surname_tokens if tok and tok.strip())
+    if not s_toks or sum(len(tok) for tok in s_toks) < 3:
+        return False
+    if len(s_toks) == 1 and s_toks[0] in _NON_EPONYMOUS_SURNAME_TOKENS:
+        return False
+    org_toks = tuple(tok for tok in org_key.split() if tok)
+    if not org_toks or (set(org_toks) & _NON_EPONYMOUS_INSTITUTION_TOKENS):
+        return False
+    span = len(s_toks)
+    return any(org_toks[idx:idx + span] == s_toks for idx in range(len(org_toks) - span + 1))
+
+
+def evaluate_auto_publish_guardrails(
+    *,
+    witness_name: NormalizedName,
+    lda_first_tokens: Sequence[str] | set[str],
+    lda_surname_tokens: Sequence[tuple[str, ...]] | set[tuple[str, ...]],
+    lda_has_multi_token_given: bool,
+    org_key: str,
+    matched_roles: Sequence[str] | set[str] | frozenset[str],
+    middle_guard: str,
+    suffix_guard: str,
+    hearing_date: date | None,
+    hearing_congress: int | None,
+    filing_years: Sequence[int],
+    max_gap_years: int = MAX_AUTO_PUBLISH_GAP_YEARS,
+    min_first_name_length: int = MIN_FIRST_NAME_LENGTH,
+) -> GuardrailEvaluation:
+    """Apply the three blind-review precision guardrails to one matched witness-lobbyist pair.
+
+    1. Reject initial-only given names (``len(first_name) < 2``) on either CT witness or LDA record.
+    2. Cap temporal gap at ``<= max_gap_years`` (5 years) between hearing date and LDA filing years.
+    3. For undated hearings, fall back to the 2-year Congress window when available and apply the
+       same ``<= max_gap_years`` check; when completely unbounded, require corroboration via
+       matching middle initial/name, matching generational suffix, or an eponymous registrant firm.
+    """
+    reasons: list[str] = []
+
+    first_ok, first_guard = check_first_name_guard(
+        witness_name.first_name,
+        lda_first_tokens,
+        min_length=min_first_name_length,
+    )
+    if not first_ok:
+        reasons.append(QUARANTINE_INITIAL_ONLY_FIRST_NAME)
+
+    if hearing_date is not None:
+        temporal_bound_source = "hearing_date"
+        hearing_year_window: tuple[int, int] | None = (hearing_date.year, hearing_date.year)
+    elif hearing_congress is not None:
+        temporal_bound_source = "congress_window"
+        hearing_year_window = congress_year_window(hearing_congress)
+    else:
+        temporal_bound_source = "unbounded"
+        hearing_year_window = None
+
+    temporal_gap_years = compute_temporal_gap_years(hearing_year_window, filing_years)
+    corroboration: list[str] = []
+
+    if not filing_years:
+        reasons.append(QUARANTINE_NO_LDA_DATES)
+    elif hearing_year_window is not None:
+        assert temporal_gap_years is not None
+        if temporal_gap_years > max_gap_years:
+            reasons.append(QUARANTINE_TEMPORAL_GAP_EXCEEDS_5Y)
+    else:
+        # Completely unbounded undated hearing: require explicit secondary corroboration.
+        if middle_guard == "both_match" or (lda_has_multi_token_given and len(witness_name.tokens) >= 3):
+            corroboration.append("middle_match")
+        if suffix_guard == "both_match":
+            corroboration.append("suffix_match")
+        surname_candidates: list[tuple[str, ...]] = [
+            *sorted(lda_surname_tokens),
+            *([] if not witness_name.surname_tokens else [witness_name.surname_tokens]),
+        ]
+        if any(
+            is_eponymous_firm_match(stoks, org_key, matched_roles=matched_roles)
+            for stoks in surname_candidates
+        ):
+            corroboration.append("eponymous_firm")
+        if not corroboration:
+            reasons.append(QUARANTINE_UNDATED_UNCORROBORATED)
+
+    disposition = DISPOSITION_MANUAL_REVIEW_QUARANTINE if reasons else DISPOSITION_QUALIFIED
+    return GuardrailEvaluation(
+        disposition=disposition,
+        quarantine_reasons=tuple(reasons),
+        first_name_guard=first_guard,
+        hearing_congress=hearing_congress,
+        hearing_year_window=hearing_year_window,
+        temporal_bound_source=temporal_bound_source,
+        temporal_gap_years=temporal_gap_years,
+        undated_corroboration=tuple(corroboration),
+    )
+
+
+def is_auto_publish_qualified(candidate: Mapping[str, Any]) -> bool:
+    """Return True only when a candidate carries an explicit qualified auto-publish disposition."""
+    return (
+        candidate.get("auto_publish_disposition") == DISPOSITION_QUALIFIED
+        and not candidate.get("quarantine_reasons")
+        and not candidate.get("is_planted_control")
+    )
+
+
+def require_auto_publish_qualified(candidate: Mapping[str, Any]) -> None:
+    """Refuse quarantined or non-qualified candidates from auto-publish pathways."""
+    if is_auto_publish_qualified(candidate):
+        return
+    cid = candidate.get("candidate_id", "<unknown>")
+    disposition = candidate.get("auto_publish_disposition", "unset")
+    reasons = candidate.get("quarantine_reasons") or []
+    raise ValueError(
+        f"Candidate {cid!r} refused for auto-publish (disposition={disposition!r}, reasons={reasons!r}); "
+        "route to manual review via identity_review.py"
+    )
 
 
 def check_middle_initial_guard(left_mid: str, right_mid: str | Sequence[str] | set[str]) -> tuple[bool, str]:
@@ -643,19 +932,25 @@ def _coerce_date(value: Any) -> date | None:
     return None
 
 
-def match_lda_witness_candidates(
+def partition_lda_witness_candidates(
     witnesses: Iterable[Mapping[str, Any]],
     lda_rows: Iterable[Mapping[str, Any]],
     *,
     ct_release_id: str | None = None,
     lobbying_generation_digest: str | None = None,
-) -> tuple[list[dict[str, Any]], dict[str, int]]:
-    """Deterministically match CT witness appearances against LDA lobbyist filings.
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
+    """Match CT witness appearances against LDA lobbyist filings and partition by precision guardrails.
 
     Joins on exact normalized name + full normalized organization (matching either the
     lobbyist's ``registrant_name`` or ``client_name``), blocking differing generational
-    suffixes and differing middle initials, and computes content-only ``candidate_digest``
-    plus date-overlap scores.
+    suffixes and differing middle initials, computes content-only ``candidate_digest``
+    plus date-overlap scores, and partitions matched pairs into:
+
+    1. ``qualified``: pairs clearing all three blind-review precision guardrails
+       (``auto_publish_disposition == "qualified"``).
+    2. ``quarantined``: pairs failing one or more precision guardrails, retained with
+       explicit ``auto_publish_disposition == "manual_review_quarantine"`` and machine-readable
+       ``quarantine_reasons`` for manual review via ``identity_review.py``.
     """
     stats: Counter[str] = Counter()
 
@@ -712,6 +1007,9 @@ def match_lda_witness_candidates(
                     lobbyist_id=lobbyist_id,
                     name_key=norm_name.name_key,
                     org_key=org_key,
+                    first_tokens=set(),
+                    surname_tokens=set(),
+                    has_multi_token_given=False,
                     middle_initials=set(),
                     suffixes=set(),
                     stated_names=Counter(),
@@ -723,6 +1021,12 @@ def match_lda_witness_candidates(
                     covered_positions=Counter(),
                 )
                 lda_index[(norm_name.name_key, org_key)][lobbyist_id] = bucket
+            if norm_name.first_name:
+                bucket.first_tokens.add(norm_name.first_name)
+            if norm_name.surname_tokens:
+                bucket.surname_tokens.add(norm_name.surname_tokens)
+            if len(norm_name.given_tokens) >= 2:
+                bucket.has_multi_token_given = True
             if norm_name.middle_initial:
                 bucket.middle_initials.add(norm_name.middle_initial)
             if norm_name.suffix:
@@ -744,7 +1048,8 @@ def match_lda_witness_candidates(
             if covered_position:
                 bucket.covered_positions[covered_position] += 1
 
-    candidates: list[dict[str, Any]] = []
+    qualified: list[dict[str, Any]] = []
+    quarantined: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
 
     for w in witnesses:
@@ -783,6 +1088,7 @@ def match_lda_witness_candidates(
             stats["witnesses_skipped_missing_locator"] += 1
             continue
         hearing_date = _coerce_date(w.get("hearing_date") or w.get("meeting_date"))
+        hearing_congress = extract_hearing_congress(w)
 
         for lobbyist_id in sorted(matches_by_lobbyist):
             lob = matches_by_lobbyist[lobbyist_id]
@@ -819,9 +1125,22 @@ def match_lda_witness_candidates(
             covered_pos = lob.covered_positions.most_common(1)[0][0] if lob.covered_positions else None
 
             overlap = compute_date_overlap(hearing_date, filing_periods)
+            guardrail = evaluate_auto_publish_guardrails(
+                witness_name=w_name,
+                lda_first_tokens=lob.first_tokens,
+                lda_surname_tokens=lob.surname_tokens,
+                lda_has_multi_token_given=lob.has_multi_token_given,
+                org_key=w_org,
+                matched_roles=lob.matched_roles,
+                middle_guard=mid_guard,
+                suffix_guard=suf_guard,
+                hearing_date=hearing_date,
+                hearing_congress=hearing_congress,
+                filing_years=filing_years,
+            )
             # Restrict quoted_span strictly to the immutable hearing-side quote anchored to
             # (body_sha256, page_or_offset); mutable LDA aggregates (filing_count, year_span,
-            # most-common strings) stay strictly outside candidate_digest as diagnostics.
+            # most-common strings) and guardrail diagnostics stay strictly outside candidate_digest.
             quoted_span = f"CT witness '{stated_name}' ({stated_org}) at {page_or_offset}"
 
             candidate: dict[str, Any] = {
@@ -849,6 +1168,14 @@ def match_lda_witness_candidates(
                 "event_id": int(w["event_id"]) if w.get("event_id") is not None else None,
                 "package_id": str(w.get("package_id") or "").strip() or None,
                 "hearing_date": hearing_date.isoformat() if hearing_date else None,
+                "hearing_congress": guardrail.hearing_congress,
+                "hearing_year_window": list(guardrail.hearing_year_window) if guardrail.hearing_year_window else None,
+                "temporal_bound_source": guardrail.temporal_bound_source,
+                "temporal_gap_years": guardrail.temporal_gap_years,
+                "undated_corroboration": list(guardrail.undated_corroboration),
+                "first_name_guard": guardrail.first_name_guard,
+                "auto_publish_disposition": guardrail.disposition,
+                "quarantine_reasons": list(guardrail.quarantine_reasons),
                 "lda_stated_name": lda_stated_name,
                 "lda_middle_initial": l_mid,
                 "lda_suffix": l_suf,
@@ -867,11 +1194,54 @@ def match_lda_witness_candidates(
                 "lda_max_date": overlap.lda_max_date,
             }
             candidate["content_digest"] = person_candidate_digest(candidate)
-            candidates.append(candidate)
-            stats["candidates_emitted"] += 1
+            stats["matched_before_guardrails"] += 1
+            if guardrail.qualified:
+                qualified.append(candidate)
+                stats["candidates_emitted"] += 1
+                if guardrail.temporal_bound_source == "congress_window":
+                    stats["qualified_undated_congress_bounded"] += 1
+                elif guardrail.temporal_bound_source == "unbounded":
+                    stats["qualified_undated_corroborated"] += 1
+            else:
+                quarantined.append(candidate)
+                stats["quarantined_total"] += 1
+                if len(guardrail.quarantine_reasons) > 1:
+                    stats["quarantined_multiple_reasons"] += 1
+                for reason in guardrail.quarantine_reasons:
+                    stats[f"quarantined_{reason}"] += 1
 
-    candidates.sort(key=lambda c: (c["name_key"], c["org_key"], c["witness_key"], c["external_native_id"]))
-    return candidates, dict(stats)
+    def _sort_key(c: Mapping[str, Any]) -> tuple[str, str, str, str]:
+        return (c["name_key"], c["org_key"], c["witness_key"], c["external_native_id"])
+
+    qualified.sort(key=_sort_key)
+    quarantined.sort(key=_sort_key)
+    return qualified, quarantined, dict(stats)
+
+
+def match_lda_witness_candidates(
+    witnesses: Iterable[Mapping[str, Any]],
+    lda_rows: Iterable[Mapping[str, Any]],
+    *,
+    ct_release_id: str | None = None,
+    lobbying_generation_digest: str | None = None,
+    quarantined_out: list[dict[str, Any]] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Deterministically match CT witness appearances against LDA lobbyist filings.
+
+    Returns auto-publish-qualified candidates plus matching/quarantine statistics. Pairs
+    failing the blind-review precision guardrails are excluded from the returned list and
+    optionally written into ``quarantined_out`` with explicit ``manual_review_quarantine``
+    disposition for manual adjudication via ``identity_review.py``.
+    """
+    qualified, quarantined, stats = partition_lda_witness_candidates(
+        witnesses,
+        lda_rows,
+        ct_release_id=ct_release_id,
+        lobbying_generation_digest=lobbying_generation_digest,
+    )
+    if quarantined_out is not None:
+        quarantined_out.extend(quarantined)
+    return qualified, stats
 
 
 def build_planted_wrong_controls(
@@ -936,6 +1306,14 @@ def build_planted_wrong_controls(
             "event_id": w_src.get("event_id"),
             "package_id": w_src.get("package_id"),
             "hearing_date": w_src.get("hearing_date"),
+            "hearing_congress": w_src.get("hearing_congress"),
+            "hearing_year_window": w_src.get("hearing_year_window"),
+            "temporal_bound_source": "planted_control",
+            "temporal_gap_years": None,
+            "undated_corroboration": [],
+            "first_name_guard": "planted_control",
+            "auto_publish_disposition": "planted_control",
+            "quarantine_reasons": [],
             "lda_stated_name": l_src["lda_stated_name"],
             "lda_middle_initial": l_src.get("lda_middle_initial", ""),
             "lda_suffix": l_src.get("lda_suffix", ""),
@@ -983,18 +1361,23 @@ def build_precision_read_batch(
         raise ValueError("total_pairs must exceed planted_wrong_count")
 
     rng = random.Random(seed)
+    # Fail closed if any manual-review quarantined pair was passed into the auto-publish batch.
+    for item in candidates:
+        if item.get("auto_publish_disposition") == DISPOSITION_MANUAL_REVIEW_QUARANTINE:
+            require_auto_publish_qualified(item)
+
     # Group real candidates by normalized name_key so each sampled real pair tests a distinct person.
     by_name: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for item in candidates:
         by_name[item["name_key"]].append({**dict(item), "is_planted_control": False})
 
-    # Choose one deterministic representative appearance per person (preferring dated appearances).
+    # Choose one deterministic representative appearance per person (preferring dated, then Congress-bounded).
     representatives: list[dict[str, Any]] = []
     for name_key in sorted(by_name):
         group = sorted(
             by_name[name_key],
             key=lambda c: (
-                0 if c.get("hearing_date") else 1,
+                0 if c.get("hearing_date") else (1 if c.get("hearing_congress") is not None else 2),
                 -float(c.get("date_overlap_score") or 0.0),
                 c["witness_key"],
                 c["external_native_id"],
@@ -1017,13 +1400,29 @@ def build_precision_read_batch(
 
     overlap_counts = Counter(c.get("date_overlap_status") or "unknown" for c in candidates)
     sample_overlap_counts = Counter(c.get("date_overlap_status") or "unknown" for c in sampled_real)
+    stats_map = stats or {}
     summary = {
         "population_appearances": len(candidates),
         "population_distinct_names": len({c["name_key"] for c in candidates}),
         "population_distinct_witness_keys": len({c["witness_key"] for c in candidates}),
         "population_distinct_lobbyists": len({c["external_native_id"] for c in candidates}),
-        "population_blocked_middle_initial": (stats or {}).get("blocked_middle_initial", 0),
-        "population_blocked_suffix": (stats or {}).get("blocked_suffix", 0),
+        "population_matched_before_guardrails": stats_map.get("matched_before_guardrails", len(candidates)),
+        "population_blocked_middle_initial": stats_map.get("blocked_middle_initial", 0),
+        "population_blocked_suffix": stats_map.get("blocked_suffix", 0),
+        "population_quarantined_total": stats_map.get("quarantined_total", 0),
+        "population_quarantined_initial_only_first_name": stats_map.get(
+            f"quarantined_{QUARANTINE_INITIAL_ONLY_FIRST_NAME}", 0
+        ),
+        "population_quarantined_temporal_gap_exceeds_5y": stats_map.get(
+            f"quarantined_{QUARANTINE_TEMPORAL_GAP_EXCEEDS_5Y}", 0
+        ),
+        "population_quarantined_undated_uncorroborated": stats_map.get(
+            f"quarantined_{QUARANTINE_UNDATED_UNCORROBORATED}", 0
+        ),
+        "population_quarantined_no_lda_dates": stats_map.get(f"quarantined_{QUARANTINE_NO_LDA_DATES}", 0),
+        "population_quarantined_multiple_reasons": stats_map.get("quarantined_multiple_reasons", 0),
+        "population_qualified_undated_congress_bounded": stats_map.get("qualified_undated_congress_bounded", 0),
+        "population_qualified_undated_corroborated": stats_map.get("qualified_undated_corroborated", 0),
         "sample_total_pairs": len(combined),
         "sample_real_pairs": len(sampled_real),
         "sample_planted_wrong_controls": len(planted),
@@ -1211,12 +1610,39 @@ def load_live_lda_witness_candidates(
         con.execute("INSTALL httpfs; LOAD httpfs;")
         witness_rows = con.execute(
             f"""
-            WITH pkg_dates AS (
-                SELECT d.package_id, min(l.document_date) AS pkg_date
+            WITH pkg_meta AS (
+                SELECT
+                    d.package_id,
+                    min(coalesce(d.document_date, l.document_date)) AS pkg_date,
+                    CASE
+                        WHEN min(coalesce(d.congress, l.congress)) = max(coalesce(d.congress, l.congress))
+                        THEN min(coalesce(d.congress, l.congress))
+                    END AS pkg_congress
                 FROM read_parquet('{ct_base}/detail.parquet', file_row_number=true) d
                 JOIN read_parquet('{ct_base}/list.parquet', file_row_number=true) l
                   ON l.file_row_number = d.file_row_number
-                WHERE d.package_id IS NOT NULL AND l.document_date IS NOT NULL
+                WHERE d.package_id IS NOT NULL
+                GROUP BY 1
+            ),
+            witness_list_meta AS (
+                SELECT
+                    wk AS witness_key,
+                    CASE
+                        WHEN date_diff('day', min(document_date), max(document_date)) <= 180
+                        THEN min(document_date)
+                    END AS list_date,
+                    CASE
+                        WHEN min(congress) = max(congress)
+                        THEN min(congress)
+                    END AS list_congress
+                FROM (
+                    SELECT
+                        unnest(l.witness_keys) AS wk,
+                        l.document_date,
+                        l.congress
+                    FROM read_parquet('{ct_base}/list.parquet') l
+                    WHERE l.witness_keys IS NOT NULL AND len(l.witness_keys) > 0
+                )
                 GROUP BY 1
             )
             SELECT
@@ -1233,10 +1659,12 @@ def load_live_lda_witness_candidates(
                 w.bioguide_id,
                 w.matched_bioguide_id,
                 w.superseded_by,
-                coalesce(m.meeting_date, pd.pkg_date) AS hearing_date
+                coalesce(m.meeting_date, pm.pkg_date, wlm.list_date) AS hearing_date,
+                coalesce(m.congress, pm.pkg_congress, wlm.list_congress) AS hearing_congress
             FROM read_parquet('{ct_base}/witnesses.parquet') w
             LEFT JOIN read_parquet('{ct_base}/meetings.parquet') m ON m.event_id = w.event_id
-            LEFT JOIN pkg_dates pd ON pd.package_id = w.package_id
+            LEFT JOIN pkg_meta pm ON pm.package_id = w.package_id
+            LEFT JOIN witness_list_meta wlm ON wlm.witness_key = w.witness_key
             WHERE w.superseded_by IS NULL
               AND w.name IS NOT NULL
               AND w.organization IS NOT NULL
@@ -1252,7 +1680,7 @@ def load_live_lda_witness_candidates(
         witness_cols = (
             "witness_key", "source", "record_sha", "source_locator", "event_id", "package_id",
             "name", "position", "organization", "witness_type", "bioguide_id",
-            "matched_bioguide_id", "superseded_by", "hearing_date",
+            "matched_bioguide_id", "superseded_by", "hearing_date", "hearing_congress",
         )
         witness_dicts = [dict(zip(witness_cols, row, strict=True)) for row in witness_rows]
 
@@ -1274,7 +1702,7 @@ def load_live_lda_witness_candidates(
     finally:
         con.close()
 
-    candidates, stats = match_lda_witness_candidates(
+    candidates, quarantined, stats = partition_lda_witness_candidates(
         witness_dicts,
         lda_dicts,
         ct_release_id=release_id,
@@ -1284,6 +1712,8 @@ def load_live_lda_witness_candidates(
         "ct_release_id": release_id,
         "lobbying_generation_digest": lobbying_digest,
         "stats": stats,
+        "quarantined_count": len(quarantined),
+        "quarantined": quarantined,
     }
     return candidates, meta
 
@@ -1296,6 +1726,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--planted-wrong", type=int, default=2, help="Number of clearly tracked planted wrong controls")
     parser.add_argument("--json-out", type=Path, required=True, help="Companion precision-read JSON path")
     parser.add_argument("--md-out", type=Path, required=True, help="Rendered Markdown precision-read sheet path")
+    parser.add_argument(
+        "--quarantine-json-out",
+        type=Path,
+        default=None,
+        help="Optional JSON path to write guardrail-quarantined pairs routed to manual review",
+    )
     parser.add_argument("--check", action="store_true", help="Verify existing Markdown sheet matches JSON companion")
     parser.add_argument("--r2-base-url", default="https://data.spicygov.ai", help="Public R2 data base URL")
     args = parser.parse_args(argv)
@@ -1323,6 +1759,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args.md_out.parent.mkdir(parents=True, exist_ok=True)
     args.json_out.write_text(json.dumps(batch, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     args.md_out.write_text(render_person_batch_sheet(batch), encoding="utf-8")
+    if args.quarantine_json_out is not None:
+        args.quarantine_json_out.parent.mkdir(parents=True, exist_ok=True)
+        args.quarantine_json_out.write_text(
+            json.dumps(meta["quarantined"], indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
     print(json.dumps({"status": "written", "metadata": batch["metadata"]}, indent=2))
     return 0
 
