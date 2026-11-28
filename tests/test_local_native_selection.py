@@ -228,14 +228,30 @@ def test_same_workspace_cutover_drops_orphaned_shared_receipt_only_pin(tmp_path,
     # laws moved off, but empty members + bill_family_archives still own mixed_receipts, so all stay pinned.
     after_laws = SelectedInputs(partial_root, tmp_path / "read-1", public_url="").local
     assert set(after_laws) == {"laws", "members", "bill_family_archives", "legislative_document_file_states"}
-    # Moving empty members off still leaves bill_family_archives owning mixed_receipts.
-    remember_selection(partial_root, [SelectedDataset("members", (new_law,), None, None)])
-    after_members = SelectedInputs(partial_root, tmp_path / "read-2", public_url="").local
-    assert set(after_members) == {"laws", "members", "bill_family_archives", "legislative_document_file_states"}
-    # Once the final owner (bill_family_archives) moves off mixed_receipts, the shared log is pruned cleanly.
+    # Moving bill_family_archives off first leaves ONLY empty members owning mixed_receipts, proving an empty
+    # subject table keeps the shared log alive until it also moves off.
     remember_selection(partial_root, [SelectedDataset("bill_family_archives", (new_law,), None, None)])
+    after_checkpoint = SelectedInputs(partial_root, tmp_path / "read-2", public_url="").local
+    assert set(after_checkpoint) == {"laws", "members", "bill_family_archives", "legislative_document_file_states"}
+    # Once the sole remaining empty subject table (members) moves off mixed_receipts, the shared log is pruned.
+    remember_selection(partial_root, [SelectedDataset("members", (new_law,), None, None)])
     after_final = SelectedInputs(partial_root, tmp_path / "read-3", public_url="").local
     assert set(after_final) == {"laws", "members", "bill_family_archives"}
+
+    # Reverse order: moving empty members off first leaves ONLY bill_family_archives owning mixed_receipts,
+    # proving an independently readable checkpoint is never auto-pruned and keeps the shared log alive until moved.
+    ckpt_root = tmp_path / "workspace-checkpoint-owner"
+    remember_selection(ckpt_root, [
+        SelectedDataset("members", (), mixed_receipts, "mixed-old"),
+        SelectedDataset("bill_family_archives", (), mixed_receipts, "mixed-old"),
+        SelectedDataset("legislative_document_file_states", (), mixed_receipts, "mixed-old"),
+    ])
+    remember_selection(ckpt_root, [SelectedDataset("members", (new_law,), None, None)])
+    after_ckpt_only = SelectedInputs(ckpt_root, tmp_path / "read-4", public_url="").local
+    assert set(after_ckpt_only) == {"members", "bill_family_archives", "legislative_document_file_states"}
+    remember_selection(ckpt_root, [SelectedDataset("bill_family_archives", (new_law,), None, None)])
+    after_ckpt_final = SelectedInputs(ckpt_root, tmp_path / "read-5", public_url="").local
+    assert set(after_ckpt_final) == {"members", "bill_family_archives"}
 
 
 def test_mcp_captures_multiple_generations_and_scopes_shared_receipts(tmp_path, monkeypatch):
