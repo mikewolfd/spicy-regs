@@ -531,17 +531,19 @@ def test_merge_with_until_updates_window_and_preserves_outside_rows_and_composit
             regulations_dot_gov_info={},
         ),
     ]
-    all_fresh = fresh_2020 + fresh_1998
+    from typing import Any
+
+    all_fresh: list[dict[str, Any]] = fresh_2020 + fresh_1998
     served_pages: dict[str, bytes] = {}
 
     def fake_fetch(url: str) -> bytes:
         query = parse_qs(urlparse(url).query)
         gte = query["conditions[publication_date][gte]"][0]
         lte = query["conditions[publication_date][lte]"][0]
-        matched = [doc for doc in all_fresh if gte <= doc["publication_date"] <= lte]
+        matched = [doc for doc in all_fresh if gte <= str(doc["publication_date"]) <= lte]
         raw = json.dumps({"count": len(matched), "total_pages": 1, "results": matched}).encode()
         if matched:
-            served_pages[matched[0]["document_number"]] = raw
+            served_pages[str(matched[0]["document_number"])] = raw
         return raw
 
     @contextmanager
@@ -640,6 +642,49 @@ def test_date_window_and_env_validation_refuses_malformed_or_reversed_dates(tmp_
             download_prior=lambda k, p: False,
         )
     assert called == [] and local_out.read_bytes() == before_bytes
+
+    # Remote prior with older schema (missing 'topics') also fails fast on reversed implicit since > until
+    # BEFORE running regulations_shape.mapped_table and leaves zero _fr_*.parquet scratch files behind.
+    from spicy_regs.transforms import regulations_shape
+
+    remote_dir = tmp_path / "remote-prior-remap-guard"
+    remote_dir.mkdir()
+    older_table = pa.Table.from_pylist([row], schema=schema).drop_columns(["topics"])
+
+    def fake_download_older(_key: str, dest: Path) -> bool:
+        pq.write_table(older_table, dest)
+        return True
+
+    remapped_called = []
+    with monkeypatch.context() as scoped:
+        scoped.setattr(
+            regulations_shape,
+            "mapped_table",
+            lambda *a, **kw: remapped_called.append(a) or (_ for _ in ()).throw(AssertionError("remap ran")),
+        )
+        with pytest.raises(ValueError, match="reversed"):
+            merge_federal_register(
+                remote_dir,
+                until=date(2020, 12, 31),
+                documents=lambda start: called.append(start) or iter(()),
+                download_prior=fake_download_older,
+            )
+    assert remapped_called == [] and called == []
+    assert list(remote_dir.glob("_fr_*.parquet")) == []
+
+    # Negative FR_REQUEST_INTERVAL_SECONDS is rejected when wired through FederalRegisterRollup.build().
+    from spicy_regs.pipelines.rollups.federal_register import FederalRegisterRollup
+
+    rollup_dir = tmp_path / "neg-interval"
+    rollup_dir.mkdir()
+    monkeypatch.setenv("FR_SINCE", "2020-01-01")
+    monkeypatch.setenv("FR_UNTIL", "2020-01-02")
+    monkeypatch.setenv("FR_REQUEST_INTERVAL_SECONDS", "-0.1")
+    with pytest.raises(ValueError, match="request_interval_seconds"):
+        FederalRegisterRollup(output_dir=rollup_dir, skip_upload=True).build(rollup_dir)
+    monkeypatch.delenv("FR_SINCE", raising=False)
+    monkeypatch.delenv("FR_UNTIL", raising=False)
+    monkeypatch.delenv("FR_REQUEST_INTERVAL_SECONDS", raising=False)
 
     for bad_date in ("20200601", "2020-13-01", "not-a-date", datetime(2020, 6, 1)):
         with pytest.raises(ValueError, match="until"):
@@ -767,6 +812,22 @@ def test_streaming_parquet_writer_matches_single_batch_and_flushes_incrementally
     assert pq.read_table(empty_out).num_rows == 0
     assert pq.read_schema(empty_out).names == list(COLUMNS)
 
+    # Mid-stream failure AFTER chunk 1 flushes cleans up _fr_new.parquet and leaves prior output untouched.
+    fail_dir = tmp_path / "mid-stream-fail"
+    fail_dir.mkdir()
+    prior_sentinel = fail_dir / "federal_register.parquet"
+    prior_sentinel.write_bytes(b"keep-existing")
+
+    def failing_stream(_since: date):
+        yield dict(_RAW_DOC, document_number="2020-1", publication_date="2020-01-01")
+        yield dict(_RAW_DOC, document_number="2020-2", publication_date="2020-01-02")
+        raise RuntimeError("mid-stream boom after chunk 1")
+
+    with pytest.raises(RuntimeError, match="mid-stream boom"):
+        build_federal_register(fail_dir, batch_size=2, documents=failing_stream)
+    assert not (fail_dir / "_fr_new.parquet").exists()
+    assert prior_sentinel.read_bytes() == b"keep-existing"
+
 
 def test_polite_pacing_sleeps_between_pages_not_before_first(tmp_path, monkeypatch):
     """``request_interval_seconds`` paces consecutive API fetches without delaying the first request."""
@@ -835,7 +896,30 @@ def test_polite_pacing_sleeps_between_pages_not_before_first(tmp_path, monkeypat
     build_federal_register(out_b, since=date(2020, 1, 1), until=date(2020, 1, 3), request_interval_seconds=0.25)
     assert sleeps == [pytest.approx(0.25), pytest.approx(0.25)]
 
-    # 3. Interval of 0 never sleeps.
+    # 3. Elapsed time since the previous fetch is subtracted from interval (and >= interval skips sleep).
+    sleeps.clear()
+    out_elapsed = tmp_path / "elapsed"
+    out_elapsed.mkdir()
+    seen_docs = []
+    for idx, item in enumerate(
+        _live_federal_register_documents(
+            date(2020, 1, 1),
+            until=date(2020, 1, 3),
+            request_interval_seconds=0.25,
+            output_dir=out_elapsed,
+            sleep=fake_sleep,
+            monotonic=lambda: now[0],
+        )
+    ):
+        seen_docs.append(item)
+        if idx == 0:
+            now[0] += 0.10  # 0.10s elapsed before page 2 -> sleep only 0.15s
+        elif idx == 1:
+            now[0] += 0.30  # 0.30s elapsed before page 3 (>= 0.25s) -> no sleep
+    assert len(seen_docs) == 3
+    assert sleeps == [pytest.approx(0.15)]
+
+    # 4. Interval of 0 never sleeps.
     sleeps.clear()
     out_c = tmp_path / "c"
     out_c.mkdir()

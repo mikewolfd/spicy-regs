@@ -462,7 +462,9 @@ def merge_federal_register(
     prior, out_file = output_dir / "_fr_published.parquet", output_dir / OUTPUT
     scratch = [prior, output_dir / "_fr_prior_text.parquet", output_dir / "_fr_prior.parquet",
                output_dir / "_fr_observed.parquet", output_dir / "_fr_fresh.parquet"]
-    have_prior = prior.exists() or download_prior(OUTPUT, prior)
+    existed_prior = prior.exists()
+    downloaded_prior = False if existed_prior else bool(download_prior(OUTPUT, prior))
+    have_prior = existed_prior or downloaded_prior
     if not have_prior and out_file.exists():
         # Validate implicit since <= until before moving a local output file onto the prior scratch path.
         if since_date is None and until_date is not None:
@@ -471,6 +473,15 @@ def merge_federal_register(
         # A local run beside the table it last built: that table is its prior.
         out_file.replace(prior)
         have_prior = True
+    if since_date is None:
+        prior_max = _prior_max_publication_date(prior) if have_prior else None
+        since_date = (prior_max - timedelta(days=OVERLAP_DAYS)) if prior_max else FR_EPOCH
+    try:
+        _validate_date_window(since_date, until_date)
+    except BaseException:
+        if downloaded_prior:
+            prior.unlink(missing_ok=True)
+        raise
     # Counted as published, before any re-map, so a re-map that loses or repeats a row fails the check below.
     prior_rows = pq.ParquetFile(prior).metadata.num_rows if have_prior else 0
     remap: dict[str, list[str]] = {}
@@ -490,10 +501,6 @@ def merge_federal_register(
                     prior_rows)
         prior = mapped_table("federal_register", published_as_source("federal_register", prior, scratch[1]),
                              scratch[2])
-    if since_date is None:
-        prior_max = _prior_max_publication_date(prior) if have_prior else None
-        since_date = (prior_max - timedelta(days=OVERLAP_DAYS)) if prior_max else FR_EPOCH
-    _validate_date_window(since_date, until_date)
     # The night's observations alone (no prior to merge), moved off the table's name before the merge writes it.
     observed = build_federal_register(
         output_dir,

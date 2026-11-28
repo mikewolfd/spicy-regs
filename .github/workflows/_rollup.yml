@@ -728,12 +728,16 @@ jobs:
           cp "$RUNNER_TEMP/disk-watch.log" output/disk-watch.log
           awk '/^[[:space:]]*[0-9]+[[:space:]]*$/ {if (!n++ || $1 < lowest) lowest=$1} END {if (n) printf "lowest sampled free disk during the run: %.1f GiB (%d samples)\n", lowest/1048576, n}' output/disk-watch.log
 
-      # When live R2 upload succeeded, every referenced raw original is already verified in
-      # R2 source-evidence/blobs/sha256/; drop the local mirror so rollup-audit stays lightweight
-      # while preserving output/raw-source-originals/ on failures, cancellations, and dry runs.
+      # When live R2 upload succeeded and published a generation, every referenced raw original is
+      # already verified in R2 source-evidence/blobs/sha256/; drop the local mirror so rollup-audit
+      # stays lightweight while preserving output/raw-source-originals/ on failures, cancellations,
+      # dry runs, and Unchanged live runs (which write no generation and do not upload probe blobs).
       - name: Drop already-uploaded raw source originals before audit upload
         if: success() && !inputs.skip_upload
-        run: rm -rf output/raw-source-originals
+        run: |
+          if [ -d output/generations ] && [ -n "$(ls -A output/generations 2>/dev/null)" ]; then
+            rm -rf output/raw-source-originals
+          fi
 
       - name: Retain invocation and transferred-input audit
         if: always()

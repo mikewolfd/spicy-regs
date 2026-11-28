@@ -176,6 +176,7 @@ def test_workflow_always_retains_main_evidence_bodies_and_journal():
     disk_idx = next(i for i, step in enumerate(steps) if step.get("name") == "Report the lowest free disk seen")
     assert run_idx < disk_idx < drop_idx < audit_idx
     assert steps[drop_idx]["if"] == "success() && !inputs.skip_upload"
+    assert "output/generations" in steps[drop_idx]["run"]
     assert "rm -rf output/raw-source-originals" in steps[drop_idx]["run"]
 
 
@@ -194,7 +195,9 @@ def test_federal_register_workflow_wires_fr_until_pacing_and_resume_scope(tmp_pa
     run_with = fr["jobs"]["run"]["with"]
     assert run_with["fr_since"] == "${{ inputs.since || '' }}"
     assert run_with["fr_until"] == "${{ inputs.until || '' }}"
-    assert run_with["fr_request_interval_seconds"] == "${{ inputs.request_interval_seconds || (inputs.since && '0.25' || '') }}"
+    assert run_with["fr_request_interval_seconds"] == (
+        "${{ inputs.request_interval_seconds || ((inputs.since || inputs.until) && '0.25' || '') }}"
+    )
 
     reusable_inputs = reusable[True]["workflow_call"]["inputs"]
     assert {"fr_since", "fr_until", "fr_request_interval_seconds"} <= set(reusable_inputs)
@@ -218,18 +221,31 @@ def test_federal_register_workflow_wires_fr_until_pacing_and_resume_scope(tmp_pa
     scope_b = FederalRegisterRollup(output_dir=tmp_path).invocation_scope()
     assert scope_a != scope_b
 
-    # Execute the prune step's exact shell command and verify lightweight audit files survive.
-    work = tmp_path / "prune-check"
-    (work / "output" / "raw-source-originals" / "blobs").mkdir(parents=True)
-    (work / "output" / "raw-source-originals" / "blobs" / "big.json").write_bytes(b"{}")
-    (work / "output" / "source-evidence" / "run1").mkdir(parents=True)
-    (work / "output" / "source-evidence" / "run1" / "artifact.json").write_text("{}")
-    (work / "output" / "invocation.json").write_text("{}")
-    subprocess.run(
-        ["bash", "-e", "-o", "pipefail", "-c", steps["Drop already-uploaded raw source originals before audit upload"]["run"]],
-        cwd=work,
-        check=True,
-    )
-    assert not (work / "output" / "raw-source-originals").exists()
-    assert (work / "output" / "source-evidence" / "run1" / "artifact.json").is_file()
-    assert (work / "output" / "invocation.json").is_file()
+    prune_cmd = steps["Drop already-uploaded raw source originals before audit upload"]["run"]
+
+    # Branch 1: generation published -> prunes output/raw-source-originals while keeping lightweight audit files.
+    work_pub = tmp_path / "prune-published"
+    (work_pub / "output" / "generations" / ("a" * 64)).mkdir(parents=True)
+    (work_pub / "output" / "generations" / ("a" * 64) / "artifact.json").write_text("{}")
+    (work_pub / "output" / "raw-source-originals" / "blobs").mkdir(parents=True)
+    (work_pub / "output" / "raw-source-originals" / "blobs" / "big.json").write_bytes(b"{}")
+    (work_pub / "output" / "source-evidence" / "run1").mkdir(parents=True)
+    (work_pub / "output" / "source-evidence" / "run1" / "artifact.json").write_text("{}")
+    (work_pub / "output" / "invocation.json").write_text("{}")
+    subprocess.run(["bash", "-e", "-o", "pipefail", "-c", prune_cmd], cwd=work_pub, check=True)
+    assert not (work_pub / "output" / "raw-source-originals").exists()
+    assert (work_pub / "output" / "source-evidence" / "run1" / "artifact.json").is_file()
+    assert (work_pub / "output" / "invocation.json").is_file()
+
+    # Branch 2: Unchanged live run (no output/generations or empty output/generations) -> preserves raw originals!
+    for label, make_empty_dir in (("no-generations-dir", False), ("empty-generations-dir", True)):
+        work_unchanged = tmp_path / f"prune-{label}"
+        if make_empty_dir:
+            (work_unchanged / "output" / "generations").mkdir(parents=True)
+        (work_unchanged / "output" / "raw-source-originals" / "blobs").mkdir(parents=True)
+        probe = work_unchanged / "output" / "raw-source-originals" / "blobs" / "probe.json"
+        probe.write_bytes(b'{"unchanged": true}')
+        (work_unchanged / "output" / "source-evidence" / "run1").mkdir(parents=True)
+        (work_unchanged / "output" / "source-evidence" / "run1" / "artifact.json").write_text("{}")
+        subprocess.run(["bash", "-e", "-o", "pipefail", "-c", prune_cmd], cwd=work_unchanged, check=True)
+        assert probe.is_file() and probe.read_bytes() == b'{"unchanged": true}'
