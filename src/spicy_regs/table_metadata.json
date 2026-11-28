@@ -27349,7 +27349,7 @@
       {
         "column_name": "return_type",
         "column_type": "VARCHAR",
-        "description": "Literal index and XML return type. Financial interpretation supports 990 only; 990EZ, 990PF, 990T and separate 990-N are excluded."
+        "description": "Canonical Form 990 return type (matching XML ReturnTypeCd). Financial interpretation supports 990 only (translating reviewed 2019-2020 IRS index code 990O while preserving the verbatim raw index code in index_native_json); 990EZ (including legacy 990EO), 990PF (including legacy 990PR), 990T and separate 990-N are excluded."
       },
       {
         "column_name": "return_version",

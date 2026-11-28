@@ -45,7 +45,17 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
   598,325 bytes). Pinned only under the optional `ddk-bridge` extra and dependency group so base
   CLI/MCP installs and `source-readers` remain untouched.
 
-- **Selected Mirrulations reader provider** `spicy_docs-0.85.0+readers.20261128.5` is built from
+- **Selected IRS 990 2019–2020 legacy-alias reader provider** `spicy_docs-0.85.0+readers.20261128.6` is built from
+  `65e7f5af262c1c47d4b40777e9db3c84786e18dd` (tree `b3ec50b5655051f80ff912df019e20a07950b85b`,
+  `mikewolfd/spicy-docs#66` and `#67` on `fork/main`). It adds reviewed 2019–2020 IRS TEOS legacy
+  index return-type alias translation (`990O` → `990`, `990EO` → `990EZ`, `990PR` → `990PF`) via
+  `canonical_index_return_type(..., submission_year=)` strictly gated on `2019` and `2020` while
+  preserving verbatim raw `native_index["RETURN_TYPE"]` (`ss-umeo`). Two clean `git archive` builds
+  are byte-identical (`sha256:8490681c...`). See [the receipt](spicy_docs-0.85.0+readers.20261128.6.json)
+  for source, wheel and RECORD identity. The superseded `.20261128.5` wheel is recoverable from this
+  adoption commit's parent; its receipt remains.
+
+- **Prior Mirrulations reader provider** `spicy_docs-0.85.0+readers.20261128.5` is built from
   `7c32bdb4f0f88232419d0152ea50c1a4ba42e872` (tree `9ec0a1a45fddae1f98c248dbef551e27510c8184`,
   `mikewolfd/spicy-docs#65`), including the `#64` reader changes (ss-zznj / ss-r8rf A) and the
   exact Rulespec Artifacts 1.1.3 pin. The Mirrulations reader exposes the exact GET body on JSON

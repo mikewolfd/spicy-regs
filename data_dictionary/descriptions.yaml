@@ -13403,8 +13403,11 @@ tables:
       return_id: Literal index RETURN_ID. Distinct from OBJECT_ID, EIN and DLN.
       tax_period: Literal six-character TAX_PERIOD from index, reconciled to XML tax
         period end month.
-      return_type: Literal index and XML return type. Financial interpretation supports
-        990 only; 990EZ, 990PF, 990T and separate 990-N are excluded.
+      return_type: Canonical Form 990 return type (matching XML ReturnTypeCd). Financial
+        interpretation supports 990 only (translating reviewed 2019-2020 IRS index code
+        990O while preserving the verbatim raw index code in index_native_json); 990EZ
+        (including legacy 990EO), 990PF (including legacy 990PR), 990T and separate 990-N
+        are excluded.
       return_version: Literal XML returnVersion. Only visually qualified Form 990 schema
         cohorts (2016v3.* through 2025v4.*) are interpreted; unknown versions are quarantined
         and fail the build above 0.1%.

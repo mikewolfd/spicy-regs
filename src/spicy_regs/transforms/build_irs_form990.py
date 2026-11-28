@@ -286,8 +286,12 @@ def interpret(record: Mapping[str, Any]) -> tuple[dict[str, Any], list[dict[str,
     dollars, never scaled or converted. Missing values remain NULL with an explicit
     status. Absent schedules establish no claim that an organization paid no grants.
     """
+    from spicy_docs.sources.irs_form990 import canonical_index_return_type
+
     index = record["native_index"]
-    if index["RETURN_TYPE"] != "990":
+    submission_year = record["submission_year"]
+    return_type = canonical_index_return_type(index["RETURN_TYPE"], submission_year=submission_year)
+    if return_type != "990":
         raise ValueError(f"Unsupported IRS form type for Form 990 interpretation: {index['RETURN_TYPE']!r}")
     return_version = record.get("return_version")
     if resolve_version_spec(return_version) is None:
@@ -295,7 +299,6 @@ def interpret(record: Mapping[str, Any]) -> tuple[dict[str, Any], list[dict[str,
             f"Unsupported IRS Form 990 returnVersion {return_version!r}; visual qualification required"
         )
 
-    submission_year = record["submission_year"]
     locator = _json(record["source_locator"])
 
     if "form_fields" in record:
@@ -323,7 +326,7 @@ def interpret(record: Mapping[str, Any]) -> tuple[dict[str, Any], list[dict[str,
             "return_id": index["RETURN_ID"],
             "tax_period": index["TAX_PERIOD"],
             "submission_year": submission_year,
-            "return_type": index["RETURN_TYPE"],
+            "return_type": return_type,
             "return_version": return_version,
             "tax_year": tax_year,
             "tax_period_begin": tax_period_begin,
@@ -366,7 +369,7 @@ def interpret(record: Mapping[str, Any]) -> tuple[dict[str, Any], list[dict[str,
             "return_id": index["RETURN_ID"],
             "tax_period": index["TAX_PERIOD"],
             "submission_year": submission_year,
-            "return_type": index["RETURN_TYPE"],
+            "return_type": return_type,
             "return_version": return_version,
             "tax_year": _text(header, "TaxYr"),
             "tax_period_begin": _text(header, "TaxPeriodBeginDt"),
