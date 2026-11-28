@@ -50,6 +50,7 @@ from contextlib import suppress
 from functools import cache
 from os import getenv
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from spicy_regs.duckdb_settings import ExportResources
 from spicy_regs.schemas import COMMENT
@@ -981,69 +982,99 @@ def _write_batch(con, workdir, journal, prepared, table, files, expected, by_fil
     ids = {"batch": batch, "files": files, "prepare_id": prepared["prepare_id"]}
     # BEGIN first: the transaction reads one snapshot from here on and its COMMIT is refused (409) if the table moved
     # since, so the checked snapshot, the pre-image and the MERGE all see the same table.
-    con.execute("BEGIN")
-    try:
-        current = iceberg._read_snapshot(con, COMMENT)
-        if current.__dict__ != expected:
-            raise RuntimeError(f"the comments catalog moved from {expected} to {current.__dict__}: another writer or "
-                               "R2 compaction committed; prepare again under the lock")
-        before_files = live_files(con) if by_file else None
-        con.execute(f"CREATE OR REPLACE TEMP TABLE _batch AS SELECT * FROM read_parquet({_sql(fill)}) "
-                    f"WHERE _file IN ({file_list})")
-        from spicy_regs.sources import regulatory_catalog as native
-        selected_ids = f'SELECT comment_id FROM {table} WHERE {in_files}comment_id IN (SELECT comment_id FROM _batch)'
-        processing = native.processing_table(con, COMMENT, where=f'{in_files}comment_id IN ({selected_ids})',
-                                             in_transaction=True)
-        con.execute(f"COPY (SELECT {col_list} FROM {processing}) TO {_sql(preimage)} (FORMAT PARQUET, COMPRESSION ZSTD)")
-        con.execute(f"DROP TABLE {processing}")
-        con.execute(f"CREATE OR REPLACE TEMP VIEW _prior AS SELECT * FROM read_parquet({_sql(preimage)})")
-        kept = {"preimage": str(preimage), "preimage_sha256": _sha256(preimage)}
-        need = " OR ".join(_changes(c, "p", "b", operation=operation) for c in prepared["columns"])
-        planned = con.execute(f"""SELECT count(*) FROM _prior p JOIN _batch b
-            ON p.comment_id = b.comment_id AND p.modify_date IS NOT DISTINCT FROM b.modify_date WHERE {need}""").fetchone()[0]
-        _append(journal, {"state": "pending", **ids, "planned": planned, "snapshot_before": current.__dict__, **kept,
-                          "before_files": sorted(before_files or ()), "by_file": by_file})
-        changed = 0
-        if planned:
-            values = ", ".join(
-                f'{_filled(c, "p", "b", operation=operation)} AS "{c}"' if c in prepared["columns"] else f'p."{c}"'
-                for c in columns
-            )
-            con.execute(f'CREATE OR REPLACE TEMP TABLE _filled AS SELECT {values} FROM _prior p JOIN _batch b '
-                        f'ON p.comment_id=b.comment_id AND p.modify_date IS NOT DISTINCT FROM b.modify_date WHERE {need}')
-            if con.execute('SELECT count(*) FROM _filled').fetchone()[0] != planned:
-                raise FillVerificationError('Replacement rows differ from planned count')
-            try:
-                native.replace_native(con, COMMENT, '_filled', expected_prior='_prior', in_transaction=True)
-            except (ValueError, RuntimeError) as error:
-                raise FillVerificationError(f'Native subject and receipt differ: {error}') from error
-            changed = planned
-            _check(
-                con,
-                table,
-                columns,
-                prepared["columns"],
-                files,
-                before_files,
-                by_file,
-                prepared["table_rows"],
-                postimage=postimage,
-                operation=operation,
-            )
-            kept |= {"postimage": str(postimage), "postimage_sha256": _sha256(postimage)}
-        con.execute("COMMIT")
-    except Exception as error:
+    with TemporaryDirectory(prefix="comment-fill-batch-") as batch_tmp:
+        batch_work = Path(batch_tmp)
+        filled_file = batch_work / f"{prepared['prepare_id']}-{batch}-filled.parquet"
+        con.execute("BEGIN")
         try:
-            con.execute("ROLLBACK")
-        except Exception:  # a failed COMMIT can already have aborted the transaction; keep the original error
-            pass
-        from spicy_regs.sources.regulatory_catalog import retain_refusal
-        retain_refusal(con, error)
-        postimage.unlink(missing_ok=True)  # it describes rows that were never committed
-        if isinstance(error, FillVerificationError):
-            _append(journal, {"state": "failed", **ids, "committed": False, "reason": str(error)[:500],
-                              "snapshot_before": expected})
-        raise
+            current = iceberg._read_snapshot(con, COMMENT)
+            if current.__dict__ != expected:
+                raise RuntimeError(f"the comments catalog moved from {expected} to {current.__dict__}: another writer or "
+                                   "R2 compaction committed; prepare again under the lock")
+            before_files = live_files(con) if by_file else None
+            con.execute(f"CREATE OR REPLACE TEMP VIEW _batch AS SELECT * FROM read_parquet({_sql(fill)}) "
+                        f"WHERE _file IN ({file_list})")
+            from spicy_regs.sources import regulatory_catalog as native
+            selected_ids = f'SELECT comment_id FROM {table} WHERE {in_files}comment_id IN (SELECT comment_id FROM _batch)'
+            preimage_proc_dir = batch_work / "preimage-processing"
+            processing = native.processing_table(
+                con, COMMENT, where=f'{in_files}comment_id IN ({selected_ids})',
+                in_transaction=True, output_dir=preimage_proc_dir,
+            )
+            native._copy(
+                con, f"SELECT {col_list} FROM {processing}", preimage,
+                resources=native._layout(COMMENT.name), ordered=False,
+            )
+            native._drop_relation(con, processing)
+            shutil.rmtree(preimage_proc_dir, ignore_errors=True)
+            con.execute(f"CREATE OR REPLACE TEMP VIEW _prior AS SELECT * FROM read_parquet({_sql(preimage)})")
+            kept = {"preimage": str(preimage), "preimage_sha256": _sha256(preimage)}
+            need = " OR ".join(_changes(c, "p", "b", operation=operation) for c in prepared["columns"])
+            planned = con.execute(f"""SELECT count(*) FROM _prior p JOIN _batch b
+                ON p.comment_id = b.comment_id AND p.modify_date IS NOT DISTINCT FROM b.modify_date WHERE {need}""").fetchone()[0]
+            _append(journal, {"state": "pending", **ids, "planned": planned, "snapshot_before": current.__dict__, **kept,
+                              "before_files": sorted(before_files or ()), "by_file": by_file})
+            changed = 0
+            if planned:
+                values = ", ".join(
+                    f'{_filled(c, "p", "b", operation=operation)} AS "{c}"' if c in prepared["columns"] else f'p."{c}"'
+                    for c in columns
+                )
+                filled_sql = (
+                    f"SELECT {values} FROM _prior p JOIN _batch b "
+                    f"ON p.comment_id=b.comment_id AND p.modify_date IS NOT DISTINCT FROM b.modify_date WHERE {need}"
+                )
+                native._copy(
+                    con, filled_sql, filled_file,
+                    resources=native._layout(COMMENT.name), ordered=False,
+                )
+                con.execute(f"CREATE OR REPLACE TEMP VIEW _filled AS SELECT * FROM read_parquet({_sql(filled_file)})")
+                if con.execute("SELECT count(*) FROM _filled").fetchone()[0] != planned:
+                    raise FillVerificationError("Replacement rows differ from planned count")
+                try:
+                    native.replace_native(
+                        con,
+                        COMMENT,
+                        "_filled",
+                        expected_prior="_prior",
+                        in_transaction=True,
+                        source_files=files if by_file else None,
+                        before_files=before_files if by_file else None,
+                        file_column=FILE_COLUMN,
+                    )
+                except (ValueError, RuntimeError) as error:
+                    raise FillVerificationError(f"Native subject and receipt differ: {error}") from error
+                con.execute("DROP VIEW _filled")
+                filled_file.unlink(missing_ok=True)
+                changed = planned
+                _check(
+                    con,
+                    table,
+                    columns,
+                    prepared["columns"],
+                    files,
+                    before_files,
+                    by_file,
+                    prepared["table_rows"],
+                    postimage=postimage,
+                    operation=operation,
+                )
+                kept |= {"postimage": str(postimage), "postimage_sha256": _sha256(postimage)}
+            con.execute("COMMIT")
+        except Exception as error:
+            try:
+                con.execute("ROLLBACK")
+            except Exception:  # a failed COMMIT can already have aborted the transaction; keep the original error
+                pass
+            from spicy_regs.sources.regulatory_catalog import retain_refusal
+            retain_refusal(con, error)
+            postimage.unlink(missing_ok=True)  # it describes rows that were never committed
+            if isinstance(error, FillVerificationError):
+                _append(journal, {"state": "failed", **ids, "committed": False, "reason": str(error)[:500],
+                                  "snapshot_before": expected})
+            raise
+        finally:
+            filled_file.unlink(missing_ok=True)
     if not changed:
         _append(journal, {"state": "verified", **ids, "planned": 0, "changed": 0, "snapshot_before": expected,
                           "snapshot_after": expected})
@@ -1091,15 +1122,20 @@ def _check(con, table: str, columns: list[str], filled: list[str], files: list[s
     from spicy_regs.sources import regulatory_catalog as native
     if at is not None and iceberg._read_snapshot(con, COMMENT).snapshot_id != at:
         raise FillVerificationError('A later commit superseded the batch; qualify its current pair before recovery')
-    table = native.processing_table(con, COMMENT, where='comment_id IN (SELECT comment_id FROM _prior)',
-                                    in_transaction=at is None)
-    where = 'TRUE'
-    # Rows are compared by key and whole-row digest: a multiset of narrow pairs, not of wide rows (live, 2026-09-29:
-    # the wide EXCEPT ALL took 206-301 s of a 4.5-5.5M-row batch's 260-360 s).
-    con.execute(f"""CREATE OR REPLACE TEMP TABLE _got AS SELECT comment_id, {_columns_md5(columns)} AS row_md5
-                    FROM {table} WHERE {where} AND comment_id IN (SELECT comment_id FROM _prior)""")
-    con.execute(f"COPY _got TO {_sql(postimage)} (FORMAT PARQUET, COMPRESSION ZSTD)")
-    con.execute(f"DROP TABLE {table}")
+    check_where = (
+        f"{where} AND comment_id IN (SELECT comment_id FROM _prior)"
+        if by_file else "comment_id IN (SELECT comment_id FROM _prior)"
+    )
+    with TemporaryDirectory(prefix="comment-fill-check-") as check_tmp:
+        table = native.processing_table(
+            con, COMMENT, where=check_where, in_transaction=at is None, output_dir=Path(check_tmp)
+        )
+        # Rows are compared by key and whole-row digest: a multiset of narrow pairs, not of wide rows (live, 2026-09-29:
+        # the wide EXCEPT ALL took 206-301 s of a 4.5-5.5M-row batch's 260-360 s).
+        con.execute(f"""CREATE OR REPLACE TEMP TABLE _got AS SELECT comment_id, {_columns_md5(columns)} AS row_md5
+                        FROM {table} WHERE comment_id IN (SELECT comment_id FROM _prior)""")
+        con.execute(f"COPY _got TO {_sql(postimage)} (FORMAT PARQUET, COMPRESSION ZSTD)")
+        native._drop_relation(con, table)
     want = {c: _filled(c, "p", "b", operation=operation) if c in filled else f'p."{c}"' for c in columns}
     con.execute(f"""CREATE OR REPLACE TEMP TABLE _want AS SELECT p.comment_id, {_row_md5(want)} AS row_md5
                     FROM _prior p LEFT JOIN _batch b
@@ -1164,7 +1200,7 @@ def _recover(con, journal: Path, pending: dict, prepared: dict, table: str, expe
         raise RuntimeError(f"the pre-image of pending batch {ids['batch']} is not the one journaled; stop (runbook)")
     con.execute(f"CREATE OR REPLACE TEMP VIEW _prior AS SELECT * FROM read_parquet({_sql(kept['preimage'])})")
     file_list = ", ".join(map(_sql, pending["files"]))
-    con.execute(f"CREATE OR REPLACE TEMP TABLE _batch AS SELECT * FROM read_parquet("
+    con.execute(f"CREATE OR REPLACE TEMP VIEW _batch AS SELECT * FROM read_parquet("
                 f"{_sql(fill_dir(journal.parent.parent) / 'fill.parquet')}) WHERE _file IN ({file_list})")
     postimage = Path(kept["preimage"]).with_name(f"{Path(kept['preimage']).stem}-written.parquet")
     try:
@@ -1235,15 +1271,29 @@ def undo(workdir: Path, batch: str, *, expected_snapshot: int, con=None) -> dict
             raise RuntimeError(f"the comments catalog is at snapshot {current.snapshot_id}, not the expected "
                                f"{expected_snapshot}: review it and rerun with that snapshot")
         table = iceberg._qualified(COMMENT)
-        con.execute(f"CREATE OR REPLACE TEMP TABLE _undo_pre AS SELECT {col_list} FROM read_parquet("
+        con.execute(f"CREATE OR REPLACE TEMP VIEW _undo_pre AS SELECT {col_list} FROM read_parquet("
                     f"{_sql(images['preimage'])})")
         con.execute(f"CREATE OR REPLACE TEMP TABLE _undo_written AS SELECT * FROM read_parquet("
                     f"{_sql(images['postimage'])})")
-        from spicy_regs.sources.regulatory_catalog import processing_table
-        table = processing_table(con, COMMENT, where="comment_id IN (SELECT comment_id FROM _undo_pre)")
-        con.execute(f"""CREATE OR REPLACE TEMP TABLE _undo_now AS SELECT {col_list} FROM {table}
-                        WHERE comment_id IN (SELECT comment_id FROM _undo_pre)""")
-        con.execute(f"DROP TABLE {table}")
+        undo_files = [
+            r[0]
+            for r in con.execute(
+                f"SELECT DISTINCT {FILE_COLUMN} FROM {table} "
+                f"WHERE comment_id IN (SELECT comment_id FROM _undo_pre) AND {FILE_COLUMN} IS NOT NULL"
+            ).fetchall()
+        ]
+        undo_before_files = live_files(con) if undo_files else None
+        if undo_files:
+            undo_files_sql = ", ".join(map(_sql, undo_files))
+            undo_where = f"{FILE_COLUMN} IN ({undo_files_sql}) AND comment_id IN (SELECT comment_id FROM _undo_pre)"
+        else:
+            undo_where = "FALSE"
+        from spicy_regs.sources import regulatory_catalog as native
+        with TemporaryDirectory(prefix="comment-fill-undo-") as undo_tmp:
+            table = native.processing_table(con, COMMENT, where=undo_where, output_dir=Path(undo_tmp))
+            con.execute(f"""CREATE OR REPLACE TEMP TABLE _undo_now AS SELECT {col_list} FROM {table}
+                            WHERE comment_id IN (SELECT comment_id FROM _undo_pre)""")
+            native._drop_relation(con, table)
         # The table must hold, key for key, exactly what the commit wrote: same digests, same number of rows.
         now = f"SELECT comment_id, {_columns_md5(columns)} AS row_md5 FROM _undo_now"
         changed = con.execute(f"""SELECT count(*) FROM (
@@ -1263,8 +1313,16 @@ def undo(workdir: Path, batch: str, *, expected_snapshot: int, con=None) -> dict
                                          "(SELECT count(*) FROM _undo_expected)").fetchone()
         after, problem = current.__dict__, None
         if restored:
-            iceberg.replace_rows(con, COMMENT, "_undo_source", expected_prior="_undo_expected",
-                                 expected_snapshot=current)
+            iceberg.replace_rows(
+                con,
+                COMMENT,
+                "_undo_source",
+                expected_prior="_undo_expected",
+                expected_snapshot=current,
+                source_files=undo_files or None,
+                before_files=undo_before_files,
+                file_column=FILE_COLUMN,
+            )
             after, problem = _our_commit(con, current.__dict__, restored, deletes=replaced)
     finally:
         if own:
