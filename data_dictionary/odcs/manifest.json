@@ -5,7 +5,7 @@
   "arrow_profile": "urn:ddk:odcs:arrow-declaration:3",
   "scope": "pilot",
   "source_digests": {
-    "table_metadata_sha256": "f24fcb991818934fd5c7026332ff329e8c288d08a46d5f45cfaa73baa19475c2",
+    "table_metadata_sha256": "f6b14413e28410b337062295d605f468078bd77d827861e673c330dd0e63b3ee",
     "table_joins_sha256": "0af5448b2a6c9c0163410edaa103c058469191bc294eeb08be68a05770e884b5"
   },
   "pilot_families": [
@@ -32,7 +32,7 @@
     "amendments": {
       "family": "amendments",
       "path": "families/amendments.odcs.json",
-      "sha256": "b6a94f3203581caecb492ef4b7b51b5c223f15c3f008a999e0277e194f039d07",
+      "sha256": "4e1d2b8a844603349e68e869aa437122ddae9bad3e05372b99ce71ee73103a95",
       "contract_id": "urn:spicy-regs:odcs:family:amendments",
       "domain": "spicycongress",
       "secondary_domains": [],
@@ -48,7 +48,7 @@
     "bill-family": {
       "family": "bill-family",
       "path": "families/bill-family.odcs.json",
-      "sha256": "5de4f18f2fe80c8e5d76bcc68b4820786c895767ee208fc3ec2d62de21d3d74d",
+      "sha256": "463f798c80df2e0763f98f51bb27834b375e8de409dd310e65565cdd7bac0d6a",
       "contract_id": "urn:spicy-regs:odcs:family:bill-family",
       "domain": "spicycongress",
       "secondary_domains": [
@@ -85,7 +85,7 @@
     "committee-rosters": {
       "family": "committee-rosters",
       "path": "families/committee-rosters.odcs.json",
-      "sha256": "b8c335619f66fbb664534b51b4ef06d026f545e0975ee924dc31c7ff6cdb45d3",
+      "sha256": "c29089ca8815d06d85e397031d8b5b2de01f4ff7e3585c3ad13731923aee9eab",
       "contract_id": "urn:spicy-regs:odcs:family:committee-rosters",
       "domain": "spicycongress",
       "secondary_domains": [
@@ -105,7 +105,7 @@
     "federal-register": {
       "family": "federal-register",
       "path": "families/federal-register.odcs.json",
-      "sha256": "4916a7cd5da77ae0b5549f08823f09fb66e52e7e02162beaf3feab587709478e",
+      "sha256": "12b629024d2787ce9bc5871f5ee1e36d572d02e7e645640a14900e235d00184f",
       "contract_id": "urn:spicy-regs:odcs:family:federal-register",
       "domain": "spicygov",
       "secondary_domains": [
@@ -123,7 +123,7 @@
     "members": {
       "family": "members",
       "path": "families/members.odcs.json",
-      "sha256": "ccb0b78fc9d54c01dad69c4429b81a247f851ef58d3e3b34fb6f0c2185d2b1c9",
+      "sha256": "09cd521517966454f341bceb02a0ab4988cc62ca32a7d329b7f1047a8caa7a50",
       "contract_id": "urn:spicy-regs:odcs:family:members",
       "domain": "spicycongress",
       "secondary_domains": [
@@ -143,7 +143,7 @@
     "nominations": {
       "family": "nominations",
       "path": "families/nominations.odcs.json",
-      "sha256": "296763e4d0cf4990af91d7227494a02c6559d0d82845d88fe8ccfa15236dbdcd",
+      "sha256": "a46ec3974fa60c5dcceaa11c4c0136d2440e769c891a247b431ffc57d63eec03",
       "contract_id": "urn:spicy-regs:odcs:family:nominations",
       "domain": "spicycongress",
       "secondary_domains": [
@@ -162,7 +162,7 @@
     "roll-call-votes": {
       "family": "roll-call-votes",
       "path": "families/roll-call-votes.odcs.json",
-      "sha256": "0d841d6609d03dddfe09f22b098ccc88e60f3c064bbe692caeef0eca7086af1d",
+      "sha256": "9ec9cb9e99c8fe640d99098facb799ccd4eeda28ed98e2a8cfe0ad70dcf9ea15",
       "contract_id": "urn:spicy-regs:odcs:family:roll-call-votes",
       "domain": "spicycongress",
       "secondary_domains": [],
@@ -179,7 +179,7 @@
     "rulemaking": {
       "family": "rulemaking",
       "path": "families/rulemaking.odcs.json",
-      "sha256": "ac6d16ec7acb1a2b926162011ec208e1d630320c96c349a06871eae5f291fb68",
+      "sha256": "765e6f47d9f5912cf111e7f6755212d5022791b11be4cba63d9701f7825765b9",
       "contract_id": "urn:spicy-regs:odcs:family:rulemaking",
       "domain": "spicygov",
       "secondary_domains": [
