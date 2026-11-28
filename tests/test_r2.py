@@ -6,6 +6,7 @@ all reported.
 """
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -30,8 +31,13 @@ def test_the_floor_for_a_table_that_kept_its_rows_applies_where_it_is_the_lower(
         return
     with pytest.raises(RuntimeError, match="shrink"):
         r2._assert_upload_safe(new_bytes, 10_731_354, "fec_committees.parquet", floor=floor)
+    r2._assert_upload_safe(new_bytes, 10_731_354, "fec_committees.parquet", floor=floor, allow_shrink=True)
+
+
+def test_legacy_shrink_env_does_not_bypass_guard(monkeypatch):
     monkeypatch.setenv("R2_ALLOW_SHRINK", "1")
-    r2._assert_upload_safe(new_bytes, 10_731_354, "fec_committees.parquet", floor=floor)
+    with pytest.raises(RuntimeError, match="Refusing to upload comments.parquet"):
+        r2._assert_upload_safe(100, 100_000, "comments.parquet")
 
 
 def test_a_refusal_says_which_threshold_was_compared():
@@ -39,13 +45,13 @@ def test_a_refusal_says_which_threshold_was_compared():
         r2._assert_upload_safe(4_207_441, 10_731_354, "fec_committees.parquet")
     assert str(ordinary.value) == (
         "Refusing to upload fec_committees.parquet: new file would shrink remote from 10.2 MB to 4.0 MB "
-        "(ratio 0.392 < threshold 0.5). Set R2_ALLOW_SHRINK=1 to override.")
+        "(ratio 0.392 < threshold 0.5). Pass allow_shrink=True to override.")
     with pytest.raises(RuntimeError) as kept:
         r2._assert_upload_safe(1_750_000, 10_731_354, "fec_committees.parquet", floor=0.2)
     assert str(kept.value) == (
         "Refusing to upload fec_committees.parquet: new file would shrink remote from 10.2 MB to 1.7 MB "
         "(ratio 0.163 < threshold 0.2, the floor for a table that kept its rows and columns). "
-        "Set R2_ALLOW_SHRINK=1 to override.")
+        "Pass allow_shrink=True to override.")
 
 
 def test_retry_checkpoint_can_clear_without_disabling_dataset_shrink_guards():
@@ -71,15 +77,19 @@ def test_upload_dataset_uploads_only_existing_base_files(tmp_path: Path, monkeyp
     (tmp_path / "manifest.parquet").write_bytes(b"m")
     # comments.parquet intentionally absent — it's published as partitions.
 
-    uploaded: list[Path] = []
-    monkeypatch.setattr(r2, "preflight_uploads", lambda output_dir, files: None)
-    monkeypatch.setattr(r2, "upload_file", lambda p, remote_key=None: uploaded.append(p))
+    uploaded: list[tuple[Path, bool]] = []
+    preflight = MagicMock()
+    monkeypatch.setattr(r2, "preflight_uploads", preflight)
+    monkeypatch.setattr(r2, "upload_file", lambda p, *, allow_shrink: uploaded.append((p, allow_shrink)))
 
-    r2.upload_dataset(tmp_path, ["dockets", "documents", "comments"])
+    r2.upload_dataset(tmp_path, ["dockets", "documents", "comments"], allow_shrink=True)
 
+    preflight.assert_called_once_with(
+        tmp_path, [tmp_path / "dockets.parquet", tmp_path / "documents.parquet"], allow_shrink=True,
+    )
     assert set(uploaded) == {
-        tmp_path / "dockets.parquet",
-        tmp_path / "documents.parquet",
+        (tmp_path / "dockets.parquet", True),
+        (tmp_path / "documents.parquet", True),
     }
 
 
@@ -90,13 +100,17 @@ def test_upload_comment_partitions_uploads_changed_and_index(tmp_path: Path, mon
     changed.write_bytes(b"c")
     (tmp_path / "comments_index.parquet").write_bytes(b"i")
 
-    uploaded: list[tuple[Path, str | None]] = []
-    monkeypatch.setattr(r2, "upload_file", lambda p, remote_key=None: uploaded.append((p, remote_key)))
+    uploaded: list[tuple[Path, str, bool]] = []
+    monkeypatch.setattr(r2, "upload_file", lambda p, remote_key, *, allow_shrink: uploaded.append(
+        (p, remote_key, allow_shrink),
+    ))
 
-    r2.upload_comment_partitions(tmp_path, [changed])
+    r2.upload_comment_partitions(tmp_path, [changed], allow_shrink=True)
 
-    assert (changed, str(changed.relative_to(tmp_path))) in uploaded
-    assert (tmp_path / "comments_index.parquet", "comments_index.parquet") in uploaded
+    assert uploaded == [
+        (changed, str(changed.relative_to(tmp_path)), True),
+        (tmp_path / "comments_index.parquet", "comments_index.parquet", True),
+    ]
 
 
 def test_upload_comment_partitions_refuses_without_an_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -119,6 +133,28 @@ def _upload_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("R2_SECRET_ACCESS_KEY", "s")
     monkeypatch.setenv("R2_BUCKET_NAME", "spicy-regs")
     monkeypatch.setenv("R2_PUBLIC_URL", "https://data.spicy-regs.dev")
+
+
+def test_explicit_shrink_override_stays_with_the_targeted_call(tmp_path, monkeypatch):
+    _upload_env(monkeypatch)
+    client = MagicMock()
+    client.head_object.return_value = {"ContentLength": 100_000}
+    monkeypatch.setattr(r2, "get_r2_client", lambda: client)
+    monkeypatch.setattr(r2, "purge_urls", lambda urls: None)
+    allowed, sibling = tmp_path / "dockets.parquet", tmp_path / "documents.parquet"
+    for path in (allowed, sibling):
+        path.write_bytes(b"small")
+
+    r2.preflight_uploads(tmp_path, [allowed], allow_shrink=True)
+    r2.upload_file(allowed, allow_shrink=True)
+    with pytest.raises(RuntimeError, match="Publication preflight failed.*documents.parquet") as refused:
+        r2.preflight_uploads(tmp_path, [sibling])
+    assert "shrink remote" in str(refused.value.__cause__)
+    with pytest.raises(RuntimeError, match="Refusing to upload documents.parquet"):
+        r2.upload_file(sibling)
+    assert [call.args[:3] for call in client.upload_file.call_args_list] == [
+        (str(allowed), "spicy-regs", "dockets.parquet"),
+    ]
 
 
 def test_upload_file_purges_exact_object_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -198,11 +234,11 @@ def test_upload_dataset_raises_when_an_upload_fails(tmp_path: Path, monkeypatch:
     (tmp_path / "dockets.parquet").write_bytes(b"d")
     (tmp_path / "documents.parquet").write_bytes(b"x")
 
-    def fake_upload(path: Path, remote_key: str | None = None) -> None:
+    def fake_upload(path: Path, *, allow_shrink: bool) -> None:
         if path.name == "dockets.parquet":
             raise RuntimeError("Refusing to upload dockets.parquet: would shrink remote")
 
-    monkeypatch.setattr(r2, "preflight_uploads", lambda output_dir, files: None)
+    monkeypatch.setattr(r2, "preflight_uploads", lambda output_dir, files, *, allow_shrink: None)
     monkeypatch.setattr(r2, "upload_file", fake_upload)
 
     with pytest.raises(RuntimeError, match="dockets.parquet"):
@@ -230,7 +266,7 @@ def test_upload_dataset_preflights_all_guards_before_uploading(tmp_path: Path, m
         fake_remote_size,
     )
     uploaded: list[Path] = []
-    monkeypatch.setattr(r2, "upload_file", lambda path, remote_key=None: uploaded.append(path))
+    monkeypatch.setattr(r2, "upload_file", lambda path, *, allow_shrink: uploaded.append(path))
 
     with pytest.raises(RuntimeError, match="Publication preflight failed.*dockets.parquet"):
         r2.upload_dataset(tmp_path, ["documents", "dockets"])
@@ -244,10 +280,10 @@ def test_upload_dataset_reports_every_failure(tmp_path: Path, monkeypatch: pytes
     (tmp_path / "dockets.parquet").write_bytes(b"d")
     (tmp_path / "documents.parquet").write_bytes(b"x")
 
-    def fake_upload(path: Path, remote_key: str | None = None) -> None:
+    def fake_upload(path: Path, *, allow_shrink: bool) -> None:
         raise RuntimeError(f"boom: {path.name}")
 
-    monkeypatch.setattr(r2, "preflight_uploads", lambda output_dir, files: None)
+    monkeypatch.setattr(r2, "preflight_uploads", lambda output_dir, files, *, allow_shrink: None)
     monkeypatch.setattr(r2, "upload_file", fake_upload)
 
     with pytest.raises(RuntimeError) as excinfo:
@@ -372,7 +408,6 @@ def test_empty_discovery_signals_bypasses_shrink_guard_on_r2_upload_without_weak
     import pyarrow.parquet as pq
 
     _upload_env(monkeypatch)
-    monkeypatch.delenv("R2_ALLOW_SHRINK", raising=False)
     monkeypatch.setattr(r2, "get_r2_client", lambda: __import__("unittest.mock", fromlist=["MagicMock"]).MagicMock())
     monkeypatch.setattr(r2, "_get_remote_size", lambda *a, **k: 1_225)
     monkeypatch.setattr(r2, "purge_urls", lambda urls: None)

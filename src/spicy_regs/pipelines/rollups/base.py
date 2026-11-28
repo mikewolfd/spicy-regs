@@ -341,6 +341,8 @@ class RollupPipeline(Pipeline):
     #: family's table set may grow. Inert once they are published; never a way to drop one.
     added_tables: ClassVar[tuple[str, ...]] = ()
     receipt_only_tables: ClassVar[tuple[str, ...]] = ()
+    #: Exact generation table keys exempt from the publication byte-size guard for this rollup.
+    allow_shrink_tables: frozenset[str] = frozenset()
     #: Outputs stored as several files, by key, to their partition columns. The build returns each as a directory
     #: named for the table, holding ``<col>=<value>/part-NNNNNN.parquet`` (multi-file design §4.2).
     partitioned: ClassVar[Mapping[str, tuple[str, ...]]] = {}
@@ -366,11 +368,14 @@ class RollupPipeline(Pipeline):
         skip_upload: bool = True,
         resume: bool = False,
         require_resume_candidate: bool = False,
+        allow_shrink_tables: frozenset[str] | None = None,
     ) -> None:
         self.output_dir = output_dir
         self.skip_upload = skip_upload
         self.resume = resume
         self.require_resume_candidate = require_resume_candidate
+        if allow_shrink_tables is not None:
+            self.allow_shrink_tables = allow_shrink_tables
         self.source_evidence: CaptureEvidence | None = None
         #: A failure ``build`` met and built around (one source refused, the rest was read): ``run`` publishes the
         #: generation and then raises it, so the run still fails.
@@ -871,6 +876,7 @@ class RollupPipeline(Pipeline):
             evidence_directories=(evidence_dir,) if evidence_dir is not None else (),
             added_tables=frozenset(self.added_tables),
             receipt_only_tables=frozenset(self.receipt_only_tables),
+            allow_shrink_tables=frozenset(self.allow_shrink_tables),
         )
         purge_urls([f"{public_url.rstrip('/')}/{publication.INDEX_V2_KEY}"])
         remember_generation(output_dir, gen_dir, artifact)
@@ -1193,6 +1199,7 @@ class RollupPipeline(Pipeline):
                 evidence_directories=(self.source_evidence.artifact_dir,) if self.source_evidence else (),
                 added_tables=frozenset(self.added_tables),
                 receipt_only_tables=frozenset(self.receipt_only_tables),
+                allow_shrink_tables=frozenset(self.allow_shrink_tables),
             )
             from spicy_regs.sources.cloudflare import purge_urls
 

@@ -162,11 +162,6 @@ jobs:
 
       - name: Republish the public comments mirror
         if: ${{ inputs.publish_mirror }}
-        # Same shrink-guard bypass the scheduled mirror job uses: a re-export from
-        # the catalog re-sorts + re-compresses, so partitions can shrink on disk
-        # while holding more rows; the script enforces a row-count floor instead.
-        env:
-          R2_ALLOW_SHRINK: '1'
         run: |
           echo "Running: uv run python scripts/publish_comments_mirror.py"
           uv run python scripts/publish_comments_mirror.py

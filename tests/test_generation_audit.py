@@ -32,7 +32,7 @@ def rows(*pairs, v=pa.string()):
     return pa.table({"id": pa.array([p[0] for p in pairs], pa.string()), "v": pa.array([p[1] for p in pairs], v)})
 
 
-def publish(tmp_path, store, name, tables, *, prior=None, evidence=None):
+def publish(tmp_path, store, name, tables, *, prior=None, evidence=None, allow_shrink_tables=frozenset()):
     """Build and publish one ``test`` generation into the fake bucket; returns the new index."""
     source = tmp_path / f"{name}-source"
     source.mkdir()
@@ -42,6 +42,7 @@ def publish(tmp_path, store, name, tables, *, prior=None, evidence=None):
     build_generation(directory, family="test", files=[source / key for key in tables], expected_keys=list(tables),
                      read_snapshot=prior, inputs=evidence.inputs() if evidence else ())
     return pub.publish_generation(directory, client=store, bucket="test", prior_index=prior or pub.empty_index(),
+                                  allow_shrink_tables=allow_shrink_tables,
                                   evidence_directories=(evidence.artifact_dir,) if evidence else ())
 
 
@@ -255,11 +256,11 @@ def test_a_key_in_a_table_cell_is_flagged_in_text_and_list_columns(tmp_path):
     assert "Z" * 8 not in serialized and KEY[:8] not in serialized
 
 
-def test_an_empty_output_is_reported_as_state_not_failure(tmp_path, monkeypatch):
-    monkeypatch.setenv("R2_ALLOW_SHRINK", "1")
+def test_an_empty_output_is_reported_as_state_not_failure(tmp_path):
     store = Store()
     prior = publish(tmp_path, store, "prior", {"t.parquet": rows(), "u.parquet": rows(("1", "a"))})
-    publish(tmp_path, store, "current", {"t.parquet": rows(), "u.parquet": rows(("1", "a"))}, prior=prior)
+    publish(tmp_path, store, "current", {"t.parquet": rows(), "u.parquet": rows(("1", "a"))},
+            prior=prior, allow_shrink_tables=frozenset({"t.parquet"}))
 
     report = audit(public_base(store, tmp_path / "public"), family="test", declarations={**DECLARED, "u": DECLARED["t"]})
 

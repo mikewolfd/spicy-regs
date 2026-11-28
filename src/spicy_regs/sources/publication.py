@@ -1927,6 +1927,7 @@ def publish_evidence_index(client, bucket: str, family: str, path: Path) -> str:
 def publish_generation(directory: Path, *, client, bucket: str, prior_index: Mapping,
                        evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
                        receipt_only_tables: frozenset[str] = frozenset(), exact_prior: bool = False,
+                       allow_shrink_tables: frozenset[str] = frozenset(),
                        conversion_proof: NativeConversionProof | None = None, before_pointer=None) -> dict:
     """Verify/upload/verify, then compare-and-swap the publication pointer.
 
@@ -1947,6 +1948,7 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     Managed parents must also remain current on every pointer attempt.
     Input provenance and semantic quality are separate checks.
     ``exact_prior`` also holds the captured publication timestamp unchanged on every pointer retry.
+    ``allow_shrink_tables`` bypasses only the byte-size check for the exact table keys named.
     ``conversion_proof`` replaces the byte-size heuristic only for original tables
     completely restored by this native-conversion invocation; it also requires the exact prior on every retry.
     ``before_pointer`` runs after immutable staging and before the timestamp on each pointer attempt. A callback
@@ -1959,6 +1961,7 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     return _publish_verified_generation(
         artifact, LocalMemberSource(directory), client=client, bucket=bucket, prior_index=prior_index,
         evidence_directories=evidence_directories, added_tables=added_tables, receipt_only_tables=receipt_only_tables,
+        allow_shrink_tables=allow_shrink_tables,
         exact_prior=exact_prior, conversion_proof=conversion_proof, before_pointer=before_pointer, local=directory,
         upload_member=lambda prefix, key: _put_immutable(client, bucket, prefix + "/" + key, directory / key),
     )
@@ -2203,6 +2206,7 @@ def _stage_verified_generation(
     artifact, source, *, upload_member, client, bucket: str, index: dict,
     evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
     receipt_only_tables: frozenset[str] = frozenset(),
+    allow_shrink_tables: frozenset[str] = frozenset(),
     conversion_proof: NativeConversionProof | None = None, members=None,
     _verified_replacement_tables: frozenset[str] = frozenset(),
 ) -> dict:
@@ -2242,7 +2246,9 @@ def _stage_verified_generation(
             else:
                 kept = prior is not None and _keeps_rows_and_columns(table, prior)
                 floor = _KEPT_ROWS_MIN_RATIO if kept else None
-            _assert_upload_safe(table["byteSize"], old_size, key, floor=floor)
+            _assert_upload_safe(
+                table["byteSize"], old_size, key, floor=floor, allow_shrink=(key in allow_shrink_tables),
+            )
     old_family = index["families"].get(family)
     # The table set may change only by an explicit migration: exactly the declared added tables join, none leave.
     # A union, so the declaration is inert once those tables are published.
@@ -2367,6 +2373,7 @@ def _publish_verified_generation(
     artifact, source, *, upload_member, client, bucket: str, prior_index: Mapping,
     evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
     receipt_only_tables: frozenset[str] = frozenset(), exact_prior: bool = False,
+    allow_shrink_tables: frozenset[str] = frozenset(),
     conversion_proof: NativeConversionProof | None = None,
     before_pointer=None, local: Path | None = None,
 ) -> dict:
@@ -2382,7 +2389,7 @@ def _publish_verified_generation(
     entry = _stage_verified_generation(
         artifact, source, upload_member=upload_member, client=client, bucket=bucket, index=index,
         evidence_directories=evidence_directories, added_tables=added_tables,
-        receipt_only_tables=receipt_only_tables, conversion_proof=conversion_proof,
+        receipt_only_tables=receipt_only_tables, allow_shrink_tables=allow_shrink_tables, conversion_proof=conversion_proof,
     )
     # Each lost race means another writer's pointer write succeeded, so
     # contention resolves in at most one round per concurrent writer.

@@ -113,12 +113,12 @@ jobs:
             -o "$WORK_DIR/prior-publication.v2.json"
           uv run --frozen python -m spicy_regs.pipelines.prior_repairs repair-bill-family-quality \
             --dry-run | tee "$WORK_DIR/pre-repair-counts.json"
+          set --
           if [ "$ALLOW_SHRINK_PUBLIC_ACTIVITY_EVENTS" = "true" ]; then
-            export R2_ALLOW_SHRINK=1
+            set -- --allow-shrink-public-activity-events
           fi
           uv run --frozen python -m spicy_regs.pipelines.prior_repairs repair-bill-family-quality \
-            --output-dir "$WORK_DIR/out" --no-skip-upload
-          unset R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO
+            --output-dir "$WORK_DIR/out" --no-skip-upload "$@"
           curl -fsSL -H "User-Agent: $WORKFLOW_USER_AGENT" "${R2_PUBLIC_URL%/}/publication.v2.json" \
             -o "$WORK_DIR/post-publication.v2.json"
 

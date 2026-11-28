@@ -31,8 +31,11 @@ def build(tmp_path, name="one", family="test", keys=("a.parquet", "b.parquet"), 
     return target, artifact
 
 
-def publish(store, path, prior=None):
-    return pub.publish_generation(path, client=store, bucket="test", prior_index=prior or pub.empty_index())
+def publish(store, path, prior=None, *, allow_shrink_tables=frozenset()):
+    return pub.publish_generation(
+        path, client=store, bucket="test", prior_index=prior or pub.empty_index(),
+        allow_shrink_tables=allow_shrink_tables,
+    )
 
 
 #: The pointer publishing wrote before ``publication.v2.json`` was the only one. Nothing writes or reads it now.
@@ -105,6 +108,30 @@ def test_late_shrink_refusal_uploads_nothing(tmp_path):
     with pytest.raises(RuntimeError, match="shrink"):
         publish(store, directory)
     assert not store.writes
+
+
+def test_only_named_tables_may_shrink(tmp_path):
+    keys = ("t.parquet", "u.parquet")
+    old, _ = build(tmp_path, keys=keys, table=pa.table({"id": [str(i) for i in range(400)]}), row_group_size=1)
+    small, _ = build(tmp_path, "small", keys=keys)
+    store = Store()
+    prior = publish(store, old)
+    writes = list(store.writes)
+    allowed = frozenset({"t.parquet"})
+
+    with pytest.raises(RuntimeError, match=r"Refusing to upload t\.parquet"):
+        publish(store, small, prior)
+    with pytest.raises(RuntimeError, match=r"Refusing to upload u\.parquet"):
+        publish(store, small, prior, allow_shrink_tables=allowed)
+    assert store.writes == writes
+
+    only_t_smaller = tmp_path / "only-t-smaller"
+    build_generation(only_t_smaller, family="test", files=[small / "t.parquet", old / "u.parquet"],
+                     expected_keys=keys)
+    index = publish(store, only_t_smaller, prior, allow_shrink_tables=allowed)
+    current_tables = index["families"]["test"]["tables"]
+    assert current_tables["t.parquet"]["rows"] == 1
+    assert current_tables["u.parquet"] == prior["families"]["test"]["tables"]["u.parquet"]
 
 
 def test_persistent_contention_refuses_and_preserves_concurrent_writer(tmp_path):
@@ -786,7 +813,8 @@ def test_a_table_shaped_like_fec_committees_publishes_unless_most_of_its_bytes_w
         return
     writes = list(store.writes)
     with pytest.raises(RuntimeError, match=(
-            r"< threshold 0\.2, the floor for a table that kept its rows and columns\)\. Set R2_ALLOW_SHRINK=1")):
+            r"< threshold 0\.2, the floor for a table that kept its rows and columns\)\. "
+            r"Pass allow_shrink=True to override\.")):
         publish(store, small, prior)
     assert store.writes == writes
 

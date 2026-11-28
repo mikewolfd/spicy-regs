@@ -108,7 +108,7 @@ def publication(tmp_path, monkeypatch):
     monkeypatch.setattr(mirror.publication, "public_object_version", lambda url, **_: state["objects"].get(url.removeprefix("https://public.example/")))
     state["objects"]["comments.parquet"] = {"etag": "prior", "bytes": 99}
     monkeypatch.setattr(mirror, "validate_export", lambda *a, **kw: mirror.PublicPredecessor(state["objects"]["comments.parquet"]["etag"], frozenset({"EPA"})))
-    monkeypatch.setattr(mirror.r2, "preflight_uploads", lambda *a: None)
+    monkeypatch.setattr(mirror.r2, "preflight_uploads", lambda *a, **kw: None)
     monkeypatch.setattr(mirror.publication, "current_index", lambda _: state["index"])
     monkeypatch.setattr(mirror.r2, "get_r2_client", lambda: object())
     def publish(directory, **kwargs):
@@ -148,7 +148,7 @@ def publication(tmp_path, monkeypatch):
             raise OSError("readback failed")
         return {**state["objects"][key], "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
 
-    def partitions(root, files):
+    def partitions(root, files, *, allow_shrink):
         for path in files:
             upload(path, path.relative_to(root).as_posix())
         upload(root / "comments_index.parquet")
@@ -425,43 +425,51 @@ def test_a_receipt_whose_agency_rows_do_not_sum_to_the_monolith_is_refused(tmp_p
 
 
 def test_only_the_agency_files_may_shrink(publication, monkeypatch):
-    """The workflow no longer lifts r2's shrink guard; the mirror lifts it around the agency files alone."""
+    """Only fixed agency files and their index receive an explicit size exemption."""
     import os
 
-    state, root = publication
+    _, root = publication
     monkeypatch.delenv("R2_ALLOW_SHRINK", raising=False)
+    setitem = type(os.environ).__setitem__
+
+    def refuse_legacy_env_write(environ, key, value):
+        assert key != "R2_ALLOW_SHRINK"
+        setitem(environ, key, value)
+
+    monkeypatch.setattr(type(os.environ), "__setitem__", refuse_legacy_env_write)
     seen = []
     upload, partitions = mirror.r2.upload_file, mirror.r2.upload_comment_partitions
     publish = mirror.publication.publish_generation
 
-    def note(step, what):
-        seen.append((step, what, os.environ.get("R2_ALLOW_SHRINK")))
+    def preflight(output_dir, files, *, allow_shrink):
+        seen.append(("preflight", [path.relative_to(output_dir).as_posix() for path in files], allow_shrink))
 
-    def preflight(output_dir, files):
-        note("preflight", sorted(path.relative_to(output_dir).as_posix() for path in files))
+    def upload_file(path, remote_key=None, *, allow_shrink, **kw):
+        seen.append(("upload", remote_key or path.name, allow_shrink))
+        return upload(path, remote_key, allow_shrink=allow_shrink, **kw)
 
-    def upload_file(path, remote_key=None, **kw):
-        note("upload", remote_key or path.name)
-        return upload(path, remote_key, **kw)
+    def upload_agency_files(output_dir, files, *, allow_shrink):
+        seen.append(("agency files", [path.relative_to(output_dir).as_posix() for path in files], allow_shrink))
+        return partitions(output_dir, files, allow_shrink=allow_shrink)
 
-    def upload_agency_files(output_dir, files):
-        note("agency files", len(files))
-        return partitions(output_dir, files)
-
-    def publish_generation(directory, **kw):
-        note("generation", None)
-        return publish(directory, **kw)
+    def publish_generation(directory, *, allow_shrink_tables, **kw):
+        seen.append(("generation", None, allow_shrink_tables))
+        return publish(directory, allow_shrink_tables=allow_shrink_tables, **kw)
 
     monkeypatch.setattr(mirror.r2, "preflight_uploads", preflight)
     monkeypatch.setattr(mirror.r2, "upload_file", upload_file)
     monkeypatch.setattr(mirror.r2, "upload_comment_partitions", upload_agency_files)
     monkeypatch.setattr(mirror.publication, "publish_generation", publish_generation)
     assert mirror.publish_comments_mirror(root)
-    assert seen[:3] == [("preflight", ["comments.parquet"], None),
-                        ("preflight", ["comments/agency/agency_code=EPA/part-0.parquet", "comments_index.parquet"], "1"),
-                        ("upload", "comments.parquet", None)]
-    assert ("agency files", 1, "1") in seen and ("generation", None, None) in seen
-    assert ("upload", "comments-publication.json", None) in seen
+    agency = "comments/agency/agency_code=EPA/part-0.parquet"
+    assert seen == [
+        ("preflight", ["comments.parquet"], False),
+        ("preflight", [agency, "comments_index.parquet"], True),
+        ("upload", "comments.parquet", False),
+        ("agency files", [agency], True),
+        ("generation", None, frozenset()),
+        ("upload", "comments-publication.json", False),
+    ]
     assert "R2_ALLOW_SHRINK" not in os.environ
 
 

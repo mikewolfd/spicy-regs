@@ -114,7 +114,7 @@ class TestUploadShrinkGuard:
         assert len(uploads) == 1
 
     def test_escape_hatch_allows_shrink(self, tmp_path, monkeypatch):
-        """Recovery flows need to bypass the guard."""
+        """Only the explicit recovery argument bypasses the guard."""
         self._setup_env(monkeypatch)
         monkeypatch.setenv("R2_ALLOW_SHRINK", "1")
         _, uploads = self._mock_r2_client(monkeypatch, remote_size=3_300_000_000)
@@ -122,7 +122,11 @@ class TestUploadShrinkGuard:
         local = tmp_path / "comments.parquet"
         local.write_bytes(b"x" * 8_000_000)
 
-        upload_to_r2(local)
+        with pytest.raises(RuntimeError, match=r"Pass allow_shrink=True to override\."):
+            upload_to_r2(local)
+        assert uploads == []
+
+        upload_to_r2(local, allow_shrink=True)
         assert len(uploads) == 1
 
     def test_custom_shrink_threshold_from_env(self, tmp_path, monkeypatch):

@@ -2,10 +2,10 @@
 
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import AbstractContextManager, contextmanager, nullcontext
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import asdict, dataclass
 import json
-from os import environ, getenv
+from os import getenv
 from pathlib import Path
 import re
 from tempfile import TemporaryDirectory
@@ -150,27 +150,6 @@ def _retain_empty_agencies(result: dict[str, Path], predecessor: PublicPredecess
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
             pq.write_table(pa.Table.from_batches([], schema=schema), path, compression="zstd")
-
-
-@contextmanager
-def _agency_files_may_shrink():
-    """Lift ``r2``'s shrink guard for the fixed agency files alone, restoring the caller's setting after.
-
-    An agency file may legitimately shrink: re-sorted and re-compressed it can be several times smaller while
-    holding more rows (ACF 19.7 MB to 6.0 MB), and one whose last row moved agency is emptied. The monolith and
-    the generation's members are not exempt, so the bypass is no longer the workflow's environment (ss-juz8). The
-    guard reads only ``R2_ALLOW_SHRINK``; an ``allow_shrink`` argument on ``upload_file``, ``preflight_uploads``
-    and ``upload_comment_partitions`` would replace this.
-    """
-    held = environ.get("R2_ALLOW_SHRINK")
-    environ["R2_ALLOW_SHRINK"] = "1"
-    try:
-        yield
-    finally:
-        if held is None:
-            environ.pop("R2_ALLOW_SHRINK", None)
-        else:
-            environ["R2_ALLOW_SHRINK"] = held
 
 
 def check_receipt_rows(output_dir: Path, files: dict[str, dict], exported_rows: int) -> None:
@@ -453,14 +432,12 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
     files = [result["comments"], *agency_files, result["index"]]
     rows = {path.relative_to(output_dir).as_posix(): {"rows": pq.ParquetFile(path).metadata.num_rows} for path in files}
     check_receipt_rows(output_dir, rows, n_rows)
-    # Every planned file is guarded before the first byte lands; only the agency files (and the index uploaded
-    # with them) may shrink, the monolith here and the generation's members at publication may not.
-    r2.preflight_uploads(output_dir, [result["comments"]])
-    with _agency_files_may_shrink():
-        r2.preflight_uploads(output_dir, [*agency_files, result["index"]])
-    r2.upload_file(result["comments"], remote_key="comments.parquet")
-    with _agency_files_may_shrink():
-        r2.upload_comment_partitions(output_dir, agency_files)
+    # Only the fixed agency files and their index may shrink. Re-sorting and compression can make an
+    # agency file smaller even with more rows, and an agency whose last row moved is deliberately emptied.
+    r2.preflight_uploads(output_dir, [result["comments"]], allow_shrink=False)
+    r2.preflight_uploads(output_dir, [*agency_files, result["index"]], allow_shrink=True)
+    r2.upload_file(result["comments"], remote_key="comments.parquet", allow_shrink=False)
+    r2.upload_comment_partitions(output_dir, agency_files, allow_shrink=True)
 
     def verify(path: Path) -> tuple[str, dict]:
         key = path.relative_to(output_dir).as_posix()
@@ -470,12 +447,14 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
         descriptors = dict(pool.map(verify, files))
     published_index = publication.publish_generation(
         generation_directory, client=r2.get_r2_client(), bucket=getenv("R2_BUCKET_NAME", "spicy-regs"),
-        prior_index=prior_index)
+        prior_index=prior_index, allow_shrink_tables=frozenset())
     receipt = {"format_version": FORMAT_VERSION, "source": asdict(snapshot), "files": descriptors,
                "generation": published_index["families"]["comments"]}
     receipt_path = output_dir / RECEIPT_KEY
     receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
-    r2.upload_file(receipt_path, remote_key=RECEIPT_KEY, cache_control="no-cache, must-revalidate")
+    r2.upload_file(
+        receipt_path, remote_key=RECEIPT_KEY, cache_control="no-cache, must-revalidate", allow_shrink=False,
+    )
     r2.verify_public_file(receipt_path, RECEIPT_KEY, base_url)
     logger.info("Published and read back comments snapshot {}", snapshot.snapshot_id)
     return True
