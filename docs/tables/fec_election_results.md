@@ -2,11 +2,11 @@
 
 # `fec_election_results`
 
-**Official Senate election results**
+**Official federal election results**
 
-Official Senate election results with exact source coordinates and explicit interpretation limits.
+Official FEC Presidential, U.S. Senate, and U.S. House election results with exact source coordinates and explicit interpretation limits.
 
-**Coverage.** Window. Reviewed official Senate edition, preserving primaries, runoffs, general elections, unexpired terms, ballot lines, zero votes and ranked-choice rounds. Appendix observations remain literal in the companion table. *(measured 2026-11-13)*
+**Coverage.** Window. Reviewed official FEC Federal Elections editions (2016-2024 Presidential, 2016-2022 U.S. Senate and U.S. House), preserving primaries, runoffs, general elections, unexpired terms, ballot lines, combined-party witnesses, electoral votes, zero votes, and ranked-choice rounds. Overlapping appendix worksheets remain literal in fec_election_workbook_rows. *(measured 2026-11-27)*
 
 - **Parquet file:** `fec_election_results.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -22,26 +22,28 @@ Official Senate election results with exact source coordinates and explicit inte
 | `source_sheet` | `VARCHAR` | Literal worksheet name. |
 | `reader_version` | `VARCHAR` | Version of the source reader over maintained literal workbook syntax. |
 | `source_column` | `VARCHAR` | Native vote column in the retained worksheet. |
-| `state` | `VARCHAR` | Source state abbreviation; blank totals inherit only within the same explicitly repeated full state name. |
+| `office` | `VARCHAR` | Federal office of the contest (president, senate, or house). |
+| `state` | `VARCHAR` | Source state or territory postal abbreviation, or US for published national totals. |
 | `state_raw` | `VARCHAR` | Literal native state cell; original blanks remain blank. |
-| `district_raw` | `VARCHAR` | Literal seat label, preserving full versus unexpired terms. |
-| `seat_term` | `VARCHAR` | Full or unexpired Senate term, separate within each state. |
-| `stage` | `VARCHAR` | Primary, primary runoff, general or general runoff, from separate source columns. |
-| `round` | `VARCHAR` | Reported column, combined-party witness, or explicit ranked-choice round. |
-| `vote_basis` | `VARCHAR` | Ballot line, combined-party witness, ranked-choice round or reported total. These bases overlap. |
-| `row_kind` | `VARCHAR` | Candidate, party total or contest total; summary totals are not additional candidate votes. |
-| `candidate_id` | `VARCHAR` | Native candidate ID. Different offices may have different IDs for the same person. |
-| `candidate_id_status` | `VARCHAR` | Supported source ID shape or unresolved, including write-ins and totals. |
+| `district` | `VARCHAR` | Normalized contest district code (two-digit House district or 00 at-large, H for House statewide totals, S for Senate, P for state Presidential contests, or US for national totals). |
+| `district_raw` | `VARCHAR` | Literal seat or district label from the workbook, preserving full versus unexpired terms and blanks. |
+| `seat_term` | `VARCHAR` | Full or unexpired term for congressional seats, or not_applicable for Presidential and statewide House aggregate rows. |
+| `stage` | `VARCHAR` | Primary, primary runoff, general, or general runoff, from separate source columns or worksheets. |
+| `round` | `VARCHAR` | Reported column, combined-party witness, explicit ranked-choice round (rcv_1 through rcv_8; separate printed final-round summary excerpts in 2020 AK/KS Presidential primaries use rcv_8_final_summary / rcv_4_final_summary so single-round queries never double-count), or electoral_vote for Presidential electoral votes. |
+| `vote_basis` | `VARCHAR` | Ballot line, combined-party witness, ranked-choice round, electoral_vote, or reported_total. These bases overlap or measure distinct quantities and must never be summed together. |
+| `row_kind` | `VARCHAR` | Candidate, party_total, contest_total, state_total, or national_total; summary totals are not additional candidate votes. In 2024 Presidential matrix Total rows, national_total covers both grand national totals (candidate_name IS NULL, cols B and AE) and per-candidate national subtotals (candidate_name IS NOT NULL, cols C, D, and E-AD); filter candidate_name IS NULL for grand national totals. |
+| `candidate_id` | `VARCHAR` | Native FEC candidate ID where supplied; trimmed when matching an office-specific FEC ID pattern. |
+| `candidate_id_status` | `VARCHAR` | Office-matched source_id or not_resolved, including write-ins, aggregates, and 2024 Presidential matrix rows lacking published IDs. |
 | `candidate_name` | `VARCHAR` | Literal source candidate label, independent of identifier resolution. |
 | `party` | `VARCHAR` | Literal party ballot-line label; several party lines do not create several candidates. |
-| `votes_raw` | `VARCHAR` | Literal source vote cell, retaining zero, null, asterisk and Unopposed. |
+| `votes_raw` | `VARCHAR` | Literal source vote cell, retaining zero, null, asterisk, bracketed witnesses, faithless-elector notes, and Unopposed. |
 | `votes_status` | `VARCHAR` | Exact nonnegative integer, missing value, or nonnumeric source text. |
 | `percentage_raw` | `VARCHAR` | Literal source fractional percentage; not recomputed or used to infer votes. |
-| `footnotes` | `VARCHAR` | Literal source row footnotes, including ranked-choice and nomination-method qualifications. |
+| `footnotes` | `VARCHAR` | Literal source row or table footnotes, including ranked-choice, faithless-elector, and nomination-method qualifications. |
 | `primary_winner_raw` | `VARCHAR` | Literal primary winner indicator. |
 | `general_winner_raw` | `VARCHAR` | Literal general winner indicator; not inferred from a single round. |
-| `interpretation_version` | `VARCHAR` | Version of downstream Senate result interpretation. |
-| `overlap_note` | `VARCHAR` | Repeated combined-party totals, distinct rounds and appendix overlap limits. |
+| `interpretation_version` | `VARCHAR` | Version of downstream federal election result interpretation. |
+| `overlap_note` | `VARCHAR` | Repeated combined-party totals, distinct rounds (including rcv_N_final_summary excerpts), electoral votes, 2024 grand vs per-candidate national_total rows (filter candidate_name IS NULL for grand totals), and appendix overlap limits. |
 | `source_row` | `INTEGER` | One-based native worksheet row, including source totals, notes and blanks. |
 | `source_cycle` | `INTEGER` | Selected two-year FEC cycle or completed result edition. |
-| `votes` | `BIGINT` | Exact integer votes where supplied; zero survives and missing stays null. |
+| `votes` | `BIGINT` | Exact integer votes where supplied; zero survives and missing or annotated nonnumeric text stays null. |

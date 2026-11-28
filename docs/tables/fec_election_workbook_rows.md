@@ -6,7 +6,7 @@
 
 Official election workbook rows with exact source coordinates and explicit interpretation limits.
 
-**Coverage.** Not a range. Literal official workbook rows, including summaries and overlapping appendices. Only the reviewed Senate layout is interpreted in the companion table. *(measured 2026-11-13)*
+**Coverage.** Window. Literal official FEC Federal Elections workbook rows across reviewed editions (2016-2024), including Presidential, Senate, House, summary tables, and overlapping special-election appendices. *(measured 2026-11-27)*
 
 - **Parquet file:** `fec_election_workbook_rows.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

@@ -35205,9 +35205,9 @@
     "label": "Official election workbook rows",
     "category": "query_data",
     "summary": "Official election workbook rows with exact source coordinates and explicit interpretation limits.",
-    "coverage": "Not a range. Literal official workbook rows, including summaries and overlapping appendices. Only the reviewed Senate layout is interpreted in the companion table.",
-    "kind": "not_a_range",
-    "measured_on": "2026-11-13",
+    "coverage": "Window. Literal official FEC Federal Elections workbook rows across reviewed editions (2016-2024), including Presidential, Senate, House, summary tables, and overlapping special-election appendices.",
+    "kind": "window",
+    "measured_on": "2026-11-27",
     "data_quality": null,
     "columns": [
       {
@@ -35264,12 +35264,12 @@
   },
   "fec_election_results": {
     "table": "fec_election_results",
-    "label": "Official Senate election results",
+    "label": "Official federal election results",
     "category": "query_data",
-    "summary": "Official Senate election results with exact source coordinates and explicit interpretation limits.",
-    "coverage": "Window. Reviewed official Senate edition, preserving primaries, runoffs, general elections, unexpired terms, ballot lines, zero votes and ranked-choice rounds. Appendix observations remain literal in the companion table.",
+    "summary": "Official FEC Presidential, U.S. Senate, and U.S. House election results with exact source coordinates and explicit interpretation limits.",
+    "coverage": "Window. Reviewed official FEC Federal Elections editions (2016-2024 Presidential, 2016-2022 U.S. Senate and U.S. House), preserving primaries, runoffs, general elections, unexpired terms, ballot lines, combined-party witnesses, electoral votes, zero votes, and ranked-choice rounds. Overlapping appendix worksheets remain literal in fec_election_workbook_rows.",
     "kind": "window",
-    "measured_on": "2026-11-13",
+    "measured_on": "2026-11-27",
     "data_quality": null,
     "columns": [
       {
@@ -35308,9 +35308,14 @@
         "description": "Native vote column in the retained worksheet."
       },
       {
+        "column_name": "office",
+        "column_type": "VARCHAR",
+        "description": "Federal office of the contest (president, senate, or house)."
+      },
+      {
         "column_name": "state",
         "column_type": "VARCHAR",
-        "description": "Source state abbreviation; blank totals inherit only within the same explicitly repeated full state name."
+        "description": "Source state or territory postal abbreviation, or US for published national totals."
       },
       {
         "column_name": "state_raw",
@@ -35318,44 +35323,49 @@
         "description": "Literal native state cell; original blanks remain blank."
       },
       {
+        "column_name": "district",
+        "column_type": "VARCHAR",
+        "description": "Normalized contest district code (two-digit House district or 00 at-large, H for House statewide totals, S for Senate, P for state Presidential contests, or US for national totals)."
+      },
+      {
         "column_name": "district_raw",
         "column_type": "VARCHAR",
-        "description": "Literal seat label, preserving full versus unexpired terms."
+        "description": "Literal seat or district label from the workbook, preserving full versus unexpired terms and blanks."
       },
       {
         "column_name": "seat_term",
         "column_type": "VARCHAR",
-        "description": "Full or unexpired Senate term, separate within each state."
+        "description": "Full or unexpired term for congressional seats, or not_applicable for Presidential and statewide House aggregate rows."
       },
       {
         "column_name": "stage",
         "column_type": "VARCHAR",
-        "description": "Primary, primary runoff, general or general runoff, from separate source columns."
+        "description": "Primary, primary runoff, general, or general runoff, from separate source columns or worksheets."
       },
       {
         "column_name": "round",
         "column_type": "VARCHAR",
-        "description": "Reported column, combined-party witness, or explicit ranked-choice round."
+        "description": "Reported column, combined-party witness, explicit ranked-choice round (rcv_1 through rcv_8; separate printed final-round summary excerpts in 2020 AK/KS Presidential primaries use rcv_8_final_summary / rcv_4_final_summary so single-round queries never double-count), or electoral_vote for Presidential electoral votes."
       },
       {
         "column_name": "vote_basis",
         "column_type": "VARCHAR",
-        "description": "Ballot line, combined-party witness, ranked-choice round or reported total. These bases overlap."
+        "description": "Ballot line, combined-party witness, ranked-choice round, electoral_vote, or reported_total. These bases overlap or measure distinct quantities and must never be summed together."
       },
       {
         "column_name": "row_kind",
         "column_type": "VARCHAR",
-        "description": "Candidate, party total or contest total; summary totals are not additional candidate votes."
+        "description": "Candidate, party_total, contest_total, state_total, or national_total; summary totals are not additional candidate votes. In 2024 Presidential matrix Total rows, national_total covers both grand national totals (candidate_name IS NULL, cols B and AE) and per-candidate national subtotals (candidate_name IS NOT NULL, cols C, D, and E-AD); filter candidate_name IS NULL for grand national totals."
       },
       {
         "column_name": "candidate_id",
         "column_type": "VARCHAR",
-        "description": "Native candidate ID. Different offices may have different IDs for the same person."
+        "description": "Native FEC candidate ID where supplied; trimmed when matching an office-specific FEC ID pattern."
       },
       {
         "column_name": "candidate_id_status",
         "column_type": "VARCHAR",
-        "description": "Supported source ID shape or unresolved, including write-ins and totals."
+        "description": "Office-matched source_id or not_resolved, including write-ins, aggregates, and 2024 Presidential matrix rows lacking published IDs."
       },
       {
         "column_name": "candidate_name",
@@ -35370,7 +35380,7 @@
       {
         "column_name": "votes_raw",
         "column_type": "VARCHAR",
-        "description": "Literal source vote cell, retaining zero, null, asterisk and Unopposed."
+        "description": "Literal source vote cell, retaining zero, null, asterisk, bracketed witnesses, faithless-elector notes, and Unopposed."
       },
       {
         "column_name": "votes_status",
@@ -35385,7 +35395,7 @@
       {
         "column_name": "footnotes",
         "column_type": "VARCHAR",
-        "description": "Literal source row footnotes, including ranked-choice and nomination-method qualifications."
+        "description": "Literal source row or table footnotes, including ranked-choice, faithless-elector, and nomination-method qualifications."
       },
       {
         "column_name": "primary_winner_raw",
@@ -35400,12 +35410,12 @@
       {
         "column_name": "interpretation_version",
         "column_type": "VARCHAR",
-        "description": "Version of downstream Senate result interpretation."
+        "description": "Version of downstream federal election result interpretation."
       },
       {
         "column_name": "overlap_note",
         "column_type": "VARCHAR",
-        "description": "Repeated combined-party totals, distinct rounds and appendix overlap limits."
+        "description": "Repeated combined-party totals, distinct rounds (including rcv_N_final_summary excerpts), electoral votes, 2024 grand vs per-candidate national_total rows (filter candidate_name IS NULL for grand totals), and appendix overlap limits."
       },
       {
         "column_name": "source_row",
@@ -35420,11 +35430,11 @@
       {
         "column_name": "votes",
         "column_type": "BIGINT",
-        "description": "Exact integer votes where supplied; zero survives and missing stays null."
+        "description": "Exact integer votes where supplied; zero survives and missing or annotated nonnumeric text stays null."
       }
     ],
     "subject": "campaign_finance",
-    "grain": "One native Senate row and vote column.",
+    "grain": "One native result row and vote column across reviewed Presidential, Senate, and House worksheets.",
     "identity_columns": [
       "record_id"
     ]
