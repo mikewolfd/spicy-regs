@@ -12,6 +12,10 @@ concurrency:
   group: rollup-fec-source-catalog
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   run:
     uses: ./.github/workflows/_rollup.yml

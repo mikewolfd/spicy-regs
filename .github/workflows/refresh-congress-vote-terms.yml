@@ -13,6 +13,10 @@ concurrency:
   group: congress-vote-terms
   cancel-in-progress: false
   queue: max
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   votes:
     # Votes pin the members crosswalk; finish its writer before capturing inputs.

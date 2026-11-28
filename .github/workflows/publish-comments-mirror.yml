@@ -39,6 +39,10 @@ env:
   # so its catalog writes do not log the unlocked-write warning.
   SPICY_REGS_CATALOG_LOCK: comments-catalog-write
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   refresh:
     uses: ./.github/workflows/_regulations-refresh.yml

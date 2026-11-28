@@ -31,6 +31,10 @@ concurrency:
   group: congress-vote-terms
   cancel-in-progress: false
   queue: max
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   run:
     uses: ./.github/workflows/_rollup.yml

@@ -686,31 +686,52 @@ def test_reusable_rollup_workflow_permissions_align_with_callers_and_restore_sta
     assert "resumed_from" in stage["run"]
     assert "SPICY_REGS_RESUME_GENERATION=true" in stage["run"]
 
-    # Every caller workflow that calls _rollup.yml and declares an explicit permissions block must allow actions: read.
-    checked_callers = 0
-    for workflow_path in sorted(WORKFLOWS.glob("*.yml")):
-        if workflow_path.name == "_rollup.yml":
-            continue
-        doc = yaml.safe_load(workflow_path.read_text())
+    # Every workflow that directly or transitively calls _rollup.yml must explicitly declare contents: read
+    # and actions: read (repos with default_workflow_permissions='read' omit actions: read unless declared,
+    # causing GitHub Actions startup_failure when calling a reusable workflow that requests actions: read).
+    all_docs = {
+        workflow_path.name: yaml.safe_load(workflow_path.read_text())
+        for workflow_path in sorted(WORKFLOWS.glob("*.yml"))
+    }
+    calls: dict[str, set[str]] = {}
+    for name, doc in all_docs.items():
         jobs = doc.get("jobs", {}) if isinstance(doc, dict) else {}
-        calls_rollup = any(
-            isinstance(job, dict) and job.get("uses") == "./.github/workflows/_rollup.yml"
-            for job in jobs.values()
-        )
-        if not calls_rollup:
-            continue
+        called: set[str] = set()
+        for job in jobs.values():
+            uses = job.get("uses", "") if isinstance(job, dict) else ""
+            if isinstance(uses, str) and uses.startswith("./.github/workflows/"):
+                called.add(uses.split("/")[-1])
+        calls[name] = called
+
+    reaches_rollup = {"_rollup.yml"}
+    changed = True
+    while changed:
+        changed = False
+        for name, called in calls.items():
+            if name not in reaches_rollup and (called & reaches_rollup):
+                reaches_rollup.add(name)
+                changed = True
+
+    checked_callers = 0
+    for name in sorted(reaches_rollup - {"_rollup.yml"}):
+        doc = all_docs[name]
+        jobs = doc.get("jobs", {}) if isinstance(doc, dict) else {}
         checked_callers += 1
         top_perms = doc.get("permissions")
-        if isinstance(top_perms, dict):
-            assert top_perms.get("contents") in {"read", "write"}, workflow_path.name
-            assert top_perms.get("actions") in {"read", "write"}, (
-                f"{workflow_path.name} explicitly restricts permissions without granting actions: read"
-            )
+        assert isinstance(top_perms, dict), (
+            f"{name} calls _rollup.yml (directly or transitively) without an explicit top-level permissions block"
+        )
+        assert top_perms.get("contents") in {"read", "write"}, name
+        assert top_perms.get("actions") in {"read", "write"}, (
+            f"{name} must explicitly grant actions: read to call _rollup.yml"
+        )
         for job_name, job in jobs.items():
-            if isinstance(job, dict) and job.get("uses") == "./.github/workflows/_rollup.yml":
+            uses = job.get("uses", "") if isinstance(job, dict) else ""
+            if isinstance(uses, str) and uses.startswith("./.github/workflows/") and uses.split("/")[-1] in reaches_rollup:
                 job_perms = job.get("permissions")
                 if isinstance(job_perms, dict):
+                    assert job_perms.get("contents") in {"read", "write"}, f"{name} job {job_name}"
                     assert job_perms.get("actions") in {"read", "write"}, (
-                        f"{workflow_path.name} job {job_name} restricts permissions without actions: read"
+                        f"{name} job {job_name} restricts permissions without actions: read"
                     )
-    assert checked_callers >= 20
+    assert checked_callers >= 55
