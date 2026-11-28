@@ -963,12 +963,12 @@ def test_duckdb_merge_temp_view_and_quoted_virtual_filename(tmp_path):
         con.execute("INSERT INTO target VALUES ('c1', 'EPA', 'old'), ('c2', 'CMS', 'untouched')")
         con.execute(f"COPY (SELECT 'c1' AS comment_id, 'EPA' AS agency_code, 'new' AS body) TO '{stage}' (FORMAT PARQUET)")
         con.execute(f"CREATE TEMP VIEW v_stage AS SELECT * FROM read_parquet('{stage}')")
-        changed = con.execute("""
+        row = con.execute("""
             MERGE INTO target t USING v_stage s ON t."comment_id"=s."comment_id" AND t."agency_code" IN ('EPA')
             WHEN MATCHED THEN UPDATE SET comment_id=s.comment_id, agency_code=s.agency_code, body=s.body
             WHEN NOT MATCHED THEN INSERT (comment_id, agency_code, body) VALUES (s.comment_id, s.agency_code, s.body)
-        """).fetchone()[0]
-        assert changed == 1
+        """).fetchone()
+        assert row is not None and row[0] == 1
         assert con.execute("SELECT * FROM target ORDER BY 1").fetchall() == [('c1', 'EPA', 'new'), ('c2', 'CMS', 'untouched')]
         con.execute(f"COPY (SELECT * FROM target) TO '{data}' (FORMAT PARQUET)")
         matched = con.execute(
