@@ -30229,9 +30229,9 @@
     "table": "executive_disclosure_filings",
     "label": "Executive disclosure filing lookup",
     "summary": "Executive disclosure filing lookup for an explicitly selected public filing cohort.",
-    "coverage": "Not a range. Published pilot cohort of selected archived White House Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part 6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.",
+    "coverage": "Not a range. Explicitly selected publicly posted OGE Form 278e and 278-T packages from official White House archives and public OGE collections, excluding Form 201 agency-gated filings. Deterministic extraction covers qualified Form 278e Parts 2, 5, 6, and 7; amended, scanned, or unreviewed layouts remain lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.",
     "kind": "not_a_range",
-    "measured_on": "2026-11-13",
+    "measured_on": "2026-11-28",
     "data_quality": null,
     "columns": [
       {
@@ -30272,17 +30272,17 @@
       {
         "column_name": "report_type",
         "column_type": "VARCHAR",
-        "description": "Literal report type from the source cover, independent of form type."
+        "description": "Literal report type from the source cover (Annual, New Entrant, Nominee, Termination, Candidate, Periodic Transaction, or Amendment), independent of form type."
       },
       {
         "column_name": "report_period_raw",
         "column_type": "VARCHAR",
-        "description": "Native annual reporting period as printed; not the release/filename year."
+        "description": "Native reporting period as printed on the cover; not the release or filename year."
       },
       {
         "column_name": "form_type",
         "column_type": "VARCHAR",
-        "description": "OGE form identifier; this reader qualifies only annual 278e Part 6, never 278-T."
+        "description": "OGE form identifier (278e or 278-T); Form 278-T remains lookup-only until visually qualified."
       },
       {
         "column_name": "filing_date",
@@ -30302,17 +30302,17 @@
       {
         "column_name": "oge_certification_date",
         "column_type": "VARCHAR",
-        "description": "Reviewed ISO date of OGE certification; attached amendment certifications remain separately recorded."
+        "description": "Reviewed ISO date of OGE certification or native digital signature date; attached amendment certifications remain separately recorded."
       },
       {
         "column_name": "metadata_review_ref",
         "column_type": "VARCHAR",
-        "description": "Reviewed original cover locator and retained image/checksum evidence for manually read metadata."
+        "description": "Reviewed original cover locator or native cover digest reference for filing metadata."
       },
       {
         "column_name": "source_url",
         "column_type": "VARCHAR",
-        "description": "Official archived public PDF, retained independently of extracted facts."
+        "description": "Official publicly posted PDF URL, retained independently of extracted facts."
       },
       {
         "column_name": "source_sha256",
@@ -30332,7 +30332,7 @@
       {
         "column_name": "access_basis",
         "column_type": "VARCHAR",
-        "description": "public_posting, form201_required, agency_request_required or human_attestation_required. Only public postings supported by this build."
+        "description": "public_posting, form201_required, agency_request_required or human_attestation_required. Only public postings are replayed by this build."
       },
       {
         "column_name": "access_reason",
@@ -30357,7 +30357,7 @@
       {
         "column_name": "facts_status",
         "column_type": "VARCHAR",
-        "description": "qualified_part6, unsupported or not_available; unsupported records retain their filing/evidence lookup."
+        "description": "qualified_parts_2_5_6_7, qualified_partial, qualified_278t, unsupported or not_available; unsupported records retain their filing/evidence lookup."
       },
       {
         "column_name": "facts_reason",
@@ -30367,22 +30367,27 @@
       {
         "column_name": "metadata_json",
         "column_type": "VARCHAR",
-        "description": "Exact reviewed metadata selection with its digest-bound source and review reference."
+        "description": "Exact resolved filing metadata selection with its digest-bound source and review reference."
       },
       {
         "column_name": "report_year",
         "column_type": "BIGINT",
-        "description": "Native annual-report year from the cover, distinct from filename/publication year."
+        "description": "Native report calendar year from the cover when stated (NULL when non-annual covers state only an appointment or filing date), distinct from filename or release year."
       },
       {
         "column_name": "byte_size",
         "column_type": "BIGINT",
-        "description": "Byte size."
+        "description": "Exact byte size of the retained original PDF, or NULL when unavailable."
       },
       {
         "column_name": "cover_page",
         "column_type": "BIGINT",
         "description": "One-based original PDF cover page, after any attached amendment letter."
+      },
+      {
+        "column_name": "qualified_sections_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of qualified section codes extracted for this filing (for example part2, part5, part6, part7), or empty array when unsupported or unavailable."
       }
     ],
     "subject": "oversight",
@@ -30394,11 +30399,11 @@
   },
   "executive_disclosure_facts": {
     "table": "executive_disclosure_facts",
-    "label": "Executive disclosure supported Part 6 facts",
-    "summary": "Executive disclosure supported Part 6 facts for an explicitly selected public filing cohort.",
-    "coverage": "Not a range. Published pilot cohort of selected archived White House Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part 6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.",
+    "label": "Executive disclosure Form 278e asset and income observations",
+    "summary": "Executive disclosure Form 278e asset and income observations (Parts 2, 5, and 6) for an explicitly selected public filing cohort.",
+    "coverage": "Not a range. Explicitly selected publicly posted OGE Form 278e packages from official White House archives and public OGE collections, excluding Form 201 agency-gated filings. Deterministic extraction covers qualified Form 278e Parts 2, 5, and 6; amended, scanned, or unreviewed layouts remain lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.",
     "kind": "not_a_range",
-    "measured_on": "2026-11-13",
+    "measured_on": "2026-11-28",
     "data_quality": null,
     "columns": [
       {
@@ -30414,12 +30419,12 @@
       {
         "column_name": "fact_id",
         "column_type": "VARCHAR",
-        "description": "Filing identity plus exact original digest, section and native row label; never a person profile key."
+        "description": "Page-scoped observation identity ({filing_id}:{source_sha256}:{section_code}:p{page}:{row_number_raw}); never a person profile key."
       },
       {
         "column_name": "section",
         "column_type": "VARCHAR",
-        "description": "Qualified OGE section title; current support is Part 6: Other Assets and Income."
+        "description": "Qualified OGE Form 278e section heading (Part 2, Part 5, or Part 6)."
       },
       {
         "column_name": "row_number_raw",
@@ -30434,7 +30439,7 @@
       {
         "column_name": "eif_raw",
         "column_type": "VARCHAR",
-        "description": "Literal excepted investment fund (EIF) designation, such as N/A or No; blank remains blank."
+        "description": "Literal excepted investment fund (EIF) designation, such as N/A, Yes, or No; blank remains blank."
       },
       {
         "column_name": "value_raw",
@@ -30449,7 +30454,7 @@
       {
         "column_name": "income_amount_raw",
         "column_type": "VARCHAR",
-        "description": "Literal income amount/range, with blank distinct from zero and from an absent filing."
+        "description": "Canonical literal income amount or statutory bracket coalesced across Form 278e revisions, with blank distinct from zero and from an absent filing."
       },
       {
         "column_name": "ownership_label",
@@ -30459,22 +30464,22 @@
       {
         "column_name": "value_status",
         "column_type": "VARCHAR",
-        "description": "range, blank or unrecognized; original text retained in value_raw."
+        "description": "Classification of value_raw as range, below_threshold, over_threshold, exact_amount, blank, or unrecognized; original text remains in value_raw."
       },
       {
         "column_name": "income_status",
         "column_type": "VARCHAR",
-        "description": "range, blank or unrecognized; original text retained in income_amount_raw."
+        "description": "Classification of income_amount_raw as range, below_threshold, over_threshold, exact_amount, blank, or unrecognized; original text remains in income_amount_raw."
       },
       {
         "column_name": "currency",
         "column_type": "VARCHAR",
-        "description": "USD only for recognized dollar ranges; NULL when neither cell supplies a qualified dollar range."
+        "description": "USD when value_status or income_status is a recognized USD bracket or exact amount; NULL otherwise."
       },
       {
         "column_name": "source_url",
         "column_type": "VARCHAR",
-        "description": "Official archived public PDF, retained independently of extracted facts."
+        "description": "Official publicly posted PDF URL, retained independently of extracted facts."
       },
       {
         "column_name": "source_sha256",
@@ -30514,37 +30519,203 @@
       {
         "column_name": "value_lower",
         "column_type": "BIGINT",
-        "description": "Inclusive USD lower bound only when value_status is range; NULL otherwise."
+        "description": "USD lower bound when value_status is range, below_threshold (0), or over_threshold (exclusive lower bound); NULL for exact_amount, blank, or unrecognized."
       },
       {
         "column_name": "value_upper",
         "column_type": "BIGINT",
-        "description": "Inclusive USD upper bound only when value_status is range; NULL otherwise."
+        "description": "Inclusive USD upper bound when value_status is range or below_threshold; NULL for over_threshold, exact_amount, blank, or unrecognized."
       },
       {
         "column_name": "income_lower",
         "column_type": "BIGINT",
-        "description": "Inclusive USD lower bound only when income_status is range; NULL otherwise."
+        "description": "USD lower bound when income_status is range, below_threshold (0), or over_threshold (exclusive lower bound); NULL for exact_amount, blank, or unrecognized."
       },
       {
         "column_name": "income_upper",
         "column_type": "BIGINT",
-        "description": "Inclusive USD upper bound only when income_status is range; NULL otherwise."
+        "description": "Inclusive USD upper bound when income_status is range or below_threshold; NULL for over_threshold, exact_amount, blank, or unrecognized."
+      },
+      {
+        "column_name": "section_code",
+        "column_type": "VARCHAR",
+        "description": "Canonical section code (part2, part5, or part6) for deterministic filtering and keying."
+      },
+      {
+        "column_name": "value_exact_usd",
+        "column_type": "VARCHAR",
+        "description": "Exact printed USD decimal string (for example 234.13 or 8254) when value_status is exact_amount, preserving cents without integer truncation; NULL otherwise."
+      },
+      {
+        "column_name": "income_exact_usd",
+        "column_type": "VARCHAR",
+        "description": "Exact printed USD decimal string (for example 234.13 or 8254) when income_status is exact_amount, preserving cents without integer truncation; NULL otherwise."
       }
     ],
     "subject": "oversight",
-    "grain": "One populated row in a qualified source version and section.",
+    "grain": "One populated asset or income row in a qualified Form 278e section, page, and source version.",
     "identity_columns": [
       "fact_id"
+    ]
+  },
+  "executive_disclosure_transactions": {
+    "table": "executive_disclosure_transactions",
+    "label": "Executive disclosure securities transactions",
+    "summary": "Executive disclosure securities transaction observations from OGE Form 278e Part 7 (and future qualified Form 278-T periodic transaction reports) for an explicitly selected public filing cohort.",
+    "coverage": "Not a range. Explicitly selected publicly posted OGE Form 278e packages from official White House archives and public OGE collections, excluding Form 201 agency-gated filings. Deterministic extraction covers qualified Form 278e Part 7 transactions; Form 278-T and scanned or amended packages remain lookup-only until visually qualified. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-28",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "cohort_id",
+        "column_type": "VARCHAR",
+        "description": "Identity of the explicitly declared report cohort, with omissions stated in coverage_note."
+      },
+      {
+        "column_name": "filing_id",
+        "column_type": "VARCHAR",
+        "description": "Reviewed report identity within the cohort; join to executive_disclosure_filings on filing_id."
+      },
+      {
+        "column_name": "transaction_id",
+        "column_type": "VARCHAR",
+        "description": "Page-scoped transaction identity ({filing_id}:{source_sha256}:{section_code}:p{page}:{row_number_raw}); handles per-page row-number resets without collision."
+      },
+      {
+        "column_name": "form_type",
+        "column_type": "VARCHAR",
+        "description": "Source OGE form identifier (278e for Part 7 transactions, or 278-T for periodic transaction reports)."
+      },
+      {
+        "column_name": "section",
+        "column_type": "VARCHAR",
+        "description": "Qualified OGE transaction section heading (such as Part 7: Transactions)."
+      },
+      {
+        "column_name": "section_code",
+        "column_type": "VARCHAR",
+        "description": "Canonical transaction section code (such as part7 or form278t)."
+      },
+      {
+        "column_name": "row_number_raw",
+        "column_type": "VARCHAR",
+        "description": "Native source row label on the page, preserving punctuation."
+      },
+      {
+        "column_name": "description_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source Description cell, including ownership prefixes and ticker text; no security identifier is invented."
+      },
+      {
+        "column_name": "ownership_label",
+        "column_type": "VARCHAR",
+        "description": "Literal Self, Spouse or Joint prefix when stated in Description; NULL when unstated."
+      },
+      {
+        "column_name": "transaction_type_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal printed transaction type (such as purchase, sale, or exchange)."
+      },
+      {
+        "column_name": "transaction_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal printed transaction date cell retained verbatim from the PDF."
+      },
+      {
+        "column_name": "transaction_date_status",
+        "column_type": "VARCHAR",
+        "description": "Classification of transaction_date_raw as parsed, blank, or unparsed."
+      },
+      {
+        "column_name": "notification_over_30_days_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal Form 278-T Notification Received Over 30 Days Ago cell; NULL on Form 278e Part 7 rows where the column does not exist."
+      },
+      {
+        "column_name": "amount_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal printed transaction amount bracket or dollar string; not an exact cash value unless amount_status is exact_amount."
+      },
+      {
+        "column_name": "amount_status",
+        "column_type": "VARCHAR",
+        "description": "Classification of amount_raw as range, below_threshold, over_threshold, exact_amount, blank, or unrecognized."
+      },
+      {
+        "column_name": "currency",
+        "column_type": "VARCHAR",
+        "description": "USD when amount_status is a recognized USD bracket or exact amount; NULL otherwise."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Official publicly posted PDF URL, retained independently of extracted rows."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "Exact original PDF digest; reopen through CentralRawArchiveStore and verify before replay."
+      },
+      {
+        "column_name": "source_locator",
+        "column_type": "VARCHAR",
+        "description": "One-based original PDF page fragment; append to source_url to inspect the original."
+      },
+      {
+        "column_name": "parser_revision",
+        "column_type": "VARCHAR",
+        "description": "Source-specific interpretation rule revision; retained with backend version for replay."
+      },
+      {
+        "column_name": "backend_version",
+        "column_type": "VARCHAR",
+        "description": "Installed PyMuPDF table-reader version used for this observation."
+      },
+      {
+        "column_name": "raw_cells_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered source table cells including blanks and original text."
+      },
+      {
+        "column_name": "cell_boxes_json",
+        "column_type": "VARCHAR",
+        "description": "Original table cell coordinates for bounded visual reconciliation."
+      },
+      {
+        "column_name": "page",
+        "column_type": "BIGINT",
+        "description": "One-based page in the exact original PDF, including any prefixed amendment pages."
+      },
+      {
+        "column_name": "amount_lower",
+        "column_type": "BIGINT",
+        "description": "USD lower bound when amount_status is range, below_threshold (0), or over_threshold (exclusive lower bound); NULL otherwise."
+      },
+      {
+        "column_name": "amount_upper",
+        "column_type": "BIGINT",
+        "description": "Inclusive USD upper bound when amount_status is range or below_threshold; NULL for over_threshold, exact_amount, blank, or unrecognized."
+      },
+      {
+        "column_name": "transaction_date",
+        "column_type": "DATE",
+        "description": "Parsed printed transaction calendar date when transaction_date_status is parsed; NULL otherwise."
+      }
+    ],
+    "subject": "oversight",
+    "grain": "One populated securities transaction row on a qualified PDF page and source version.",
+    "identity_columns": [
+      "transaction_id"
     ]
   },
   "executive_disclosure_pages": {
     "table": "executive_disclosure_pages",
     "label": "Executive disclosure interpreted pages",
     "summary": "Executive disclosure interpreted pages for an explicitly selected public filing cohort.",
-    "coverage": "Not a range. Published pilot cohort of selected archived White House Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part 6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.",
+    "coverage": "Not a range. Explicitly selected publicly posted OGE Form 278e packages from official White House archives and public OGE collections, excluding Form 201 agency-gated filings. Retains page text, filer identity verification, slot reconciliation counts, and in-table endnotes for every interpreted section page. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.",
     "kind": "not_a_range",
-    "measured_on": "2026-11-13",
+    "measured_on": "2026-11-28",
     "data_quality": null,
     "columns": [
       {
@@ -30560,7 +30731,7 @@
       {
         "column_name": "source_url",
         "column_type": "VARCHAR",
-        "description": "Official archived public PDF, retained independently of extracted facts."
+        "description": "Official publicly posted PDF URL, retained independently of extracted facts."
       },
       {
         "column_name": "source_sha256",
@@ -30580,12 +30751,12 @@
       {
         "column_name": "filer_identity_json",
         "column_type": "VARCHAR",
-        "description": "Literal Part 6 Filer's Name label/value and cover Last Name, First Name and MI fields, with original page/section cell locators. Comparison collapses whitespace only; cover fields use First Name, optional MI and Last Name order. Case, spelling and punctuation differences refuse without aliases."
+        "description": "Literal section Filer's Name label/value and cover Last Name, First Name and MI fields, with original page/section cell locators. Comparison collapses whitespace only; cover fields use First Name, optional MI and Last Name order. Case, spelling and punctuation differences refuse without aliases."
       },
       {
         "column_name": "table_bbox_json",
         "column_type": "VARCHAR",
-        "description": "Table bbox json."
+        "description": "Original bounding box of the qualified ruled table on this page."
       },
       {
         "column_name": "parser_revision",
@@ -30610,7 +30781,22 @@
       {
         "column_name": "blank_slot_count",
         "column_type": "BIGINT",
-        "description": "Completely blank data slots; excluded from facts and retained as a page-level reconciliation count."
+        "description": "Completely blank data slots; excluded from facts and transactions and retained as a page-level reconciliation count."
+      },
+      {
+        "column_name": "section",
+        "column_type": "VARCHAR",
+        "description": "Qualified OGE section heading observed on this interpreted page."
+      },
+      {
+        "column_name": "layout_profile",
+        "column_type": "VARCHAR",
+        "description": "Registered deterministic OGE PDF layout profile used to interpret this page (such as excel_278e)."
+      },
+      {
+        "column_name": "endnotes_json",
+        "column_type": "VARCHAR",
+        "description": "Structured JSON array of in-table or page-scoped endnotes extracted on this page with raw text and bounding boxes."
       }
     ],
     "subject": "oversight",

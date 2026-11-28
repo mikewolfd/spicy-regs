@@ -1,0 +1,375 @@
+name: Refresh — executive_disclosures
+# Manual-dispatch dry-run-default refresh workflow for the executive-disclosures family (ss-rhsd).
+# Unlike hosted RollupPipeline families (rollup-*.yml), executive-disclosures stays in
+# LOCAL_FAMILIES and publishes through publish-local-generation using
+# spicy_regs.pipelines.executive_disclosures. Default skip_upload=true performs a bounded
+# Route A acquisition (reusing retained archive digests) and 4-table candidate validation into
+# $RUNNER_TEMP without touching R2. Form 201, paid proxies, and paid OCR remain hard-refused.
+on:
+  workflow_dispatch:
+    inputs:
+      manifest_path:
+        description: 'Repository-relative path to a v1 selection or v2 executive-disclosures cohort manifest JSON'
+        required: false
+        default: 'tests/fixtures/executive_disclosures/cohort-manifest.v2.json'
+        type: string
+      max_requests:
+        description: 'Bounded HTTP request cap (1-128) passed to executive_disclosures acquire-manifest'
+        required: false
+        default: '16'
+        type: string
+      evidence_policy:
+        description: 'Source evidence retention policy for R2 publication (hash_only avoids mirroring raw PDFs to R2)'
+        required: false
+        default: 'hash_only'
+        type: choice
+        options:
+          - hash_only
+          - full
+      added_table:
+        description: 'Optional newly added table filename (e.g. executive_disclosure_transactions.parquet) on first schema migration'
+        required: false
+        default: ''
+        type: string
+      expect_prior:
+        description: 'Optional live executive-disclosures digest (8-64 hex chars) required when skip_upload is false; blank re-reads live publication.v2.json'
+        required: false
+        default: ''
+        type: string
+      skip_upload:
+        description: 'Build and validate candidate generation without publishing to R2 (dry run)'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: refresh-executive-disclosures
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install pinned dependencies
+        run: uv sync --frozen
+
+      - name: Retain invocation scope
+        env:
+          WORKFLOW_INPUTS: ${{ toJSON(inputs) }}
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          python3 - <<'PY'
+          import datetime
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          receipt = {
+              "started_at": datetime.datetime.now(datetime.UTC).isoformat(),
+              "family": "executive-disclosures",
+              "code_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "workflow_revision": os.environ["GITHUB_SHA"],
+              "run_id": os.environ["GITHUB_RUN_ID"],
+              "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "inputs": json.loads(os.environ["WORKFLOW_INPUTS"]),
+          }
+          Path("output/invocation.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Validate inputs
+        id: validate
+        env:
+          EXEC_MANIFEST_PATH: ${{ inputs.manifest_path }}
+          EXEC_MAX_REQUESTS: ${{ inputs.max_requests }}
+          EXEC_EVIDENCE_POLICY: ${{ inputs.evidence_policy }}
+          EXEC_ADDED_TABLE: ${{ inputs.added_table }}
+          EXEC_EXPECT_PRIOR: ${{ inputs.expect_prior }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          WORK_DIR="$RUNNER_TEMP/executive-disclosures"
+          rm -rf "$WORK_DIR"
+          mkdir -p "$WORK_DIR"
+          uv run --frozen python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          from spicy_docs.sources.executive_disclosures import MAX_REQUESTS_CAP
+
+          raw_manifest = os.environ.get("EXEC_MANIFEST_PATH", "").strip()
+          if not raw_manifest:
+              raise SystemExit("manifest_path is required")
+          if raw_manifest.startswith("/") or ".." in Path(raw_manifest).parts:
+              raise SystemExit(f"manifest_path must be a clean repository-relative path: {raw_manifest!r}")
+          repo_root = Path.cwd().resolve()
+          resolved = (repo_root / raw_manifest).resolve()
+          if not resolved.is_relative_to(repo_root) or not resolved.is_file():
+              raise SystemExit(f"manifest_path does not exist inside repository: {raw_manifest!r}")
+
+          raw_max_req = os.environ.get("EXEC_MAX_REQUESTS", "16").strip()
+          if not re.fullmatch(r"[1-9]\d*", raw_max_req):
+              raise SystemExit(f"Invalid max_requests: {raw_max_req!r}")
+          max_requests = int(raw_max_req)
+          if not 1 <= max_requests <= MAX_REQUESTS_CAP:
+              raise SystemExit(f"max_requests must be between 1 and {MAX_REQUESTS_CAP}, got {max_requests}")
+
+          evidence_policy = os.environ.get("EXEC_EVIDENCE_POLICY", "hash_only").strip()
+          if evidence_policy not in {"hash_only", "full"}:
+              raise SystemExit(f"Invalid evidence_policy: {evidence_policy!r}")
+
+          added_table = os.environ.get("EXEC_ADDED_TABLE", "").strip()
+          if added_table and not re.fullmatch(r"[a-z][a-z0-9_]*\.parquet", added_table):
+              raise SystemExit(f"Invalid added_table filename: {added_table!r}")
+
+          expect_prior = os.environ.get("EXEC_EXPECT_PRIOR", "").strip()
+          if expect_prior and not re.fullmatch(r"(sha256:)?[0-9a-f]{8,64}", expect_prior):
+              raise SystemExit("expect_prior must be 8-64 lowercase hex chars (optional sha256: prefix)")
+
+          work_dir = Path(os.environ["RUNNER_TEMP"]) / "executive-disclosures"
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
+              out.write(f"work_dir={work_dir}\n")
+              out.write(f"manifest_path={resolved}\n")
+              out.write(f"max_requests={max_requests}\n")
+              out.write(f"evidence_policy={evidence_policy}\n")
+              out.write(f"added_table={added_table}\n")
+          PY
+
+      - name: Read live publication index
+        id: live
+        env:
+          WORK_DIR: ${{ steps.validate.outputs.work_dir }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicygov.ai') }}
+          WORKFLOW_USER_AGENT: 'spicy-regs-refresh-executive-disclosures/1.0'
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          INDEX_URL="${R2_PUBLIC_URL%/}/publication.v2.json"
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+            --retry 3 --connect-timeout 30 --max-time 60 \
+            -H "User-Agent: $WORKFLOW_USER_AGENT" \
+            -H "Cache-Control: no-cache" \
+            --output "$WORK_DIR/live-publication.v2.json" "$INDEX_URL"
+          LIVE_PRESENT=$(uv run --frozen python - "$WORK_DIR/live-publication.v2.json" <<'PY'
+          import sys
+          from pathlib import Path
+          from spicy_regs.sources import publication
+
+          index = publication.parse_index(Path(sys.argv[1]).read_bytes())
+          print("true" if "executive-disclosures" in index["families"] else "false")
+          PY
+          )
+          READ_INDEX=""
+          if [ "$LIVE_PRESENT" = "true" ]; then
+            SPICY_REGS_R2_URL="$R2_PUBLIC_URL" uv run --frozen spicy-regs mirror "$WORK_DIR/live-mirror" \
+              --family executive-disclosures --min-free-gib 4 > "$WORK_DIR/mirror-output.jsonl"
+            READ_INDEX=$(uv run --frozen python - "$WORK_DIR/live-mirror" "$WORK_DIR/mirror-output.jsonl" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          lines = [json.loads(line) for line in Path(sys.argv[2]).read_text().splitlines() if line.strip()]
+          snapshot = next(item["snapshot"] for item in reversed(lines) if "snapshot" in item)
+          print(root / snapshot)
+          PY
+            )
+          fi
+          echo "read_index=$READ_INDEX" >> "$GITHUB_OUTPUT"
+
+      - name: Acquire missing public executive disclosure PDFs
+        env:
+          WORK_DIR: ${{ steps.validate.outputs.work_dir }}
+          MANIFEST_PATH: ${{ steps.validate.outputs.manifest_path }}
+          MAX_REQUESTS: ${{ steps.validate.outputs.max_requests }}
+          SKIP_UPLOAD: ${{ inputs.skip_upload }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          ACQ_ARGS=(
+            --manifest "$MANIFEST_PATH"
+            --manifest-out "$WORK_DIR/acquired-manifest.json"
+            --max-requests "$MAX_REQUESTS"
+            --output-dir "$WORK_DIR/acquire"
+          )
+          if [ "$SKIP_UPLOAD" = "true" ]; then
+            export SPICYGOV_RAW_ROOT="$WORK_DIR/raw-archive"
+            ACQ_ARGS+=(--archive-root "$WORK_DIR/raw-archive")
+          else
+            unset SPICYGOV_RAW_ROOT
+          fi
+          uv run --frozen python -m spicy_regs.pipelines.executive_disclosures acquire-manifest "${ACQ_ARGS[@]}" \
+            | tee "$WORK_DIR/acquire-result.json"
+
+      - name: Build and validate candidate generation
+        id: build
+        env:
+          WORK_DIR: ${{ steps.validate.outputs.work_dir }}
+          READ_INDEX: ${{ steps.live.outputs.read_index }}
+          EVIDENCE_POLICY: ${{ steps.validate.outputs.evidence_policy }}
+          SKIP_UPLOAD: ${{ inputs.skip_upload }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          BUILD_ARGS=(
+            --selection "$WORK_DIR/acquired-manifest.json"
+            --evidence-policy "$EVIDENCE_POLICY"
+            --output-dir "$WORK_DIR/build"
+          )
+          if [ "$SKIP_UPLOAD" = "true" ]; then
+            export SPICYGOV_RAW_ROOT="$WORK_DIR/raw-archive"
+            BUILD_ARGS+=(--archive-root "$WORK_DIR/raw-archive")
+          else
+            unset SPICYGOV_RAW_ROOT
+          fi
+          if [ -n "$READ_INDEX" ]; then
+            BUILD_ARGS+=(--read-index "$READ_INDEX")
+          fi
+          uv run --frozen python -m spicy_regs.pipelines.executive_disclosures build "${BUILD_ARGS[@]}" \
+            | tee "$WORK_DIR/build-result.json"
+
+          mkdir -p output
+          cp "$WORK_DIR/build/summary.json" output/summary.json
+          uv run --frozen python - "$WORK_DIR/build-result.json" "$WORK_DIR/build/generation" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          from rulespec_artifacts import LocalMemberSource, admit_artifact
+          from spicy_regs import local_publication
+
+          lines = [line for line in Path(sys.argv[1]).read_text(encoding="utf-8").splitlines() if line.strip()]
+          result = json.loads(lines[-1])
+          generation_dir = Path(sys.argv[2])
+          evidence_dir = Path(result["evidence"])
+
+          root = local_publication._candidate(generation_dir, "executive-disclosures", (evidence_dir,))
+          admitted = admit_artifact(LocalMemberSource(generation_dir))
+          if admitted.pin.artifact_digest != result["artifact_digest"]:
+              raise SystemExit("Admitted generation digest differs from build output")
+          filings_rows = result.get("rows", {}).get("executive_disclosure_filings", 0)
+          if not isinstance(filings_rows, int) or filings_rows <= 0:
+              raise SystemExit(f"Expected positive executive_disclosure_filings rows, got {filings_rows!r}")
+
+          validation = {
+              "status": "candidate_validated",
+              "family": "executive-disclosures",
+              "artifact_digest": admitted.pin.artifact_digest,
+              "logical_id": admitted.pin.logical_id,
+              "evidence_policy": result.get("evidencePolicy"),
+              "tables": sorted(root["spec"]["tables"].keys()),
+              "rows": result["rows"],
+              "skip_upload": os.environ.get("SKIP_UPLOAD") == "true",
+          }
+          Path("output/candidate-validation.json").write_text(json.dumps(validation, indent=2) + "\n", encoding="utf-8")
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
+              out.write(f"generation_dir={generation_dir}\n")
+              out.write(f"evidence_dir={evidence_dir}\n")
+              out.write(f"artifact_digest={admitted.pin.artifact_digest}\n")
+          PY
+
+      - name: Publish candidate generation
+        if: inputs.skip_upload == false
+        env:
+          WORK_DIR: ${{ steps.validate.outputs.work_dir }}
+          GENERATION_DIR: ${{ steps.build.outputs.generation_dir }}
+          EVIDENCE_DIR: ${{ steps.build.outputs.evidence_dir }}
+          ADDED_TABLE: ${{ steps.validate.outputs.added_table }}
+          EXPECT_PRIOR: ${{ inputs.expect_prior }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicygov.ai') }}
+          WORKFLOW_USER_AGENT: 'spicy-regs-refresh-executive-disclosures/1.0'
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        run: |
+          set -euo pipefail
+          export TMPDIR="$RUNNER_TEMP"
+          unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO ZYTE_TOKEN FIRECRAWL_API_KEY
+          INDEX_URL="${R2_PUBLIC_URL%/}/publication.v2.json"
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+            --retry 3 --connect-timeout 30 --max-time 60 \
+            -H "User-Agent: $WORKFLOW_USER_AGENT" \
+            -H "Cache-Control: no-cache" \
+            --output "$WORK_DIR/live-before-publish.v2.json" "$INDEX_URL"
+          LIVE_PRIOR=$(uv run --frozen python - "$WORK_DIR/live-before-publish.v2.json" <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+          from spicy_regs.sources import publication
+
+          index = publication.parse_index(Path(sys.argv[1]).read_bytes())
+          live = index["families"].get("executive-disclosures")
+          expected = os.environ.get("EXPECT_PRIOR", "").strip().removeprefix("sha256:")
+          held = live["artifactDigest"].removeprefix("sha256:") if live else ""
+          if expected and (not held or not held.startswith(expected)):
+              raise SystemExit(
+                  f"Live executive-disclosures digest {held or 'absent'} does not match expect_prior {expected}"
+              )
+          print(held)
+          PY
+          )
+          PUBLISH_ARGS=(
+            --generation "$GENERATION_DIR"
+            --family executive-disclosures
+            --evidence "$EVIDENCE_DIR"
+            --output "$WORK_DIR/publish-receipt"
+          )
+          if [ -n "$ADDED_TABLE" ]; then
+            PUBLISH_ARGS+=(--added-table "$ADDED_TABLE")
+          fi
+          if [ -n "$LIVE_PRIOR" ]; then
+            PUBLISH_ARGS+=(--expect-prior "$LIVE_PRIOR")
+          fi
+          uv run --frozen publish-local-generation "${PUBLISH_ARGS[@]}"
+          mkdir -p output/publish-receipt
+          cp "$WORK_DIR/publish-receipt/receipt.json" output/publish-receipt/receipt.json
+
+      - name: Retain invocation and audit receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: refresh-executive-disclosures-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            output/invocation.json
+            output/candidate-validation.json
+            output/summary.json
+            output/publish-receipt/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Retain build-only candidate outputs and failures
+        if: failure() || (success() && inputs.skip_upload)
+        uses: actions/upload-artifact@v4
+        with:
+          name: refresh-executive-disclosures-output-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/executive-disclosures/build/generation/
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 30

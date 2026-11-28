@@ -2,14 +2,14 @@
 
 These published families are refreshed from a workstation: `treasury-fiscal`,
 `administration-policy`, `ofac-sanctions`, `house-disbursements`,
-`grants-opportunities`, `executive-orders`, `fec-financial-profiles` and
-`uscode-editions`. Each hand refresh is the same five steps: acquire, build,
-dry-run publish, publish, read back. What each command does and refuses is in the
-family's own page ([Treasury](treasury-fiscal.md), [administration
-policy](retained-collections.md), [OFAC](ofac-sanctions.md),
+`grants-opportunities`, `executive-orders`, `executive-disclosures`,
+`fec-financial-profiles` and `uscode-editions`. Each hand refresh is the same
+five steps: acquire, build, dry-run publish, publish, read back. What each
+command does and refuses is in the family's own page ([Treasury](treasury-fiscal.md),
+[administration policy](retained-collections.md), [OFAC](ofac-sanctions.md),
 [House](congressional-disbursements.md), [Grants](grants-opportunities.md),
-[executive orders](executive-orders.md), [FEC
-profiles](fec-financial-profiles.md), [U.S. Code editions](uscode-editions.md));
+[executive orders](executive-orders.md), [executive disclosures](executive-disclosures.md),
+[FEC profiles](fec-financial-profiles.md), [U.S. Code editions](uscode-editions.md));
 this page is only the order.
 
 ## Before any family
@@ -271,6 +271,49 @@ nothing new fetches no body, so the failed ones stay failed until then.
 The hosted `rollup-executive-orders.yml` runs on weekdays; it restores the
 published bodies from R2 source evidence and publishes nothing when nothing is
 new.
+
+## executive-disclosures
+
+Mirror the family first (`--family executive-disclosures`, under 1 MB) so
+`--read-index "$LIVE_INDEX"` records the predecessor generation for weekly
+retention. `acquire-manifest` reuses already-retained PDFs in the shared raw
+archive by SHA-256 before making any bounded HTTP request, and keeps Route B
+OGE terms affirmation off by default (Form 201 and paid proxies/OCR are always
+refused). `build` streams filings one at a time into four `zstd` Parquet tables
+(`executive_disclosure_filings`, `executive_disclosure_facts`,
+`executive_disclosure_transactions`, `executive_disclosure_pages`) and defaults
+to `--evidence-policy hash_only` so raw PDFs stay in local `CentralRawArchiveStore`
+without mirroring restricted OGE PDFs onto public R2.
+
+```sh
+SPICY_REGS_R2_URL=https://data.spicygov.ai $UV spicy-regs mirror "$WORK/live" \
+  --family executive-disclosures
+$UV python -m spicy_regs.pipelines.executive_disclosures acquire-manifest \
+  --manifest "$MANIFEST" --manifest-out "$WORK/acquired-manifest.json" \
+  --max-requests 16 --output-dir "$WORK/exec-acquire"
+$UV python -m spicy_regs.pipelines.executive_disclosures build \
+  --selection "$WORK/acquired-manifest.json" \
+  --read-index "$LIVE_INDEX" \
+  --evidence-policy hash_only \
+  --output-dir "$WORK/exec-build"
+```
+
+On the first publish adding `executive_disclosure_transactions.parquet` over a
+3-table live generation, pass `--added-table executive_disclosure_transactions.parquet`
+to both the `--dry-run` and real `publish-local-generation` commands (once
+published, the flag is no longer needed):
+
+```sh
+$UV publish-local-generation --generation "$WORK/exec-build/generation" \
+  --evidence "$EVIDENCE" --family executive-disclosures \
+  --added-table executive_disclosure_transactions.parquet \
+  --expect-prior "$PRIOR" --dry-run --output "$WORK/exec-dry-run"
+```
+
+Rehearsals using a temporary archive set `SPICYGOV_RAW_ROOT="$WORK/raw"` and
+pass `--archive-root "$WORK/raw"` plus `--scratch-raw` to `--dry-run`. See
+[executive-disclosures.md](executive-disclosures.md) for v2 cohort manifests,
+range/exact-amount rules, and refusal controls.
 
 ## fec-financial-profiles
 

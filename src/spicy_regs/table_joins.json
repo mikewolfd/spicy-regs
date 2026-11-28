@@ -5743,6 +5743,60 @@
       "floor_pct": null,
       "expected_cardinality": "one",
       "measurement": null
+    },
+    {
+      "child": "executive_disclosure_facts",
+      "child_columns": [
+        "filing_id"
+      ],
+      "parent": "executive_disclosure_filings",
+      "parent_columns": [
+        "filing_id"
+      ],
+      "kind": "complete",
+      "reason": "Each executive disclosure fact row belongs to its parent filing_id in the same generation (live Harris-2024 pilot baseline: 1/1 filing_id = 100%).",
+      "measured_via": null,
+      "baseline_keys": 1,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "executive_disclosure_transactions",
+      "child_columns": [
+        "filing_id"
+      ],
+      "parent": "executive_disclosure_filings",
+      "parent_columns": [
+        "filing_id"
+      ],
+      "kind": "unmeasured",
+      "reason": "Each executive disclosure transaction row belongs to its parent filing_id in the same generation; public baseline pending initial v2 publication.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "executive_disclosure_pages",
+      "child_columns": [
+        "filing_id"
+      ],
+      "parent": "executive_disclosure_filings",
+      "parent_columns": [
+        "filing_id"
+      ],
+      "kind": "complete",
+      "reason": "Each executive disclosure page row belongs to its parent filing_id in the same generation (live Harris-2024 pilot baseline: 1/1 filing_id = 100%).",
+      "measured_via": null,
+      "baseline_keys": 1,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
     }
   ],
   "processing_joins": [
@@ -11097,6 +11151,39 @@
         "parent_table": "house_disclosure_reports",
         "parent_columns": [
           "report_id"
+        ]
+      }
+    ],
+    "executive_disclosure_facts": [
+      {
+        "child_columns": [
+          "filing_id"
+        ],
+        "parent_table": "executive_disclosure_filings",
+        "parent_columns": [
+          "filing_id"
+        ]
+      }
+    ],
+    "executive_disclosure_transactions": [
+      {
+        "child_columns": [
+          "filing_id"
+        ],
+        "parent_table": "executive_disclosure_filings",
+        "parent_columns": [
+          "filing_id"
+        ]
+      }
+    ],
+    "executive_disclosure_pages": [
+      {
+        "child_columns": [
+          "filing_id"
+        ],
+        "parent_table": "executive_disclosure_filings",
+        "parent_columns": [
+          "filing_id"
         ]
       }
     ]

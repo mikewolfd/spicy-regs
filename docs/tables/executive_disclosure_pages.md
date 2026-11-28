@@ -6,7 +6,7 @@
 
 Executive disclosure interpreted pages for an explicitly selected public filing cohort.
 
-**Coverage.** Not a range. Published pilot cohort of selected archived White House Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part 6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md. *(measured 2026-11-13)*
+**Coverage.** Not a range. Explicitly selected publicly posted OGE Form 278e packages from official White House archives and public OGE collections, excluding Form 201 agency-gated filings. Retains page text, filer identity verification, slot reconciliation counts, and in-table endnotes for every interpreted section page. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md. *(measured 2026-11-28)*
 
 - **Parquet file:** `executive_disclosure_pages.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -17,14 +17,17 @@ Executive disclosure interpreted pages for an explicitly selected public filing 
 | --- | --- | --- |
 | `cohort_id` | `VARCHAR` | Identity of the explicitly declared report cohort, with omissions stated in coverage_note. |
 | `filing_id` | `VARCHAR` | Reviewed report identity within the cohort; source versions remain separately pinned by source_sha256. |
-| `source_url` | `VARCHAR` | Official archived public PDF, retained independently of extracted facts. |
+| `source_url` | `VARCHAR` | Official publicly posted PDF URL, retained independently of extracted facts. |
 | `source_sha256` | `VARCHAR` | Exact original PDF digest; reopen through CentralRawArchiveStore and verify before replay. |
 | `source_locator` | `VARCHAR` | One-based original PDF page fragment; append to source_url to inspect the original. |
 | `page_text` | `VARCHAR` | Full raw text of the interpreted page, including footnotes; exact original remains authoritative. |
-| `filer_identity_json` | `VARCHAR` | Literal Part 6 Filer's Name label/value and cover Last Name, First Name and MI fields, with original page/section cell locators. Comparison collapses whitespace only; cover fields use First Name, optional MI and Last Name order. Case, spelling and punctuation differences refuse without aliases. |
-| `table_bbox_json` | `VARCHAR` | Table bbox json. |
+| `filer_identity_json` | `VARCHAR` | Literal section Filer's Name label/value and cover Last Name, First Name and MI fields, with original page/section cell locators. Comparison collapses whitespace only; cover fields use First Name, optional MI and Last Name order. Case, spelling and punctuation differences refuse without aliases. |
+| `table_bbox_json` | `VARCHAR` | Original bounding box of the qualified ruled table on this page. |
 | `parser_revision` | `VARCHAR` | Source-specific interpretation rule revision; retained with backend version for replay. |
 | `backend_version` | `VARCHAR` | Installed PyMuPDF table-reader version used for this observation. |
 | `page` | `BIGINT` | One-based page in the exact original PDF, including any prefixed amendment pages. |
 | `source_slot_count` | `BIGINT` | All physical data slots observed in the interpreted source table, including blank slots. |
-| `blank_slot_count` | `BIGINT` | Completely blank data slots; excluded from facts and retained as a page-level reconciliation count. |
+| `blank_slot_count` | `BIGINT` | Completely blank data slots; excluded from facts and transactions and retained as a page-level reconciliation count. |
+| `section` | `VARCHAR` | Qualified OGE section heading observed on this interpreted page. |
+| `layout_profile` | `VARCHAR` | Registered deterministic OGE PDF layout profile used to interpret this page (such as excel_278e). |
+| `endnotes_json` | `VARCHAR` | Structured JSON array of in-table or page-scoped endnotes extracted on this page with raw text and bounding boxes. |

@@ -159,6 +159,7 @@ FAMILY_TABLES: dict[str, tuple[str, ...]] = {
         "executive_disclosure_facts",
         "executive_disclosure_filings",
         "executive_disclosure_pages",
+        "executive_disclosure_transactions",
     ),
     "executive-orders": ("executive_order_observations",),
     "fara": ("fara_filings", "fara_foreign_principals", "fara_registrants", "fara_snapshots"),

@@ -99,6 +99,10 @@ nav:
       - federal_register_agencies: tables/federal_register_agencies.md
       - federal_register_cfr_references: tables/federal_register_cfr_references.md
       - federal_register_docket_candidates: tables/federal_register_docket_candidates.md
+      - executive_disclosure_filings: tables/executive_disclosure_filings.md
+      - executive_disclosure_facts: tables/executive_disclosure_facts.md
+      - executive_disclosure_transactions: tables/executive_disclosure_transactions.md
+      - executive_disclosure_pages: tables/executive_disclosure_pages.md
       # The materialized rulemaking dataset (materialized/rulemaking/latest.json)
       - rule_targets: tables/rule_targets.md
       - proceedings: tables/proceedings.md

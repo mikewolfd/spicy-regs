@@ -8507,9 +8507,9 @@
       "table": "executive_disclosure_filings",
       "label": "Executive disclosure filing lookup",
       "summary": "Executive disclosure filing lookup for an explicitly selected public filing cohort.",
-      "coverage": "Not a range. Published pilot cohort of selected archived White House Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part 6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.",
+      "coverage": "Not a range. Explicitly selected publicly posted OGE Form 278e and 278-T packages from official White House archives and public OGE collections, excluding Form 201 agency-gated filings. Deterministic extraction covers qualified Form 278e Parts 2, 5, 6, and 7; amended, scanned, or unreviewed layouts remain lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.",
       "kind": "not_a_range",
-      "measured_on": "2026-11-13",
+      "measured_on": "2026-11-28",
       "data_quality": null,
       "columns": [
         "cohort_id",
@@ -8541,16 +8541,17 @@
         "metadata_json",
         "report_year",
         "byte_size",
-        "cover_page"
+        "cover_page",
+        "qualified_sections_json"
       ]
     },
     {
       "table": "executive_disclosure_facts",
-      "label": "Executive disclosure supported Part 6 facts",
-      "summary": "Executive disclosure supported Part 6 facts for an explicitly selected public filing cohort.",
-      "coverage": "Not a range. Published pilot cohort of selected archived White House Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part 6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.",
+      "label": "Executive disclosure Form 278e asset and income observations",
+      "summary": "Executive disclosure Form 278e asset and income observations (Parts 2, 5, and 6) for an explicitly selected public filing cohort.",
+      "coverage": "Not a range. Explicitly selected publicly posted OGE Form 278e packages from official White House archives and public OGE collections, excluding Form 201 agency-gated filings. Deterministic extraction covers qualified Form 278e Parts 2, 5, and 6; amended, scanned, or unreviewed layouts remain lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.",
       "kind": "not_a_range",
-      "measured_on": "2026-11-13",
+      "measured_on": "2026-11-28",
       "data_quality": null,
       "columns": [
         "cohort_id",
@@ -8578,16 +8579,57 @@
         "value_lower",
         "value_upper",
         "income_lower",
-        "income_upper"
+        "income_upper",
+        "section_code",
+        "value_exact_usd",
+        "income_exact_usd"
+      ]
+    },
+    {
+      "table": "executive_disclosure_transactions",
+      "label": "Executive disclosure securities transactions",
+      "summary": "Executive disclosure securities transaction observations from OGE Form 278e Part 7 (and future qualified Form 278-T periodic transaction reports) for an explicitly selected public filing cohort.",
+      "coverage": "Not a range. Explicitly selected publicly posted OGE Form 278e packages from official White House archives and public OGE collections, excluding Form 201 agency-gated filings. Deterministic extraction covers qualified Form 278e Part 7 transactions; Form 278-T and scanned or amended packages remain lookup-only until visually qualified. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.",
+      "kind": "not_a_range",
+      "measured_on": "2026-11-28",
+      "data_quality": null,
+      "columns": [
+        "cohort_id",
+        "filing_id",
+        "transaction_id",
+        "form_type",
+        "section",
+        "section_code",
+        "row_number_raw",
+        "description_raw",
+        "ownership_label",
+        "transaction_type_raw",
+        "transaction_date_raw",
+        "transaction_date_status",
+        "notification_over_30_days_raw",
+        "amount_raw",
+        "amount_status",
+        "currency",
+        "source_url",
+        "source_sha256",
+        "source_locator",
+        "parser_revision",
+        "backend_version",
+        "raw_cells_json",
+        "cell_boxes_json",
+        "page",
+        "amount_lower",
+        "amount_upper",
+        "transaction_date"
       ]
     },
     {
       "table": "executive_disclosure_pages",
       "label": "Executive disclosure interpreted pages",
       "summary": "Executive disclosure interpreted pages for an explicitly selected public filing cohort.",
-      "coverage": "Not a range. Published pilot cohort of selected archived White House Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part 6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.",
+      "coverage": "Not a range. Explicitly selected publicly posted OGE Form 278e packages from official White House archives and public OGE collections, excluding Form 201 agency-gated filings. Retains page text, filer identity verification, slot reconciliation counts, and in-table endnotes for every interpreted section page. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md.",
       "kind": "not_a_range",
-      "measured_on": "2026-11-13",
+      "measured_on": "2026-11-28",
       "data_quality": null,
       "columns": [
         "cohort_id",
@@ -8602,7 +8644,10 @@
         "backend_version",
         "page",
         "source_slot_count",
-        "blank_slot_count"
+        "blank_slot_count",
+        "section",
+        "layout_profile",
+        "endnotes_json"
       ]
     },
     {
