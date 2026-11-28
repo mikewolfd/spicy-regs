@@ -142,7 +142,7 @@ def test_a_build_that_read_the_published_index_names_the_generation_it_replaces(
     assert local_paths(tmp_path / "november" / "generation", evidence, also=(str(tmp_path),)) == []
 
     # The publisher holds the family to the index the build read.
-    moved = json.loads(json.dumps(read))
+    moved = json.loads(index.read_bytes())
     moved["families"][family]["artifactDigest"] = "sha256:" + "0" * 64
     moved["families"][family]["prefix"] = f"generations/{family}/" + "0" * 64
     stale = Store()

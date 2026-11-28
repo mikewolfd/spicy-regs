@@ -203,7 +203,12 @@ def staged_snapshot(captured, generation, operation):
         raise ValueError('Staged FEC parent must be complete observations')
     old = captured['families']['fec-observations']
     check_membership('fec-observations', old)
-    if spec['readSnapshot'] != captured:
+    if not publication.read_snapshot_matches(
+        spec['readSnapshot'],
+        captured,
+        family='fec-observations',
+        parents=spec.get('parents'),
+    ):
         raise ValueError('Staged observations differ from the captured prior snapshot')
     descriptors = {p['dataset'] for p in spec['etlReceipts']['policies']}
     if descriptors != {key.removesuffix('.parquet') for key in family_tables('fec-observations')}:

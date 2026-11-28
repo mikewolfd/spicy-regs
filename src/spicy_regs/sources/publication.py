@@ -39,7 +39,7 @@ from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import mkstemp
-from typing import TYPE_CHECKING, BinaryIO, Callable, ContextManager, NamedTuple
+from typing import TYPE_CHECKING, Any, BinaryIO, Callable, ContextManager, NamedTuple
 
 from spicy_regs.runtime_bounds import checkpoint, remaining_timeout
 
@@ -61,6 +61,10 @@ SNAPSHOT_ID = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 #: would strand every existing dataset's state at its next build.
 SNAPSHOT_FORMAT_VERSIONS = (1, 2)
 INDEX_LIMIT = 1024 * 1024
+#: Non-blocking warning threshold (80% of ``INDEX_LIMIT``, rounded up: 838,861 B).
+INDEX_WARNING_BYTES = (INDEX_LIMIT * 4 + 4) // 5
+READ_SNAPSHOT_SCOPE = "referenced-families"
+_COMPACT_SNAPSHOT_KEYS = frozenset({"format", "version", "scope", "indexSha256", "indexFamilyCount", "families"})
 PART_BYTES = 64 * 1024 * 1024
 EVIDENCE_PREFIX = "source-evidence"
 #: Concurrent blob requests while publishing evidence, as r2.py bounds its uploads.
@@ -262,6 +266,81 @@ def generation_entry(artifact, members) -> dict:
     return entry
 
 
+def _validate_index_mapping(value: Any) -> dict:
+    """Validate a parsed publication index mapping without re-serializing."""
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"format", "version", "families"}
+        or value["format"] != "spicy-regs-publication"
+        or type(value["version"]) is not int
+        or value["version"] not in (1, 2)
+        or not isinstance(value["families"], dict)
+    ):
+        raise ValueError("invalid publication index")
+    seen = set()
+    dataset_owners = set()
+    for family, entry in value["families"].items():
+        if not _NAME.fullmatch(family) or not _FAMILY_KEYS <= set(entry) <= _FAMILY_KEYS | {"publishedAt", "etlReceipts"}:
+            raise ValueError("invalid family")
+        if "publishedAt" in entry:
+            instant = entry["publishedAt"]
+            if not isinstance(instant, str) or not _INSTANT.fullmatch(instant):
+                raise ValueError("invalid publication instant")
+            datetime.fromisoformat(instant)  # a calendar instant, not only its shape
+        digest = entry["artifactDigest"]
+        if not isinstance(digest, str) or not _DIGEST.fullmatch(digest):
+            raise ValueError("invalid artifact pin")
+        if entry["prefix"] != f"generations/{family}/{digest.removeprefix('sha256:')}":
+            raise ValueError("prefix differs from artifact identity")
+        if not isinstance(entry["logicalId"], str) or not entry["logicalId"].startswith("urn:"):
+            raise ValueError("invalid logical identity")
+        if not isinstance(entry["tables"], dict) or (not entry["tables"] and "etlReceipts" not in entry):
+            raise ValueError("empty family")
+        if "etlReceipts" in entry:
+            receipt = entry["etlReceipts"]
+            if ({"key", "sha256", "byteSize", "rows", "columns", "generationId", "datasets"} != set(receipt)
+                    or receipt["key"] != "etl_receipts.parquet"
+                    or not _DIGEST.fullmatch(receipt["sha256"]) or not _counts(receipt)
+                    or not isinstance(receipt["generationId"], str) or not receipt["generationId"]
+                    or not isinstance(receipt["columns"], list) or not receipt["columns"]
+                    or any(not isinstance(c, list) or len(c) != 2
+                           or not all(isinstance(v, str) and v for v in c) for c in receipt["columns"])
+                    or len({c[0] for c in receipt["columns"]}) != len(receipt["columns"])
+                    or not isinstance(receipt["datasets"], list) or not receipt["datasets"]
+                    or any(not isinstance(name, str) or not _NAME.fullmatch(name) for name in receipt["datasets"])
+                    or len(set(receipt["datasets"])) != len(receipt["datasets"])):
+                raise ValueError("invalid ETL receipt member")
+        datasets = {key.removesuffix(".parquet") for key in entry["tables"]}
+        datasets.update(entry.get("etlReceipts", {}).get("datasets", []))
+        if datasets & dataset_owners:
+            raise ValueError("multiply owned dataset")
+        dataset_owners.update(datasets)
+        for key, table in entry["tables"].items():
+            if not key.endswith(".parquet") or not _NAME.fullmatch(key[:-8]) or key in seen:
+                raise ValueError("invalid or multiply owned table")
+            seen.add(key)
+            columns = table.get("columns")
+            if not isinstance(columns, list) or not columns:
+                raise ValueError("missing columns")
+            if any(
+                not isinstance(c, list) or len(c) != 2 or not all(isinstance(x, str) and x for x in c)
+                for c in columns
+            ):
+                raise ValueError("invalid columns")
+            if len({c[0] for c in columns}) != len(columns):
+                raise ValueError("duplicate columns")
+            if "members" in table and value["version"] == 2:
+                _split_table(key, table)
+                continue
+            if set(table) != {"sha256", "byteSize", "rows", "columns"}:
+                raise ValueError("invalid table descriptor")
+            if not _DIGEST.fullmatch(table["sha256"]):
+                raise ValueError("invalid table digest")
+            if not _counts(table):
+                raise ValueError("invalid table counts")
+    return value
+
+
 def parse_index(raw: bytes) -> dict:
     """Validate the small mutable pointer without claiming payload verification.
 
@@ -272,78 +351,114 @@ def parse_index(raw: bytes) -> dict:
         raise PublicationError("Publication index exceeds its byte limit")
     try:
         value = json.loads(raw, object_pairs_hook=_pairs)
-        if (
-            set(value) != {"format", "version", "families"}
-            or value["format"] != "spicy-regs-publication"
-            or type(value["version"]) is not int
-            or value["version"] not in (1, 2)
-            or not isinstance(value["families"], dict)
-        ):
-            raise ValueError("invalid publication index")
-        seen = set()
-        dataset_owners = set()
-        for family, entry in value["families"].items():
-            if not _NAME.fullmatch(family) or not _FAMILY_KEYS <= set(entry) <= _FAMILY_KEYS | {"publishedAt", "etlReceipts"}:
-                raise ValueError("invalid family")
-            if "publishedAt" in entry:
-                instant = entry["publishedAt"]
-                if not isinstance(instant, str) or not _INSTANT.fullmatch(instant):
-                    raise ValueError("invalid publication instant")
-                datetime.fromisoformat(instant)  # a calendar instant, not only its shape
-            digest = entry["artifactDigest"]
-            if not isinstance(digest, str) or not _DIGEST.fullmatch(digest):
-                raise ValueError("invalid artifact pin")
-            if entry["prefix"] != f"generations/{family}/{digest.removeprefix('sha256:')}":
-                raise ValueError("prefix differs from artifact identity")
-            if not isinstance(entry["logicalId"], str) or not entry["logicalId"].startswith("urn:"):
-                raise ValueError("invalid logical identity")
-            if not isinstance(entry["tables"], dict) or (not entry["tables"] and "etlReceipts" not in entry):
-                raise ValueError("empty family")
-            if "etlReceipts" in entry:
-                receipt = entry["etlReceipts"]
-                if ({"key", "sha256", "byteSize", "rows", "columns", "generationId", "datasets"} != set(receipt)
-                        or receipt["key"] != "etl_receipts.parquet"
-                        or not _DIGEST.fullmatch(receipt["sha256"]) or not _counts(receipt)
-                        or not isinstance(receipt["generationId"], str) or not receipt["generationId"]
-                        or not isinstance(receipt["columns"], list) or not receipt["columns"]
-                        or any(not isinstance(c, list) or len(c) != 2
-                               or not all(isinstance(v, str) and v for v in c) for c in receipt["columns"])
-                        or len({c[0] for c in receipt["columns"]}) != len(receipt["columns"])
-                        or not isinstance(receipt["datasets"], list) or not receipt["datasets"]
-                        or any(not isinstance(name, str) or not _NAME.fullmatch(name) for name in receipt["datasets"])
-                        or len(set(receipt["datasets"])) != len(receipt["datasets"])):
-                    raise ValueError("invalid ETL receipt member")
-            datasets = {key.removesuffix(".parquet") for key in entry["tables"]}
-            datasets.update(entry.get("etlReceipts", {}).get("datasets", []))
-            if datasets & dataset_owners:
-                raise ValueError("multiply owned dataset")
-            dataset_owners.update(datasets)
-            for key, table in entry["tables"].items():
-                if not key.endswith(".parquet") or not _NAME.fullmatch(key[:-8]) or key in seen:
-                    raise ValueError("invalid or multiply owned table")
-                seen.add(key)
-                columns = table.get("columns")
-                if not isinstance(columns, list) or not columns:
-                    raise ValueError("missing columns")
-                if any(
-                    not isinstance(c, list) or len(c) != 2 or not all(isinstance(x, str) and x for x in c)
-                    for c in columns
-                ):
-                    raise ValueError("invalid columns")
-                if len({c[0] for c in columns}) != len(columns):
-                    raise ValueError("duplicate columns")
-                if "members" in table and value["version"] == 2:
-                    _split_table(key, table)
-                    continue
-                if set(table) != {"sha256", "byteSize", "rows", "columns"}:
-                    raise ValueError("invalid table descriptor")
-                if not _DIGEST.fullmatch(table["sha256"]):
-                    raise ValueError("invalid table digest")
-                if not _counts(table):
-                    raise ValueError("invalid table counts")
+        return _validate_index_mapping(value)
     except (ValueError, TypeError, KeyError, AttributeError) as exc:
         raise PublicationError("Invalid publication index") from exc
+
+
+def parse_read_snapshot(raw: bytes) -> dict:
+    """Validate a generation's ``spec.readSnapshot`` (empty, legacy full index, or compact referenced-families).
+
+    Live ``publication.v2.json`` pointers must still use :func:`parse_index`, which refuses compact snapshots.
+    """
+    if len(raw) > INDEX_LIMIT:
+        raise PublicationError("Publication read snapshot exceeds its byte limit")
+    try:
+        value = json.loads(raw, object_pairs_hook=_pairs)
+        if not isinstance(value, dict):
+            raise ValueError("invalid read snapshot")
+        if not value:
+            return {}
+        if "scope" not in value:
+            return _validate_index_mapping(value)
+        if (
+            set(value) != _COMPACT_SNAPSHOT_KEYS
+            or value["scope"] != READ_SNAPSHOT_SCOPE
+            or not isinstance(value["indexSha256"], str)
+            or not _DIGEST.fullmatch(value["indexSha256"])
+            or type(value["indexFamilyCount"]) is not int
+            or not isinstance(value["families"], dict)
+            or value["indexFamilyCount"] < len(value["families"])
+        ):
+            raise ValueError("invalid compact read snapshot")
+        _validate_index_mapping({
+            "format": value["format"],
+            "version": value["version"],
+            "families": value["families"],
+        })
+    except (ValueError, TypeError, KeyError, AttributeError) as exc:
+        raise PublicationError("Invalid publication read snapshot") from exc
     return value
+
+
+def compact_read_snapshot(
+    index: Mapping | None,
+    *,
+    family: str,
+    parents: Mapping[str, Mapping] | None = None,
+    extra_families: Sequence[str] = (),
+) -> dict:
+    """Compact a captured publication index to its digest, count, and referenced family entries."""
+    if isinstance(extra_families, (str, bytes)) or any(
+        not isinstance(name, str) or not _NAME.fullmatch(name) for name in extra_families
+    ):
+        raise ValueError("extra_families must be a sequence of valid family names")
+    if not index:
+        return {}
+    from rulespec_artifacts import canonical_json_bytes
+
+    parent_families = {
+        parent["family"]
+        for parent in (parents or {}).values()
+        if isinstance(parent, Mapping) and isinstance(parent.get("family"), str)
+    }
+    if "scope" in index:
+        parsed = parse_read_snapshot(canonical_json_bytes(index))
+        if missing := sorted(parent_families - set(parsed["families"])):
+            raise PublicationError(f"Compact read snapshot omits required parent families: {missing}")
+        return deepcopy(parsed)
+    raw = canonical_json_bytes(index)
+    parsed = parse_index(raw)
+    keep = ({family} | parent_families | set(extra_families)) & set(parsed["families"])
+    return {
+        "format": parsed["format"],
+        "version": parsed["version"],
+        "scope": READ_SNAPSHOT_SCOPE,
+        "indexSha256": "sha256:" + hashlib.sha256(raw).hexdigest(),
+        "indexFamilyCount": len(parsed["families"]),
+        "families": {name: deepcopy(parsed["families"][name]) for name in sorted(keep)},
+    }
+
+
+def read_snapshot_matches(
+    recorded: Mapping | None,
+    full_index: Mapping,
+    *,
+    family: str,
+    parents: Mapping[str, Mapping] | None = None,
+    extra_families: Sequence[str] = (),
+) -> bool:
+    """Whether ``recorded`` (legacy full index or compact snapshot) binds the exact ``full_index`` for ``family``."""
+    from rulespec_artifacts import canonical_json_bytes
+
+    if not isinstance(recorded, Mapping) or not recorded or not isinstance(full_index, Mapping) or not full_index:
+        return False
+    try:
+        recorded_raw = canonical_json_bytes(recorded)
+        parsed = parse_read_snapshot(recorded_raw)
+        full_raw = canonical_json_bytes(full_index)
+        parse_index(full_raw)
+        if "scope" not in parsed:
+            return recorded_raw == full_raw
+        expected = compact_read_snapshot(
+            full_index,
+            family=family,
+            parents=parents,
+            extra_families=extra_families,
+        )
+        return recorded_raw == canonical_json_bytes(expected)
+    except (PublicationError, ValueError, TypeError):
+        return False
 
 
 _BOUNDED_GET_MAX_ATTEMPTS = 4
@@ -2605,6 +2720,15 @@ def _merge_family(index: dict, family: str, entry: dict) -> tuple[dict, bytes]:
     updated["families"][family] = entry
     raw = canonical_json_bytes(updated)
     parse_index(raw)
+    if len(raw) >= INDEX_WARNING_BYTES:
+        logger.warning(
+            "publication: {} reached {:,} bytes ({:.1f}% of {:,}-byte INDEX_LIMIT across {} families)",
+            INDEX_V2_KEY,
+            len(raw),
+            100.0 * len(raw) / INDEX_LIMIT,
+            INDEX_LIMIT,
+            len(updated["families"]),
+        )
     return updated, raw
 
 

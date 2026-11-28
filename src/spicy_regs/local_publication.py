@@ -478,7 +478,9 @@ def _require_default_thresholds() -> None:
 
 def _prior_index(root: dict, stored: dict) -> dict:
     """The index the build read, when it recorded one: the publisher then refuses a family changed since."""
-    return publication.parse_index(json.dumps(root["spec"]["readSnapshot"]).encode()) if (
+    from rulespec_artifacts import canonical_json_bytes
+
+    return publication.parse_read_snapshot(canonical_json_bytes(root["spec"]["readSnapshot"])) if (
         root["spec"]["readSnapshot"]) else stored
 
 

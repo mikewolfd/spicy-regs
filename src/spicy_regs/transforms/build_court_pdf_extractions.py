@@ -207,8 +207,12 @@ def prepare_captured_opinions(
                           'body_version': read_snapshot['families'][FAMILY]['artifactDigest']})
     path = write_court_rows('court_opinion_pdf_extractions', table.to_pylist(), output, witnesses=witnesses,
                            prior_receipts=receipt_path, resolution_receipts=resolution_receipts)
+    # Contextual snapshot shim: spicygov/scripts/congress_coverage.py:463 reads
+    # spec.readSnapshot.families["court-opinion-clusters"] from this family's root even though only
+    # court-opinions is a declared parent. Retire once congress_coverage.py drops that lookup.
     artifact = build_court_generation(output / 'generation', family=FAMILY, files=[path],
                                 read_snapshot=read_snapshot, inputs=evidence.inputs(),
+                                extra_snapshot_families=('court-opinion-clusters',),
                                 parents={'court_opinions.parquet': {
                                     'sha256': parent['tables']['court_opinions.parquet']['sha256'],
                                     'byteSize': parent['tables']['court_opinions.parquet']['byteSize'],
