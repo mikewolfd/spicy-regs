@@ -1,6 +1,6 @@
 """Transform: build ``usaspending_recipients.parquet`` from USASpending.gov.
 
-Produces a native subject table and shared receipts keyed on ``recipient_id`` — the
+Produces a native subject table keyed on ``recipient_id`` — the
 federal-award **recipient** reference dimension that sits alongside the
 regulations.gov corpus and complements the SAM entity registry and FEC
 committee table for resolving organization commenters by their federal
@@ -188,66 +188,67 @@ def build_usaspending_recipients(
     out_file = output_dir / OUTPUT
     prior_file = output_dir / "_usaspending_prior.parquet"
     prior_native = output_dir / "_usaspending_prior_native.parquet"
+    new_file = output_dir / "_usaspending_new.parquet"
 
     # 1. Pull the prior table (best effort — absence just means a clean build).
     have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
-    selected_prior = ensure_native_prior("usaspending_recipients", prior_file, prior_native) if have_prior else None
-    if selected_prior is not None:
-        logger.info("USASpending recipients: merging against prior table {}", selected_prior)
-    else:
-        logger.info("USASpending recipients: no prior table found — clean build")
-
-    # 2. Fetch + shape + map into a native "new rows" parquet.
-    rows = [
-        map_subject("usaspending_recipients", _shape(doc))
-        for doc in _iter_recipient_rows(
-            max_pages=max_pages, include_observation=True, evidence=evidence, every_funded=every_funded,
-        )
-    ]
-    new_file = output_dir / "_usaspending_new.parquet"
-    table = pa.Table.from_pylist(rows, schema=schema) if rows else schema.empty_table()
-    pq.write_table(table, new_file, compression="zstd")
-    logger.info("USASpending recipients: fetched {:,} recipients this run", len(rows))
-
-    # 3. Merge prior + new, dedup on recipient_id preferring the new row.
-    spill_dir = output_dir / ".duckdb_tmp"
-    spill_dir.mkdir(exist_ok=True)
-    con = duckdb.connect()
     try:
-        con.execute("SET memory_limit='4GB'")
-        con.execute("SET preserve_insertion_order=false")
-        con.execute("SET threads=2")
-        con.execute(f"SET temp_directory='{spill_dir}'")
-
-        cols = ", ".join(f'"{c}"' for c in schema.names)
-        new_path = str(new_file).replace("'", "''")
+        selected_prior = ensure_native_prior("usaspending_recipients", prior_file, prior_native) if have_prior else None
         if selected_prior is not None:
-            prior_path = str(selected_prior).replace("'", "''")
-            union = (
-                f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_path}') "
-                f"UNION ALL BY NAME "
-                f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_path}')"
-            )
+            logger.info("USASpending recipients: merging against prior table {}", selected_prior)
         else:
-            union = f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_path}')"
-        query = f"""
-            SELECT {cols} FROM (
-                SELECT {cols}, ROW_NUMBER() OVER (
-                    PARTITION BY recipient_id ORDER BY _src DESC
-                ) AS _rn
-                FROM ({union})
-                WHERE recipient_id IS NOT NULL
-            )
-            WHERE _rn = 1
-            ORDER BY CAST(total_award_amount AS DOUBLE) DESC NULLS LAST, recipient_id
-        """
-        write_duckdb_native(con, query, out_file, schema)
-    finally:
-        con.close()
+            logger.info("USASpending recipients: no prior table found — clean build")
 
-    # Housekeeping: drop scratch files so they aren't mistaken for outputs.
-    for scratch in (prior_file, prior_native, new_file):
-        scratch.unlink(missing_ok=True)
+        # 2. Fetch + shape + map into a native "new rows" parquet.
+        rows = [
+            map_subject("usaspending_recipients", _shape(doc))
+            for doc in _iter_recipient_rows(
+                max_pages=max_pages, include_observation=True, evidence=evidence, every_funded=every_funded,
+            )
+        ]
+        table = pa.Table.from_pylist(rows, schema=schema) if rows else schema.empty_table()
+        pq.write_table(table, new_file, compression="zstd")
+        logger.info("USASpending recipients: fetched {:,} recipients this run", len(rows))
+
+        # 3. Merge prior + new, dedup on recipient_id preferring the new row.
+        spill_dir = output_dir / ".duckdb_tmp"
+        spill_dir.mkdir(exist_ok=True)
+        con = duckdb.connect()
+        try:
+            con.execute("SET memory_limit='4GB'")
+            con.execute("SET preserve_insertion_order=false")
+            con.execute("SET threads=2")
+            con.execute(f"SET temp_directory='{spill_dir}'")
+
+            cols = ", ".join(f'"{c}"' for c in schema.names)
+            new_path = str(new_file).replace("'", "''")
+            if selected_prior is not None:
+                prior_path = str(selected_prior).replace("'", "''")
+                union = (
+                    f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_path}') "
+                    f"UNION ALL BY NAME "
+                    f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_path}')"
+                )
+            else:
+                union = f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_path}')"
+            query = f"""
+                SELECT {cols} FROM (
+                    SELECT {cols}, ROW_NUMBER() OVER (
+                        PARTITION BY recipient_id ORDER BY _src DESC
+                    ) AS _rn
+                    FROM ({union})
+                    WHERE recipient_id IS NOT NULL
+                )
+                WHERE _rn = 1
+                ORDER BY CAST(total_award_amount AS DOUBLE) DESC NULLS LAST, recipient_id
+            """
+            write_duckdb_native(con, query, out_file, schema)
+        finally:
+            con.close()
+        prior_file.unlink(missing_ok=True)
+    finally:
+        for scratch in (prior_native, new_file):
+            scratch.unlink(missing_ok=True)
 
     total = pq.ParquetFile(out_file).metadata.num_rows
     logger.info("USASpending recipients: {:,} rows", total)

@@ -252,6 +252,51 @@ def test_fcc_filings_matches_receipt_route_without_receipts(tmp_path, monkeypatc
     )
     assert table_differences(out, expected, key=IDENTITY_FIELDS["fcc_filings"]) == []
 
+    # Same-key refresh carries extraction_results when documents match, and invalidates when documents change.
+    for changed in (False, True):
+        refresh_dir = tmp_path / f"fcc_refresh_{changed}"
+        refresh_dir.mkdir()
+        (refresh_dir / "_fcc_filings_prior.parquet").write_bytes(out.read_bytes())
+        refreshed = {**prior_raw, "text_data": "Refreshed"}
+        if changed:
+            refreshed["documents"] = []
+        monkeypatch.setattr(mod, "_fetch_fcc", lambda *a, item=refreshed, **k: (r for r in [item]))
+        refreshed_out = mod.build_fcc_filings(refresh_dir, since=date(2026, 1, 1), generation_id="refresh-gen")
+        row = next(r for r in pq.read_table(refreshed_out).to_pylist() if r["id_submission"] == "1001")
+        assert row["text_data"] == "Refreshed" and row["generation_id"] == "refresh-gen"
+        assert (row["extraction_results"] is None) is changed
+
+
+def test_corrupt_kv_metadata_missing_crs_witness_and_non_1_to_1_legacy_read_refuse(tmp_path):
+    from spicy_regs.crs_report_detail import check_detail_replacement
+    from spicy_regs.transforms.government_source_shapes import (
+        CRS_DETAIL_WITNESSES_METADATA,
+        GAO_READINGS_METADATA,
+        GovernmentShapeError,
+        native_to_legacy_rows,
+    )
+
+    for dataset, key, sample in (
+        ("gao_reports", GAO_READINGS_METADATA, {"report_id": "gao-26-1", "title": "T"}),
+        ("crs_reports", CRS_DETAIL_WITNESSES_METADATA, {"report_id": "R1", "update_date": "2026-01-01T00:00:00Z"}),
+    ):
+        bad_schema = SUBJECT_SCHEMAS[dataset].with_metadata({**(SUBJECT_SCHEMAS[dataset].metadata or {}), key: b"not-valid-b64!"})
+        bad_path = tmp_path / f"corrupt_{dataset}.parquet"
+        pq.write_table(pa.Table.from_pylist([map_subject(dataset, sample)], schema=bad_schema), bad_path)
+        with pytest.raises(GovernmentShapeError, match="Corrupt Parquet table KV metadata"):
+            native_to_legacy_rows(dataset, bad_path)
+
+    with pytest.raises(GovernmentShapeError, match="lacks its pinned witness"):
+        check_detail_replacement({"detail_state": "ok", "detail_witness_json": None}, {"id": "R1"})
+
+    fcc_path = tmp_path / "fcc_filings.parquet"
+    pq.write_table(
+        pa.Table.from_pylist([map_subject("fcc_filings", {"id_submission": "1"})], schema=SUBJECT_SCHEMAS["fcc_filings"]),
+        fcc_path,
+    )
+    with pytest.raises(ValueError, match="non-1:1"):
+        native_to_legacy_rows("fcc_filings", fcc_path)
+
 
 def test_crs_reports_matches_receipt_route_and_offline_seams_run_without_receipts(tmp_path, monkeypatch):
     from spicy_regs import crs_file_preparation as prep

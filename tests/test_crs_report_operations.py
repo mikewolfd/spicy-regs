@@ -298,13 +298,6 @@ def test_reconciliation_limit_preserves_prior_and_never_commits_cursor(prior, tm
         asked.append(request)
         return httpx.Response(200, json={"pagination": {"count": 2}, "CRSReports": [LIST, {**LIST, "id": "R2"}]})
 
-    options = (
-        {"max_requests": 0}
-        if limit == "requests"
-        else {"max_list_bytes": 10}
-        if limit == "bytes"
-        else {"max_list_rows": 1}
-    )
     with pytest.raises(CrsOperationLimitError):
         build_crs_reports(
             output,
@@ -314,7 +307,9 @@ def test_reconciliation_limit_preserves_prior_and_never_commits_cursor(prior, tm
             reconcile=True,
             evidence=evidence,
             list_transport=httpx.MockTransport(listing),
-            **options,
+            max_requests=0 if limit == "requests" else 10000,
+            max_list_bytes=10 if limit == "bytes" else 128 * 1024 * 1024,
+            max_list_rows=1 if limit == "rows" else 100000,
         )
     assert len(asked) == (0 if limit == "requests" else 1)
     assert not (output / "crs_reports.parquet").exists()

@@ -738,6 +738,17 @@ CRS_DETAIL_WITNESSES_METADATA = b"spicy_regs.crs_reports.detail_witnesses"
 _GAO_INT_COLUMNS = frozenset({"recommendation_count", "matters_for_congress_count", "page_count"})
 
 
+_NATIVE_TO_LEGACY_DATASETS = frozenset({
+    "crs_reports",
+    "fcc_proceedings",
+    "gao_decisions",
+    "gao_recommendations",
+    "gao_reports",
+    "sam_entities",
+    "usaspending_recipients",
+})
+
+
 def encode_kv_json(payload: Any) -> bytes:
     """Compact gzipped JSON encoded as ASCII base64 for Parquet schema KV metadata."""
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
@@ -745,8 +756,13 @@ def encode_kv_json(payload: Any) -> bytes:
 
 
 def decode_kv_json(raw: bytes | None) -> Any:
-    """Inverse of :func:`encode_kv_json`."""
-    return json.loads(gzip.decompress(base64.b64decode(raw))) if raw else None
+    """Inverse of :func:`encode_kv_json`; refuses corrupt metadata with :class:`GovernmentShapeError`."""
+    if not raw:
+        return None
+    try:
+        return json.loads(gzip.decompress(base64.b64decode(raw, validate=True)))
+    except (ValueError, OSError, EOFError) as error:
+        raise GovernmentShapeError("Corrupt Parquet table KV metadata") from error
 
 
 def is_native_table(path: Path, dataset: str) -> bool:
@@ -845,12 +861,18 @@ def native_to_legacy_rows(dataset: str, path: Path) -> list[dict[str, Any]]:
     """Read ``path`` as legacy literal row dicts without receipts (handles both native and legacy Parquet)."""
     import pyarrow.parquet as pq
 
+    if dataset not in _NATIVE_TO_LEGACY_DATASETS:
+        raise ValueError(f"{dataset}: native_to_legacy_rows does not support non-1:1 dataset")
     if not is_native_table(path, dataset):
         return pq.read_table(path).to_pylist()
     table = pq.read_table(path)
     meta = table.schema.metadata or {}
     readings = decode_kv_json(meta.get(GAO_READINGS_METADATA)) if dataset == "gao_reports" else None
+    if readings is not None and not isinstance(readings, dict):
+        raise GovernmentShapeError("gao_reports: corrupt readings metadata")
     crs_witnesses = decode_kv_json(meta.get(CRS_DETAIL_WITNESSES_METADATA)) if dataset == "crs_reports" else None
+    if crs_witnesses is not None and not isinstance(crs_witnesses, dict):
+        raise GovernmentShapeError("crs_reports: corrupt detail witness metadata")
     decision_rule = (
         meta[GAO_DECISION_RULE_METADATA].decode()
         if dataset == "gao_decisions" and GAO_DECISION_RULE_METADATA in meta

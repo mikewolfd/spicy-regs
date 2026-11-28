@@ -141,7 +141,7 @@ def prepare(
             max_list_rows=max_list_rows or 1,
             coverage=coverage,
         )
-    # Local result metadata is deliberately separate from native source receipts.
+    # Local result metadata is separate from the published native table.
     result = {
         "operation": operation,
         "candidate": str((output_dir / "crs_reports.parquet").resolve()),

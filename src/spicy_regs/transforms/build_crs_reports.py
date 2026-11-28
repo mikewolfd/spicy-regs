@@ -56,7 +56,7 @@ OUTPUT = "crs_reports.parquet"
 # Reopen this many days before the selected generation's discovery cutoff.
 OVERLAP_DAYS = 3
 
-# Literal processing schema, converted to native subjects and retained in receipts.
+# Legacy shaping columns mapped to native subjects.
 # The report id and source update date identify a retained revision.
 COLUMNS = (
     "report_id",

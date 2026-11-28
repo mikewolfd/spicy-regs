@@ -1,4 +1,4 @@
-"""FCC navigation over native domain arrays; raw fields and parser states live in receipts."""
+"""FCC navigation over native domain arrays."""
 
 from .sql_views import SQLView, pin
 

@@ -3,6 +3,7 @@ import importlib
 import json
 from contextlib import contextmanager
 from datetime import UTC, date, datetime
+from typing import cast
 
 import httpx
 import pyarrow.parquet as pq
@@ -59,12 +60,12 @@ def test_crs_cursor_ignores_historical_rows_and_explicit_imports(tmp_path, monke
     monkeypatch.setattr(module, "CrsReportsReader", Reader)
     evidence = CaptureEvidence(tmp_path, "crs-reports")
     monkeypatch.setattr(evidence, "inherited_event", lambda *_: {"cursor": "2026-11-05T13:00:00+00:00"})
-    module.build_crs_reports(tmp_path, evidence=evidence, receipt_generation_id="initial")
+    module.build_crs_reports(tmp_path, evidence=evidence)
     assert windows == [date(2026, 11, 2)]
     assert [e for e in journal(evidence) if e["event"] == "crs-discovery"][-1]["mode"] == "refresh"
     assert datetime.fromisoformat([e for e in journal(evidence) if e["event"] == "crs-discovery"][-1]["cursor"]) > datetime(2026, 11, 5, tzinfo=UTC)
     (tmp_path / module.OUTPUT).rename(tmp_path / "_crs_prior.parquet")
-    module.build_crs_reports(tmp_path, since=date(2020, 1, 1), evidence=evidence, receipt_generation_id="archive")
+    module.build_crs_reports(tmp_path, since=date(2020, 1, 1), evidence=evidence)
     assert windows[-1] == date(2020, 1, 1)
     assert [e for e in journal(evidence) if e["event"] == "crs-discovery"][-1]["cursor"] == "2026-11-05T13:00:00+00:00"
     assert [e for e in journal(evidence) if e["event"] == "crs-discovery"][-1]["mode"] == "explicit-window"
@@ -86,7 +87,7 @@ def test_crs_failed_discovery_never_commits_a_cursor(tmp_path, monkeypatch, fail
     monkeypatch.setattr(module, "CrsReportsReader", Reader)
     evidence = Evidence({"cursor": "2026-11-05T13:00:00+00:00"})
     with pytest.raises(type(failure)):
-        module.build_crs_reports(tmp_path, evidence=evidence)
+        module.build_crs_reports(tmp_path, evidence=cast(CaptureEvidence, evidence))
     assert evidence.events == []
     assert not (tmp_path / module.OUTPUT).exists()
 
@@ -218,12 +219,12 @@ def test_list_only_same_revision_conflict_preserves_prior_bytes(tmp_path, monkey
     monkeypatch.setattr(r2, "download", lambda *_: False)
     incoming = [dict(_RAW_REPORT)]
     monkeypatch.setattr(module.CrsReportsReader, "iter_records", lambda _: iter(incoming))
-    path = module.build_crs_reports(tmp_path, receipt_generation_id="list-initial")
+    path = module.build_crs_reports(tmp_path)
     original = path.read_bytes()
     path.rename(tmp_path / "_crs_prior.parquet")
     incoming[0] = {**_RAW_REPORT, field: value}
     with pytest.raises(GovernmentShapeError, match="incompatible same-coordinate list metadata"):
-        module.build_crs_reports(tmp_path, receipt_generation_id="list-conflict")
+        module.build_crs_reports(tmp_path)
     assert (tmp_path / "_crs_prior.parquet").read_bytes() == original
     assert not path.exists()
 
@@ -234,13 +235,13 @@ def test_same_revision_list_absence_and_explicit_clearing_stay_distinct(tmp_path
     monkeypatch.setattr(r2, "download", lambda *_: False)
     incoming: list[dict[str, str | int | None]] = [dict(_RAW_REPORT)]
     monkeypatch.setattr(module.CrsReportsReader, "iter_records", lambda _: iter(incoming))
-    path = module.build_crs_reports(tmp_path, receipt_generation_id="list-initial")
+    path = module.build_crs_reports(tmp_path)
     path.rename(tmp_path / "_crs_prior.parquet")
     if presence == "missing":
         del incoming[0]["title"]
     else:
         incoming[0]["title"] = None if presence == "null" else ""
-    path = module.build_crs_reports(tmp_path, receipt_generation_id="list-clearing")
+    path = module.build_crs_reports(tmp_path)
     assert pq.read_table(path)["title"].to_pylist() == [_RAW_REPORT["title"] if presence == "missing" else incoming[0]["title"]]
 
 
