@@ -185,7 +185,8 @@ def pending_guard(workdir, *, pinned_files=None):
     writer._refuse_committed_failures(workdir)
     prepared_path = writer.fill_dir(workdir) / "prepare.json"
     prepared = load(prepared_path) if prepared_path.exists() else None
-    for journal in writer.fill_dir(workdir).glob("write-journal-*.jsonl"):
+    matched = None
+    for journal in sorted(writer.fill_dir(workdir).glob("write-journal-*.jsonl")):
         lines = writer._lines(journal)
         if lines and lines[-1]["state"] == "pending":
             line = lines[-1]
@@ -197,15 +198,27 @@ def pending_guard(workdir, *, pinned_files=None):
                 require(preimage.is_file() and digest(preimage) == line.get("preimage_sha256"),
                         "Pending write lacks its verified preimage")
                 continue
+            require(matched is None, "Multiple pending journals require manual inspection")
             root = workdir.parent.absolute()
+            prepare_member = str(prepared_path.absolute().relative_to(root))
+            prepare_pin = pinned_files.get(prepare_member)
+            if prepare_pin is None or prepare_pin != pin(prepared_path):
+                raise ValueError("Pending prepare.json differs from the pinned recovery receipt")
             journal_member = str(journal.absolute().relative_to(root))
-            require(journal == writer._journal(workdir, prepared) and pinned_files.get(journal_member) == pin(journal),
-                    "Pending journal differs from the pinned recovery receipt: " + journal.name)
+            journal_pin = pinned_files.get(journal_member)
+            if journal != writer._journal(workdir, prepared) or journal_pin is None or journal_pin != pin(journal):
+                raise ValueError("Pending journal differs from the pinned recovery receipt: " + journal.name)
             # The receipt already verified the preimage bytes. The writer checks them again before any transition.
             preimage = preimage.absolute()
             member = pinned_files.get(str(preimage.relative_to(root))) if preimage.is_relative_to(root) else None
-            require(member is not None and member["sha256"] == line.get("preimage_sha256"),
-                    "Pending preimage differs from the pinned recovery receipt")
+            if member is None or member["sha256"] != line.get("preimage_sha256"):
+                raise ValueError("Pending preimage differs from the pinned recovery receipt")
+            matched = {
+                "pinned_prepare_sha256": prepare_pin["sha256"],
+                "pinned_journal_sha256": journal_pin["sha256"],
+                "pinned_preimage_sha256": member["sha256"],
+            }
+    return matched
 
 
 def pilot_history(workdir, pilot):
@@ -286,7 +299,8 @@ def run_group(args, client, bucket):
     pull_journals(args.workdir, plan["journals"], client)
     work = args.workdir / "writer"
     if args.operation == "reconcile":
-        pending_guard(work, pinned_files=pinned_files)
+        pinned = pending_guard(work, pinned_files=pinned_files)
+        require(pinned is not None, "No pending write to reconcile")
         attempt = writer.fill_dir(work) / "attempt.json"
         require(attempt.is_file() and all(load(attempt)[name] == value for name, value in recovery_identity(args).items()),
                 "Writer attempt identity differs")
@@ -294,7 +308,7 @@ def run_group(args, client, bucket):
         maintenance.run("verify", args.workdir / "maintenance-state.json")
         with iceberg._connect() as con:
             con.execute("SET max_temp_directory_size='1GB'")
-            reconciled = writer.reconcile_pending(work, resources=RESOURCES, con=con)
+            reconciled = writer.reconcile_pending(work, **pinned, resources=RESOURCES, con=con)
         owner.durable(args.workdir / "result.json", {
             **identity(args), "operation": "reconcile", "status": "complete",
             "recovery_identity": recovery_identity(args), "reconciled": reconciled,

@@ -1250,8 +1250,9 @@ def test_reconcile_refuses_uncommitted_pending_with_invalid_evidence(tmp_path, c
     path = cfw._journal(tmp_path, prepared)
     preimage = path.parent / "preimage.parquet"
     preimage.write_bytes(b"retained preimage")
+    preimage_sha = cfw._sha256(preimage)
     pending = {"state": "pending", "prepare_id": prepared["prepare_id"], "batch": "pending-batch", "files": ["EPA"],
-               "snapshot_before": prepared["snapshot"], "preimage": str(preimage), "preimage_sha256": cfw._sha256(preimage)}
+               "snapshot_before": prepared["snapshot"], "preimage": str(preimage), "preimage_sha256": preimage_sha}
     if damage == "missing preimage":
         preimage.unlink()
     elif damage == "different preimage bytes":
@@ -1262,7 +1263,63 @@ def test_reconcile_refuses_uncommitted_pending_with_invalid_evidence(tmp_path, c
     initial = path.read_bytes()
 
     with pytest.raises(RuntimeError, match=problem):
-        cfw.reconcile_pending(tmp_path)
+        cfw.reconcile_pending(
+            tmp_path,
+            pinned_prepare_sha256=cfw._sha256(cfw.fill_dir(tmp_path) / "prepare.json"),
+            pinned_journal_sha256=cfw._sha256(path),
+            pinned_preimage_sha256=preimage_sha,
+        )
+    assert path.read_bytes() == initial
+
+
+@pytest.mark.parametrize("tamper", ["missing_pins", "unpinned_journal_tail", "wrong_prepare_pin", "wrong_preimage_pin"])
+def test_reconcile_pending_requires_verified_receipt_pins_at_writer_entrypoint(tmp_path, catalog, tamper):
+    seed(catalog, [row("A")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S"}])
+    prepared = cfw.prepare(tmp_path)
+    path = cfw._journal(tmp_path, prepared)
+    preimage = path.parent / "preimage.parquet"
+    preimage.write_bytes(b"retained preimage")
+    preimage_sha = cfw._sha256(preimage)
+    prepare_sha = cfw._sha256(cfw.fill_dir(tmp_path) / "prepare.json")
+    pending = {"state": "pending", "prepare_id": prepared["prepare_id"], "batch": "pending-batch", "files": ["EPA"],
+               "snapshot_before": prepared["snapshot"], "preimage": str(preimage), "preimage_sha256": preimage_sha}
+    if tamper == "unpinned_journal_tail":
+        cfw._append(path, {"state": "verified", "batch": "earlier-batch", "prepare_id": prepared["prepare_id"]})
+        pinned_journal_sha = cfw._sha256(path)
+        cfw._append(path, pending)
+    else:
+        cfw._append(path, pending)
+        pinned_journal_sha = cfw._sha256(path)
+    initial = path.read_bytes()
+
+    if tamper == "missing_pins":
+        with pytest.raises(TypeError):
+            getattr(cfw, "reconcile_pending")(tmp_path)
+    elif tamper == "unpinned_journal_tail":
+        with pytest.raises(RuntimeError, match="differs from the pinned recovery receipt"):
+            cfw.reconcile_pending(
+                tmp_path,
+                pinned_prepare_sha256=prepare_sha,
+                pinned_journal_sha256=pinned_journal_sha,
+                pinned_preimage_sha256=preimage_sha,
+            )
+    elif tamper == "wrong_prepare_pin":
+        with pytest.raises(RuntimeError, match="prepare.json differs from the pinned recovery receipt"):
+            cfw.reconcile_pending(
+                tmp_path,
+                pinned_prepare_sha256="0" * 64,
+                pinned_journal_sha256=pinned_journal_sha,
+                pinned_preimage_sha256=preimage_sha,
+            )
+    else:
+        with pytest.raises(RuntimeError, match="pending preimage digest differs from the pinned recovery receipt"):
+            cfw.reconcile_pending(
+                tmp_path,
+                pinned_prepare_sha256=prepare_sha,
+                pinned_journal_sha256=pinned_journal_sha,
+                pinned_preimage_sha256="0" * 64,
+            )
     assert path.read_bytes() == initial
 
 

@@ -1180,15 +1180,33 @@ def _records_commits(con) -> bool:
         return False
 
 
+def _require_sha256_pin(label: str, value: str) -> str:
+    if not isinstance(value, str) or len(value) != 64 or any(ch not in "0123456789abcdef" for ch in value):
+        raise ValueError(f"{label} must be a 64-character lowercase hex SHA-256 pin")
+    return value
+
+
 def reconcile_pending(
-    workdir: Path, *, resources: ExportResources | None = None, con=None,
+    workdir: Path,
+    *,
+    pinned_prepare_sha256: str,
+    pinned_journal_sha256: str,
+    pinned_preimage_sha256: str,
+    resources: ExportResources | None = None,
+    con=None,
 ) -> dict:
-    """Reconcile a pending write journal entry against the live catalog without starting new batches."""
+    """Reconcile a receipt-pinned pending write journal entry against the live catalog without starting new batches."""
     if not getenv(iceberg.CATALOG_LOCK_ENV):
         raise RuntimeError(f"write holds the comments catalog: set {iceberg.CATALOG_LOCK_ENV} only while holding the "
                            "lock (docs/comment-fields-fill.md)")
+    _require_sha256_pin("pinned_prepare_sha256", pinned_prepare_sha256)
+    _require_sha256_pin("pinned_journal_sha256", pinned_journal_sha256)
+    _require_sha256_pin("pinned_preimage_sha256", pinned_preimage_sha256)
     out = fill_dir(workdir)
-    prepared = json.loads((out / "prepare.json").read_text())
+    prepare_path = out / "prepare.json"
+    if not prepare_path.is_file() or prepare_path.is_symlink() or _sha256(prepare_path) != pinned_prepare_sha256:
+        raise RuntimeError("prepare.json differs from the pinned recovery receipt")
+    prepared = json.loads(prepare_path.read_text())
     if _sha256(out / "fill.parquet") != prepared["fill_sha256"]:
         raise RuntimeError("fill.parquet is not the one prepare.json names; prepare again")
     if "columns" not in prepared:
@@ -1196,10 +1214,20 @@ def reconcile_pending(
     _prepared_operation(prepared)
     _refuse_committed_failures(workdir)
     journal = _journal(workdir, prepared)
+    if not journal.is_file() or journal.is_symlink() or _sha256(journal) != pinned_journal_sha256:
+        raise RuntimeError(f"{journal.name} differs from the pinned recovery receipt")
     lines = _lines(journal)
     pending = lines[-1] if lines and lines[-1]["state"] == "pending" else None
     if pending is None:
         raise ValueError(f"no pending write to reconcile in {journal.name}")
+    if pending.get("prepare_id") != prepared["prepare_id"]:
+        raise RuntimeError(f"pending batch {pending.get('batch')} in {journal.name} differs from prepare.json; stop (runbook)")
+    if pending.get("preimage_sha256") != pinned_preimage_sha256:
+        raise RuntimeError("pending preimage digest differs from the pinned recovery receipt")
+    preimage = Path(pending["preimage"]) if pending.get("preimage") else None
+    if preimage is None or not preimage.is_file() or preimage.is_symlink() or _sha256(preimage) != pinned_preimage_sha256:
+        raise RuntimeError(f"the pre-image of pending batch {pending.get('batch')} is missing or differs from the "
+                           "pinned recovery receipt; stop (runbook)")
     verified = [line for line in lines if line["state"] == "verified"]
     expected = verified[-1]["snapshot_after"] if verified else prepared["snapshot"]
     own = con is None
