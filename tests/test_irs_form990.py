@@ -1859,3 +1859,209 @@ def test_find_local_raw_match_explicit_sha_never_falls_through_and_filters_bad_r
     )
     assert direct is not None and direct[1] == sha1 and direct[2] == len(body1)
 
+
+@pytest.mark.parametrize("streaming", [True, False])
+@pytest.mark.parametrize("submission_year", [2019, 2020])
+def test_legacy_990o_alias_admitted_in_2019_2020_and_preserves_raw_index(streaming, submission_year):
+    oid = f"{submission_year}00019349300001"
+    raw_index = {**INDEX, "OBJECT_ID": oid, "SUB_DATE": str(submission_year), "RETURN_TYPE": "990O"}
+    xml = _make_xml(return_version="2018v3.1", tax_yr=str(submission_year - 1))
+    rec = record(xml, streaming=streaming, oid=oid, submission_year=submission_year, index_row=raw_index)
+
+    filing, officers, grants = transform.interpret(rec)
+    assert filing["return_type"] == "990"
+    assert json.loads(filing["index_native_json"])["RETURN_TYPE"] == "990O"
+    assert filing["submission_year"] == submission_year
+    assert len(officers) == 2 and len(grants) == 2
+
+
+@pytest.mark.parametrize("streaming", [True, False])
+def test_legacy_990o_alias_refused_outside_2019_2020_and_non_990_aliases_refused(streaming):
+    rec_2021 = {
+        "object_id": "202100019349300001",
+        "submission_year": 2021,
+        "return_version": "2020v4.1",
+        "native_index": {**INDEX, "OBJECT_ID": "202100019349300001", "RETURN_TYPE": "990O"},
+        "source_locator": {"archive_sha256": "sha256:" + "a" * 64, "member_name": "202100019349300001_public.xml"},
+        "header": {"TaxYr": "2020"},
+        "form_fields": {},
+    }
+    if not streaming:
+        rec_2021 = {
+            "object_id": "202100019349300001",
+            "submission_year": 2021,
+            "return_version": "2020v4.1",
+            "native_index": {**INDEX, "OBJECT_ID": "202100019349300001", "RETURN_TYPE": "990O"},
+            "source_locator": {"archive_sha256": "sha256:" + "a" * 64, "member_name": "202100019349300001_public.xml"},
+            "native_xml": {},
+        }
+    with pytest.raises(ValueError, match="Unsupported IRS form type"):
+        transform.interpret(rec_2021)
+
+    for legacy_code in ("990EO", "990PR"):
+        rec_non_990 = {**rec_2021, "submission_year": 2020, "native_index": {**INDEX, "RETURN_TYPE": legacy_code}}
+        with pytest.raises(ValueError, match="Unsupported IRS form type"):
+            transform.interpret(rec_non_990)
+
+
+def test_build_irs_form990_year_streams_2020_legacy_aliases_and_excludes_990eo_990pr(tmp_path):
+    oid_990o = "202000019349300001"
+    oid_990eo = "202000019349300002"
+    oid_990pr = "202000019349300003"
+    idx_bytes = _csv_bytes(
+        [
+            {**INDEX, "OBJECT_ID": oid_990o, "SUB_DATE": "2020", "RETURN_TYPE": "990O"},
+            {**INDEX, "OBJECT_ID": oid_990eo, "SUB_DATE": "2020", "RETURN_TYPE": "990EO"},
+            {**INDEX, "OBJECT_ID": oid_990pr, "SUB_DATE": "2020", "RETURN_TYPE": "990PR"},
+        ]
+    )
+    zip_bytes = _zip_bytes(
+        {
+            f"{oid_990o}_public.xml": _make_xml(return_version="2018v3.1", tax_yr="2019"),
+            f"{oid_990eo}_public.xml": b"<Return/>",
+            f"{oid_990pr}_public.xml": b"<Return/>",
+        }
+    )
+    zip_path = tmp_path / "2020_TEOS_XML_01A.zip"
+    zip_path.write_bytes(zip_bytes)
+    zip_sha = "sha256:" + hashlib.sha256(zip_bytes).hexdigest()
+
+    index_map = source.load_index_map(BytesIO(idx_bytes), submission_year=2020)
+    stream = source.iter_archive_returns(
+        zip_path,
+        index_by_oid=index_map,
+        archive_sha256=zip_sha,
+        return_types=("990",),
+        on_anomaly="yield",
+        yield_skipped=True,
+    )
+    summary = transform.build_irs_form990_year(2020, stream, tmp_path / "out")
+    assert summary["rows"][transform.FILINGS] == 1
+    assert stream.disposition.excluded_by_return_type == {"990EZ": 1, "990PF": 1}
+    assert summary["excluded_by_return_type"] == {"990EZ": 1, "990PF": 1}
+    assert summary["quarantined_count"] == 0
+    rows = pq.ParquetFile(tmp_path / "out" / summary["partition_files"][transform.FILINGS]).read().to_pylist()
+    assert len(rows) == 1
+    assert rows[0]["filing_id"] == oid_990o
+    assert rows[0]["return_type"] == "990"
+    assert json.loads(rows[0]["index_native_json"])["RETURN_TYPE"] == "990O"
+
+
+@pytest.mark.parametrize("year", [2019, 2020])
+def test_year_fingerprint_matches_requires_alias_marker_for_2019_2020(year):
+    discovered = {
+        "index": {"url": f"https://apps.irs.gov/pub/epostcard/990/xml/{year}/index_{year}.csv", "etag": '"idx"', "content_length": 100},
+        "archives": [{"url": f"https://apps.irs.gov/pub/epostcard/990/xml/{year}/{year}_TEOS_XML_01A.zip", "etag": '"z1"', "content_length": 200}],
+    }
+    prior_without_marker = {
+        "submission_year": year,
+        "source_index": {"url": discovered["index"]["url"], "etag": '"idx"', "byte_size": 100},
+        "source_archives": [{"url": discovered["archives"][0]["url"], "etag": '"z1"', "byte_size": 200}],
+    }
+    # Pre-alias 2019/2020 generations must rebuild rather than carry forward quarantined 990O cohorts.
+    assert not pipeline._year_fingerprint_matches(discovered, prior_without_marker, submission_year=year)
+    assert not pipeline._year_fingerprint_matches(discovered, prior_without_marker)
+
+    prior_with_marker = {
+        **prior_without_marker,
+        "return_type_normalization": pipeline.RETURN_TYPE_NORMALIZATION_VERSION,
+    }
+    assert pipeline._year_fingerprint_matches(discovered, prior_with_marker, submission_year=year)
+    # 2021+ closed years without the legacy-alias marker remain reusable.
+    assert pipeline._year_fingerprint_matches(
+        discovered,
+        {**prior_without_marker, "submission_year": 2021},
+        submission_year=2021,
+    )
+
+
+def test_sync_build_unlisted_carry_forward_refuses_pre_alias_2019_and_admits_marked_2019(tmp_path):
+    shared_raw = tmp_path / "shared-raw"
+    oid_2019 = "201900019349300001"
+    oid_2026 = "202600019349300001"
+    idx_2019 = _csv_bytes([{**INDEX, "OBJECT_ID": oid_2019, "SUB_DATE": "2019", "TAX_PERIOD": "201812", "RETURN_TYPE": "990O"}])
+    zip_2019 = _zip_bytes({
+        f"{oid_2019}_public.xml": _make_xml(
+            return_version="2018v3.1", tax_yr="2018", period_begin="2018-01-01", period_end="2018-12-31"
+        )
+    })
+    idx_2026 = _csv_bytes([{**INDEX, "OBJECT_ID": oid_2026, "SUB_DATE": "2026", "TAX_PERIOD": "202512", "RETURN_TYPE": "990"}])
+    zip_2026 = _zip_bytes({
+        f"{oid_2026}_public.xml": _make_xml(
+            return_version="2025v4.0", tax_yr="2025", period_begin="2025-01-01", period_end="2025-12-31"
+        )
+    })
+
+    url_idx_2019 = "https://apps.irs.gov/pub/epostcard/990/xml/2019/index_2019.csv"
+    url_zip_2019 = "https://apps.irs.gov/pub/epostcard/990/xml/2019/2019_TEOS_XML_01A.zip"
+    url_idx_2026 = "https://apps.irs.gov/pub/epostcard/990/xml/2026/index_2026.csv"
+    url_zip_2026 = "https://apps.irs.gov/pub/epostcard/990/xml/2026/2026_TEOS_XML_01A.zip"
+    payloads = {
+        url_idx_2019: (idx_2019, '"idx2019"'),
+        url_zip_2019: (zip_2019, '"zip2019"'),
+        url_idx_2026: (idx_2026, '"idx2026"'),
+        url_zip_2026: (zip_2026, '"zip2026"'),
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body, etag = payloads[str(request.url)]
+        return httpx.Response(200, content=body, headers={"etag": etag, "content-length": str(len(body))})
+
+    manifest_2019 = {
+        "format": "spicy-irs-form990-discovery",
+        "version": 1,
+        "years": {
+            "2019": {
+                "submission_year": 2019,
+                "index": {"url": url_idx_2019, "content_length": len(idx_2019), "etag": '"idx2019"'},
+                "archives": [{"url": url_zip_2019, "content_length": len(zip_2019), "etag": '"zip2019"'}],
+            }
+        },
+    }
+    prior_out = tmp_path / "prior-2019"
+    _, _, prior_summary = pipeline.sync_build(
+        manifest_2019, prior_out, archive_root=shared_raw, min_interval=0, transport=httpx.MockTransport(handler)
+    )
+    assert prior_summary["years"]["2019"]["return_type_normalization"] == pipeline.RETURN_TYPE_NORMALIZATION_VERSION
+
+    manifest_2026 = {
+        "format": "spicy-irs-form990-discovery",
+        "version": 1,
+        "years": {
+            "2026": {
+                "submission_year": 2026,
+                "index": {"url": url_idx_2026, "content_length": len(idx_2026), "etag": '"idx2026"'},
+                "archives": [{"url": url_zip_2026, "content_length": len(zip_2026), "etag": '"zip2026"'}],
+            }
+        },
+    }
+
+    # Strip marker to simulate a pre-alias 2019 generation: a 2026-only refresh must refuse carrying it forward.
+    stale_summary = json.loads((prior_out / "irs990-population-summary.json").read_text(encoding="utf-8"))
+    stale_summary["years"]["2019"].pop("return_type_normalization")
+    stale_summary_path = tmp_path / "stale-summary.json"
+    stale_summary_path.write_text(json.dumps(stale_summary), encoding="utf-8")
+    with pytest.raises(ValueError, match="include 2019 in discovery"):
+        pipeline.sync_build(
+            manifest_2026,
+            tmp_path / "refused-2026",
+            archive_root=shared_raw,
+            carry_forward_generation=prior_out / "generation",
+            carry_forward_summary=stale_summary_path,
+            min_interval=0,
+            transport=httpx.MockTransport(handler),
+        )
+
+    # With the exact alias-aware marker, a 2026-only refresh carries forward 2019 cleanly.
+    _, _, next_summary = pipeline.sync_build(
+        manifest_2026,
+        tmp_path / "ok-2026",
+        archive_root=shared_raw,
+        carry_forward_generation=prior_out / "generation",
+        carry_forward_summary=prior_out / "irs990-population-summary.json",
+        min_interval=0,
+        transport=httpx.MockTransport(handler),
+    )
+    assert next_summary["submission_years"] == [2019, 2026]
+    assert next_summary["years"]["2019"]["mode"] == "carried_forward_unlisted"
+    assert next_summary["years"]["2019"]["return_type_normalization"] == pipeline.RETURN_TYPE_NORMALIZATION_VERSION

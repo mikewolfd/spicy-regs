@@ -251,11 +251,30 @@ def _entry_fingerprint_matches(cur_entry: Mapping[Any, Any], old_entry: Mapping[
     return cur_size > 0 and cur_size == old_size
 
 
+LEGACY_RETURN_TYPE_ALIAS_YEARS = frozenset({2019, 2020})
+RETURN_TYPE_NORMALIZATION_VERSION = "2019-2020-legacy-aliases-v1"
+
+
+def _has_required_return_type_normalization(
+    prior_year_summary: Mapping[str, Any],
+    *,
+    submission_year: int | None = None,
+) -> bool:
+    year = submission_year if submission_year is not None else prior_year_summary.get("submission_year")
+    if type(year) is int and year in LEGACY_RETURN_TYPE_ALIAS_YEARS:
+        return prior_year_summary.get("return_type_normalization") == RETURN_TYPE_NORMALIZATION_VERSION
+    return True
+
+
 def _year_fingerprint_matches(
     discovered_year: Mapping[str, Any],
     prior_year_summary: Mapping[str, Any],
+    *,
+    submission_year: int | None = None,
 ) -> bool:
     """Return True when index + every archive URL, non-empty ETag, and (when present) byte size match."""
+    if not _has_required_return_type_normalization(prior_year_summary, submission_year=submission_year):
+        return False
     prior_index = prior_year_summary.get("source_index")
     prior_archives = prior_year_summary.get("source_archives")
     cur_index = discovered_year.get("index")
@@ -846,6 +865,12 @@ def sync_build(
                         f"Cannot carry forward unlisted closed year {prior_year}: missing prior year "
                         "metadata/fingerprints in carry_forward_summary"
                     )
+                if not _has_required_return_type_normalization(prior_year_meta, submission_year=prior_year):
+                    raise ValueError(
+                        f"Cannot carry forward unlisted closed year {prior_year}: prior generation predates "
+                        f"return_type_normalization={RETURN_TYPE_NORMALIZATION_VERSION!r}; include {prior_year} "
+                        "in discovery to rebuild it with reviewed legacy return-type aliases"
+                    )
                 if not _can_copy_year_partitions(carry_forward_generation, prior_year):
                     raise ValueError(
                         f"Prior carry-forward year {prior_year} failed schema verification in {carry_forward_generation}"
@@ -880,7 +905,7 @@ def sync_build(
                 max_zips == 0
                 and carry_forward_generation is not None
                 and isinstance(prior_meta, Mapping)
-                and _year_fingerprint_matches(year_spec, prior_meta)
+                and _year_fingerprint_matches(year_spec, prior_meta, submission_year=year)
                 and _can_copy_year_partitions(carry_forward_generation, year)
             ):
                 copied_rows = _copy_year_partitions(carry_forward_generation, candidate_dir, year)
@@ -1100,6 +1125,7 @@ def sync_build(
                 "etag": index_descriptor.get("etag"),
             }
             year_summary["source_archives"] = source_archives_meta
+            year_summary["return_type_normalization"] = RETURN_TYPE_NORMALIZATION_VERSION
             years_summary[year_key] = year_summary
 
             if year_quarantined_path.is_file():
