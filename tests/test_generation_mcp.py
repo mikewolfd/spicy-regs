@@ -49,7 +49,6 @@ def managed_release_fixture(tmp_path, table):
     policy = installed_policies()[table]
     row: dict[str, object] = {f.name: False if pa.types.is_boolean(f.type)
            else 1 if pa.types.is_integer(f.type) else "fixture" for f in policy.subject_schema}
-    row.update({field: {} for field in policy.receipt_fields})
     context = ReceiptContext("test-generation", "test-attempt", "test-processor", [{
         "source_id": "test-source", "sha256": "sha256:" + "a" * 64,
     }])
@@ -59,6 +58,7 @@ def managed_release_fixture(tmp_path, table):
         subject = write_rows([row], tmp_path / "source" / (table + ".parquet"), policy.subject_schema)
         build_generation(directory, family="managed-release", files=[subject], expected_keys=[subject.name])
     else:
+        row.update({field: {} for field in policy.receipt_fields})
         subject, receipts = write_dataset([(row, context)], tmp_path / "source", policy)
         assert subject is not None
         build_generation(directory, family="managed-release", files=[subject], expected_keys=[subject.name],

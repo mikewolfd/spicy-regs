@@ -40,6 +40,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from tempfile import mkstemp
 from typing import TYPE_CHECKING, Any, BinaryIO, Callable, ContextManager, NamedTuple
+from urllib.parse import urlsplit
 
 from spicy_regs.runtime_bounds import checkpoint, remaining_timeout
 
@@ -981,13 +982,54 @@ def verify_member(base_url: str, member: Member, label: str | None = None) -> in
     return body.byte_size
 
 
-def parquet_scan(paths: Sequence[str]) -> str:
+_HIVE_TYPE_RE = re.compile(r"[A-Za-z][A-Za-z0-9_(), ]*\Z")
+_HIVE_NULL_SENTINELS = frozenset({"NULL", "__HIVE_DEFAULT_PARTITION__"})
+
+
+def _hive_paths_compatible(paths: Sequence[str], partition_types: Mapping[str, str]) -> bool:
+    """Whether every path carries matching trailing ``col=val`` segments and no extraneous ``=`` ancestors."""
+    if not paths or not partition_types:
+        return False
+    expected = list(partition_types)
+    width = len(expected)
+    for col, dtype in partition_types.items():
+        if not _NAME.fullmatch(col) or not isinstance(dtype, str) or not _HIVE_TYPE_RE.fullmatch(dtype):
+            return False
+    for raw_path in paths:
+        path_only = urlsplit(raw_path).path if "://" in raw_path else raw_path.replace("\\", "/")
+        dirs = [segment for segment in path_only.split("/")[:-1] if segment]
+        if len(dirs) < width:
+            return False
+        if any("=" in segment for segment in dirs[:-width]):
+            return False
+        trailing = dirs[-width:]
+        parsed_cols: list[str] = []
+        for segment in trailing:
+            col, sep, val = segment.partition("=")
+            if not sep or not _PARTITION_VALUE.fullmatch(val) or val.upper() in _HIVE_NULL_SENTINELS:
+                return False
+            parsed_cols.append(col)
+        if parsed_cols != expected:
+            return False
+    return True
+
+
+def parquet_scan(paths: Sequence[str], *, partition_types: Mapping[str, str] | None = None) -> str:
     """``read_parquet`` over one table's files as a SQL expression.
 
-    Hive partitioning is off: a split table stores its partition column inside each file, so a path's ``col=value``
-    must not add a second one.
+    When ``partition_types`` declares a split table's partition columns and DuckDB types and every path ends
+    in matching ``<col>=<value>`` directories without extraneous ``=`` ancestors, Hive partitioning is enabled
+    with explicit ``hive_types`` so DuckDB prunes non-matching files before opening their Parquet footers
+    while keeping exact column order and types. Otherwise Hive partitioning stays off so a path's ``col=value``
+    never injects an unexpected or mis-typed column.
     """
     listed = ", ".join("'" + path.replace("'", "''") + "'" for path in paths)
+    if partition_types and _hive_paths_compatible(paths, partition_types):
+        typed = ", ".join(
+            f"'{col.replace(chr(39), chr(39) * 2)}': '{dtype.replace(chr(39), chr(39) * 2)}'"
+            for col, dtype in partition_types.items()
+        )
+        return f"read_parquet([{listed}], hive_partitioning = true, hive_types = {{{typed}}})"
     return f"read_parquet([{listed}], hive_partitioning = false)"
 
 

@@ -653,6 +653,11 @@
         "courts"
       ]
     },
+    "court-opinion-texts": {
+      "sources": [
+        "courts"
+      ]
+    },
     "court-opinions": {
       "sources": [
         "courts"

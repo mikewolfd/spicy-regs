@@ -747,6 +747,20 @@ class _RemoteSourceView(NamedTuple):
     select: str | None = None
     #: Skip on any read failure instead of refusing; the caller retracts the source's whole group.
     degrade: bool = False
+    #: Declared split-table partition columns mapped to their DuckDB types for Hive file pruning.
+    partition_types: dict[str, str] | None = None
+
+
+def _partition_types(published: Mapping[str, Any] | None) -> dict[str, str] | None:
+    """Declared partition column -> DuckDB type mapping for a published split table, preserving column order."""
+    if not published:
+        return None
+    partition_cols = published.get("partitionColumns")
+    if not partition_cols:
+        return None
+    col_types = {col: dtype for col, dtype in published.get("columns", ())}
+    resolved = {col: col_types[col] for col in partition_cols if col in col_types}
+    return resolved if len(resolved) == len(partition_cols) else None
 
 
 def _admit_remote_source_view(cursor, source: _RemoteSourceView) -> bool:
@@ -755,8 +769,13 @@ def _admit_remote_source_view(cursor, source: _RemoteSourceView) -> bool:
 
     try:
         with _diagnostic_phase("view_registration", source.name):
-            cursor.execute(f'CREATE VIEW "{source.name}" AS '
-                           + (source.select or f"SELECT * FROM {parquet_scan(source.urls)}"))
+            cursor.execute(
+                f'CREATE VIEW "{source.name}" AS '
+                + (
+                    source.select
+                    or f"SELECT * FROM {parquet_scan(source.urls, partition_types=source.partition_types)}"
+                )
+            )
         if source.columns is not None or source.required:
             with _diagnostic_phase("view_schema", source.name):
                 actual = cursor.execute(f'DESCRIBE "{source.name}"').fetchall()
@@ -1229,11 +1248,13 @@ def _build_connection_inputs(con, publication):
             urls = [str(path) for path in local.paths(name)]
         else:
             urls = [f"{R2_BASE_URL}/{path}" for path in paths]
+        partition_types = _partition_types(published)
         if local is None:
             remote_sources.append(_RemoteSourceView(
                 name, urls, published["columns"] if published is not None else None,
                 published is not None or pinned is not None,
                 published is None and pinned is None and name in COMMENTS_EXPORT_TABLES,
+                partition_types=partition_types,
             ))
             continue
         try:
@@ -1245,7 +1266,9 @@ def _build_connection_inputs(con, publication):
                 con.unregister("_empty_native")
             else:
                 with _diagnostic_phase("view_registration", name):
-                    con.execute(f'CREATE VIEW "{name}" AS SELECT * FROM {parquet_scan(urls)}')
+                    con.execute(
+                        f'CREATE VIEW "{name}" AS SELECT * FROM {parquet_scan(urls, partition_types=partition_types)}'
+                    )
             if published is not None:
                 with _diagnostic_phase("view_schema", name):
                     actual = con.execute(f'DESCRIBE "{name}"').fetchall()
