@@ -2357,7 +2357,7 @@ def _publish_verified_generation(
         try:
             written = _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag)
         except Exception as exc:
-            if not already_current:
+            if not exact_prior and not already_current:
                 try:
                     reread, _, reread_raw = _stored_index_with_raw(client, bucket)
                 except Exception:
@@ -2373,7 +2373,7 @@ def _publish_verified_generation(
             return _published(updated, raw, family, local)
         logger.info("publication: pointer moved concurrently; merging {} onto the reread index", family)
         index, etag, reread_raw = _stored_index_with_raw(client, bucket)
-        if reread_raw is not None and _generation_entry(index["families"].get(family)) == entry:
+        if not exact_prior and reread_raw is not None and _generation_entry(index["families"].get(family)) == entry:
             logger.warning(
                 "publication: pointer write for {} returned precondition conflict, but live {} already holds "
                 "this generation (lost acknowledgement reconciled)",

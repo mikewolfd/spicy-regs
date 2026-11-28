@@ -39,7 +39,10 @@ class NativeLegalReferencesRollup(LegislativeReceiptRollup):
 
     def invocation_scope(self) -> dict:
         scope = super().invocation_scope()
-        scope["native_legal_references"] = {"manifest_sha256": file_scope_digest(self.manifest)}
+        manifest = getattr(self, "manifest", None)
+        scope["native_legal_references"] = {
+            "manifest_sha256": file_scope_digest(manifest) if manifest is not None else None,
+        }
         return scope
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
