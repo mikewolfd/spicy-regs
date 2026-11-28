@@ -6,7 +6,7 @@
 
 Executive disclosure filing lookup for an explicitly selected public filing cohort.
 
-**Coverage.** Not a range. Published pilot cohort of selected archived White House Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part 6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md. *(measured 2026-11-13)*
+**Coverage.** Not a range. Explicitly selected publicly posted OGE Form 278e and 278-T packages from official White House archives and public OGE collections, excluding Form 201 agency-gated filings. Deterministic extraction covers qualified Form 278e Parts 2, 5, 6, and 7; amended, scanned, or unreviewed layouts remain lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md. *(measured 2026-11-28)*
 
 - **Parquet file:** `executive_disclosure_filings.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -22,26 +22,27 @@ Executive disclosure filing lookup for an explicitly selected public filing coho
 | `official_name` | `VARCHAR` | Filer name read from the exact original; not inferred from the nominated office. |
 | `position_raw` | `VARCHAR` | Position as printed on the reviewed source cover. |
 | `agency_raw` | `VARCHAR` | Agency as printed; an empty string is a blank source cell, not an inferred employing agency. |
-| `report_type` | `VARCHAR` | Literal report type from the source cover, independent of form type. |
-| `report_period_raw` | `VARCHAR` | Native annual reporting period as printed; not the release/filename year. |
-| `form_type` | `VARCHAR` | OGE form identifier; this reader qualifies only annual 278e Part 6, never 278-T. |
+| `report_type` | `VARCHAR` | Literal report type from the source cover (Annual, New Entrant, Nominee, Termination, Candidate, Periodic Transaction, or Amendment), independent of form type. |
+| `report_period_raw` | `VARCHAR` | Native reporting period as printed on the cover; not the release or filename year. |
+| `form_type` | `VARCHAR` | OGE form identifier (278e or 278-T); Form 278-T remains lookup-only until visually qualified. |
 | `filing_date` | `VARCHAR` | Actual receipt/filing date if evidenced; NULL when only the signature date is known. |
 | `filer_signed_date` | `VARCHAR` | Reviewed ISO calendar date of the filer signature; source cover retains the original handwriting. |
 | `agency_certification_date` | `VARCHAR` | Reviewed ISO date of agency certification, independent of signature and filing dates. |
-| `oge_certification_date` | `VARCHAR` | Reviewed ISO date of OGE certification; attached amendment certifications remain separately recorded. |
-| `metadata_review_ref` | `VARCHAR` | Reviewed original cover locator and retained image/checksum evidence for manually read metadata. |
-| `source_url` | `VARCHAR` | Official archived public PDF, retained independently of extracted facts. |
+| `oge_certification_date` | `VARCHAR` | Reviewed ISO date of OGE certification or native digital signature date; attached amendment certifications remain separately recorded. |
+| `metadata_review_ref` | `VARCHAR` | Reviewed original cover locator or native cover digest reference for filing metadata. |
+| `source_url` | `VARCHAR` | Official publicly posted PDF URL, retained independently of extracted facts. |
 | `source_sha256` | `VARCHAR` | Exact original PDF digest; reopen through CentralRawArchiveStore and verify before replay. |
 | `acquired_at` | `VARCHAR` | Original-response observation timestamp; not the report filing or certification date. |
 | `access_status` | `VARCHAR` | not_requested, requested, available, unavailable, expired or access_refused; none implies an empty filing. |
-| `access_basis` | `VARCHAR` | public_posting, form201_required, agency_request_required or human_attestation_required. Only public postings supported by this build. |
+| `access_basis` | `VARCHAR` | public_posting, form201_required, agency_request_required or human_attestation_required. Only public postings are replayed by this build. |
 | `access_reason` | `VARCHAR` | Observed access condition/outcome and its limitations. |
 | `access_evidence_ref` | `VARCHAR` | Retained acquisition or authoritative access-condition evidence reference. |
 | `amendment_status` | `VARCHAR` | none_observed_in_retained_document, included_unreconciled or unknown; no claim of global amendment completeness. |
 | `amendment_details_json` | `VARCHAR` | Ordered retained amendment observations, with section/page/date and unresolved interpretation. |
-| `facts_status` | `VARCHAR` | qualified_part6, unsupported or not_available; unsupported records retain their filing/evidence lookup. |
+| `facts_status` | `VARCHAR` | qualified_parts_2_5_6_7, qualified_partial, qualified_278t, unsupported or not_available; unsupported records retain their filing/evidence lookup. |
 | `facts_reason` | `VARCHAR` | Qualification limit or explicit refusal reason; not a statement that a filing contains no interests. |
-| `metadata_json` | `VARCHAR` | Exact reviewed metadata selection with its digest-bound source and review reference. |
-| `report_year` | `BIGINT` | Native annual-report year from the cover, distinct from filename/publication year. |
-| `byte_size` | `BIGINT` | Byte size. |
+| `metadata_json` | `VARCHAR` | Exact resolved filing metadata selection with its digest-bound source and review reference. |
+| `report_year` | `BIGINT` | Native report calendar year from the cover when stated (NULL when non-annual covers state only an appointment or filing date), distinct from filename or release year. |
+| `byte_size` | `BIGINT` | Exact byte size of the retained original PDF, or NULL when unavailable. |
 | `cover_page` | `BIGINT` | One-based original PDF cover page, after any attached amendment letter. |
+| `qualified_sections_json` | `VARCHAR` | JSON array of qualified section codes extracted for this filing (for example part2, part5, part6, part7), or empty array when unsupported or unavailable. |

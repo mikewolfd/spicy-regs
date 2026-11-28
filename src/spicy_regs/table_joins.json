@@ -5743,6 +5743,60 @@
       "floor_pct": null,
       "expected_cardinality": "one",
       "measurement": null
+    },
+    {
+      "child": "executive_disclosure_facts",
+      "child_columns": [
+        "filing_id"
+      ],
+      "parent": "executive_disclosure_filings",
+      "parent_columns": [
+        "filing_id"
+      ],
+      "kind": "unmeasured",
+      "reason": "Cohort-scoped executive disclosure filing identity. Local candidate resolution is checked by unit and dry-run verification; the shared publication has no measured multi-table baseline yet.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "executive_disclosure_transactions",
+      "child_columns": [
+        "filing_id"
+      ],
+      "parent": "executive_disclosure_filings",
+      "parent_columns": [
+        "filing_id"
+      ],
+      "kind": "unmeasured",
+      "reason": "Cohort-scoped executive disclosure filing identity. Local candidate resolution is checked by unit and dry-run verification; the shared publication has no measured multi-table baseline yet.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "executive_disclosure_pages",
+      "child_columns": [
+        "filing_id"
+      ],
+      "parent": "executive_disclosure_filings",
+      "parent_columns": [
+        "filing_id"
+      ],
+      "kind": "unmeasured",
+      "reason": "Cohort-scoped executive disclosure filing identity. Local candidate resolution is checked by unit and dry-run verification; the shared publication has no measured multi-table baseline yet.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
     }
   ],
   "processing_joins": [
@@ -11097,6 +11151,39 @@
         "parent_table": "house_disclosure_reports",
         "parent_columns": [
           "report_id"
+        ]
+      }
+    ],
+    "executive_disclosure_facts": [
+      {
+        "child_columns": [
+          "filing_id"
+        ],
+        "parent_table": "executive_disclosure_filings",
+        "parent_columns": [
+          "filing_id"
+        ]
+      }
+    ],
+    "executive_disclosure_transactions": [
+      {
+        "child_columns": [
+          "filing_id"
+        ],
+        "parent_table": "executive_disclosure_filings",
+        "parent_columns": [
+          "filing_id"
+        ]
+      }
+    ],
+    "executive_disclosure_pages": [
+      {
+        "child_columns": [
+          "filing_id"
+        ],
+        "parent_table": "executive_disclosure_filings",
+        "parent_columns": [
+          "filing_id"
         ]
       }
     ]

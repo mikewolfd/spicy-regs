@@ -2,11 +2,11 @@
 
 # `executive_disclosure_facts`
 
-**Executive disclosure supported Part 6 facts**
+**Executive disclosure Form 278e asset and income observations**
 
-Executive disclosure supported Part 6 facts for an explicitly selected public filing cohort.
+Executive disclosure Form 278e asset and income observations (Parts 2, 5, and 6) for an explicitly selected public filing cohort.
 
-**Coverage.** Not a range. Published pilot cohort of selected archived White House Kamala D. Harris annual packages released in 2021 and 2024 (native report years 2020 and 2023). Part 6 qualified only for the 2024 package; the amended 2021 package remains lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md. *(measured 2026-11-13)*
+**Coverage.** Not a range. Explicitly selected publicly posted OGE Form 278e packages from official White House archives and public OGE collections, excluding Form 201 agency-gated filings. Deterministic extraction covers qualified Form 278e Parts 2, 5, and 6; amended, scanned, or unreviewed layouts remain lookup-only. No complete executive, amendment, historical or personal-profile coverage. See docs/executive-disclosures.md. *(measured 2026-11-28)*
 
 - **Parquet file:** `executive_disclosure_facts.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -17,19 +17,19 @@ Executive disclosure supported Part 6 facts for an explicitly selected public fi
 | --- | --- | --- |
 | `cohort_id` | `VARCHAR` | Identity of the explicitly declared report cohort, with omissions stated in coverage_note. |
 | `filing_id` | `VARCHAR` | Reviewed report identity within the cohort; source versions remain separately pinned by source_sha256. |
-| `fact_id` | `VARCHAR` | Filing identity plus exact original digest, section and native row label; never a person profile key. |
-| `section` | `VARCHAR` | Qualified OGE section title; current support is Part 6: Other Assets and Income. |
+| `fact_id` | `VARCHAR` | Page-scoped observation identity ({filing_id}:{source_sha256}:{section_code}:p{page}:{row_number_raw}); never a person profile key. |
+| `section` | `VARCHAR` | Qualified OGE Form 278e section heading (Part 2, Part 5, or Part 6). |
 | `row_number_raw` | `VARCHAR` | Native source row label, preserving punctuation and subordinate labels such as 4.1. |
 | `description_raw` | `VARCHAR` | Literal source Description cell, including ownership prefixes and footnote references. |
-| `eif_raw` | `VARCHAR` | Literal excepted investment fund (EIF) designation, such as N/A or No; blank remains blank. |
+| `eif_raw` | `VARCHAR` | Literal excepted investment fund (EIF) designation, such as N/A, Yes, or No; blank remains blank. |
 | `value_raw` | `VARCHAR` | Literal reported value; empty string means a blank source cell. No point estimate or aggregate wealth. |
 | `income_type_raw` | `VARCHAR` | Literal reported income category; blank remains blank. |
-| `income_amount_raw` | `VARCHAR` | Literal income amount/range, with blank distinct from zero and from an absent filing. |
+| `income_amount_raw` | `VARCHAR` | Canonical literal income amount or statutory bracket coalesced across Form 278e revisions, with blank distinct from zero and from an absent filing. |
 | `ownership_label` | `VARCHAR` | Literal Self, Spouse or Joint prefix, when stated in Description; NULL when unstated. |
-| `value_status` | `VARCHAR` | range, blank or unrecognized; original text retained in value_raw. |
-| `income_status` | `VARCHAR` | range, blank or unrecognized; original text retained in income_amount_raw. |
-| `currency` | `VARCHAR` | USD only for recognized dollar ranges; NULL when neither cell supplies a qualified dollar range. |
-| `source_url` | `VARCHAR` | Official archived public PDF, retained independently of extracted facts. |
+| `value_status` | `VARCHAR` | Classification of value_raw as range, below_threshold, over_threshold, exact_amount, blank, or unrecognized; original text remains in value_raw. |
+| `income_status` | `VARCHAR` | Classification of income_amount_raw as range, below_threshold, over_threshold, exact_amount, blank, or unrecognized; original text remains in income_amount_raw. |
+| `currency` | `VARCHAR` | USD when value_status or income_status is a recognized USD bracket or exact amount; NULL otherwise. |
+| `source_url` | `VARCHAR` | Official publicly posted PDF URL, retained independently of extracted facts. |
 | `source_sha256` | `VARCHAR` | Exact original PDF digest; reopen through CentralRawArchiveStore and verify before replay. |
 | `source_locator` | `VARCHAR` | One-based original PDF page fragment; append to source_url to inspect the original. |
 | `parser_revision` | `VARCHAR` | Source-specific interpretation rule revision; retained with backend version for replay. |
@@ -37,7 +37,10 @@ Executive disclosure supported Part 6 facts for an explicitly selected public fi
 | `raw_cells_json` | `VARCHAR` | Ordered source table cells including blanks, NULL merged cells and original text. |
 | `cell_boxes_json` | `VARCHAR` | Original table cell coordinates for bounded visual reconciliation. |
 | `page` | `BIGINT` | One-based page in the exact original PDF, including any prefixed amendment pages. |
-| `value_lower` | `BIGINT` | Inclusive USD lower bound only when value_status is range; NULL otherwise. |
-| `value_upper` | `BIGINT` | Inclusive USD upper bound only when value_status is range; NULL otherwise. |
-| `income_lower` | `BIGINT` | Inclusive USD lower bound only when income_status is range; NULL otherwise. |
-| `income_upper` | `BIGINT` | Inclusive USD upper bound only when income_status is range; NULL otherwise. |
+| `value_lower` | `BIGINT` | USD lower bound when value_status is range, below_threshold (0), or over_threshold (exclusive lower bound); NULL for exact_amount, blank, or unrecognized. |
+| `value_upper` | `BIGINT` | Inclusive USD upper bound when value_status is range or below_threshold; NULL for over_threshold, exact_amount, blank, or unrecognized. |
+| `income_lower` | `BIGINT` | USD lower bound when income_status is range, below_threshold (0), or over_threshold (exclusive lower bound); NULL for exact_amount, blank, or unrecognized. |
+| `income_upper` | `BIGINT` | Inclusive USD upper bound when income_status is range or below_threshold; NULL for over_threshold, exact_amount, blank, or unrecognized. |
+| `section_code` | `VARCHAR` | Canonical section code (part2, part5, or part6) for deterministic filtering and keying. |
+| `value_exact_usd` | `VARCHAR` | Exact printed USD decimal string (for example 234.13 or 8254) when value_status is exact_amount, preserving cents without integer truncation; NULL otherwise. |
+| `income_exact_usd` | `VARCHAR` | Exact printed USD decimal string (for example 234.13 or 8254) when income_status is exact_amount, preserving cents without integer truncation; NULL otherwise. |

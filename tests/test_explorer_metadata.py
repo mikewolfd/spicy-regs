@@ -835,7 +835,7 @@ def test_wave_b_disclosure_tables_resolve_sources_and_drop_local_candidate_copy(
     from spicy_regs.transforms.build_executive_disclosures import SCHEMAS as executive_schemas
 
     assert len(house_schemas) == 5
-    assert len(executive_schemas) == 3
+    assert len(executive_schemas) == 4
     scopes = [
         ("house-disclosures", house_schemas, "house-disclosures", "https://disclosures-clerk.house.gov/"),
         ("executive-disclosures", executive_schemas, "executive-disclosures",

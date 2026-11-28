@@ -1928,8 +1928,8 @@
     {
       "id": "family:executive-disclosures",
       "title": "Selected public Executive disclosure filings",
-      "publisher": "Archived White House; U.S. Office of Government Ethics access guidance",
-      "description": "Explicit public archived Harris annual packages released in 2021 and 2024, native report years 2020 and 2023. Local filing lookup and 2024 Part 6 qualification only; amended 2021 package remains lookup-only. No complete executive coverage or public publication established. Refused locator probes and guidance responses remain separate from available filings.",
+      "publisher": "Archived White House; U.S. Office of Government Ethics public disclosure collections",
+      "description": "Explicitly selected publicly posted OGE Form 278e and 278-T executive disclosure cohorts from official White House archives and publicly posted OGE collections (excluding Form 201 agency-gated filings). Extracts qualified Form 278e Parts 2, 5, and 6 asset/income facts, Part 7 transactions, and interpreted pages with endnotes from digest-pinned PDFs; amended or scanned packages remain lookup-only. Refused locator probes and guidance responses remain separate from available filings.",
       "source_names": [
         "executive-disclosures"
       ],
@@ -1939,6 +1939,7 @@
       "tables": [
         "executive_disclosure_filings",
         "executive_disclosure_facts",
+        "executive_disclosure_transactions",
         "executive_disclosure_pages"
       ],
       "source_urls": [

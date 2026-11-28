@@ -382,10 +382,10 @@
     },
     "executive-disclosures": {
       "id": "executive-disclosures",
-      "name": "Archived White House / OGE Public Financial Disclosures (Form 278e)",
+      "name": "Archived White House / OGE Public Financial Disclosures (Form 278e / 278-T)",
       "url": "https://www.oge.gov/web/OGE.nsf/publicresources_disclosure-faq",
       "kind": "government",
-      "note": "Explicitly selected publicly posted archived White House OGE Form 278e annual packages (Kamala D. Harris 2021 and 2024 releases). Part 6 is qualified for the 2024 package only; the amended 2021 package remains lookup-only. Not complete executive or person-profile coverage."
+      "note": "Explicitly selected publicly posted OGE Form 278e and 278-T disclosures from official White House archives and publicly posted OGE collections, excluding Form 201 agency-gated filings. Deterministic parsing extracts qualified Form 278e Parts 2, 5, 6 (assets and income) and Part 7 (transactions) with exact PDF page/cell locators, literal statutory brackets, and exact dollar amounts; amended or scanned filings remain lookup-only. Not complete executive or person-profile coverage."
     },
     "cms-nppes": {
       "id": "cms-nppes",
@@ -946,7 +946,7 @@
       "sources": [
         "executive-disclosures"
       ],
-      "transformation": "Retains selected publicly posted archived White House OGE Form 278e filings, qualified Part 6 observations, and page/slot reconciliation from digest-pinned PDFs without inferring person profiles or net wealth.",
+      "transformation": "Retains selected publicly posted OGE Form 278e/278-T filings, qualified Form 278e Parts 2/5/6 asset and income observations, Part 7 securities transactions, and page/endnote reconciliation from digest-pinned PDFs without paid OCR, Form 201 requests, person profiles, or net-wealth estimates.",
       "evidence": "src/spicy_regs/pipelines/executive_disclosures.py"
     },
     "nppes-providers": {

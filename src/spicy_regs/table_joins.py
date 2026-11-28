@@ -1126,6 +1126,26 @@ JOINS += tuple(
     )
 )
 
+JOINS += tuple(
+    _join(
+        child,
+        "filing_id",
+        "executive_disclosure_filings",
+        "filing_id",
+        0,
+        0,
+        "unmeasured",
+        "Cohort-scoped executive disclosure filing identity. Local candidate resolution is checked by unit "
+        "and dry-run verification; the shared publication has no measured multi-table baseline yet.",
+        expected_cardinality="one",
+    )
+    for child in (
+        "executive_disclosure_facts",
+        "executive_disclosure_transactions",
+        "executive_disclosure_pages",
+    )
+)
+
 # New full-key/attribute baselines include raw-row cardinality and immutable input
 # URLs. Keep historical declarations above as lineage; replace their measured
 # values only from the replayable complete-input receipt.
