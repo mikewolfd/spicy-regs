@@ -116,7 +116,11 @@ def test_aggregate_null_coordinates_do_not_merge_with_literal_strings(tmp_path):
     assert len({r["record_id"] for r in pq.read_table(selected.receipts).to_pylist()}) == 2
 
 
-def test_local_generation_admits_receipts_separately_from_domain_tables(tmp_path):
+def test_local_generation_admits_receipts_separately_from_domain_tables(tmp_path, monkeypatch):
+    from spicy_regs import subject_catalog
+
+    retired = subject_catalog.retired_receipt_datasets() - {"documents"}
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
     source = tmp_path / "held.parquet"
     pq.write_table(pa.table({"document_id": ["D"], "modify_date": ["2026-01-01"]}), source)
     artifact = build_local_generation({"documents": source}, tmp_path / "generation", generation_id="g")
@@ -701,76 +705,6 @@ def test_retry_checkpoint_receipts_preserve_empty_retirement_and_wrong_generatio
     cleared = restored.save_receipts(tmp_path / "cleared", context("g2"))
     assert read_checkpoint("failed_keys", cleared, generation_id="g2") == []
     assert pq.read_table(cleared)["outcome"].to_pylist() == ["observed"]
-
-
-def test_attribute_selection_keeps_every_copy_and_same_volatile_tie_choice(tmp_path, monkeypatch):
-    from datetime import UTC, datetime
-    from spicy_docs.sources.mirrulations import KeyedPayload
-    from spicy_regs import subject_catalog
-    from spicy_regs.etl_receipts import read_attempts
-    from spicy_regs.transforms.regulations_attributes import TeeAttributes, merge_attribute_parts
-    from spicy_regs.transforms.regulations_attribute_receipts import build_attribute_generation
-
-    retired = subject_catalog.retired_receipt_datasets() - {"document_attributes"}
-    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
-
-    copies = [
-        {
-            "data": {
-                "id": "D",
-                "type": "documents",
-                "attributes": {
-                    "modifyDate": "2026-01-01",
-                    "openForComment": flag,
-                    "pageCount": 4,
-                    "topics": ["Air", "Air"],
-                    "displayProperties": [{"name": "x", "label": "Display"}],
-                },
-            }
-        }
-        for flag in [True, False, False]
-    ]
-    times = [1_000_000, 1_000_030, 1_004_000]
-    keyed = [
-        KeyedPayload(str(i), datetime.fromtimestamp(t, UTC), p)
-        for i, (p, t) in enumerate(zip(copies, times, strict=True))
-    ]
-    list(TeeAttributes("document_attributes", tmp_path / "legacy").apply(keyed))
-    legacy = tmp_path / "selected.parquet"
-    merge_attribute_parts("document_attributes", tmp_path / "legacy/document_attributes", None, legacy)
-    prior = write(tmp_path, "document_attributes", [{"document_id": "carried", "page_count": 7}], label="prior")
-    invalid = {"data": {"id": "invalid", "attributes": {"pageCount": "wrong"}}}
-    inputs: list[tuple[dict, ReceiptContext, int | None]] = [(p, context("g2", str(i)), t) for i, (p, t) in enumerate(zip(copies, times, strict=True))]
-    inputs.append((invalid, context("g2", "invalid"), None))
-    target = tmp_path / "generation"
-    build_attribute_generation("document_attributes", inputs, target, scan_context=context("g2", "scan"), prior=prior)
-    selected = ReceiptInput(
-        "document_attributes", (target / "document_attributes.parquet",), target / "etl_receipts.parquet", "g2"
-    )
-    restored = {r["document_id"]: r for r in read_internal(selected)}
-    assert restored["D"] == pq.read_table(legacy).to_pylist()[0]
-    assert restored["carried"]["page_count"] == 7
-    assert restored["D"]["topics"] == ["Air", "Air"]
-    attempts = list(read_attempts([selected.receipts], policy("document_attributes"), generation_id="g2"))
-    copies_held = [a for a in attempts if a["outcome"] == "observed" and "raw_source_record" in a["processing_fields"]]
-    assert [a["processing_fields"]["raw_source_record"] for a in copies_held] == copies
-    assert [a["processing_fields"]["raw_conversion_inputs"]["_written_at"] for a in copies_held] == times
-    assert sum(a["outcome"] == "refused" for a in attempts) == 1
-    assert not any(c.startswith("_") for c in pq.read_schema(selected.subjects[0]).names)
-
-
-def test_attribute_successful_empty_scan_has_receipt_without_a_subject(tmp_path, monkeypatch):
-    from spicy_regs import subject_catalog
-    from spicy_regs.transforms.regulations_attribute_receipts import build_attribute_generation
-
-    retired = subject_catalog.retired_receipt_datasets() - {"docket_attributes"}
-    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
-
-    target = tmp_path / "generation"
-    build_attribute_generation("docket_attributes", [], target, scan_context=context("g2", "empty"))
-    assert pq.read_table(target / "docket_attributes.parquet").num_rows == 0
-    [attempt] = pq.read_table(target / "etl_receipts.parquet").to_pylist()
-    assert attempt["outcome"] == "observed"
 
 
 @pytest.mark.parametrize('dataset,original,altered', [

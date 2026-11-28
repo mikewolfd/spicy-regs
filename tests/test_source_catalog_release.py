@@ -103,6 +103,9 @@ def test_registered_release_policy_matches_final_producer(dataset):
 RETIRED_RELEASE_DATASETS = (
     "administration_policy_bill_links",
     "administration_policy_statements",
+    "ecfr_snapshot_sections",
+    "ecfr_snapshots",
+    "federal_register_issues",
     "uscode_edition_structure",
     "uscode_editions",
     "uscode_edition_sections",

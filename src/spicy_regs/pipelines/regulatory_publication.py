@@ -33,7 +33,7 @@ def restore_dataset(root: Path, dataset: str, destination: Path, *, index=None, 
         selected = inputs.select(dataset)
         if selected is None:
             return False
-        if dataset in retired_receipt_datasets() and dataset != 'documents':
+        if dataset in retired_receipt_datasets():
             published_as_source(dataset, selected.subjects, destination)
             return True
         receipts = selected.required_receipts("the regulatory restore")
@@ -126,13 +126,17 @@ def _finish_retired_dataset(root: Path, dataset: str, source: Path, directory: P
     from spicy_regs import etl_bulk
     from spicy_regs.native_types import described_schema
     from spicy_regs.transforms.regulations_receipts import CARRY_DATASETS, policy, write_held_dataset
+    from spicy_regs.transforms.regulations_shape import _own_metadata
 
     declared = policy(dataset)
+    kept_metadata = _own_metadata(pq.read_schema(source))
     root.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(dir=root, prefix='.retired-write-') as temporary:
         work = Path(temporary)
-        subjects, receipts = write_held_dataset(dataset, source, work / 'check', generation_id=uuid4().hex,
-                                                bulk=True, validate=False)
+        subjects, receipts = write_held_dataset(
+            dataset, source, work / 'check', generation_id=uuid4().hex,
+            bulk=True, validate=False, subject_metadata=kept_metadata or None,
+        )
         if dataset not in CARRY_DATASETS:
             _refuse_refusals(dataset, receipts)
         rows = pq.ParquetFile(subjects).metadata.num_rows

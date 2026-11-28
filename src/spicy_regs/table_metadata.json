@@ -52675,42 +52675,6 @@
         ]
       },
       {
-        "dataset": "documents",
-        "receipt_only": false,
-        "policy_version": "regulations-native-v2",
-        "identity_columns": [
-          "document_id"
-        ],
-        "processing_fields": [
-          "raw_conversion_inputs",
-          "input_metadata",
-          "raw_source_record"
-        ]
-      },
-      {
-        "dataset": "ecfr_snapshot_sections",
-        "receipt_only": false,
-        "policy_version": "historical-regulations-public-v2",
-        "identity_columns": [
-          "snapshot_id",
-          "xml_position"
-        ],
-        "processing_fields": [
-          "selection_metadata"
-        ]
-      },
-      {
-        "dataset": "ecfr_snapshots",
-        "receipt_only": false,
-        "policy_version": "historical-regulations-public-v2",
-        "identity_columns": [
-          "snapshot_id"
-        ],
-        "processing_fields": [
-          "selection_metadata"
-        ]
-      },
-      {
         "dataset": "fcc_filings",
         "receipt_only": false,
         "policy_version": "government-sources/3",
@@ -52776,17 +52740,6 @@
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
-        ]
-      },
-      {
-        "dataset": "federal_register_issues",
-        "receipt_only": false,
-        "policy_version": "historical-regulations-public-v2",
-        "identity_columns": [
-          "issue_observation_id"
-        ],
-        "processing_fields": [
-          "selection_metadata"
         ]
       },
       {

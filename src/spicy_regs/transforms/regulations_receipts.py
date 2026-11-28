@@ -526,6 +526,20 @@ def write_records(
         return subject, receipts
 
 
+def _stamp_subject_metadata(subject: Path, subject_metadata: Mapping[str, str]) -> None:
+    """Attach custom file-level Parquet metadata to a written subject file without altering its rows or types."""
+    source = pq.ParquetFile(subject)
+    schema = source.schema_arrow.with_metadata(
+        {**(source.schema_arrow.metadata or {}), **{k.encode("utf-8"): v.encode("utf-8") for k, v in subject_metadata.items()}}
+    )
+    staged = subject.with_name(f".{subject.name}.meta")
+    with pq.ParquetWriter(staged, schema, compression="zstd") as writer:
+        for index in range(source.metadata.num_row_groups):
+            group = source.read_row_group(index).replace_schema_metadata(schema.metadata)
+            writer.write_table(group, row_group_size=max(group.num_rows, 1))
+    staged.replace(subject)
+
+
 def write_held_dataset(
     dataset: str,
     source: Path,
@@ -538,6 +552,7 @@ def write_held_dataset(
     prior_receipts: Sequence[Path] = (),
     bulk: bool = False,
     validate: bool = True,
+    subject_metadata: Mapping[str, str] | None = None,
 ) -> tuple[Path, Path]:
     """Convert retained rows with witnesses to their exact receipt-held input.
 
@@ -554,7 +569,7 @@ def write_held_dataset(
             return regulations_bulk.write_held_dataset(
                 dataset, source, destination, generation_id=generation_id, processor=processor,
                 witnesses=witnesses, include_source_witness=include_source_witness, prior_receipts=prior_receipts,
-                validate=validate,
+                validate=validate, subject_metadata=subject_metadata,
             )
         except etl_bulk.NotBulkEligible as error:
             etl_bulk.log_row_fallback("regulatory write", error, dataset=dataset,
@@ -603,8 +618,13 @@ def write_held_dataset(
         ([input_witness] if include_source_witness else []) + list(witnesses),
         {"kind": "input_file_metadata", "rows": parquet.metadata.num_rows},
     )
-    return write_records(dataset, records(), destination, input_metadata=metadata, observation_context=observed,
-                         prior_receipts=prior_receipts, validate=validate)
+    subject, receipts = write_records(
+        dataset, records(), destination, input_metadata=metadata, observation_context=observed,
+        prior_receipts=prior_receipts, validate=validate,
+    )
+    if subject_metadata:
+        _stamp_subject_metadata(subject, subject_metadata)
+    return subject, receipts
 
 
 def build_local_generation(

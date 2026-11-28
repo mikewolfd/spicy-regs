@@ -79,8 +79,10 @@ jobs:
           R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
           DATA_GOV_API_KEY: ${{ secrets.DATA_GOV_API_KEY }}
         run: uv run --frozen fill-docket-gaps --no-skip-upload
-  # Publish the ETL's finished dockets/documents as managed families before the
-  # mirror captures base versions, so every dependent reads this sweep's snapshot.
+  # Apply any newer Regulations.gov reconciliation outcomes to the documents
+  # family before the mirror and derived rollups capture base versions. The
+  # other base tables (dockets and the three attribute tables) publish directly
+  # from the ETL without per-row receipts (ss-vse3, ss-ojz3).
   base-families:
     needs: docket-gaps
     if: ${{ !cancelled() && inputs.debugger_mode == 'off' && !inputs.promote_v1 && !inputs.comments_only }}
@@ -88,21 +90,14 @@ jobs:
       fail-fast: false
       matrix:
         command:
-          - run-rollup-dockets
           - run-rollup-documents
-          - run-rollup-docket-attributes
-          - run-rollup-document-attributes
     uses: ./.github/workflows/_rollup.yml
     secrets: inherit
     with:
       command: ${{ matrix.command }}
       require_bulk: true
       skip_upload: ${{ inputs.skip_upload }}
-      # document-attributes rewrites 2.0M receipts and was cancelled at 30 minutes on its first hosted
-      # refresh (run 42769233858, 2026-11-10),
-      # which skipped the mirror; documents took 12 minutes and docket-attributes 7 there, so 90 for it
-      # and 30 for the other three (ss-ag8i).
-      timeout_minutes: ${{ matrix.command == 'run-rollup-document-attributes' && 90 || 30 }}
+      timeout_minutes: 30
   mirror:
     needs: base-families
     if: ${{ !cancelled() && (needs.base-families.result == 'success' || inputs.promote_v1 || inputs.comments_only || inputs.debugger_mode != 'off') }}

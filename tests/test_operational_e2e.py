@@ -216,9 +216,9 @@ def test_prepared_d_cfr_runs_preflight_then_semantic_offline(tmp_path):
 
 
 def test_court_qualification_under_runner_then_explicit_continuation(tmp_path, installed_httpfs):
-    # Documents: dockets, court_opinions, and the Register publish without receipts (ss-vse3), so their replay into
-    # receipts is refused.
-    plan, _, source = selected_plan(tmp_path, "documents")
+    # court_dockets: documents, dockets, court_opinions, and the Register publish without receipts (ss-vse3), so their
+    # replay into receipts is refused.
+    plan, _, source = selected_plan(tmp_path, "court_dockets")
     code = f"""
 from pathlib import Path
 from scripts import qualify_retained_population as q
@@ -299,8 +299,8 @@ q.audit_candidates(Path({str(plan)!r}), Path({str(tmp_path / "observed/candidate
     root = Path(request["run_root"])
     completion = runner.read_json(root / "build-completion.json")
     links = sorted(row["path"] for row in completion["files"] if "link" in row)
-    # The court receipt route exposed its outputs as links into their bundles; the documents' are plain files.
-    assert links == []
+    # The court receipt route exposes its outputs as links into their bundles.
+    assert links == ["current/court_dockets.parquet", "selected-prior/court_dockets.parquet"]
     assert runner.read_json(root / "output/audit/RESULT.json")["status"] == "passed"
     before = runner.census(root)
     second = continuation(request_path, tmp_path, root, "q-run2")

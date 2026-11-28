@@ -610,11 +610,7 @@ def test_senate_expenditures_retains_discovery_and_granule_without_the_key(tmp_p
 # --------------------------------------------------------------------------- #
 _UNWIRED = "not wired yet: T18 queue (open-work-investigation-2026-09-26/evidence-partials.md)"
 EVIDENCE_EXEMPT = {
-    "DocketsFamily": "republishes the ETL's own working copy; the ETL's Mirrulations reads are the source reads",
     "DocumentsFamily": "republishes the ETL's own working copy; the ETL's Mirrulations reads are the source reads",
-    "DocketAttributesFamily": "republishes the ETL's own working copy; the ETL's Mirrulations reads are the source reads",
-    "DocumentAttributesFamily": "republishes the ETL's own working copy; the ETL's Mirrulations reads are the source reads",
-    "CommentAttributesFamily": "republishes the working copy the comment re-read and the ETL's Mirrulations reads write",
     "CfrSectionsRollup": _UNWIRED,
     "FecCommitteesRollup": _UNWIRED + "; its captures live only as an expiring workflow artifact",
     "FecSourceCatalogRollup": _UNWIRED,

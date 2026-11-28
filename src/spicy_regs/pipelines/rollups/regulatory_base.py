@@ -1,25 +1,27 @@
-"""Republish selected native regulatory subjects with their exact shared receipts.
+"""Apply Regulations.gov reconciliation observations to the published documents table.
 
-Scheduled refresh jobs preserve the selected generation's source evidence while
-rebinding receipts to the newly sealed generation. No bare processing copy is a
-publication input. A table whose receipts are retired has nothing to rebind:
-the ETL's generation stands, and its family publishes nothing.
+All five base regulatory families (``dockets``, ``documents``, and the three
+attribute tables) publish directly from the ETL without per-row receipts
+(ss-vse3, ss-ojz3). Only ``documents`` keeps a scheduled refresh step, because
+``reconcile-dockets`` updates ``docket_reconcile_outcomes.parquet`` on its own
+schedule between ETL sweeps. The applied outcomes SHA-256 is recorded in
+``documents.parquet``'s Arrow schema metadata so unchanged runs skip cleanly.
 """
 
+from __future__ import annotations
+
+import shutil
 from pathlib import Path
 from typing import ClassVar
 
 import duckdb
 import pyarrow.parquet as pq
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, Unchanged, make_rollup_app
-from spicy_regs.schemas.regulations import RECORD_TYPES
-from spicy_regs.etl_receipts import select_receipts, rebind_receipt, RECEIPT_SCHEMA
-from spicy_regs.transforms.parquet_rows import write_rows
-from spicy_regs.transforms.regulations_receipts import policy, write_held_dataset
 from spicy_regs.native_types import described_schema
+from spicy_regs.pipelines.rollups.base import RollupPipeline, Unchanged, make_rollup_app
 from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
-import shutil
+from spicy_regs.schemas.regulations import RECORD_TYPES
+from spicy_regs.transforms.regulations_receipts import policy
 
 
 #: DocSpec admits a member by reference only when every row group is at most
@@ -29,130 +31,70 @@ import shutil
 MAX_ROW_GROUP_BYTES = 256 * 2**20
 
 
-class _BaseTableFamily(RollupPipeline):
-    """Publish the ETL's completed working copy of one base table."""
-
-    def key(self) -> str:
-        """The column every row must carry once."""
-        return RECORD_TYPES[self.name].dedup_key
-
-    def generation_schemas(self):
-        dataset = self.output.removesuffix(".parquet")
-        return {dataset: described_schema(policy(dataset).subject_schema)}
-
-    def build(self, output_dir: Path) -> Path:
-        from spicy_regs.subject_catalog import retired_receipt_datasets
-
-        path = output_dir / self.output
-        dataset = self.output.removesuffix(".parquet")
-        if dataset in retired_receipt_datasets() and type(self).annotate is _BaseTableFamily.annotate:
-            # The ETL publishes this table without receipts (ss-vse3); a republish would only copy it, or, while the
-            # live generation still has receipts, state them again, which admission refuses.
-            raise Unchanged(f"{dataset} publishes without receipts: the ETL's generation is the family's own")
-        selected = SelectedPriors(output_dir / ".selected")
-        processing = selected.get(dataset)
-        if processing is None:
-            raise RuntimeError(f"{self.output}: no selected native generation to publish")
-        subjects, receipts, _ = selected.selections[dataset]
-        if receipts is None:
-            raise ValueError(f"{dataset} has retired receipts; the base regulatory family still reads them")
-        if len(subjects) != 1:
-            raise ValueError("Base regulatory family requires one subject member")
-        scoped = select_receipts(receipts, output_dir / ".selected-receipts.parquet", dataset=dataset)
-        if type(self).annotate is not _BaseTableFamily.annotate:
-            source = output_dir / ".annotated-input.parquet"
-            shutil.copyfile(processing, source)
-            witnesses = self.annotate(source)
-            subject, rewritten_receipts = write_held_dataset(
-                dataset, source, output_dir / ".annotated-native", generation_id=self.receipt_generation_id,
-                witnesses=witnesses, prior_receipts=[scoped],
-                bulk=dataset in {"dockets", "documents"},
-            )
-            shutil.copyfile(subject, path)
-            shutil.copyfile(rewritten_receipts, output_dir / "etl_receipts.parquet")
-        else:
-            shutil.copyfile(subjects[0], path)
-            write_rows(
-                (
-                    rebind_receipt(row, generation_id=self.receipt_generation_id)
-                    for batch in pq.ParquetFile(scoped).iter_batches()
-                    for row in batch.to_pylist()
-                ),
-                output_dir / "etl_receipts.parquet",
-                RECEIPT_SCHEMA,
-            )
-        self.validate_native_output(path)
-        return path
-
-    def validate_native_output(self, path: Path) -> None:
-        """Apply the maintained base-family identity and row-group admission checks."""
-        type(self).receipt_policies = (policy(self.output.removesuffix(".parquet")),)
-        key = self.key()
-        rows, distinct, missing = (
-            duckdb.connect()
-            .from_parquet(str(path))
-            .aggregate(f"count(*), count(DISTINCT {key}), count(*) FILTER (WHERE {key} IS NULL)")
-            .fetchall()[0]
-        )
-        if missing or distinct != rows:
-            raise RuntimeError(f"{self.output}: {missing} rows lack {key} and {rows - missing - distinct} repeat one")
-        metadata = pq.ParquetFile(path).metadata
-        largest = max((metadata.row_group(i).total_byte_size for i in range(metadata.num_row_groups)), default=0)
-        if largest > MAX_ROW_GROUP_BYTES:
-            raise RuntimeError(f"{self.output}: a {largest / 2**20:.1f} MiB row group exceeds the admission bound")
-
-    def annotate(self, path: Path) -> tuple[dict, ...]:
-        """Read extra source observations before native subjects and receipts are sealed."""
-        return ()
+def validate_base_table_output(path: Path, *, key: str) -> None:
+    """Apply the maintained base-family identity and row-group admission checks."""
+    rows, distinct, missing = (
+        duckdb.connect()
+        .from_parquet(str(path))
+        .aggregate(f"count(*), count(DISTINCT {key}), count(*) FILTER (WHERE {key} IS NULL)")
+        .fetchall()[0]
+    )
+    if missing or distinct != rows:
+        raise RuntimeError(f"{path.name}: {missing} rows lack {key} and {rows - missing - distinct} repeat one")
+    metadata = pq.ParquetFile(path).metadata
+    largest = max((metadata.row_group(i).total_byte_size for i in range(metadata.num_row_groups)), default=0)
+    if largest > MAX_ROW_GROUP_BYTES:
+        raise RuntimeError(f"{path.name}: a {largest / 2**20:.1f} MiB row group exceeds the admission bound")
 
 
-class DocketsFamily(_BaseTableFamily):
-    name: ClassVar[str] = "dockets"
-    output: ClassVar[str] = "dockets.parquet"
-
-
-class DocumentsFamily(_BaseTableFamily):
+class DocumentsFamily(RollupPipeline):
     """The ETL's documents, each with what Regulations.gov last said of it (``pipelines.docket_reconcile``)."""
 
     name: ClassVar[str] = "documents"
     output: ClassVar[str] = "documents.parquet"
 
+    def generation_schemas(self):
+        return {"documents": described_schema(policy("documents").subject_schema)}
+
     def build(self, output_dir: Path) -> Path:
-        import pyarrow.dataset as ds
-
-        from spicy_regs.pipelines.docket_reconcile import OUTCOMES, RECONCILE_SOURCE_ID, fetch_outcomes
+        from spicy_regs.pipelines.docket_reconcile import (
+            OUTCOMES,
+            fetch_outcomes,
+            read_reconcile_outcomes_sha256,
+        )
         from spicy_regs.schemas.regulations import DOCUMENT_FAMILY_COLUMNS
+        from spicy_regs.subject_catalog import retired_receipt_datasets
 
+        if "documents" not in retired_receipt_datasets():
+            raise ValueError(
+                "DocumentsFamily: documents still publishes receipts; mark its policy "
+                "receipts_retired before it publishes without them"
+            )
         selected = SelectedPriors(output_dir / ".selected")
         selection = selected.select("documents")
         if selection is None:
             raise RuntimeError(f"{self.output}: no selected native generation to publish")
-        if selection.receipts is None:
-            raise ValueError("documents has retired receipts; the base regulatory family still reads them")
+        if len(selection.subjects) != 1:
+            raise ValueError("Documents family requires one subject member")
+        subject = selection.subjects[0]
         fetched = fetch_outcomes(output_dir / OUTCOMES)
         if fetched is None:
-            if all(
-                col in pq.read_schema(subject).names
-                for subject in selection.subjects
-                for col in DOCUMENT_FAMILY_COLUMNS
-            ):
+            if all(col in pq.read_schema(subject).names for col in DOCUMENT_FAMILY_COLUMNS):
                 raise Unchanged("no docket_reconcile_outcomes.parquet to apply; the selected documents generation stands")
-        else:
-            table = ds.dataset(selection.receipts, format="parquet").to_table(
-                columns=["witnesses"],
-                filter=(ds.field("dataset") == "documents") & (ds.field("outcome") == "observed"),
-            )
-            if any(
-                witness.get("source_id") == RECONCILE_SOURCE_ID and witness.get("sha256") == fetched[1]
-                for row in table["witnesses"].to_pylist()
-                for witness in (row or ())
-            ):
-                raise Unchanged("documents already carries the current docket_reconcile_outcomes")
+        elif read_reconcile_outcomes_sha256(subject) == fetched[1]:
+            raise Unchanged("documents already carries the current docket_reconcile_outcomes")
+
+        path = output_dir / self.output
+        shutil.copyfile(subject, path)
         self._prefetched_outcomes = fetched
         try:
-            return super().build(output_dir)
+            self.annotate(path)
         finally:
             self._prefetched_outcomes = None
+        if not pq.read_schema(path).remove_metadata().equals(policy("documents").subject_schema):
+            raise RuntimeError(f"{self.output}: annotated schema differs from the documents policy schema")
+        validate_base_table_output(path, key=RECORD_TYPES["documents"].dedup_key)
+        return path
 
     def annotate(self, path: Path) -> tuple[dict, ...]:
         from spicy_regs.pipelines.docket_reconcile import annotate_documents
@@ -160,33 +102,4 @@ class DocumentsFamily(_BaseTableFamily):
         return annotate_documents(path, prefetched=getattr(self, "_prefetched_outcomes", None))
 
 
-class _AttributesFamily(_BaseTableFamily):
-    def key(self) -> str:
-        from spicy_regs.transforms.regulations_attributes import contract
-
-        (identity,) = contract(self.output.removesuffix(".parquet")).identity
-        return identity
-
-
-class DocketAttributesFamily(_AttributesFamily):
-    name: ClassVar[str] = "docket-attributes"
-    output: ClassVar[str] = "docket_attributes.parquet"
-
-
-class DocumentAttributesFamily(_AttributesFamily):
-    name: ClassVar[str] = "document-attributes"
-    output: ClassVar[str] = "document_attributes.parquet"
-
-
-class CommentAttributesFamily(_AttributesFamily):
-    """Seeded by the comment re-read (``fill-comment-fields attributes``), then kept by the ETL's comment passes."""
-
-    name: ClassVar[str] = "comment-attributes"
-    output: ClassVar[str] = "comment_attributes.parquet"
-
-
-dockets_app = make_rollup_app(DocketsFamily)
 documents_app = make_rollup_app(DocumentsFamily)
-docket_attributes_app = make_rollup_app(DocketAttributesFamily)
-document_attributes_app = make_rollup_app(DocumentAttributesFamily)
-comment_attributes_app = make_rollup_app(CommentAttributesFamily)

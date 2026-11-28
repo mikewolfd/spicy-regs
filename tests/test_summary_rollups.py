@@ -28,7 +28,6 @@ from spicy_regs.pipelines.rollups.agency_stats import AgencyStatsRollup
 from spicy_regs.pipelines.rollups.base import RollupPipeline
 from spicy_regs.pipelines.rollups.discovery_signals import DiscoverySignalsRollup
 from spicy_regs.pipelines.rollups.feed_summary import FeedSummaryRollup
-from spicy_regs.pipelines.rollups.regulatory_base import _BaseTableFamily
 from spicy_regs.sources import publication as pub
 from spicy_regs.sources import r2
 from spicy_regs.transforms.regulations_receipts import PARENT_PINNED_SUMMARIES
@@ -158,15 +157,6 @@ def test_the_summaries_are_the_four_named_and_none_has_an_installed_policy():
     assert not PARENT_PINNED_SUMMARIES & installed_policies().keys()
 
 
-#: The base table families, each with the dataset it publishes. They declare no policy: each states it while it
-#: builds, assigning it on the class (``_BaseTableFamily.validate_native_output``), so the class attribute of these
-#: five differs before and after a build in the same process. Nothing below reads it to recognise them.
-BASE_FAMILIES = {
-    "dockets": "dockets", "documents": "documents", "docket-attributes": "docket_attributes",
-    "document-attributes": "document_attributes", "comment-attributes": "comment_attributes",
-}
-
-
 def _scheduled_rollups():
     """Every rollup class the package defines; a test module's stand-in class is no scheduled writer."""
     for module in pkgutil.iter_modules(rollups.__path__):
@@ -184,37 +174,22 @@ def test_a_rollup_with_no_receipt_route_publishes_no_table_with_an_installed_pol
     """The refusal of ss-nxew, held for every scheduled rollup before a hosted run meets it.
 
     An installed policy makes receipts mandatory at admission, unless it marks them retired
-    (``subject_catalog.RECEIPTS_RETIRED``: the court bulk tables, ss-vse3), when a plain rollup is its route. A rollup
-    has a receipt route when its class declares policies, when it passes them itself (``generation_kwargs``, the
-    court families still on receipts), or when it is a base table family, recognised by its base class whether or
-    not one has built yet (``BASE_FAMILIES``).
+    (``subject_catalog.RECEIPTS_RETIRED``: the court bulk tables and base regulatory tables, ss-vse3), when a plain
+    rollup is its route. A rollup has a receipt route when its class declares policies or passes them itself
+    (``generation_kwargs``, the court families still on receipts).
     """
     from spicy_regs.subject_catalog import retired_receipt_datasets
 
     installed, no_route = installed_policies().keys() - retired_receipt_datasets(), {}
     assert {rollup for rollup, _, _ in SUMMARIES} <= _scheduled_rollups()
     for cls in _scheduled_rollups():
-        if (issubclass(cls, _BaseTableFamily) or not cls.generation_tables or cls.receipt_policies
+        if (not cls.generation_tables or cls.receipt_policies
                 or cls.generation_kwargs is not RollupPipeline.generation_kwargs):
             continue
         tables = [key.removesuffix(".parquet") for key in cls.outputs or (cls.output,)]
         if registered := sorted(installed & set(tables)):
             no_route[cls.name] = registered
     assert no_route == {}
-    assert {cls.name: cls.output.removesuffix(".parquet") for cls in _scheduled_rollups()
-            if issubclass(cls, _BaseTableFamily)} == BASE_FAMILIES
-
-
-@pytest.mark.parametrize("family", sorted(BASE_FAMILIES))
-def test_a_base_family_states_its_installed_policy_when_it_builds(tmp_path, monkeypatch, family):
-    """The route the guard above takes on trust, held for each of the five whatever was built before."""
-    [cls] = [rollup for rollup in _scheduled_rollups() if rollup.name == family]
-    monkeypatch.setattr(cls, "receipt_policies", ())  # the build assigns on the class; this undoes it afterwards
-    owner = cls.__new__(cls)
-    pq.write_table(pa.table({owner.key(): ["A-1"]}), tmp_path / cls.output)
-    owner.validate_native_output(tmp_path / cls.output)
-    [stated] = owner.receipt_policies
-    assert stated.descriptor() == installed_policies()[BASE_FAMILIES[family]].descriptor()
 
 
 def test_discovery_signals_rollup_publishes_zero_rows_over_larger_prior(tmp_path, monkeypatch):

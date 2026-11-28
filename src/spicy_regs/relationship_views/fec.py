@@ -73,7 +73,7 @@ FEC_VIEWS = (
                            'captures span two.',
        }),
     SQLView('fec_relationship_evidence', {
-        'fec_relationships': ('source_locator_json','source_sha256','source_fields_json','relationship_type'),
+        'fec_relationships': ('source_locator_json','source_sha256','relationship_type'),
         'fec_source_records': ('collection_id','source_record_id','source_sha256'),
     }, evidence, 'Every source relationship observation locates its companion under collection/record identity. '
        'companion_candidates_json retains every candidate digest, including repeated and null values. '
@@ -82,7 +82,7 @@ FEC_VIEWS = (
        'embedded in candidate arrays, allowing serving queries to avoid reading those large columns. '
        'Explicit empty relationship states remain '
        'observations, not edges. Matching recorded digests is not verification of retained bytes.',
-       ('source_locator_json','source_fields_json','relationship_type'), rule_version='fec-companion-location-v3',
+       ('source_locator_json','relationship_type'), rule_version='fec-companion-location-v3',
        column_descriptions={
            'collection_id': 'The companion collection named in source_locator_json; NULL when the locator is unsupported.',
            'source_record_id': 'The companion record named in source_locator_json; NULL when the locator is unsupported.',

@@ -1,14 +1,16 @@
-"""Scheduled base refreshes preserve selected native data and receipt evidence."""
+"""Scheduled documents refresh applies reconciliation observations without per-row receipts (ss-vse3, ss-ojz3)."""
 
+import hashlib
 import io
 from contextlib import contextmanager
 from pathlib import Path
 
 import polars as pl
+import pyarrow.parquet as pq
 import pytest
 import yaml
 
-from spicy_regs.pipelines.rollups.regulatory_base import DocketsFamily
+from spicy_regs.pipelines.rollups.regulatory_base import DocumentsFamily
 from spicy_regs.schemas.regulations import RECORD_TYPES
 from spicy_regs.sources import publication as pub, r2
 from tests.generation_fakes import Store
@@ -24,13 +26,12 @@ def _dockets(ids: list[str]) -> pl.DataFrame:
 
 def _publish_source(tmp_path, ids):
     from spicy_regs.pipelines.regulatory_publication import finish_dataset
+    from spicy_regs.selected_generations import SelectedInputs, unique_build_directory
 
     root = tmp_path / "source"
     root.mkdir(exist_ok=True)
     path = root / "input.parquet"
     _dockets(ids).write_parquet(path)
-    from spicy_regs.selected_generations import SelectedInputs, unique_build_directory
-
     inputs = SelectedInputs(root, unique_build_directory(root))
     return finish_dataset(root, "dockets", path, publish=True, inputs=inputs)
 
@@ -40,22 +41,24 @@ def _published_ids(store: Store) -> list[str]:
     return pl.read_parquet(io.BytesIO(store.objects[location]))["docket_id"].to_list()
 
 
-def test_each_sweep_republishes_selected_native_rows_and_receipts(tmp_path, monkeypatch):
-    from spicy_regs import subject_catalog
-    from tests.regulatory_publication_fakes import install
+def _publish_documents(tmp_path, ids, *, annotate: bool = False):
+    from spicy_regs.pipelines.docket_reconcile import annotate_documents
+    from spicy_regs.pipelines.regulatory_publication import finish_dataset
+    from spicy_regs.selected_generations import SelectedInputs, unique_build_directory
 
-    retired = subject_catalog.retired_receipt_datasets() - {"dockets"}
-    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
-
-    remote = install(monkeypatch)
-    _publish_source(tmp_path, ["EPA-1", "EPA-2"])
-    DocketsFamily(output_dir=tmp_path / "first", skip_upload=False).run()
-    first = pub.parse_index(remote.objects[pub.INDEX_V2_KEY])["families"]["dockets"]
-    assert first["etlReceipts"]["datasets"] == ["dockets"]
-    assert _published_ids(remote) == ["EPA-1", "EPA-2"]
-    _publish_source(tmp_path, ["EPA-1", "EPA-2", "EPA-3"])
-    DocketsFamily(output_dir=tmp_path / "second", skip_upload=False).run()
-    assert _published_ids(remote) == ["EPA-1", "EPA-2", "EPA-3"]
+    documents = RECORD_TYPES["documents"]
+    working_copy = pl.DataFrame(
+        [{**dict.fromkeys(documents.schema), "document_id": i, "agency_code": i[:3]} for i in ids],
+        schema=documents.schema,
+    )
+    source = tmp_path / "documents-source"
+    source.mkdir(exist_ok=True)
+    input_file = source / "documents.parquet"
+    working_copy.write_parquet(input_file)
+    if annotate:
+        annotate_documents(input_file)
+    inputs = SelectedInputs(source, unique_build_directory(source))
+    return finish_dataset(source, "documents", input_file, publish=True, inputs=inputs)
 
 
 @pytest.mark.parametrize("ids", [["EPA-1", "EPA-1"], ["EPA-1", None]])
@@ -69,19 +72,31 @@ def test_a_repeated_or_missing_native_id_is_not_published(tmp_path, monkeypatch,
 
 
 def test_a_row_group_over_the_admission_bound_is_not_republished(tmp_path, monkeypatch):
-    from spicy_regs import subject_catalog
-    from tests.regulatory_publication_fakes import install
+    from spicy_regs.pipelines.docket_reconcile import OUTCOME_SCHEMA, OUTCOMES
     from spicy_regs.pipelines.rollups import regulatory_base
-
-    retired = subject_catalog.retired_receipt_datasets() - {"dockets"}
-    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
+    from tests.regulatory_publication_fakes import install
 
     remote = install(monkeypatch)
-    _publish_source(tmp_path, ["EPA-1", "EPA-2"])
+    ids = ["FNA-2026-0301-0004", "FNA-2026-0301-0005"]
+    _publish_documents(tmp_path, ids)
+    outcomes = pl.DataFrame(
+        [{"document_id": ids[0], "docket_id": "FNA-2026-0301", "publisher_status": "removed",
+          "observed_at": "2026-10-03T12:40:00+00:00", "removed_observed_at": "2026-10-03T12:40:00+00:00",
+          "http_status": 404, "body_sha256": None}],
+        schema=OUTCOME_SCHEMA,
+    )
+
+    def working(remote_key, local_path):
+        if remote_key != OUTCOMES:
+            return False
+        outcomes.write_parquet(local_path)
+        return True
+
+    monkeypatch.setattr(r2, "download_working_copy", working)
     before = remote.objects[pub.INDEX_V2_KEY]
     monkeypatch.setattr(regulatory_base, "MAX_ROW_GROUP_BYTES", 1)
     with pytest.raises(RuntimeError, match="exceeds the admission bound"):
-        DocketsFamily(output_dir=tmp_path / "republication", skip_upload=False).run()
+        DocumentsFamily(output_dir=tmp_path / "republication", skip_upload=False).run()
     assert remote.objects[pub.INDEX_V2_KEY] == before
 
 
@@ -89,21 +104,16 @@ def test_a_row_group_over_the_admission_bound_is_not_republished(tmp_path, monke
 def test_the_documents_family_carries_what_regulations_gov_last_said_of_each_document(
     tmp_path, monkeypatch, reconciled
 ):
-    """Reconcile observations join selected native inputs before subjects and receipts are sealed."""
+    """Reconcile observations join selected native inputs without per-row receipts and record their digest in metadata."""
+    from spicy_regs.pipelines.docket_reconcile import (
+        OUTCOME_SCHEMA,
+        OUTCOMES,
+        RECONCILE_OUTCOMES_METADATA_KEY,
+    )
     from tests.regulatory_publication_fakes import install
-    from spicy_regs.pipelines.regulatory_publication import finish_dataset
-    from spicy_regs.selected_generations import SelectedInputs, unique_build_directory
 
     remote = install(monkeypatch)
-    from spicy_regs.pipelines.docket_reconcile import OUTCOME_SCHEMA, OUTCOMES
-    from spicy_regs.pipelines.rollups.regulatory_base import DocumentsFamily
-
-    documents = RECORD_TYPES["documents"]
     ids = ["FNA-2026-0301-0004", "FNA-2026-0301-0005", "FNS-2025-0401-0001"]
-    working_copy = pl.DataFrame(
-        [{**dict.fromkeys(documents.schema), "document_id": i, "agency_code": i[:3]} for i in ids],
-        schema=documents.schema,
-    )
     outcomes = pl.DataFrame(
         [{"document_id": ids[0], "docket_id": "FNA-2026-0301", "publisher_status": "removed",
           "observed_at": "2026-10-03T12:40:00+00:00", "removed_observed_at": "2026-10-03T12:40:00+00:00",
@@ -113,30 +123,38 @@ def test_the_documents_family_carries_what_regulations_gov_last_said_of_each_doc
           "body_sha256": None}],
         schema=OUTCOME_SCHEMA,
     )
+    outcomes_bytes = None
+    if reconciled:
+        staged = tmp_path / "outcomes.parquet"
+        outcomes.write_parquet(staged)
+        outcomes_bytes = staged.read_bytes()
 
     def working(remote_key, local_path):
-        frame = {"documents.parquet": working_copy, OUTCOMES: outcomes if reconciled else None}.get(remote_key)
-        if frame is None:
+        if remote_key != OUTCOMES or outcomes_bytes is None:
             return False
-        frame.write_parquet(local_path)
+        local_path.write_bytes(outcomes_bytes)
         return True
 
-    source = tmp_path / "documents-source"
-    source.mkdir()
-    input_file = source / "input.parquet"
-    working_copy.write_parquet(input_file)
-    inputs = SelectedInputs(source, unique_build_directory(source))
-    finish_dataset(source, "documents", input_file, publish=True, inputs=inputs)
-
+    _publish_documents(tmp_path, ids)
     monkeypatch.setattr(r2, "download_working_copy", working)
     monkeypatch.setattr(r2, "download", lambda key, path: pytest.fail(f"read a managed family: {key}"))
-    DocumentsFamily(output_dir=tmp_path, skip_upload=False).run()
-    location = pub.single_member(pub.parse_index(remote.objects[pub.INDEX_V2_KEY]), "documents.parquet").path
-    published = pl.read_parquet(io.BytesIO(remote.objects[location]))
+    DocumentsFamily(output_dir=tmp_path / "run", skip_upload=False).run()
+    index = pub.parse_index(remote.objects[pub.INDEX_V2_KEY])
+    assert "etlReceipts" not in index["families"]["documents"]
+    location = pub.single_member(index, "documents.parquet").path
+    published_bytes = remote.objects[location]
+    published = pl.read_parquet(io.BytesIO(published_bytes))
     status = dict(published.select("document_id", "publisher_status").iter_rows())
     assert status == ({ids[0]: "removed", ids[1]: "listed", ids[2]: None} if reconciled else dict.fromkeys(ids))
     assert published.filter(pl.col("document_id") == ids[0])["removed_observed_at"].to_list() == [
         "2026-10-03T12:40:00+00:00" if reconciled else None]
+    meta = pq.read_schema(io.BytesIO(published_bytes)).metadata or {}
+    if reconciled:
+        assert outcomes_bytes is not None
+        expected = ("sha256:" + hashlib.sha256(outcomes_bytes).hexdigest()).encode("utf-8")
+        assert meta.get(RECONCILE_OUTCOMES_METADATA_KEY) == expected
+    else:
+        assert RECONCILE_OUTCOMES_METADATA_KEY not in meta
 
 
 def test_working_copy_download_ignores_a_family_that_owns_the_key(tmp_path, monkeypatch):
@@ -169,12 +187,7 @@ def test_working_copy_download_ignores_a_family_that_owns_the_key(tmp_path, monk
 def test_refresh_publishes_the_families_before_the_mirror_captures_base_versions():
     workflow = yaml.safe_load((REPO_ROOT / ".github/workflows/_regulations-refresh.yml").read_text())
     jobs = workflow["jobs"]
-    assert jobs["base-families"]["strategy"]["matrix"]["command"] == [
-        "run-rollup-dockets",
-        "run-rollup-documents",
-        "run-rollup-docket-attributes",
-        "run-rollup-document-attributes",
-    ]
+    assert jobs["base-families"]["strategy"]["matrix"]["command"] == ["run-rollup-documents"]
     assert jobs["base-families"]["with"]["skip_upload"] == "${{ inputs.skip_upload }}"
     assert jobs["mirror"]["needs"] == "base-families"
     assert jobs["derived"]["needs"] == "mirror" and jobs["org-links"]["needs"] == "mirror"
@@ -231,47 +244,62 @@ def test_the_browser_search_blob_is_built_only_where_its_app_reads_this_bucket()
     assert "docket-search" in jobs["verify"]["needs"]
 
 
-def test_documents_family_skips_rebuild_when_selected_generation_already_carries_current_outcomes(tmp_path, monkeypatch):
+def test_documents_family_skips_rebuild_when_metadata_matches_and_rebuilds_on_change(tmp_path, monkeypatch):
+    """Parquet schema metadata skips unchanged runs, falls back cleanly when absent, and rebuilds when outcomes change."""
+    from spicy_regs.pipelines.docket_reconcile import OUTCOME_SCHEMA, OUTCOMES
     from tests.regulatory_publication_fakes import install
-    from spicy_regs.pipelines.docket_reconcile import OUTCOME_SCHEMA, OUTCOMES, annotate_documents
-    from spicy_regs.pipelines.regulatory_publication import finish_dataset
-    from spicy_regs.pipelines.rollups.regulatory_base import DocumentsFamily
-    from spicy_regs.selected_generations import SelectedInputs, unique_build_directory
 
     remote = install(monkeypatch)
-    documents = RECORD_TYPES["documents"]
     ids = ["FNA-2026-0301-0004", "FNA-2026-0301-0005"]
-    working_copy = pl.DataFrame(
-        [{**dict.fromkeys(documents.schema), "document_id": i, "agency_code": "FNA"} for i in ids],
-        schema=documents.schema,
-    )
-    outcomes = pl.DataFrame(
+    outcomes_v1 = pl.DataFrame(
         [{"document_id": ids[0], "docket_id": "FNA-2026-0301", "publisher_status": "removed",
           "observed_at": "2026-10-03T12:40:00+00:00", "removed_observed_at": "2026-10-03T12:40:00+00:00",
           "http_status": 404, "body_sha256": None}],
         schema=OUTCOME_SCHEMA,
     )
+    outcomes_v2 = pl.DataFrame(
+        [{"document_id": ids[0], "docket_id": "FNA-2026-0301", "publisher_status": "removed",
+          "observed_at": "2026-10-03T12:40:00+00:00", "removed_observed_at": "2026-10-03T12:40:00+00:00",
+          "http_status": 404, "body_sha256": None},
+         {"document_id": ids[1], "docket_id": "FNA-2026-0301", "publisher_status": "listed",
+          "observed_at": "2026-10-04T12:40:00+00:00", "removed_observed_at": None,
+          "http_status": None, "body_sha256": None}],
+        schema=OUTCOME_SCHEMA,
+    )
+    current = {"frame": outcomes_v1}
 
     def working(remote_key, local_path):
         if remote_key != OUTCOMES:
             return False
-        outcomes.write_parquet(local_path)
+        current["frame"].write_parquet(local_path)
         return True
 
     monkeypatch.setattr(r2, "download_working_copy", working)
-    source = tmp_path / "documents-source"
-    source.mkdir()
-    input_file = source / "documents.parquet"
-    working_copy.write_parquet(input_file)
-    witnesses = annotate_documents(input_file)
-    inputs = SelectedInputs(source, unique_build_directory(source))
-    finish_dataset(source, "documents", input_file, publish=True, inputs=inputs, witnesses=witnesses)
+    # 1) Older prior without metadata key (backward-compatible first run): rebuilds and stamps metadata.
+    _publish_documents(tmp_path, ids, annotate=False)
+    before_first = remote.objects[pub.INDEX_V2_KEY]
+    DocumentsFamily(output_dir=tmp_path / "first", skip_upload=False).run()
+    after_first = remote.objects[pub.INDEX_V2_KEY]
+    assert after_first != before_first
 
-    before_index = remote.objects[pub.INDEX_V2_KEY]
-    monkeypatch.setattr(
-        DocumentsFamily,
-        "annotate",
-        lambda *args, **kwargs: pytest.fail("DocumentsFamily rebuilt despite matching outcomes witness"),
-    )
-    DocumentsFamily(output_dir=tmp_path / "refresh", skip_upload=False).run()
-    assert remote.objects[pub.INDEX_V2_KEY] == before_index
+    # 2) Unchanged outcomes: skips cleanly without calling annotate().
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            DocumentsFamily,
+            "annotate",
+            lambda *args, **kwargs: pytest.fail("DocumentsFamily rebuilt despite matching metadata digest"),
+        )
+        DocumentsFamily(output_dir=tmp_path / "unchanged", skip_upload=False).run()
+    assert remote.objects[pub.INDEX_V2_KEY] == after_first
+
+    # 3) Updated outcomes digest: rebuilds and publishes updated publisher_status.
+    current["frame"] = outcomes_v2
+    DocumentsFamily(output_dir=tmp_path / "updated", skip_upload=False).run()
+    after_update = remote.objects[pub.INDEX_V2_KEY]
+    assert after_update != after_first
+    location = pub.single_member(pub.parse_index(after_update), "documents.parquet").path
+    published = pl.read_parquet(io.BytesIO(remote.objects[location]))
+    assert dict(published.select("document_id", "publisher_status").iter_rows()) == {
+        ids[0]: "removed",
+        ids[1]: "listed",
+    }

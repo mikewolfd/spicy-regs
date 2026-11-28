@@ -2185,8 +2185,15 @@ def require_live_receipt_pins(index: dict, datasets) -> None:
     from spicy_regs.subject_catalog import retired_receipt_datasets
 
     for name in sorted(set(datasets) & retired_receipt_datasets()):
-        owner = table_owner(index, name + ".parquet")
-        if owner is not None and name in owner[1].get("etlReceipts", {}).get("datasets", ()):
+        owner = next(
+            (
+                (family, entry)
+                for family, entry in index["families"].items()
+                if name in entry.get("etlReceipts", {}).get("datasets", ())
+            ),
+            None,
+        )
+        if owner is not None:
             _require_receipt_archive_pins(owner[0], owner[1]["artifactDigest"], [name])
 
 
@@ -2253,21 +2260,24 @@ def _stage_verified_generation(
     expected_tables = (set((old_family or {}).get("tables", {})) | set(added_tables)) - set(receipt_only_tables)
     if old_family is not None and set(tables) != expected_tables:
         raise PublicationError("Family membership changed; explicit migration is required")
+    from spicy_regs.etl_policy_registry import installed_policies
     from spicy_regs.subject_catalog import retired_receipt_datasets, shared_receipt_logs
     # ``datasets`` is the family's claim: every index reader gives each listed name one owning family. A shared log
     # is in the receipt member and in the generation's stated policies, and is claimed by no family.
     shared = shared_receipt_logs()
     claimed = set(entry.get("etlReceipts", {}).get("datasets", []))
-    # A retirement is declared once, on the table's installed policy (subject_catalog.RECEIPTS_RETIRED), never
-    # inferred, and read here whatever path publishes (ss-ag1j): the table stays published, its evidence is the run's
-    # journal and retained originals, and no generation may claim receipts for it again. The prior generation's
-    # receipt member is not touched; retention keeps it as long as docs/pins/receipt-archive.json cites it.
+    # A retirement is declared once, on the dataset's installed policy (subject_catalog.RECEIPTS_RETIRED), never
+    # inferred, and read here whatever path publishes (ss-ag1j): a table dataset stays published without receipts, a
+    # receipt-only dataset leaves without becoming a public table, and no generation may claim receipts for either
+    # again. The prior generation's receipt member is not touched; retention keeps it as long as
+    # docs/pins/receipt-archive.json cites it.
     retired = retired_receipt_datasets()
     if retired & claimed:
         raise PublicationError("A retired receipt dataset publishes no receipts")
     # An entry written before logs were shared may still list one; ceasing to list it drops no ownership.
     dropped = set((old_family or {}).get("etlReceipts", {}).get("datasets", [])) - claimed - shared
-    if not {name + ".parquet" for name in dropped & retired} <= set(tables):
+    receipt_only = {name for name, policy in installed_policies().items() if policy.receipt_only}
+    if not {name + ".parquet" for name in (dropped & retired) - receipt_only} <= set(tables):
         raise PublicationError("A retired receipt dataset keeps its table and publishes no receipts")
     if dropped & retired and old_family is not None:
         _require_receipt_archive_pins(family, old_family["artifactDigest"], dropped & retired)
