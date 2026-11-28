@@ -81,18 +81,46 @@ def _remember_selection(root, selections, checked, *, removed=()):
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / "selection.json"
     values = json.loads(target.read_text()) if target.exists() else {}
+    replaced_receipts = set()
     for dataset in removed:
-        values.pop(dataset, None)
+        prior = values.pop(dataset, None)
+        if prior and prior.get("subjects") and prior.get("receipts"):
+            replaced_receipts.add(prior["receipts"]["path"])
 
     def member(path):
         return {"path": str(Path(path).resolve()), "sha256": _member_pin(path, checked)}
 
     for selected in selections:
+        prior = values.get(selected.dataset)
+        new_receipts = member(selected.receipts) if selected.receipts is not None else None
+        if (
+            prior
+            and prior.get("subjects")
+            and prior.get("receipts")
+            and (new_receipts is None or new_receipts["path"] != prior["receipts"]["path"])
+        ):
+            replaced_receipts.add(prior["receipts"]["path"])
         values[selected.dataset] = {
             "generation_id": selected.generation_id,
             "subjects": [member(p) for p in selected.subjects],
-            "receipts": member(selected.receipts) if selected.receipts is not None else None,
+            "receipts": new_receipts,
         }
+    if replaced_receipts:
+        active_subject_receipts = {
+            entry["receipts"]["path"]
+            for entry in values.values()
+            if entry.get("subjects") and entry.get("receipts")
+        }
+        orphaned = replaced_receipts - active_subject_receipts
+        if orphaned:
+            for dataset in [
+                name
+                for name, entry in values.items()
+                if not entry.get("subjects")
+                and entry.get("receipts")
+                and entry["receipts"]["path"] in orphaned
+            ]:
+                values.pop(dataset, None)
     temporary = target.with_name(target.name + "." + uuid4().hex)
     temporary.write_text(json.dumps(values))
     temporary.replace(target)

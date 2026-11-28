@@ -130,6 +130,84 @@ def test_registering_receipt_free_generation_preserves_receipt_backed_pin(tmp_pa
         "laws": SelectedDataset("laws", (generation / "laws.parquet",), None, None),
     }
 
+    # Reverse order: registering a receipt-backed generation preserves an existing receipt-free pin.
+    reverse_root = tmp_path / "reverse"
+    reverse_law_dir = reverse_root / "generations" / "laws"
+    reverse_law_art = build_generation(reverse_law_dir, family="laws", files=[new_law], expected_keys=["laws.parquet"])
+    remember_generation(reverse_root, reverse_law_dir, reverse_law_art)
+    remember_selection(reverse_root, [member_pin])
+
+    reverse_selected = local_selection(reverse_root)
+    assert reverse_selected.native == {
+        "members": member_pin,
+        "laws": SelectedDataset("laws", (reverse_law_dir / "laws.parquet",), None, None),
+    }
+
+
+def test_same_workspace_cutover_drops_orphaned_shared_receipt_only_pin(tmp_path, monkeypatch):
+    from spicy_regs import subject_catalog
+    from spicy_regs.legislative_receipts import write_legislative_outputs
+    from tests.test_legislative_receipts import retained, row
+
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: frozenset())
+    old_law = retained(
+        tmp_path / "src1",
+        "laws",
+        [row("laws", law_id="119-public-1", congress="119", law_type="public", number="1")],
+    )
+    old_bundle = tmp_path / "old-laws"
+    write_legislative_outputs([old_law], old_bundle, generation_id="old-laws")
+    old_laws_file, old_receipts = old_bundle / "laws.parquet", old_bundle / "etl_receipts.parquet"
+    root = tmp_path / "workspace"
+    remember_selection(root, [
+        SelectedDataset("laws", (old_laws_file,), old_receipts, "old-laws"),
+        SelectedDataset("legislative_document_file_states", (), old_receipts, "old-laws"),
+    ])
+    monkeypatch.undo()
+
+    new_law = shaped(tmp_path / "laws.parquet", [{"law_id": "119-public-2"}])
+    generation = root / "generations" / "laws-receipt-free"
+    artifact = build_generation(generation, family="laws", files=[new_law], expected_keys=["laws.parquet"])
+    remember_generation(root, generation, artifact)
+
+    # Removing the superseded receipt file must not break selection or local MCP once all owning tables moved off it.
+    old_receipts.unlink()
+    selected = local_selection(root)
+    assert set(selected.native) == {"laws"}
+    assert selected.native["laws"] == SelectedDataset("laws", (generation / "laws.parquet",), None, None)
+    with connection(root, monkeypatch) as con:
+        state = mcp_server._publication_status(con)
+        assert "etl_receipts" not in state["tables"]
+        assert con.execute("SELECT law_id FROM laws").fetchall() == [("119-public-2",)]
+
+    # If a shared-log pin belongs to a different generation's receipt file, laws' cutover must leave it intact.
+    other_root = tmp_path / "workspace-separate-log"
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: frozenset())
+    old_bundle_2 = tmp_path / "old-laws-2"
+    write_legislative_outputs([old_law], old_bundle_2, generation_id="old-laws-2")
+    old_laws_file_2, old_receipts_2 = old_bundle_2 / "laws.parquet", old_bundle_2 / "etl_receipts.parquet"
+    other_budget = retained(
+        tmp_path / "src2",
+        "budget_volumes",
+        [row("budget_volumes", package_id="BUDGET-2026-BUD", associated_bills_json="[]")],
+    )
+    other_bundle = tmp_path / "other-gen"
+    write_legislative_outputs([other_budget], other_bundle, generation_id="other-gen")
+    other_budget_file, other_receipts = other_bundle / "budget_volumes.parquet", other_bundle / "etl_receipts.parquet"
+    remember_selection(other_root, [
+        SelectedDataset("laws", (old_laws_file_2,), old_receipts_2, "old-laws-2"),
+        SelectedDataset("budget_volumes", (other_budget_file,), other_receipts, "other-gen"),
+        SelectedDataset("legislative_document_file_states", (), other_receipts, "other-gen"),
+    ])
+    monkeypatch.undo()
+    other_gen = other_root / "generations" / "laws-receipt-free"
+    other_art = build_generation(other_gen, family="laws", files=[new_law], expected_keys=["laws.parquet"])
+    remember_generation(other_root, other_gen, other_art)
+    old_receipts_2.unlink()
+    other_selected = local_selection(other_root)
+    assert set(other_selected.native) == {"laws", "budget_volumes", "legislative_document_file_states"}
+    assert other_selected.native["legislative_document_file_states"].receipts == other_receipts
+
 
 def test_mcp_captures_multiple_generations_and_scopes_shared_receipts(tmp_path, monkeypatch):
     old = selected_family(tmp_path, monkeypatch)
