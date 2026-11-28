@@ -1190,8 +1190,25 @@ def test_build_fec_query_generation_hydrates_individual_snapshot_and_skips_blank
     sel_rows = _read_generation_table(result.generation_dir, "fec_collection_selection").to_pylist()
     indiv_sel = {r["collection_id"]: r["selection_status"] for r in sel_rows if r["purpose"] == "retained-reported-individual-contribution-snapshot"}
     assert indiv_sel == {"bulk-indiv26-main": "included", "bulk-indiv26-date-01": "duplicate"}
-    # 2 valid rows mapped (2 blank lines cleanly skipped).
-    assert result.table_rows["fec_receipts"] == 2
+    # Only the selected main member's 1 non-blank row is emitted into fec_receipts; the
+    # proven-equivalent duplicate date member is excluded from fec_receipts while kept in fec_collection_selection.
+    assert result.table_rows["fec_receipts"] == 1
+    receipt_rows = _read_generation_table(result.generation_dir, "fec_receipts").to_pylist()
+    assert [r["collection_id"] for r in receipt_rows] == ["bulk-indiv26-main"]
+
+    # Fail closed if multiple bulk_receipt collections share an archive responseSha256 without a matching proof.
+    with pytest.raises(ValueError, match="without a matching individual_snapshot_proof"):
+        build_fec_query_generation(
+            observations_dir=obs_dir,
+            output_dir=tmp_path / "out_indiv_no_proof",
+            source_generation_pin=GEN,
+            selection_evidence_sha256=EVIDENCE,
+            namespace_evidence={},
+            store=CentralRawArchiveStore(tmp_path / "raw"),
+            individual_snapshot_proof=None,
+            include_rebuilt_tables=False,
+            c1_threads=2,
+        )
 
 
 def test_discover_and_qualify_retained_mur_captures_in_build_fec_query_generation(tmp_path):
