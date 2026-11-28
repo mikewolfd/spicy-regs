@@ -571,3 +571,50 @@ def test_statute_replay_emits_verified_spans_and_merges_over_legacy_xpath_only_p
     )
     verify_generation(tmp_path / "candidate", expected_pin=artifact.pin)
     verify_evidence(evidence.artifact_dir, expected_pin=evidence.artifact.pin)
+
+
+def test_native_lookup_resolves_more_than_500_distinct_usc_sections_without_target_key_limit(tmp_path):
+    import inspect
+
+    from spicy_regs.citation_resolution import resolve_citations
+    from spicy_regs.transforms.native_legal_references import MAX_OBSERVATIONS, NATIVE_MAX_TARGET_KEYS
+
+    assert MAX_OBSERVATIONS == 10_000
+    assert NATIVE_MAX_TARGET_KEYS == 10_000
+    assert inspect.signature(resolve_citations).parameters["max_target_keys"].default == 500
+
+    key_count = 800
+    sections = [str(i) for i in range(1, key_count + 1)]
+    target = tmp_path / "usc_release_point_sections.parquet"
+    pq.write_table(
+        pa.table({"usc_title": ["42"] * key_count, "usc_section_key": sections}),
+        target,
+    )
+    refs = "".join(f'<ref href="/us/usc/t42/s{sec}">42 U.S.C. {sec}</ref>' for sec in sections)
+    body = f"<section>{refs}</section>".encode()
+    manifest = manifest_for(
+        tmp_path,
+        body,
+        key="/us/usc/t42/s1",
+        targets={"usc_release_point_sections": {"path": target.name, "sha256": digest(target.read_bytes())}},
+    )
+    files, evidence = run(manifest, tmp_path / "output")
+    rows = pq.read_table(files[0]).to_pylist()
+    assert len(rows) == key_count
+
+    candidates = [json.loads(row["target_candidates_json"])[0] for row in rows]
+    assert all(c["resolution_rule"] == "selected-target-lookup/2" for c in candidates)
+    assert all(c["target_table_selected"] == "usc_release_point_sections" for c in candidates)
+    assert all(c["target_status"] == "found" for c in candidates)
+    assert all(c["match_basis"] == "printed_section" for c in candidates)
+    assert all(c["reason"] is None for c in candidates)
+    assert {c["normalized_key"] for c in candidates} == {f"42-{sec}" for sec in sections}
+
+    events = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
+    resolution = next(event for event in events if event["event"] == "native-reference-resolution")
+    assert resolution["max_target_keys"] == NATIVE_MAX_TARGET_KEYS
+    assert resolution["distinct_target_keys_selected"] == key_count
+    assert resolution["distinct_target_keys_read"] == key_count
+    assert resolution["target_status_counts"] == {"found": key_count}
+    assert resolution["reason_counts"] == {}
+    assert resolution["partial"] is False
