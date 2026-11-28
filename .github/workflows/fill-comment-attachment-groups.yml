@@ -11,13 +11,13 @@ on:
         description: 'Plan first, then one writing pilot, then remaining groups; see runbook for recovery'
         required: true
         type: choice
-        options: [plan, pilot, fill, resume, undo]
+        options: [plan, pilot, fill, resume, reconcile, undo]
       config:
         description: 'JSON with exact input/plan/pilot/recovery pins, as documented in comment-attachment-physical-fill.md'
         required: true
         type: string
       resume_run_id:
-        description: 'Resume/undo only: earlier run holding the pinned recovery artifact'
+        description: 'Resume/reconcile/undo only: earlier run holding the pinned recovery artifact'
         required: false
         type: string
 
@@ -51,7 +51,7 @@ jobs:
           RESUME_RUN: ${{ inputs.resume_run_id }}
         run: |
           [[ "$RUNTIME_REF" =~ ^[0-9a-f]{40}$ ]]
-          if [[ "$OPERATION" == resume || "$OPERATION" == undo ]]; then
+          if [[ "$OPERATION" == resume || "$OPERATION" == reconcile || "$OPERATION" == undo ]]; then
             [[ "$RESUME_RUN" =~ ^[0-9]+$ ]]
           else
             test -z "$RESUME_RUN"
@@ -110,7 +110,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
       - run: uv sync --frozen --extra operational-runner
       - name: Restore exact earlier recovery files
-        if: inputs.operation == 'resume' || inputs.operation == 'undo'
+        if: inputs.operation == 'resume' || inputs.operation == 'reconcile' || inputs.operation == 'undo'
         uses: actions/download-artifact@v4
         with:
           name: comment-attachment-fill-${{ matrix.group }}

@@ -444,6 +444,7 @@ def test_workflow_queues_writer_and_keeps_always_recovery():
     workflow = yaml.safe_load((Path(__file__).parents[1] / ".github/workflows/fill-comment-attachment-groups.yml").read_text())
     assert workflow["concurrency"]["group"] == "comments-catalog-write"
     assert workflow["concurrency"]["cancel-in-progress"] is False
+    assert "reconcile" in workflow[True]["workflow_dispatch"]["inputs"]["operation"]["options"]
     job = workflow["jobs"]["fill"]
     assert job["strategy"]["max-parallel"] == 1 and job["strategy"]["fail-fast"] is True
     steps = job["steps"]
@@ -451,3 +452,129 @@ def test_workflow_queues_writer_and_keeps_always_recovery():
     assert steps[-1]["if"] == "always()" and "writer/fill/" in steps[-1]["with"]["path"]
     assert "runner.temp" not in str(job["env"])
     assert all("--no-sync" in s["run"] for s in steps if "uv run" in s.get("run", ""))
+
+
+def test_cross_runtime_reconcile_abandons_uncommitted_pending_and_unblocks_new_pilot(tmp_path, catalog, monkeypatch):
+    store, old_plan = setup_plan(tmp_path, catalog)
+    monkeypatch.setenv(run.iceberg.CATALOG_LOCK_ENV, "comments-catalog-write")
+    monkeypatch.setattr(run, "verified_target_client", lambda: (store, "test"))
+    monkeypatch.setattr(run.maintenance, "run", lambda *a: {})
+
+    # Simulate an old runtime ("a"*40) crashing pre-commit after journaling "pending".
+    old_args = arguments(tmp_path, old_plan, operation="pilot", group=0)
+    from spicy_regs.sources import regulatory_catalog as native
+
+    def crash_replace(*a, **kw):
+        raise RuntimeError("simulated OOM before COMMIT")
+
+    with monkeypatch.context() as mp:
+        mp.setattr(native, "replace_native", crash_replace)
+        with pytest.raises(writer.FillVerificationError, match="simulated OOM before COMMIT"):
+            run.run_group(old_args, store, "test")
+    # Remove the failed line to simulate an abrupt non-FillVerificationError (e.g. DuckDB OOM) leaving "pending" last.
+    prepared = run.load(old_args.workdir / "writer/fill/prepare.json")
+    journal = writer._journal(old_args.workdir / "writer", prepared)
+    pending_only = [line for line in writer._lines(journal) if line["state"] == "pending"]
+    assert len(pending_only) == 1
+    journal.write_text(json.dumps(pending_only[0]) + "\n")
+    writer.sync_journals(old_args.workdir / "writer", "staging/aggregate/journals", push=True, client=store)
+    run.owner.durable(old_args.workdir / "maintenance-state.json", {"generation": "old"})
+    run.recovery(old_args)
+    old_rec_sha = run.digest(old_args.workdir / "recovery.json")
+
+    # Build a fresh plan for the new runtime ("b"*40).
+    new_plan_dir = tmp_path / "plan-new"
+    new_plan_dir.mkdir()
+    agg_config = {field: {"key": f"staging/aggregate/{name}", **run.pin(tmp_path / "stage" / name)}
+                  for field, name in (("staging", "staging.json"), ("reads", "reads.parquet"))}
+    plan_args = SimpleNamespace(workdir=new_plan_dir, config=agg_config, runtime_ref="b" * 40, operation="plan")
+    run.make_plan(plan_args, store, "test")
+    new_plan = run.load(new_plan_dir / "result.json")["plan"]
+
+    # Before reconcile, new pilot is blocked by the pending remote journal.
+    blocked = SimpleNamespace(workdir=tmp_path / "blocked-pilot", config={"plan": new_plan, "group": 0},
+                              runtime_ref="b" * 40, operation="pilot", group="0")
+    blocked.workdir.mkdir()
+    with pytest.raises(ValueError, match="exact earlier recovery"):
+        run.run_group(blocked, store, "test")
+
+    # Wrong recovery_runtime_ref refuses fail-closed.
+    bad_rec = SimpleNamespace(
+        workdir=old_args.workdir,
+        config={"plan": old_plan, "group": 0, "recovery_sha256": old_rec_sha, "recovery_runtime_ref": "c" * 40},
+        runtime_ref="b" * 40, operation="reconcile", group="0",
+    )
+    with pytest.raises(ValueError, match="Plan runtime/format differs"):
+        run.run_group(bad_rec, store, "test")
+
+    # Cross-runtime reconcile verifies old recovery artifact, appends "abandoned", never calls _write_batch.
+    rec_args = SimpleNamespace(
+        workdir=old_args.workdir,
+        config={"plan": old_plan, "group": 0, "recovery_sha256": old_rec_sha, "recovery_runtime_ref": "a" * 40},
+        runtime_ref="b" * 40, operation="reconcile", group="0",
+    )
+    with monkeypatch.context() as mp:
+        mp.setattr(writer, "_write_batch", lambda *a, **kw: pytest.fail("reconcile must never start new batches"))
+        mp.setattr(run.runner, "supervise", lambda *a, **kw: run.run_group(rec_args, store, "test"))
+        run.guarded(rec_args)
+    res = run.load(old_args.workdir / "result.json")
+    assert res["operation"] == "reconcile" and res["status"] == "complete"
+    assert res["reconciled"]["outcome"] == "abandoned"
+    assert (old_args.workdir / "published-result.json").exists()
+
+    # Reconciling again when no pending entry remains refuses fail-closed.
+    with pytest.raises(ValueError, match="no pending write to reconcile"):
+        writer.reconcile_pending(old_args.workdir / "writer", resources=run.RESOURCES)
+
+    # Now fresh pilot on new runtime ("b"*40) runs cleanly and fills row B!
+    new_pilot = SimpleNamespace(workdir=tmp_path / "new-pilot", config={"plan": new_plan, "group": 0},
+                                runtime_ref="b" * 40, operation="pilot", group="0")
+    new_pilot.workdir.mkdir()
+    run.run_group(new_pilot, store, "test")
+    assert table(catalog)["B"]["attachments_json"] == LISTED
+    assert run.load(new_pilot.workdir / "result.json")["written"]["rows_changed"] == 1
+
+
+def test_cross_runtime_reconcile_verifies_committed_pending_batch(tmp_path, catalog, monkeypatch):
+    from tests.test_comment_fields_write import Proxy, _recorded
+
+    store, old_plan = setup_plan(tmp_path, catalog)
+    monkeypatch.setenv(run.iceberg.CATALOG_LOCK_ENV, "comments-catalog-write")
+    monkeypatch.setattr(run.maintenance, "run", lambda *a: {})
+    old_args = arguments(tmp_path, old_plan, operation="pilot", group=0)
+    run.run_group(old_args, store, "test")
+    # Rewind journal to just the "pending" line (simulating crash right after COMMIT, before journaling "verified").
+    prepared = run.load(old_args.workdir / "writer/fill/prepare.json")
+    journal = writer._journal(old_args.workdir / "writer", prepared)
+    pending_only = [line for line in writer._lines(journal) if line["state"] == "pending"]
+    assert len(pending_only) == 1
+    journal.write_text(json.dumps(pending_only[0]) + "\n")
+    writer.sync_journals(old_args.workdir / "writer", "staging/aggregate/journals", push=True, client=store)
+    run.recovery(old_args)
+    old_rec_sha = run.digest(old_args.workdir / "recovery.json")
+
+    rec_args = SimpleNamespace(
+        workdir=old_args.workdir,
+        config={"plan": old_plan, "group": 0, "recovery_sha256": old_rec_sha, "recovery_runtime_ref": "a" * 40},
+        runtime_ref="b" * 40, operation="reconcile", group="0",
+    )
+    # Plain DuckDB catalog stand-in lacks Iceberg AT (VERSION => ...) and snapshot history; strip AT and stub commit_record.
+    from contextlib import contextmanager
+    import re as _re
+    real_connect = run.iceberg._connect
+
+    @contextmanager
+    def _proxy_connect():
+        con = real_connect()
+        try:
+            yield Proxy(con, rewrite=lambda sql: _re.sub(r" AT \(VERSION => \d+\)", "", sql))
+        finally:
+            con.close()
+
+    monkeypatch.setattr(run.iceberg, "_connect", _proxy_connect)
+    monkeypatch.setattr(writer, "commit_record", _recorded({"added-records": "1", "added-position-deletes": "1"}))
+    monkeypatch.setattr(writer, "_write_batch", lambda *a, **kw: pytest.fail("reconcile must never start new batches"))
+    run.run_group(rec_args, store, "test")
+    res = run.load(old_args.workdir / "result.json")
+    assert res["reconciled"]["outcome"] == "verified"
+    assert writer._lines(journal)[-1]["recovered"] is True

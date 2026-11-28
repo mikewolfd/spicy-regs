@@ -136,7 +136,8 @@ def selected(args, client, bucket):
     target = args.workdir / "plan.json"
     fetch(client, bucket, args.config["plan"], target, 16 * 2**20)
     plan = load(target)
-    require(plan["format"] == "comment-physical-fill/1" and plan["runtime_ref"] == args.runtime_ref, "Plan runtime/format differs")
+    expected_ref = recovery_identity(args)["runtime_ref"] if args.operation == "reconcile" else args.runtime_ref
+    require(plan["format"] == "comment-physical-fill/1" and plan["runtime_ref"] == expected_ref, "Plan runtime/format differs")
     require(len({g["original_file"] for g in plan["groups"]}) == len(plan["groups"]), "Plan splits a physical file")
     return plan
 
@@ -217,7 +218,7 @@ def recovery(args, *, verify=False, maintenance_changed=False):
     if verify:
         require(path.is_file() and digest(path) == args.config["recovery_sha256"], "Recovery receipt differs")
         data = load(path)
-        require(data["identity"] == identity(args), "Recovery runtime/plan/group differs")
+        require(data["identity"] == recovery_identity(args), "Recovery runtime/plan/group differs")
         expected_files = data["files"]
         actual = {str(f.relative_to(args.workdir)) for f in recovery_files(args.workdir)}
         if maintenance_changed:
@@ -242,6 +243,15 @@ def identity(args):
     return {"plan_sha256": args.config["plan"]["sha256"], "group": int(args.group), "runtime_ref": args.runtime_ref}
 
 
+def recovery_identity(args):
+    if args.operation != "reconcile":
+        return identity(args)
+    prior_ref = args.config.get("recovery_runtime_ref")
+    require(isinstance(prior_ref, str) and bool(re.fullmatch(r"[0-9a-f]{40}", prior_ref)),
+            "Reconcile requires an exact 40-character recovery_runtime_ref")
+    return {"plan_sha256": args.config["plan"]["sha256"], "group": int(args.group), "runtime_ref": prior_ref}
+
+
 def run_group(args, client, bucket):
     require(int(args.group) in choose(args, client, bucket), "Group is outside the approved operation")
     plan = selected(args, client, bucket)
@@ -249,13 +259,28 @@ def run_group(args, client, bucket):
     require(len(choice) == 1, "Unknown physical group")
     group = choice[0]
     require(group["identities"] <= MAX_ROWS and group["read_value_bytes"] <= MAX_VALUES, "Group exceeds qualified bounds")
-    if args.operation in {"resume", "undo"}:
+    if args.operation in {"resume", "reconcile", "undo"}:
         authorized = args.workdir / "authorized.json"
         recovery(args, verify=True, maintenance_changed=authorized.exists() and load(authorized) == ownership(args))
     elif (args.workdir / "writer/fill/prepare.json").exists():
         raise ValueError("Existing writer state requires explicit resume")
     pull_journals(args.workdir, plan["journals"], client)
     work = args.workdir / "writer"
+    if args.operation == "reconcile":
+        pending_guard(work)
+        attempt = writer.fill_dir(work) / "attempt.json"
+        require(attempt.is_file() and all(load(attempt)[name] == value for name, value in recovery_identity(args).items()),
+                "Writer attempt identity differs")
+        require((writer.fill_dir(work) / "prepare.json").is_file(), "Reconcile requires the exact earlier prepare.json")
+        maintenance.run("verify", args.workdir / "maintenance-state.json")
+        with iceberg._connect() as con:
+            con.execute("SET max_temp_directory_size='1GB'")
+            reconciled = writer.reconcile_pending(work, resources=RESOURCES, con=con)
+        owner.durable(args.workdir / "result.json", {
+            **identity(args), "operation": "reconcile", "status": "complete",
+            "recovery_identity": recovery_identity(args), "reconciled": reconciled,
+        })
+        return
     if args.operation != "undo":
         pending_guard(work)
         if args.operation == "fill":
@@ -366,7 +391,7 @@ def guarded(args):
     if args.operation == "plan":
         runner.supervise(args, command=command, limits=LIMITS)
         return
-    if args.operation in {"resume", "undo"}:
+    if args.operation in {"resume", "reconcile", "undo"}:
         recovery(args, verify=True)
     (args.workdir / "worker-complete.json").unlink(missing_ok=True)
     owner.durable(args.workdir / "authorized.json", ownership(args))
@@ -387,7 +412,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime-ref", required=True)
     parser.add_argument("--config", required=True, help="Pinned staging/plan descriptors as JSON; see runbook")
-    parser.add_argument("--operation", choices=("plan", "pilot", "fill", "resume", "undo"), required=True)
+    parser.add_argument("--operation", choices=("plan", "pilot", "fill", "resume", "reconcile", "undo"), required=True)
     parser.add_argument("--group", default="plan")
     parser.add_argument("--workdir", required=True, type=Path)
     parser.add_argument("--matrix", action="store_true")

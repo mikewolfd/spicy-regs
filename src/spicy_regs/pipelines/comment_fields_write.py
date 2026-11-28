@@ -1180,6 +1180,49 @@ def _records_commits(con) -> bool:
         return False
 
 
+def reconcile_pending(
+    workdir: Path, *, resources: ExportResources | None = None, con=None,
+) -> dict:
+    """Reconcile a pending write journal entry against the live catalog without starting new batches."""
+    if not getenv(iceberg.CATALOG_LOCK_ENV):
+        raise RuntimeError(f"write holds the comments catalog: set {iceberg.CATALOG_LOCK_ENV} only while holding the "
+                           "lock (docs/comment-fields-fill.md)")
+    out = fill_dir(workdir)
+    prepared = json.loads((out / "prepare.json").read_text())
+    if _sha256(out / "fill.parquet") != prepared["fill_sha256"]:
+        raise RuntimeError("fill.parquet is not the one prepare.json names; prepare again")
+    if "columns" not in prepared:
+        raise RuntimeError("prepare.json names no fill columns (it predates fill profiles); prepare again")
+    _prepared_operation(prepared)
+    _refuse_committed_failures(workdir)
+    journal = _journal(workdir, prepared)
+    lines = _lines(journal)
+    pending = lines[-1] if lines and lines[-1]["state"] == "pending" else None
+    if pending is None:
+        raise ValueError(f"no pending write to reconcile in {journal.name}")
+    verified = [line for line in lines if line["state"] == "verified"]
+    expected = verified[-1]["snapshot_after"] if verified else prepared["snapshot"]
+    own = con is None
+    con = con or iceberg._connect()
+    resources = resources or WRITE_RESOURCES
+    resources.configure(con, out / "spill")
+    storage_access(con)
+    table = iceberg._qualified(COMMENT)
+    try:
+        after = _recover(con, journal, pending, prepared, table, expected)
+    finally:
+        if own:
+            con.close()
+    terminal = _lines(journal)[-1]
+    return {
+        "outcome": terminal["state"],
+        "batch": pending["batch"],
+        "prepare_id": prepared["prepare_id"],
+        "snapshot_before": pending["snapshot_before"],
+        "snapshot_after": after,
+    }
+
+
 def _recover(con, journal: Path, pending: dict, prepared: dict, table: str, expected: dict) -> dict:
     """A run that stopped after journaling a batch as pending: find whether that batch committed, and account for it."""
     current = iceberg._read_snapshot(con, COMMENT).__dict__
