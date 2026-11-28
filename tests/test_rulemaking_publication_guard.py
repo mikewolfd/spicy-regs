@@ -217,12 +217,31 @@ def test_validate_before_publish_refuses_catastrophic_row_drop_unless_overridden
             }
         )
     )
-    with pytest.raises(RuntimeError, match="Rulemaking shrink guard refused proceedings.parquet"):
+    refusal = r"Rulemaking shrink guard refused proceedings\.parquet: .*Pass allow_shrink=True \(or --allow-shrink\)"
+    with pytest.raises(RuntimeError, match=refusal):
         pipeline.validate_before_publish(candidate_manifest)
 
     monkeypatch.setenv("R2_ALLOW_SHRINK", "1")
-    pipeline.validate_before_publish(candidate_manifest)
+    with pytest.raises(RuntimeError, match=refusal):
+        pipeline.validate_before_publish(candidate_manifest)
+    pipeline.validate_before_publish(candidate_manifest, allow_shrink=True)
+    with pytest.raises(RuntimeError, match=refusal):
+        pipeline.validate_before_publish(candidate_manifest)
 
-    monkeypatch.delenv("R2_ALLOW_SHRINK")
+    overridden = RulemakingDatasetPipeline(output_dir=tmp_path, allow_shrink=True)
+    overridden.validate_before_publish(candidate_manifest)
+
     previous_manifest.unlink()
     pipeline.validate_before_publish(candidate_manifest)
+
+
+@pytest.mark.parametrize("args, expected", [([], False), (["--allow-shrink"], True)])
+def test_rulemaking_cli_sets_shrink_override(monkeypatch, args, expected):
+    from spicy_regs.pipelines.rulemaking_dataset import app
+
+    seen = []
+    monkeypatch.setattr(RulemakingDatasetPipeline, "run", lambda pipeline: seen.append(pipeline.allow_shrink))
+    with pytest.raises(SystemExit) as exited:
+        app(args)
+    assert exited.value.code == 0
+    assert seen == [expected]

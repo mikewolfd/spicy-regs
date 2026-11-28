@@ -91,10 +91,26 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
     )
     receipt_policies: ClassVar[tuple] = tuple(policy(Path(name).stem) for name in published_outputs)
 
-    def validate_before_publish(self, manifest_path: Path) -> None:
+    def __init__(
+        self,
+        *,
+        output_dir: Path | None = None,
+        skip_upload: bool = True,
+        allow_bootstrap: bool = False,
+        run_id: str | None = None,
+        asserted_at: str | None = None,
+        allow_shrink: bool = False,
+    ) -> None:
+        super().__init__(
+            output_dir=output_dir, skip_upload=skip_upload, allow_bootstrap=allow_bootstrap,
+            run_id=run_id, asserted_at=asserted_at,
+        )
+        self.allow_shrink = allow_shrink
+
+    def validate_before_publish(self, manifest_path: Path, *, allow_shrink: bool = False) -> None:
         """Refuse catastrophic row-count drops against the captured prior manifest unless overridden."""
-        if os.getenv("R2_ALLOW_SHRINK") == "1":
-            logger.warning("R2_ALLOW_SHRINK=1: bypassing rulemaking row-count guard")
+        if allow_shrink or self.allow_shrink:
+            logger.warning("allow_shrink=True: bypassing rulemaking row-count guard")
             return
         previous_path = manifest_path.parent / "_rulemaking_previous_manifest.json"
         if not previous_path.exists():
@@ -125,7 +141,7 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
             if curr_rows == 0 or ratio < min_ratio:
                 raise RuntimeError(
                     f"Rulemaking shrink guard refused {name}: {curr_rows:,} rows vs prior {prev_rows:,} rows "
-                    f"(ratio {ratio:.3f} < threshold {min_ratio}). Set R2_ALLOW_SHRINK=1 to override."
+                    f"(ratio {ratio:.3f} < threshold {min_ratio}). Pass allow_shrink=True (or --allow-shrink) to override."
                 )
 
     def _publish(self, *, manifest_path, pointer_path, artifact_paths) -> None:
@@ -469,11 +485,13 @@ def main(
         bool,
         Parameter(help="Allow a first publication with no prior rulemaking generation"),
     ] = False,
+    allow_shrink: Annotated[bool, Parameter(help="Allow rulemaking output row counts to shrink")] = False,
 ) -> None:
     RulemakingDatasetPipeline(
         output_dir=output_dir,
         skip_upload=skip_upload,
         allow_bootstrap=allow_bootstrap,
+        allow_shrink=allow_shrink,
     ).run()
 
 

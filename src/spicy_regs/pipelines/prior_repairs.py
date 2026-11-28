@@ -725,6 +725,17 @@ def _print(counts: object) -> None:
 
 
 def _table_repair(name: str):
+    def run(*, dry_run_: bool, prior_dir: Path | None, output_dir: Path | None, skip_upload: bool,
+            allow_shrink_tables: frozenset[str] = frozenset()) -> None:
+        if dry_run_:
+            _print(dry_run(name, prior_dir=prior_dir))
+            return
+        if REPAIRS[name].count_only:
+            raise SystemExit(f"{name} counts only (--dry-run): {REPAIRS[name].count_only}")
+        repair_rollup(name, REPAIRS[name])(
+            output_dir=output_dir, skip_upload=skip_upload, allow_shrink_tables=allow_shrink_tables,
+        ).run()
+
     def command(
         *,
         dry_run_: Annotated[bool, Parameter(name="--dry-run", help="Print the counts and write nothing")] = False,
@@ -732,15 +743,29 @@ def _table_repair(name: str):
         output_dir: Annotated[Path | None, Parameter(help="Output directory")] = None,
         skip_upload: Annotated[bool, Parameter(help="Build and verify a local generation only")] = True,
     ) -> None:
-        if dry_run_:
-            _print(dry_run(name, prior_dir=prior_dir))
-            return
-        if REPAIRS[name].count_only:
-            raise SystemExit(f"{name} counts only (--dry-run): {REPAIRS[name].count_only}")
-        repair_rollup(name, REPAIRS[name])(output_dir=output_dir, skip_upload=skip_upload).run()
+        run(dry_run_=dry_run_, prior_dir=prior_dir, output_dir=output_dir, skip_upload=skip_upload)
 
-    command.__doc__ = f"Run {name}: a partial writer of the {REPAIRS[name].family} family."
-    return command
+    def bill_family_quality_command(
+        *,
+        dry_run_: Annotated[bool, Parameter(name="--dry-run", help="Print the counts and write nothing")] = False,
+        prior_dir: Annotated[Path | None, Parameter(help="Read <table>.parquet from here instead of the bucket")] = None,
+        output_dir: Annotated[Path | None, Parameter(help="Output directory")] = None,
+        skip_upload: Annotated[bool, Parameter(help="Build and verify a local generation only")] = True,
+        allow_shrink_public_activity_events: Annotated[
+            bool, Parameter(help="Allow only public_activity_events.parquet to shrink during publication"),
+        ] = False,
+    ) -> None:
+        allow_shrink_tables = (
+            frozenset({"public_activity_events.parquet"}) if allow_shrink_public_activity_events else frozenset()
+        )
+        run(
+            dry_run_=dry_run_, prior_dir=prior_dir, output_dir=output_dir, skip_upload=skip_upload,
+            allow_shrink_tables=allow_shrink_tables,
+        )
+
+    selected_command = bill_family_quality_command if name == "repair-bill-family-quality" else command
+    selected_command.__doc__ = f"Run {name}: a partial writer of the {REPAIRS[name].family} family."
+    return selected_command
 
 
 for _name in REPAIRS:

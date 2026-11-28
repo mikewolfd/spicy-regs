@@ -216,6 +216,7 @@ def _assert_upload_safe(
     remote_key: str,
     *,
     floor: float | None = None,
+    allow_shrink: bool = False,
 ) -> None:
     """Abort if the new upload would catastrophically shrink the remote.
 
@@ -224,7 +225,7 @@ def _assert_upload_safe(
     the publisher's lower fraction for a table whose index shows it kept its
     rows and columns; the lower of the two applies, so an operator's ratio
     below the floor still decides and one above it does not tighten such a
-    table. Set ``R2_ALLOW_SHRINK=1`` to bypass (used by recovery scripts).
+    table. Pass ``allow_shrink=True`` to bypass the byte-size check for this call.
     """
     # Retry state must shrink to zero when the last unresolved key recovers.
     # Dataset size guards still apply to every data table and the manifest.
@@ -232,8 +233,8 @@ def _assert_upload_safe(
         return
     if remote_size is None or remote_size == 0:
         return
-    if getenv("R2_ALLOW_SHRINK") == "1":
-        logger.warning("R2_ALLOW_SHRINK=1: bypassing shrink guard for {}", remote_key)
+    if allow_shrink:
+        logger.warning("allow_shrink=True: bypassing shrink guard for {}", remote_key)
         return
 
     ratio_env = getenv("R2_MIN_SIZE_RATIO", "0.5")
@@ -251,7 +252,7 @@ def _assert_upload_safe(
             f"Refusing to upload {remote_key}: new file would shrink remote "
             f"from {remote_size / 1024 / 1024:.1f} MB to "
             f"{local_size / 1024 / 1024:.1f} MB (ratio {ratio:.3f} < "
-            f"threshold {min_ratio}{compared}). Set R2_ALLOW_SHRINK=1 to override."
+            f"threshold {min_ratio}{compared}). Pass allow_shrink=True to override."
         )
 
 
@@ -311,7 +312,7 @@ def _is_empty_discovery_signals(local_path: Path, remote_key: str) -> bool:
     return not documents.exists() or pq.read_metadata(documents).num_rows > 0
 
 
-def preflight_uploads(output_dir: Path, files: list[Path]) -> None:
+def preflight_uploads(output_dir: Path, files: list[Path], *, allow_shrink: bool = False) -> None:
     """HEAD every planned object and run its size guard before the first byte lands.
 
     One worker used to replace its object while a sibling was still discovering
@@ -340,7 +341,9 @@ def preflight_uploads(output_dir: Path, files: list[Path]) -> None:
         try:
             remote_size = _get_remote_size(client, bucket, remote_key)
             floor = 0.0 if _is_empty_discovery_signals(local_path, remote_key) else None
-            _assert_upload_safe(local_path.stat().st_size, remote_size, remote_key, floor=floor)
+            _assert_upload_safe(
+                local_path.stat().st_size, remote_size, remote_key, floor=floor, allow_shrink=allow_shrink,
+            )
         except Exception as error:
             failures.append((remote_key, error))
 
@@ -353,7 +356,10 @@ def preflight_uploads(output_dir: Path, files: list[Path]) -> None:
     _raise_for_failures("Publication preflight", failures, len(files))
 
 
-def upload_file(local_path: Path, remote_key: str | None = None, *, cache_control: str | None = None) -> None:
+def upload_file(
+    local_path: Path, remote_key: str | None = None, *,
+    cache_control: str | None = None, allow_shrink: bool = False,
+) -> None:
     """Publish one file to R2 (the remote key defaults to the filename).
 
     HEADs the existing object first and refuses to overwrite it with a much
@@ -374,7 +380,7 @@ def upload_file(local_path: Path, remote_key: str | None = None, *, cache_contro
 
     remote_size = _get_remote_size(client, bucket, remote_key)
     floor = 0.0 if _is_empty_discovery_signals(local_path, remote_key) else None
-    _assert_upload_safe(local_size_bytes, remote_size, remote_key, floor=floor)
+    _assert_upload_safe(local_size_bytes, remote_size, remote_key, floor=floor, allow_shrink=allow_shrink)
 
     # Cache-Control policy. Parquet must never be edge-cached: DuckDB (the MCP
     # server and the browser DuckDB-WASM UI) reads each file through many
@@ -473,7 +479,7 @@ def upload_directory_to_r2(local_dir: Path, remote_prefix: str | None = None) ->
     logger.info("Uploaded {} files under {}/", len(files), remote_prefix)
 
 
-def upload_dataset(output_dir: Path, data_types: list[str]) -> None:
+def upload_dataset(output_dir: Path, data_types: list[str], *, allow_shrink: bool = False) -> None:
     """Publish the merged base tables in parallel.
 
     Every size guard runs before the first upload starts, so a table this run
@@ -509,11 +515,11 @@ def upload_dataset(output_dir: Path, data_types: list[str]) -> None:
         logger.warning("upload_dataset: no files to publish in {}", output_dir)
         return
 
-    preflight_uploads(output_dir, base_files)
+    preflight_uploads(output_dir, base_files, allow_shrink=allow_shrink)
 
     failures: list[tuple[str, BaseException]] = []
     with ThreadPoolExecutor(max_workers=len(base_files)) as executor:
-        futures = {executor.submit(upload_file, pf): pf for pf in base_files}
+        futures = {executor.submit(upload_file, pf, allow_shrink=allow_shrink): pf for pf in base_files}
         for future in as_completed(futures):
             if (error := future.exception()) is not None:
                 failures.append((futures[future].name, error))
@@ -521,7 +527,7 @@ def upload_dataset(output_dir: Path, data_types: list[str]) -> None:
     _raise_for_failures("R2 base table publish", failures, len(base_files))
 
 
-def upload_comment_partitions(output_dir: Path, changed_files: list[Path]) -> None:
+def upload_comment_partitions(output_dir: Path, changed_files: list[Path], *, allow_shrink: bool = False) -> None:
     """Publish the changed per-agency comment files, then the refreshed comments index.
 
     Each file is keyed by its path relative to ``output_dir``. Refuses before
@@ -536,13 +542,15 @@ def upload_comment_partitions(output_dir: Path, changed_files: list[Path]) -> No
     # published index can never name partitions that are not yet there.
     with ThreadPoolExecutor(max_workers=min(8, len(changed_files) or 1)) as executor:
         futures = {
-            executor.submit(upload_file, local_path, _remote_key(output_dir, local_path)): local_path
+            executor.submit(
+                upload_file, local_path, _remote_key(output_dir, local_path), allow_shrink=allow_shrink,
+            ): local_path
             for local_path in changed_files
         }
         for future in as_completed(futures):
             if (error := future.exception()) is not None:
                 raise RuntimeError(f"partition upload failed for {futures[future].name}") from error
-    upload_file(index_file, remote_key="comments_index.parquet")
+    upload_file(index_file, remote_key="comments_index.parquet", allow_shrink=allow_shrink)
 
     logger.info("Uploaded {} comment partitions + index", len(changed_files))
 

@@ -541,8 +541,7 @@ class MaterializedDatasetPipeline(Pipeline):
         # This single object replacement is the publication commit. It happens
         # only after every immutable object and the manifest are durable.
         # The pointer is a few hundred bytes and roughly constant in size, so the
-        # shrink guard in upload_file does not apply; R2_ALLOW_SHRINK=1 is the
-        # documented override if a snapshot id ever makes it fire.
+        # upload_file shrink guard should not normally trip.
         self._publish_pointer(pointer_path)
         logger.info(
             "Published materialized dataset {} snapshot {}",

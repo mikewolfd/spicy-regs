@@ -984,6 +984,29 @@ def test_bill_family_quality_repair_rollup_repairs_native_generation_and_preserv
     assert again_dry["public_activity_events"]["stage_changed_null_from_dropped"] == 0
 
 
+@pytest.mark.parametrize("args, expected", [
+    ([], frozenset()),
+    (["--allow-shrink-public-activity-events"], frozenset({"public_activity_events.parquet"})),
+])
+def test_bill_family_quality_cli_scopes_shrink_override(monkeypatch, args, expected):
+    from spicy_regs.pipelines.rollups.base import RollupPipeline
+
+    seen = []
+    monkeypatch.setattr(RollupPipeline, "run", lambda self: seen.append((self.skip_upload, self.allow_shrink_tables)))
+    with pytest.raises(SystemExit) as exited:
+        repairs.app(["repair-bill-family-quality", "--no-skip-upload", *args])
+    assert exited.value.code == 0
+    assert seen == [(False, expected)]
+
+
+def test_other_repairs_do_not_expose_the_bill_family_shrink_override():
+    from cyclopts import UnknownOptionError
+
+    with pytest.raises(UnknownOptionError, match="--allow-shrink-public-activity-events"):
+        repairs.app(["repair-null-from-stage-events", "--allow-shrink-public-activity-events"],
+                    exit_on_error=False, print_error=False)
+
+
 def test_repair_bill_family_quality_workflow_guards_permissions_concurrency_and_shell_safety(tmp_path):
     """Verify repair-bill-family-quality.yml shares bill-family concurrency and guards shrink/shell/secrets."""
     import os
@@ -1031,7 +1054,7 @@ def test_repair_bill_family_quality_workflow_guards_permissions_concurrency_and_
     assert "R2_ACCESS_KEY_ID" not in dry_step.get("env", {})
     assert "R2_SECRET_ACCESS_KEY" not in dry_step.get("env", {})
     assert "R2_ALLOW_SHRINK" not in dry_step["run"] or "unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK" in dry_step["run"]
-    assert "export R2_ALLOW_SHRINK=1" not in dry_step["run"]
+    assert "export R2_ALLOW_SHRINK=1" not in raw_text
     assert "R2_ACCESS_KEY_ID" in publish_step["env"]
     assert "R2_SECRET_ACCESS_KEY" in publish_step["env"]
     assert 'if [ "$ALLOW_SHRINK_PUBLIC_ACTIVITY_EVENTS" = "true" ]; then' in publish_step["run"]
@@ -1050,3 +1073,24 @@ def test_repair_bill_family_quality_workflow_guards_permissions_concurrency_and_
     bad = subprocess.run(["bash", "-c", validate["run"]], cwd=repo_root, env=env, capture_output=True, text=True, timeout=30)
     assert bad.returncode != 0
     assert "SKIP_UPLOAD" in (bad.stderr + bad.stdout)
+
+    stubs = r"""
+curl() { :; }
+uv() {
+    test -z "${R2_ALLOW_SHRINK+x}"
+    printf '%s\n' "$*"
+}
+"""
+    command = "run --frozen python -m spicy_regs.pipelines.prior_repairs repair-bill-family-quality"
+    output = tmp_path.resolve() / "bill-family-quality-repair" / "out"
+    for setting, extra_args in [("false", ""), ("true", " --allow-shrink-public-activity-events")]:
+        result = subprocess.run(
+            ["bash", "-c", stubs + publish_step["run"]], cwd=repo_root,
+            env={**env, "ALLOW_SHRINK_PUBLIC_ACTIVITY_EVENTS": setting, "R2_ALLOW_SHRINK": "1",
+                 "R2_PUBLIC_URL": "https://example.test", "WORKFLOW_USER_AGENT": "test"},
+            capture_output=True, text=True, timeout=30, check=True,
+        )
+        assert result.stdout.splitlines() == [
+            f"{command} --dry-run",
+            f"{command} --output-dir {output} --no-skip-upload{extra_args}",
+        ]
