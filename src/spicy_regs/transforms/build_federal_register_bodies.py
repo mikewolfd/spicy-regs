@@ -494,7 +494,17 @@ def build_federal_register_bodies(
                 preserved_outside += 1
 
         attempt = to_acquire[:batch_limit] if batch_limit is not None else to_acquire
-        deferred_count = max(0, len(to_acquire) - len(attempt))
+        deferred = to_acquire[batch_limit:] if batch_limit is not None else []
+        deferred_count = len(deferred)
+        for candidate in deferred:
+            key = (candidate["document_number"], candidate["publication_date"])
+            held = prior_by_key.get(key)
+            if held is not None:
+                meta = {col: candidate[col] for col in _METADATA_COLUMNS}
+                row = {**meta, **{col: held[col] for col in _BODY_COLUMNS}}
+                if _metadata_pin(row) != _metadata_pin(held):
+                    metadata_updated += 1
+                carried_rows.append(row)
 
         if raise_if_unchanged and have_prior and not attempt and metadata_updated == 0:
             raise Unchanged(

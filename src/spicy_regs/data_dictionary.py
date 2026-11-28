@@ -806,7 +806,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "sam_opportunity_observations",
         "sam_opportunity_snapshots",
         "executive_order_observations",
-    "federal_register_document_bodies",
+        "federal_register_document_bodies",
         "executive_disclosure_filings",
         "executive_disclosure_facts",
         "executive_disclosure_pages",

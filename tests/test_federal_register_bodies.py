@@ -477,7 +477,9 @@ def test_rollup_end_to_end_generation_publication_and_odcs_parity(tmp_path, monk
     assert not (out_dir2 / "generations").exists()
 
 
-def test_console_script_and_workflow_wiring():
+def test_console_script_and_workflow_wiring(tmp_path, monkeypatch):
+    from spicy_regs.pipelines.rollups.base import ROLLUP_SCOPE_ENV_VARS
+
     scripts = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"]["scripts"]
     assert scripts["run-rollup-federal-register-bodies"] == "spicy_regs.pipelines.rollups.federal_register_bodies:app"
 
@@ -494,3 +496,145 @@ def test_console_script_and_workflow_wiring():
     reusable = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "_rollup.yml").read_text())
     declared_inputs = set(reusable[True]["workflow_call"]["inputs"])
     assert set(run["with"]) <= declared_inputs
+
+    steps = {step["name"]: step for step in reusable["jobs"]["rollup"]["steps"] if "name" in step}
+    run_env = steps["Run rollup"]["env"]
+    assert run_env["FR_BODIES_SINCE"] == "${{ inputs.fr_bodies_since }}"
+    assert run_env["FR_BODIES_MAX_NEW"] == "${{ inputs.fr_bodies_max_new }}"
+    assert run_env["FR_BODIES_RETRY_FAILED"] == "${{ inputs.fr_bodies_retry_failed }}"
+
+    # Scope-affecting inputs must stay in ROLLUP_SCOPE_ENV_VARS and non-operational in _rollup.yml resume staging.
+    assert {"FR_BODIES_SINCE", "FR_BODIES_MAX_NEW", "FR_BODIES_RETRY_FAILED"} <= set(ROLLUP_SCOPE_ENV_VARS)
+    assert "FR_BODIES_REQUEST_INTERVAL_SECONDS" not in ROLLUP_SCOPE_ENV_VARS
+    stage_script = steps["Stage retained generation candidate into output"]["run"]
+    for key in ("'fr_bodies_since'", "'fr_bodies_max_new'", "'fr_bodies_retry_failed'"):
+        assert key not in stage_script
+
+    monkeypatch.setenv("FR_BODIES_SINCE", "2021-01-01")
+    monkeypatch.setenv("FR_BODIES_MAX_NEW", "1000")
+    scope_a = rollup_mod.FederalRegisterBodiesRollup(output_dir=tmp_path).invocation_scope()
+    monkeypatch.setenv("FR_BODIES_MAX_NEW", "500")
+    scope_b = rollup_mod.FederalRegisterBodiesRollup(output_dir=tmp_path).invocation_scope()
+    assert scope_a != scope_b
+
+    ci_alerts = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "ci-alerts.yml").read_text())
+    watched = ci_alerts[True]["workflow_run"]["workflows"]
+    assert "Rollup — federal_register_document_bodies" in watched
+
+
+def test_retry_failed_with_max_new_and_narrower_since_preserves_all_prior_rows(tmp_path):
+    """BLOCKER 1 regression: deferred prior rows under retry_failed+max_new and rows outside since are never dropped."""
+    fr_initial = _write_fr_parquet(
+        tmp_path / "fr_initial.parquet",
+        [
+            _fr_row("2026-00004", "2026-04-01", source_sha256="sha256:" + "1" * 64),
+            _fr_row("2026-00003", "2026-03-01", source_sha256="sha256:" + "2" * 64),
+            _fr_row("2026-00002", "2026-02-01", source_sha256="sha256:" + "3" * 64),
+            _fr_row("2026-00001", "2026-01-01", body_html_url=None, source_sha256="sha256:" + "4" * 64),
+            _fr_row("2021-00001", "2021-06-01", source_sha256="sha256:" + "5" * 64),
+        ],
+    )
+
+    def initial_handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url.endswith("/2026-00004.xml"):
+            return _stream_response(200, content_type="application/xml", body=_rule_xml("2026-00004"))
+        if url.endswith("/2021-00001.xml"):
+            return _stream_response(200, content_type="application/xml", body=_rule_xml("2021-00001"))
+        return _stream_response(404, content_type="text/html", body=b"not found")
+
+    first = mod.build_federal_register_bodies(
+        tmp_path / "run1",
+        fr_path=fr_initial,
+        min_request_interval_seconds=0.0,
+        download_prior=lambda *_: False,
+        transport=httpx.MockTransport(initial_handler),
+    )
+    first_rows = {r["document_number"]: r for r in pq.read_table(first).to_pylist()}
+    assert {k: v["body_status"] for k, v in first_rows.items()} == {
+        "2026-00004": "acquired",
+        "2026-00003": "refused",
+        "2026-00002": "refused",
+        "2026-00001": "missing_locator",
+        "2021-00001": "acquired",
+    }
+
+    # Now 2026-00001 gains a valid locator, 2026-00002 gets an updated source_sha256,
+    # retry_failed=True + max_new=1 attempts only 2026-00003, and since narrows to 2025-01-01.
+    fr_second = _write_fr_parquet(
+        tmp_path / "fr_second.parquet",
+        [
+            _fr_row("2026-00004", "2026-04-01", source_sha256="sha256:" + "1" * 64),
+            _fr_row("2026-00003", "2026-03-01", source_sha256="sha256:" + "2" * 64),
+            _fr_row("2026-00002", "2026-02-01", source_sha256="sha256:" + "9" * 64),
+            _fr_row("2026-00001", "2026-01-01", source_sha256="sha256:" + "4" * 64),
+            _fr_row("2021-00001", "2021-06-01", source_sha256="sha256:" + "5" * 64),
+        ],
+    )
+    retried_docs: list[str] = []
+
+    def retry_handler(request: httpx.Request) -> httpx.Response:
+        doc = request.url.path.rsplit("/", 1)[-1].removesuffix(".xml")
+        retried_docs.append(doc)
+        return _stream_response(200, content_type="application/xml", body=_rule_xml(doc))
+
+    second = mod.build_federal_register_bodies(
+        tmp_path / "run2",
+        fr_path=fr_second,
+        since=date(2025, 1, 1),
+        max_new=1,
+        retry_failed=True,
+        min_request_interval_seconds=0.0,
+        prior_path=first,
+        transport=httpx.MockTransport(retry_handler),
+    )
+    assert retried_docs == ["2026-00003"]
+    second_rows = {r["document_number"]: r for r in pq.read_table(second).to_pylist()}
+    assert set(second_rows) == {"2026-00004", "2026-00003", "2026-00002", "2026-00001", "2021-00001"}
+    assert second_rows["2026-00003"]["body_status"] == "acquired"
+    assert second_rows["2026-00002"]["body_status"] == "refused"
+    assert second_rows["2026-00002"]["source_sha256"] == "sha256:" + "9" * 64
+    assert second_rows["2026-00001"]["body_status"] == "missing_locator"
+    assert second_rows["2021-00001"] == first_rows["2021-00001"]
+    assert second_rows["2026-00004"] == first_rows["2026-00004"]
+
+
+def test_composite_multi_date_document_number_keeps_both_dated_rows(tmp_path):
+    """Composite key (document_number, publication_date) preserves reused document numbers published on distinct dates."""
+    fr_path = _write_fr_parquet(
+        tmp_path / "federal_register.parquet",
+        [
+            _fr_row("2024-11111", "2024-03-15", title="March 15 printing"),
+            _fr_row("2024-11111", "2024-03-01", title="March 1 printing"),
+        ],
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if "/2024/03/15/2024-11111.xml" in url:
+            return _stream_response(
+                200, content_type="application/xml", body=_rule_xml("2024-11111", body_sentence="Later March 15 text.")
+            )
+        if "/2024/03/01/2024-11111.xml" in url:
+            return _stream_response(
+                200, content_type="application/xml", body=_rule_xml("2024-11111", body_sentence="Earlier March 1 text.")
+            )
+        raise AssertionError(f"Unexpected URL: {url}")
+
+    out = mod.build_federal_register_bodies(
+        tmp_path / "build",
+        fr_path=fr_path,
+        min_request_interval_seconds=0.0,
+        download_prior=lambda *_: False,
+        transport=httpx.MockTransport(handler),
+    )
+    rows = {(r["document_number"], r["publication_date"]): r for r in pq.read_table(out).to_pylist()}
+    assert len(rows) == 2
+    earlier = rows[("2024-11111", date(2024, 3, 1))]
+    later = rows[("2024-11111", date(2024, 3, 15))]
+    assert earlier["source_record_id"] == "2024-11111@2024-03-01"
+    assert later["source_record_id"] == "2024-11111@2024-03-15"
+    assert "Earlier March 1 text." in earlier["body_text"]
+    assert "Later March 15 text." in later["body_text"]
+    assert earlier["body_sha256"] != later["body_sha256"]
+

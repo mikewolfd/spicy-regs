@@ -3568,8 +3568,10 @@ def _tools() -> list[Tool]:
         'full' for the whole document. Page long text with offset=next_offset
         until next_offset is null (max_chars 500-20000).
 
-        Fetches GPO's official govinfo copy with bounded retries, falling back to
-        federalregister.gov body HTML when available. Quote section numbers used.
+        Reads acquired text offline from federal_register_document_bodies or
+        executive_order_observations when available; otherwise fetches GPO's
+        official govinfo copy with bounded retries, falling back to
+        federalregister.gov body HTML. Quote section numbers used.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):

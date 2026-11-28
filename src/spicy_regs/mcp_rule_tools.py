@@ -562,7 +562,8 @@ def _rule_structure(text: str) -> tuple[list[dict[str, Any]], list[dict[str, Any
     for i, line in enumerate(lines):
         if has_blank_paragraphs and i > 0 and lines[i - 1].strip():
             continue
-        following = lines[i + 1].strip() if i + 1 < len(lines) else ""
+        raw_following = lines[i + 1] if i + 1 < len(lines) else ""
+        following = raw_following.strip()
         part = _PART_HEADING.match(line)
         if part:
             current_part = part.group(1)
@@ -574,6 +575,8 @@ def _rule_structure(text: str) -> tuple[list[dict[str, Any]], list[dict[str, Any
         section = _SECTION_HEADING.match(line)
         if section:
             title = section.group(2).strip()
+            if not has_blank_paragraphs and title[:1].islower():
+                continue
             if has_blank_paragraphs and following and not title.endswith("."):
                 title = f"{title} {following}"
             sections.append(
@@ -582,10 +585,12 @@ def _rule_structure(text: str) -> tuple[list[dict[str, Any]], list[dict[str, Any
             continue
         if not has_blank_paragraphs:
             marker = _SECTION_MARKER_ONLY.match(line.strip())
-            if marker and following:
+            if marker and following and not raw_following[:1].isspace() and not following[:1].islower():
                 sections.append(
                     {"section": marker.group(1), "title": " ".join(following.split()), "part": current_part, "line": i}
                 )
+    if not has_blank_paragraphs and (parts or any(s["part"] is not None for s in sections)):
+        sections = [s for s in sections if s["part"] is not None]
     return parts, sections
 
 
@@ -602,8 +607,9 @@ def _slice_lines(text: str, start: int, stops: list[int], stop_at_instructions: 
 
 
 def _labeled_paragraph(text: str, label: str) -> str | None:
+    terminator = r"\n\s*\n|\n[A-Z][A-Z ]+:[ \t]*(?=\n|\Z)|\Z" if "\n\n" not in text else r"\n\s*\n|\Z"
     match = re.search(
-        rf"^{re.escape(label)}:[ \t]*(?:\n+[ \t]*)?(.*?)(?:\n\s*\n|\n[A-Z][A-Z ]+:|\Z)",
+        rf"^{re.escape(label)}:[ \t]*(?:\n+[ \t]*)?(.*?)(?:{terminator})",
         text,
         re.MULTILINE | re.DOTALL,
     )
@@ -947,7 +953,10 @@ def get_rule_text(
             return result
         body = _slice_lines(text, part_match["line"], [p["line"] for p in parts], stop_at_instructions=False)
     elif section_arg:
-        sec_match = next((s for s in sections if s["section"] == section_arg.group(1)), None)
+        sec_match = next(
+            (s for s in sections if s["section"] == section_arg.group(1) and s["part"] is not None),
+            None,
+        ) or next((s for s in sections if s["section"] == section_arg.group(1)), None)
         if sec_match is None:
             result["error"] = (
                 f"No section {section_arg.group(1)} in this document. Sections: {[s['section'] for s in sections][:60]}"
