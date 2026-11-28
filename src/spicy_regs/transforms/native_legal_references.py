@@ -46,6 +46,11 @@ from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratc
 #: The two tables, as spicy-docs contracts them: columns, identities and the rule their rows name.
 CONTRACTS = (NATIVE_LEGAL_REFERENCES, NATIVE_LEGAL_REFERENCE_READS)
 OUTPUTS = tuple(contract.name + ".parquet" for contract in CONTRACTS)
+#: Per-run scanner observation cap and matching distinct target-key lookup bound.
+#: Keeps interactive ``resolve_citations`` default (500) intact while preventing large
+#: batch replays (e.g. Statutes at Large volumes) from truncating at 500 distinct keys.
+MAX_OBSERVATIONS = 10_000
+NATIVE_MAX_TARGET_KEYS = 10_000
 
 
 def _json(value: Any) -> str:
@@ -82,8 +87,9 @@ def build_native_legal_references(
     """Replay explicit complete inputs; a failed/capped scan cannot clear earlier findings.
 
     Bounds: at most 100 source records, 16 MiB per XML, 64 MiB total XML,
-    10,000 selected observations per run. Optional target Parquet inputs are
-    exact byte-pinned and bounded to 64 MiB each. No network acquisition occurs.
+    10,000 selected observations and 10,000 distinct target keys per run.
+    Optional target Parquet inputs are exact byte-pinned and bounded to 64 MiB
+    each. No network acquisition occurs.
     Scope is family/record/edition; input digest and rule revisions replace that
     scope after a complete read, including zero. Other scopes survive the merge.
     """
@@ -196,7 +202,7 @@ def build_native_legal_references(
                 text_indexes[(scope, context["input_sha256"])] = text_index
 
                 def admit(observation, shaper, *, index=text_index):
-                    if len(rows) + len(fresh) >= 10_000:
+                    if len(rows) + len(fresh) >= MAX_OBSERVATIONS:
                         raise ValueError("selected observation bound exceeded")
                     extra = (
                         {"title": str(facts["metadata"]["title"])}
@@ -218,14 +224,14 @@ def build_native_legal_references(
                         body,
                         on_authority=lambda o: admit(o, shape_ecfr_note),
                         on_source=lambda o: admit(o, shape_ecfr_note),
-                        max_observations=10_000,
+                        max_observations=MAX_OBSERVATIONS,
                     )
                 elif family == "uscode":
                     scan_uscode_references(
                         body,
                         on_reference=lambda o: admit(o, shape_uscode_reference),
                         on_source_credit=lambda o: admit(o, shape_uscode_source_credit),
-                        max_observations=10_000,
+                        max_observations=MAX_OBSERVATIONS,
                     )
                 else:
                     scanner = (
@@ -236,7 +242,7 @@ def build_native_legal_references(
                         else scan_statute_references
                     )
                     shaper = partial(shape_legislative_reference, source_family=family)
-                    scanner(body, on_reference=lambda o: admit(o, shaper), max_observations=10_000)
+                    scanner(body, on_reference=lambda o: admit(o, shaper), max_observations=MAX_OBSERVATIONS)
             except Exception as error:
                 evidence.refusal(error, stage="native-legal-reference:" + scope)
                 raise
@@ -259,9 +265,16 @@ def build_native_legal_references(
         coverage: dict[str, Any] = {}
 
         def lookup(candidates: list[dict[str, Any]], texts: dict[tuple[str, str], str]) -> list[dict[str, Any]]:
-            resolved = resolve_citations(cursor, candidates, snapshots, source_digests=texts,
-                                         routes=NATIVE_ROUTES, rule=NATIVE_RESOLUTION_RULE,
-                                         enrich_dispositions=False)
+            resolved = resolve_citations(
+                cursor,
+                candidates,
+                snapshots,
+                source_digests=texts,
+                max_target_keys=NATIVE_MAX_TARGET_KEYS,
+                routes=NATIVE_ROUTES,
+                rule=NATIVE_RESOLUTION_RULE,
+                enrich_dispositions=False,
+            )
             coverage.update(resolved["coverage"])
             return resolved["occurrences"]
 

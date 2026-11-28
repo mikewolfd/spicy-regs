@@ -61,8 +61,10 @@ candidate keys stay linkable. An unknown source edition stays unknown even when 
 target lookup finds a release-point section.
 
 Bounds are explicit: at most 100 source inputs, 16 MiB per XML and 64 MiB total
-XML, 10,000 selected observations per run, and 64 MiB per optional target
-file. Owner scanner depth/text limits remain active. The shared resolver
+XML, 10,000 selected observations and 10,000 distinct target keys per run
+(`NATIVE_MAX_TARGET_KEYS`, matching `MAX_OBSERVATIONS` while leaving
+`resolve_citations`'s interactive default at 500), and 64 MiB per optional
+target file. Owner scanner depth/text limits remain active. The shared resolver
 limits distinct target keys and candidates and records capped/failed lookups.
 A parsing, pin or size failure aborts before replacing output tables.
 
