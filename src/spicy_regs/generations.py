@@ -607,7 +607,6 @@ def _verify_receipts(source, tables, members, receipt_spec, table_info, admit_re
     """Recheck all row joins through the same local or pinned remote byte source."""
     from spicy_regs.etl_receipts import DatasetPolicy, RECEIPT_KEY
     from spicy_regs.sources.publication import member_table
-    from spicy_regs.subject_catalog import retired_receipt_datasets
 
     if ({"key", "generationId", "policies", "columns", "rows"} != set(receipt_spec)
             or receipt_spec["key"] != RECEIPT_KEY or not isinstance(receipt_spec["generationId"], str)
@@ -616,14 +615,11 @@ def _verify_receipts(source, tables, members, receipt_spec, table_info, admit_re
     if table_info(RECEIPT_KEY) != {key: receipt_spec[key] for key in ("columns", "rows")}:
         raise ValueError("Receipt member differs from its declared shape/count")
     policies = [DatasetPolicy.from_descriptor(value) for value in receipt_spec["policies"]]
+    if {p.dataset + ".parquet" for p in policies if not p.receipt_only} != set(tables):
+        raise ValueError("Receipt policies must classify every subject output in a generation")
     subjects = {p.dataset: [] for p in policies}
-    receipt_tables = {p.dataset + ".parquet" for p in policies if not p.receipt_only}
-    receipt_free = {name + ".parquet" for name in retired_receipt_datasets() - subjects.keys()} & tables.keys()
-    if receipt_tables | receipt_free != set(tables):
-        raise ValueError("Receipt policies must classify every subject output with active receipts")
     for member in members:
-        table = member_table(member.object_key)
-        if table in receipt_tables:
-            subjects[table.removesuffix(".parquet")].append(lambda key=member.object_key: source.open(key))
+        subjects[member_table(member.object_key).removesuffix(".parquet")].append(
+            lambda key=member.object_key: source.open(key))
     admit_receipts(subjects, [lambda: source.open(RECEIPT_KEY)], policies,
                    generation_id=receipt_spec["generationId"])

@@ -13,7 +13,7 @@ pytestmark = pytest.mark.usefixtures("votes_receipts_unretired")
 
 
 def fixture(tmp_path, monkeypatch, *, mutate=None, fail=False):
-    values = {'members.parquet': b'verified', 'laws.parquet': b'law', 'etl_receipts.parquet': b'receipts'}
+    values = {'members.parquet': b'verified', 'roll_call_votes.parquet': b'vote', 'etl_receipts.parquet': b'receipts'}
     prefix = 'generations/test/' + 'a' * 64
     def descriptor(data):
         return {'sha256': 'sha256:' + hashlib.sha256(data).hexdigest(), 'byteSize': len(data), 'rows': 1}
@@ -22,7 +22,7 @@ def fixture(tmp_path, monkeypatch, *, mutate=None, fail=False):
         'prefix': prefix,
         'tables': {key: descriptor(data) for key, data in values.items() if key != 'etl_receipts.parquet'},
         'etlReceipts': {'key': 'etl_receipts.parquet', **descriptor(values['etl_receipts.parquet']),
-                        'generationId': 'g1', 'datasets': ['members', 'laws']},
+                        'generationId': 'g1', 'datasets': ['members', 'roll_call_votes']},
     }
     calls = []
     class Response:
@@ -63,8 +63,8 @@ def test_shared_member_downloads_once_and_provenance_rechecks(tmp_path, monkeypa
     # A real stream download already hashes these bytes. Reuse must add no disk hash.
     monkeypatch.setattr('spicy_regs.selected_generations._pin', lambda _: pytest.fail('duplicate hash'))
     assert reader.select('absent') is None and not calls
-    first, second = reader.select('members'), reader.select('laws')
-    assert first.receipts == second.receipts and len(calls) == 3
+    first, second = reader.select('members'), reader.select('roll_call_votes')
+    assert first.receipts is not None and first.receipts == second.receipts and len(calls) == 3
     assert reader.select('members') == first
     assert reader.member_pin(first.receipts)['byteSize'] == 8
     assert len(calls) == 3

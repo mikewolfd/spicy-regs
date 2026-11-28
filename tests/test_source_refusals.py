@@ -14,9 +14,8 @@ import pytest
 from spicy_docs.transport.credentials import CredentialRefusedError
 
 from scripts import check_source_refusals as check
-from spicy_regs.native_types import described_schema
-from spicy_regs.legislative_receipts import write_legislative_outputs, policy, FILE_POLICY
 from spicy_regs.generations import build_generation
+from spicy_regs.pipelines.rollups.laws import LawsRollup
 from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.sources import publication as pub
 from tests.generation_fakes import Store
@@ -46,12 +45,16 @@ def _published(tmp_path, monkeypatch, olrc, *, after=None, retain=True):
     from spicy_regs.transforms.build_laws import build_laws
 
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
     build = tmp_path / "build"
     build.mkdir()
+    rollup = LawsRollup(output_dir=build, skip_upload=True)
+    evidence = CaptureEvidence(tmp_path, "laws")
+    evidence.inherit(pub.empty_index(), public_url=None)
 
-    def run(source, evidence=None):
+    def run(directory, source, evidence=None):
         return build_laws(
-            build,
+            directory,
             reader=StubListingReader({119: LISTED_119}),
             uslm=StubUslm(unavailable={110, 109, 104}),
             olrc=source,
@@ -59,26 +62,20 @@ def _published(tmp_path, monkeypatch, olrc, *, after=None, retain=True):
             evidence=evidence,
         )
 
-    if after is not None:
-        for path in run(after):
-            shutil.copyfile(path, build / f"_{path.stem}_prior.parquet")
-    evidence = CaptureEvidence(tmp_path, "laws")
-    evidence.inherit(pub.empty_index(), public_url=None)
-    outputs = run(olrc, evidence)
+    def build_with_prior(directory):
+        if after is not None:
+            for path in run(directory, after):
+                shutil.copyfile(path, directory / f"_{path.stem}_prior.parquet")
+        return run(directory, olrc, evidence)
+
+    outputs = rollup.build_tables(build, build_with_prior)
     directory = tmp_path / "generation"
-    bundle = tmp_path / "native-bundle"
-    manifest = write_legislative_outputs(outputs, bundle, generation_id="laws-refusal-test")
-    native = [bundle / member for members in manifest["subjects"].values() for member in members]
-    policies = [policy(name) for name in manifest["datasets"]] + [FILE_POLICY]
     build_generation(
         directory,
         family="laws",
-        files=native,
-        expected_keys=[p.name for p in native],
-        schemas={p.dataset: described_schema(p.subject_schema) for p in policies if not p.receipt_only},
-        receipt_path=bundle / "etl_receipts.parquet",
-        receipt_policies=policies,
-        receipt_generation_id="laws-refusal-test",
+        files=outputs,
+        expected_keys=rollup.outputs,
+        schemas=rollup.generation_schemas(),
         inputs=evidence.inputs() if retain else (),
     )
     store = Store()
@@ -99,7 +96,7 @@ def _published(tmp_path, monkeypatch, olrc, *, after=None, retain=True):
         raise httpx.HTTPStatusError("404", request=httpx.Request("GET", url), response=httpx.Response(404))
 
     monkeypatch.setattr(pub, "_bounded_get", get)
-    return {path.name: pq.read_table(path).num_rows for path in outputs}
+    return {name: pq.ParquetFile(directory / name).metadata.num_rows for name in rollup.source_outputs}
 
 
 @pytest.mark.parametrize(

@@ -376,13 +376,15 @@ def remember_generation(root: Path, directory: Path, artifact) -> None:
             if LocalFileState.from_stat(path.lstat()) != state:
                 raise ValueError("Native generation changed after byte admission")
             checked[path.absolute()] = (signature, member.sha256)
-    selected = [SelectedDataset(name, tuple(subjects.get(name, ())), None, None) for name in sorted(public_datasets)]
-    if specification is not None:
-        selected.extend(
+    if specification is None:
+        # The outcome table now owns incremental checkpoint reads for this dataset.
+        removed = [dataset for dataset, outcome in READ_TABLES.items() if outcome in public_datasets and dataset in retired]
+        selected = [SelectedDataset(name, tuple(subjects.get(name, ())), None, None) for name in sorted(public_datasets)]
+        _remember_selection(root, selected, checked, removed=removed)
+    else:
+        selected = [
             SelectedDataset(name, tuple(subjects.get(name, ())), directory / specification["key"],
                             specification["generationId"])
             for name in (policy["dataset"] for policy in specification["policies"])
-        )
-    # The outcome table now owns incremental checkpoint reads for this dataset.
-    removed = [dataset for dataset, outcome in READ_TABLES.items() if outcome in public_datasets and dataset in retired]
-    _remember_selection(root, selected, checked, removed=removed)
+        ]
+        _remember_selection(root, selected, checked)

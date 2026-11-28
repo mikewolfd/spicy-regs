@@ -105,7 +105,7 @@ def test_local_mcp_resolves_public_law_against_receipt_free_pin(tmp_path, monkey
         assert match["candidate_keys"] == [{"congress": "114", "law_type": "public", "number": "254"}]
 
 
-def test_mixed_generation_registration_updates_both_pins(tmp_path):
+def test_registering_receipt_free_generation_preserves_receipt_backed_pin(tmp_path):
     old_source = shaped(tmp_path / "old-source.parquet", [{"bioguide_id": "X"}])
     old_member, old_receipts = write_congress_dataset(
         old_source, tmp_path / "old", dataset="members", generation_id="old",
@@ -113,29 +113,22 @@ def test_mixed_generation_registration_updates_both_pins(tmp_path):
     assert old_member is not None
     old_law = shaped(tmp_path / "old" / "laws.parquet", [{"law_id": "119-public-1"}])
     root = tmp_path / "output"
+    member_pin = SelectedDataset("members", (old_member,), old_receipts, "old")
     remember_selection(root, [
-        SelectedDataset("members", (old_member,), old_receipts, "old"),
+        member_pin,
         SelectedDataset("laws", (old_law,), None, None),
     ])
-    new_source = shaped(tmp_path / "new-source.parquet", [{"bioguide_id": "Y"}])
-    new_member, new_receipts = write_congress_dataset(
-        new_source, tmp_path / "new", dataset="members", generation_id="new",
-    )
-    assert new_member is not None
-    new_law = shaped(tmp_path / "new" / "laws.parquet", [{"law_id": "119-public-2"}])
-    generation = root / "generations" / "mixed"
-    artifact = build_generation(
-        generation, family="mixed", files=[new_member, new_law], expected_keys=["members.parquet", "laws.parquet"],
-        receipt_path=new_receipts, receipt_policies=[installed_policies()["members"]], receipt_generation_id="new",
-    )
+    new_law = shaped(tmp_path / "laws.parquet", [{"law_id": "119-public-2"}])
+    generation = root / "generations" / "new-laws"
+    artifact = build_generation(generation, family="laws", files=[new_law], expected_keys=["laws.parquet"])
 
     remember_generation(root, generation, artifact)
 
     selected = local_selection(root)
-    assert selected.native["members"] == SelectedDataset(
-        "members", (generation / "members.parquet",), generation / "etl_receipts.parquet", "new",
-    )
-    assert selected.native["laws"] == SelectedDataset("laws", (generation / "laws.parquet",), None, None)
+    assert selected.native == {
+        "members": member_pin,
+        "laws": SelectedDataset("laws", (generation / "laws.parquet",), None, None),
+    }
 
 
 def test_mcp_captures_multiple_generations_and_scopes_shared_receipts(tmp_path, monkeypatch):

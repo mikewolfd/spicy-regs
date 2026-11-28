@@ -10,14 +10,11 @@ import pytest
 
 from spicy_docs.schemas.native_reference_rows import NATIVE_LEGAL_REFERENCE_RULE
 from spicy_regs.citation_resolution import NATIVE_RESOLUTION_RULE, ROUTES, resolve_citations
-from spicy_regs.generations import build_generation, verify_generation
-from spicy_regs.legislative_receipts import FILE_POLICY, policy, write_legislative_outputs
-from spicy_regs.native_types import described_schema
+from spicy_regs.generations import verify_generation
+from spicy_regs.pipelines.rollups.native_legal_references import NativeLegalReferencesRollup
 from spicy_regs.relationship_views.reference import REFERENCE_TABLES, reference_paths
 from spicy_regs.relationship_views.sql_views import install_sql_views
 from spicy_regs.relationship_views.uscode import USCODE_VIEWS
-from spicy_regs.source_evidence import CaptureEvidence
-from spicy_regs.transforms.native_legal_references import OUTPUTS, build_native_legal_references
 
 
 def _table(con, name, fields, records):
@@ -436,11 +433,11 @@ def test_the_route_finds_what_the_release_point_prints_or_spans(con):
     assert resolved["resolution_rule"] == "selected-target-lookup/2"
 
 
-def test_sealed_native_legal_references_generation_integrates_with_verdicts(tmp_path):
-    """End-to-end sealed legislative-documents/4 (rule/2 + /004 spans) native Arrow target_candidates -> usc_citation_verdicts."""
+def test_sealed_native_legal_references_generation_integrates_with_verdicts(tmp_path, monkeypatch):
+    """Read sealed receipt-free target candidates through the U.S. Code citation verdicts."""
     assert NATIVE_RESOLUTION_RULE == "selected-target-lookup/2"
     assert NATIVE_LEGAL_REFERENCE_RULE == "native-legal-reference/004"
-    assert policy("native_legal_references").policy_version == "legislative-documents/4"
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
 
     inputs = tmp_path / "inputs"
     inputs.mkdir()
@@ -492,25 +489,12 @@ def test_sealed_native_legal_references_generation_integrates_with_verdicts(tmp_
         ],
     }))
 
-    raw_out = tmp_path / "raw_out"
-    evidence = CaptureEvidence(raw_out, "native-legal-references")
-    files = build_native_legal_references(manifest, raw_out, evidence=evidence)
-    bundle = tmp_path / "sealed-bundle"
-    write_legislative_outputs(files, bundle, generation_id="verdict-integration")
-    gen = tmp_path / "generation"
-    artifact = build_generation(
-        gen,
-        family="native-legal-references",
-        files=[bundle / "native_legal_references.parquet", bundle / "native_legal_reference_reads.parquet"],
-        expected_keys=list(OUTPUTS),
-        schemas={name: described_schema(policy(name).subject_schema)
-                 for name in ("native_legal_references", "native_legal_reference_reads")},
-        inputs=evidence.inputs(),
-        receipt_path=bundle / "etl_receipts.parquet",
-        receipt_policies=[policy("native_legal_references"), policy("native_legal_reference_reads"), FILE_POLICY],
-        receipt_generation_id="verdict-integration",
-    )
-    verify_generation(gen, expected_pin=artifact.pin)
+    output = tmp_path / "output"
+    NativeLegalReferencesRollup(manifest=manifest, output_dir=output, skip_upload=True).run()
+    gen, = (output / "generations").iterdir()
+    artifact = verify_generation(gen)
+    assert artifact.pin.artifact_digest == f"sha256:{gen.name}"
+    assert "etlReceipts" not in artifact.root["spec"]
 
     # Confirm sealed native_legal_references carries rule/2 provenance and found status for printed sections.
     sealed_rows = pq.read_table(gen / "native_legal_references.parquet").to_pylist()
