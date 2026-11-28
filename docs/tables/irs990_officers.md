@@ -6,7 +6,7 @@
 
 Repeated Part VII Section A officer, director, trustee, key-employee, and corporate-trustee entries with separately reported compensation, partitioned by submission_year.
 
-**Coverage.** Window. Multi-year Form 990 streaming population across official IRS TEOS annual indexes and bulk XML archives for visually qualified schema cohorts (2020v4.* through 2025v4.*), partitioned by submission_year. Form 990-EZ, 990-PF, 990-T, 990-N, and Section 527 (irs-527) are excluded. *(measured 2026-11-28)*
+**Coverage.** Window. Multi-year Form 990 streaming population across official IRS TEOS annual indexes and bulk XML archives for visually qualified schema cohorts (2016v3.* through 2025v4.*), partitioned by submission_year. Form 990-EZ, 990-PF, 990-T, 990-N, and Section 527 (irs-527) are excluded. *(measured 2026-11-28)*
 
 - **Parquet file:** `irs990_officers.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

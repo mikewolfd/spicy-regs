@@ -315,7 +315,7 @@
       "name": "Internal Revenue Service Form 990 series",
       "url": "https://www.irs.gov/charities-non-profits/form-990-series-downloads",
       "kind": "government",
-      "note": "Multi-year streaming IRS TEOS annual index and bulk XML Form 990 population (qualified 2020v4.*–2025v4.* cohorts), partitioned by submission_year. Covers Form 990 finances, Part VII personnel/corporate trustees, and Schedule I domestic organization grants; excludes 990-EZ, 990-PF, 990-T, 990-N, and Section 527 (irs-527)."
+      "note": "Multi-year streaming IRS TEOS annual index and bulk XML Form 990 population (qualified 2016v3.*–2025v4.* cohorts), partitioned by submission_year. Covers Form 990 finances, Part VII personnel/corporate trustees, and Schedule I domestic organization grants; excludes 990-EZ, 990-PF, 990-T, 990-N, and Section 527 (irs-527)."
     },
     "sec-edgar": {
       "id": "sec-edgar",

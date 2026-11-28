@@ -13383,7 +13383,7 @@ tables:
     summary: Multi-year IRS Form 990 nonprofit return headers, Part I financial totals,
       and Part VIII/IX reconciliations partitioned by submission_year.
     coverage: Window. Multi-year Form 990 streaming population across official IRS TEOS annual
-      indexes and bulk XML archives for visually qualified schema cohorts (2020v4.* through
+      indexes and bulk XML archives for visually qualified schema cohorts (2016v3.* through
       2025v4.*), partitioned by submission_year. Form 990-EZ, Form 990-PF, Form 990-T,
       and separate non-XML Form 990-N e-Postcard filings are excluded from financial
       interpretation (with exact per-year exclusion counts retained in the build population
@@ -13405,7 +13405,7 @@ tables:
       return_type: Literal index and XML return type. Financial interpretation supports
         990 only; 990EZ, 990PF, 990T and separate 990-N are excluded.
       return_version: Literal XML returnVersion. Only visually qualified Form 990 schema
-        cohorts (2020v4.* through 2025v4.*) are interpreted; unknown versions are quarantined
+        cohorts (2016v3.* through 2025v4.*) are interpreted; unknown versions are quarantined
         and fail the build above 0.1%.
       tax_year: Literal XML TaxYr; missing remains NULL.
       tax_period_begin: Literal XML TaxPeriodBeginDt; missing remains NULL.
@@ -13457,7 +13457,7 @@ tables:
       corporate-trustee entries with separately reported compensation, partitioned by
       submission_year.
     coverage: Window. Multi-year Form 990 streaming population across official IRS TEOS annual
-      indexes and bulk XML archives for visually qualified schema cohorts (2020v4.* through
+      indexes and bulk XML archives for visually qualified schema cohorts (2016v3.* through
       2025v4.*), partitioned by submission_year. Form 990-EZ, 990-PF, 990-T, 990-N,
       and Section 527 (irs-527) are excluded.
     measured_on: '2026-11-28'
@@ -13514,7 +13514,7 @@ tables:
     summary: Repeated Schedule I Part II domestic organization grant entries partitioned
       by submission_year; cash and noncash assistance remain separate.
     coverage: Window. Multi-year Form 990 streaming population across official IRS TEOS annual
-      indexes and bulk XML archives for visually qualified schema cohorts (2020v4.* through
+      indexes and bulk XML archives for visually qualified schema cohorts (2016v3.* through
       2025v4.*), partitioned by submission_year. Covers Schedule I Part II domestic
       organization recipients only (excluding Schedule I Part III individuals, Schedule
       F foreign grants, 990-EZ, 990-PF, 990-T, 990-N, and Section 527 irs-527). Unallocated

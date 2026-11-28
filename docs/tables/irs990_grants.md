@@ -6,7 +6,7 @@
 
 Repeated Schedule I Part II domestic organization grant entries partitioned by submission_year; cash and noncash assistance remain separate.
 
-**Coverage.** Window. Multi-year Form 990 streaming population across official IRS TEOS annual indexes and bulk XML archives for visually qualified schema cohorts (2020v4.* through 2025v4.*), partitioned by submission_year. Covers Schedule I Part II domestic organization recipients only (excluding Schedule I Part III individuals, Schedule F foreign grants, 990-EZ, 990-PF, 990-T, 990-N, and Section 527 irs-527). Unallocated differences against Part I grants_paid_usd stay explicit. *(measured 2026-11-28)*
+**Coverage.** Window. Multi-year Form 990 streaming population across official IRS TEOS annual indexes and bulk XML archives for visually qualified schema cohorts (2016v3.* through 2025v4.*), partitioned by submission_year. Covers Schedule I Part II domestic organization recipients only (excluding Schedule I Part III individuals, Schedule F foreign grants, 990-EZ, 990-PF, 990-T, 990-N, and Section 527 irs-527). Unallocated differences against Part I grants_paid_usd stay explicit. *(measured 2026-11-28)*
 
 - **Parquet file:** `irs990_grants.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
