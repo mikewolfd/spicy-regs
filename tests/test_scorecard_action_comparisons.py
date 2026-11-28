@@ -6,7 +6,7 @@ import pytest
 from spicy_regs.scorecards.action_comparisons import (
     COLUMNS, RESULT_COLUMNS, TABLE, VOTE_COLUMNS, compare_lcv_2025, selected_native_rows,
 )
-from spicy_regs.scorecards.etl import ANALYSIS_NAMES, SOURCE_NAMES, generation_options, read_family, write_family
+from spicy_regs.scorecards.etl import ANALYSIS_NAMES, SOURCE_NAMES, generation_schemas, read_family, write_family
 from spicy_regs.scorecards.resolution import INPUT_TABLES
 from spicy_regs.generations import build_generation
 from tests.test_scorecard_native_main_inputs import native_selection
@@ -75,7 +75,7 @@ def test_six_statuses_fail_closed_and_native_credit_is_unchanged(tmp_path):
     files = write_family(directory, {TABLE: rows})
     assert read_family(directory, [TABLE])[TABLE] == rows
     build_generation(tmp_path / "generation", family="scorecard-analysis", files=files,
-                     expected_keys=[TABLE + ".parquet"], **generation_options(directory, [TABLE]))
+                     expected_keys=[TABLE + ".parquet"], schemas=generation_schemas([TABLE]))
 
 
 def test_changed_source_snapshot_refuses():

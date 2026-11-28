@@ -7,7 +7,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_regs.scorecards.etl import ANALYSIS_NAMES, generation_options, read_family
+from spicy_regs.scorecards.etl import ANALYSIS_NAMES, generation_schemas, read_family
 from spicy_regs.generations import build_generation, verify_generation
 from spicy_regs.pipelines.rollups.scorecard_analysis import ScorecardAnalysisRollup
 from spicy_regs.scorecards.resolution import OFFICIAL_COLUMNS
@@ -99,7 +99,7 @@ def _inputs(tmp_path, *, row_overrides=None, published=frozenset()):
     scorecard_generation = tmp_path / 'published-scorecards'
     build_generation(scorecard_generation, family='scorecards', files=source_files,
                      expected_keys=[p.name for p in source_files],
-                     **generation_options(scorecard_build, scorecard_names))
+                     schemas=generation_schemas(scorecard_names))
     store = Store()
     index = pub.publish_generation(scorecard_generation, client=store, bucket='test', prior_index=pub.empty_index())
 
@@ -170,10 +170,11 @@ def test_analysis_pins_every_partition_and_keeps_publisher_identities(tmp_path, 
     output.mkdir()
     rollup = ScorecardAnalysisRollup(output_dir=output)
     parents = rollup._prime(output, index)
-    # Every main member, including both bill partitions; source receipts and
-    # only the two official datasets requiring original processing context.
-    assert len(calls) == len(rollup.inputs) + 1 + 1 + 2
+    # Every main member, including both bill partitions, and only the two official
+    # datasets still requiring receipts (scorecards are receipt-retired).
+    assert len(calls) == len(rollup.inputs) + 1 + 2
     assert set(rollup._official_receipts) == {"members", "member_terms"}
+    assert rollup._scorecard_source_receipt is None
 
     assert "tableDescriptorDigest" in parents["congress_bills.parquet"]
     assert "sha256" not in parents["congress_bills.parquet"]
@@ -201,12 +202,13 @@ def test_analysis_pins_every_partition_and_keeps_publisher_identities(tmp_path, 
         expected_keys=rollup.outputs,
         parents=parents,
         read_snapshot=index,
-        **generation_options(output, ANALYSIS_NAMES),
+        schemas=generation_schemas(ANALYSIS_NAMES),
     )
-    verify_generation(sealed)
+    admitted = verify_generation(sealed)
+    assert "etlReceipts" not in admitted.root["spec"]
     # A warm read validates bytes and needs no network.
     rollup._prime(output, index)
-    assert len(calls) == len(rollup.inputs) + 1 + 1 + 2
+    assert len(calls) == len(rollup.inputs) + 1 + 2
 
 
 def test_analysis_keeps_member_context_receipt_checked(tmp_path, monkeypatch):
@@ -257,7 +259,7 @@ def test_lcv_comparison_flows_through_pinned_analysis_family(tmp_path, monkeypat
     assert qualification["input_pins"]["member_votes"] == parents["member_votes.parquet"]
     sealed = tmp_path / "generation"
     build_generation(sealed, family="scorecard-analysis", files=files, expected_keys=rollup.outputs,
-                     parents=parents, read_snapshot=index, **generation_options(output, ANALYSIS_NAMES))
+                     parents=parents, read_snapshot=index, schemas=generation_schemas(ANALYSIS_NAMES))
     assert "scorecard_action_comparisons.parquet" in verify_generation(sealed).root["spec"]["tables"]
 
 
@@ -397,15 +399,19 @@ def test_split_parent_pin_rejects_a_changed_member_or_size(tmp_path):
             )
 
 
-@pytest.mark.parametrize('missing', ['source', 'official'])
+@pytest.mark.parametrize('missing', ['source_unretired', 'official'])
 def test_analysis_requires_native_receipts_for_every_input(tmp_path, monkeypatch, missing):
+    from spicy_regs import subject_catalog
+
     store, index = _inputs(tmp_path)
     _serve(monkeypatch, store)
     output = tmp_path / 'analysis'
     output.mkdir()
     rollup = ScorecardAnalysisRollup(output_dir=output)
     rollup._prime(output, index)
-    if missing == 'source':
+    if missing == 'source_unretired':
+        retired = subject_catalog.retired_receipt_datasets() - {"scorecards"}
+        monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
         rollup._scorecard_source_receipt = None
     else:
         rollup._official_receipts.pop('member_terms')

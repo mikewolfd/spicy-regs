@@ -8,7 +8,6 @@ import argparse
 from hashlib import file_digest, sha256
 import json
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 import duckdb
 import pyarrow.parquet as pq
@@ -16,9 +15,7 @@ import pyarrow.parquet as pq
 from spicy_regs.scorecards.operations.inventory import read_receipt
 from spicy_regs.scorecards.operations.results import query_rows, write
 from spicy_regs.duckdb_settings import ExportResources
-from spicy_regs.etl_receipts import read_attempts, read_with_receipts, select_receipts
 from spicy_regs.scorecards.etl import SOURCE_NAMES, admitted_read_policies
-from spicy_regs.scorecards.subject_shapes import restore_source_row
 
 
 def document(path):
@@ -64,7 +61,12 @@ def publication_proof(readback_root):
     generation = family["artifactDigest"]
     mode = summary.get("mode")
     receipt_serving = summary.get("receipt_serving")
-    if (mode, receipt_serving) not in ((None, None), ("full", "passed"), ("source-adoption", "not_checked")):
+    if (mode, receipt_serving) not in (
+        (None, None),
+        ("full", "passed"),
+        ("full", "retired"),
+        ("source-adoption", "not_checked"),
+    ):
         raise ValueError("Readback mode and receipt-serving status differ")
     accepted_scopes = []
     if mode == "source-adoption":
@@ -84,16 +86,16 @@ def publication_proof(readback_root):
     if set(family["tables"]) != {name + ".parquet" for name in native_names}:
         raise ValueError("Publication source-family table membership differs")
     members = {row["key"]: row for row in files["members"]}
-    if len(members) != len(files["members"]) or set(members) != set(family["tables"]) | {"etl_receipts.parquet"}:
+    if len(members) != len(files["members"]) or set(members) != set(family["tables"]):
         raise ValueError("Public source-file membership is incomplete or repeated")
     with duckdb.connect() as connection:
         ExportResources(memory="1GB", threads=1).configure(connection, readback_root / "bookkeeping-spill")
         connection.execute("SET max_temp_directory_size='32GB'")
         counts = {}
-        for name in sorted(native_names | {"etl_receipts"}):
+        for name in sorted(native_names):
             path = readback_root / "members" / (name + ".parquet")
             member = members[path.name]
-            declared = family["etlReceipts"] if name == "etl_receipts" else family["tables"][path.name]
+            declared = family["tables"][path.name]
             with path.open("rb") as stream:
                 digest = "sha256:" + file_digest(stream, "sha256").hexdigest()
             if (
@@ -106,8 +108,6 @@ def publication_proof(readback_root):
             ):
                 raise ValueError("Published member differs from its accepted byte and footer pins")
             connection.read_parquet(str(path)).create_view(name)
-            if name == "etl_receipts":
-                continue
             counts[name] = hosted_counts(readback_root, summary, name, generation)
             key = "publisher_id" if name == "scorecard_publishers" else "scorecard_id"
             local = dict(connection.execute(f'SELECT "{key}",count(*) FROM "{name}" GROUP BY "{key}"').fetchall())
@@ -118,37 +118,19 @@ def publication_proof(readback_root):
         publishers = dict(edition_rows)
         if len(publishers) != len(edition_rows):
             raise ValueError("Published editions repeat their source identity")
-        with TemporaryDirectory(prefix="scorecard-publication-proof-") as temporary:
-            selected = Path(temporary) / "snapshots.parquet"
-            select_receipts(readback_root / "members/etl_receipts.parquet", selected, dataset="scorecard_snapshots")
-            policy = policies["scorecard_snapshots"]
-            generation_id = family["etlReceipts"]["generationId"]
-
-            def complete_attempts():
-                for attempt in read_attempts([selected], policy, generation_id=generation_id):
-                    if attempt["outcome"] != ("observed" if policy.receipt_only else "accepted"):
-                        raise ValueError("Source snapshot publication contains an unfinished acquisition attempt")
-                    yield attempt["processing_fields"]
-
-            if policy.receipt_only:
-                snapshots = complete_attempts()
-            else:
-                for _ in complete_attempts():
-                    pass
-                snapshots = read_with_receipts(
-                    [readback_root / "members/scorecard_snapshots.parquet"], [selected], policy, generation_id=generation_id)
-            for native in snapshots:
-                row = restore_source_row("scorecard_snapshots", native)
-                scope = row["scorecard_id"]
-                publisher = publishers[scope]
-                if scope in scopes or row["completeness_status"] != "complete":
-                    raise ValueError("Public source snapshots repeat or lack complete acquisition evidence")
-                scope_counts = {
-                    name: counts[name].get(publisher if name == "scorecard_publishers" else scope, 0)
-                    for name in native_names
-                }
-                scope_counts["scorecard_snapshots"] = 1
-                scopes[scope] = dict(publisher_id=publisher, parser_version=row["parser_version"], counts=scope_counts)
+        snapshot_rows = connection.execute(
+            "SELECT scorecard_id, completeness_status, parser_version FROM scorecard_snapshots"
+        ).fetchall()
+        for scope, completeness_status, parser_version in snapshot_rows:
+            if scope not in publishers or scope in scopes or completeness_status != "complete":
+                raise ValueError("Public source snapshots repeat or lack complete acquisition evidence")
+            publisher = publishers[scope]
+            scope_counts = {
+                name: counts[name].get(publisher if name == "scorecard_publishers" else scope, 0)
+                for name in native_names
+            }
+            scope_counts["scorecard_snapshots"] = 1
+            scopes[scope] = dict(publisher_id=publisher, parser_version=parser_version, counts=scope_counts)
     if (
         len(scopes) != summary["counts"]["scorecard_snapshots"]
         or set(scopes) != set(counts["scorecards"])

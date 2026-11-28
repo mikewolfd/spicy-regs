@@ -10,7 +10,13 @@ from tempfile import TemporaryDirectory
 
 import pyarrow.parquet as pq
 
-from spicy_regs.scorecards.etl import read_family, read_source_inputs, write_family
+from spicy_regs.scorecards.etl import (
+    read_published_source_inputs,
+    read_source_inputs,
+    selected_table_entry,
+    verify_family_readback,
+    write_family,
+)
 from spicy_regs.scorecards.action_comparisons import TABLE as COMPARISON_TABLE, COLUMNS as COMPARISON_COLUMNS, KEYS as COMPARISON_KEYS, build_comparisons
 
 SOURCE_TABLES = ("scorecards", "scorecard_members", "scorecard_items")
@@ -25,14 +31,13 @@ def analysis_input_entries(snapshot: Mapping, *, convert_published_official_inpu
     """Require a complete native input selection before downloading its members.
 
     This only checks the captured index. The caller still verifies every pinned
-    byte, and the build still admits subject/receipt joins under their selected
-    generations. The preparation host may explicitly convert already-published
-    official shaped inputs through the normal Congress writer; it must supply
-    verified new native bundles before building. Source scorecard receipts are
-    always required. No legacy or prior receipts stand in for missing receipts.
+    byte, and the build still admits subject/receipt joins or receipt-retired
+    published tables under their selected generations. The preparation host may
+    explicitly convert already-published official shaped inputs through the
+    normal Congress writer; it must supply verified new native bundles before
+    building. No legacy or prior receipts stand in for missing receipts.
     """
     from spicy_regs.scorecards.analysis_inputs import published_input
-    from spicy_regs.scorecards.etl import selected_table_entry
     from spicy_regs.sources import publication
 
     entries = {name: selected_table_entry(snapshot, name + ".parquet")
@@ -92,7 +97,6 @@ def build_scorecard_analysis(
     source_receipt_path: Path | None = None,
     source_generation_id: str | None = None,
     official_receipts: Mapping[str, tuple[Path, str]] | None = None,
-    receipt_generation_id: str | None = None,
     projected_official_index: Mapping | None = None,
 ) -> tuple[Path, ...]:
     """Resolve already verified inputs; the rollup owns download and generation pins.
@@ -101,6 +105,11 @@ def build_scorecard_analysis(
     Parquet members, all drawn from the same captured publication index. Missing
     files refuse the build; they never become an empty congressional table.
     """
+    from spicy_regs.scorecards.analysis_inputs import (
+        PROJECTED_NATIVE_OFFICIAL_TABLES,
+        published_input,
+        read_published_native_resolver_rows,
+    )
     from spicy_regs.scorecards.resolution import (
         ITEM_LINK_COLUMNS,
         MEMBER_LINK_COLUMNS,
@@ -112,16 +121,23 @@ def build_scorecard_analysis(
     expected = set((*SOURCE_TABLES, *OFFICIAL_TABLES, *COMPARISON_INPUTS))
     if set(input_pins) != expected or set(input_paths) != expected:
         raise ValueError("Scorecard analysis requires every source and official input pin")
-    if source_receipt_path is None or not source_generation_id:
-        raise ValueError("Scorecard inputs require their selected native receipts and generation")
-    source = read_source_inputs(
-        {name: input_paths[name] for name in SOURCE_TABLES}, source_receipt_path, generation_id=source_generation_id
-    )
+    if source_receipt_path is not None:
+        if not source_generation_id:
+            raise ValueError("Scorecard inputs require their selected native receipts and generation")
+        source = read_source_inputs(
+            {name: input_paths[name] for name in SOURCE_TABLES}, source_receipt_path, generation_id=source_generation_id
+        )
+    else:
+        if not all(
+            published_input(selected_table_entry(comparison_index, name + ".parquet"), name)
+            for name in SOURCE_TABLES
+        ):
+            raise ValueError("Scorecard inputs require their selected native receipts and generation")
+        source = read_published_source_inputs(
+            comparison_index, {name: input_paths[name] for name in SOURCE_TABLES}
+        )
     if not source["scorecards"]:
         raise ValueError("An empty scorecard corpus cannot qualify an analysis generation")
-    from spicy_regs.scorecards.analysis_inputs import (
-        PROJECTED_NATIVE_OFFICIAL_TABLES, read_published_native_resolver_rows,
-    )
     projected = PROJECTED_NATIVE_OFFICIAL_TABLES if projected_official_index is not None else frozenset()
     if projected_official_index is not None:
         from spicy_regs.sources import publication
@@ -169,8 +185,8 @@ def build_scorecard_analysis(
     for name, columns, key in definitions:
         _checked_rows(results[name], columns, key)
     output_dir.mkdir(parents=True, exist_ok=True)
-    paths = write_family(output_dir, results, generation_id=receipt_generation_id)
-    read_family(output_dir, tuple(results))  # Persisted one-to-one linkage and refusal readback.
+    paths = write_family(output_dir, results)
+    verify_family_readback(output_dir, results)
     receipt = {
         "rule_version": RULE_VERSION,
         "input_pins": dict(input_pins),

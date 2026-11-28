@@ -74,8 +74,8 @@ def tables(edition, capture_id="fixture-capture", members=2, items=True):
     add("scorecards", publisher_id=edition.publisher_id, chamber_scope_text="both")
     add(
         "scorecard_snapshots",
-        capture_ids_json=json.dumps([capture_id]),
-        capture_roles_json=json.dumps([dict(capture_id=capture_id, role="primary", field_groups=["all"])]),
+        capture_ids_json=json.dumps([capture_id], separators=(",", ":")),
+        capture_roles_json=json.dumps([dict(capture_id=capture_id, role="primary", field_groups=["all"])], separators=(",", ":")),
         parser_version="test-v1",
         identity_rule_version="test-v1",
         rendition_selection_rule="one synthetic rendition",
@@ -268,7 +268,7 @@ def test_edition_reader_records_its_own_parser_version(tmp_path):
     selected_reader = next(row for row in journal(e) if row["event"] == "scorecard-edition-reader")
     assert selected_reader["reader_parser_version"] == "edition-v2"
     assert selected_reader["scorecard_id"] == selected.scorecard_id
-    current = read_family(tmp_path / "build", SOURCE_NAMES)
+    current = read_family(tmp_path / "build", SOURCE_NAMES, include_omitted=True)
     assert current["scorecard_snapshots"][0]["parser_version"] == "edition-v2"
 
 
@@ -293,7 +293,7 @@ def test_mixed_success_replaces_whole_scope_and_retains_failed_edition(tmp_path,
         },
     )
     paths = run(tmp_path, p, e, download_prior=download)
-    result = read_family(tmp_path / "build", SOURCE_NAMES)
+    result = read_family(tmp_path / "build", SOURCE_NAMES, include_omitted=True)
     for name, rows in result.items():
         if name == "scorecard_publishers":
             continue
@@ -312,7 +312,7 @@ def test_absent_historical_edition_is_additive_not_deleted(tmp_path):
     old_b = tables(b)
     download = prior(e, combine(tables(a), old_b), tmp_path)
     run(tmp_path, provider([a], {a.scorecard_id: tables}), e, download_prior=download)
-    result = read_family(tmp_path / "build", SOURCE_NAMES)["scorecards"]
+    result = read_family(tmp_path / "build", SOURCE_NAMES, include_omitted=True)["scorecards"]
     assert next(r for r in result if r["scorecard_id"] == b.scorecard_id) == old_b["scorecards"][0]
 
 
@@ -454,7 +454,7 @@ def test_complete_local_generation_binds_every_table_and_one_evidence_artifact(t
     assert set(admitted.root["spec"]["tables"]) == {
         table["name"] + ".parquet" for table in SCHEMA["tables"]
     }
-    assert admitted.root["spec"]["etlReceipts"]["key"] == "etl_receipts.parquet"
+    assert "etlReceipts" not in admitted.root["spec"]
     assert admitted.root["spec"]["family"] == "scorecards"
     assert len(admitted.root["inputs"]) == 1
     assert admitted.root["inputs"][0]["role"] == "source-evidence"

@@ -169,7 +169,9 @@ def legacy_analysis_inputs(tmp_path):
     return store, index
 
 
-def test_conversion_is_explicit_and_never_substitutes_for_missing_source_or_bad_native_receipts(tmp_path):
+def test_conversion_is_explicit_and_never_substitutes_for_missing_source_or_bad_native_receipts(tmp_path, monkeypatch):
+    from spicy_regs import subject_catalog
+
     _, index = legacy_analysis_inputs(tmp_path)
     with pytest.raises(publication.PublicationError, match="requires native receipts for: members"):
         analysis_input_entries(index)
@@ -181,7 +183,8 @@ def test_conversion_is_explicit_and_never_substitutes_for_missing_source_or_bad_
     with pytest.raises(publication.PublicationError, match="requires native receipts for: members"):
         analysis_input_entries(index, convert_published_official_inputs=True)
     official.pop("etlReceipts")
-    fixture_owner(index, "scorecards.parquet").pop("etlReceipts")
+    retired = subject_catalog.retired_receipt_datasets() - {"scorecards"}
+    monkeypatch.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
     with pytest.raises(publication.PublicationError, match="requires native receipts for: scorecards"):
         analysis_input_entries(index, convert_published_official_inputs=True)
 

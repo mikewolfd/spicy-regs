@@ -20,7 +20,7 @@ import yaml
 from spicy_regs.scorecards.operations.results import write
 from spicy_regs.scorecards.inputs import stage_member
 from spicy_regs.generations import build_generation, implementation_id
-from spicy_regs.scorecards.etl import SOURCE_NAMES, generation_options
+from spicy_regs.scorecards.etl import SOURCE_NAMES, generation_schemas
 from spicy_regs.scorecards.registry import REGISTRY
 from spicy_regs.scorecards.acquisition import MAX_BYTES, MAX_REQUESTS, validate_limits
 from spicy_regs.scorecards.extraction_replay import PageObservationReplay, page_bytes, read_page
@@ -197,7 +197,7 @@ def prepare(args):
             family="scorecards",
             files=files,
             expected_keys=OUTPUTS,
-            **generation_options(args.output, SOURCE_NAMES),
+            schemas=generation_schemas(SOURCE_NAMES),
             read_snapshot=index,
             inputs=evidence.inputs(),
         )

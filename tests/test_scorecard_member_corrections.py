@@ -135,8 +135,18 @@ def test_domenici_correction_preserves_raw_and_round_trips_native_evidence(tmp_p
     }
     assert json.loads(result["candidates_json"])[0]["term_indexes"] == ["3"]
     rows = {"scorecard_member_links": [result], "scorecard_item_links": []}
-    write_family(tmp_path, rows, generation_id="reviewed-state-fixture")
-    assert read_family(tmp_path, LINK_NAMES, generation_id="reviewed-state-fixture") == rows
+    write_family(tmp_path, rows)
+    assert read_family(tmp_path, LINK_NAMES) == rows
+    # Native receiptless scorecards & scorecard_members round-trip preserves the reviewed correction.
+    from spicy_regs.scorecards.etl import write_family as write_sc, read_family as read_sc
+    src_dir = tmp_path / "src"
+    write_sc(src_dir, {"scorecards": [deepcopy(EDITION)], "scorecard_members": [deepcopy(SOURCE)]})
+    native_loaded = read_sc(src_dir, ("scorecards", "scorecard_members"))
+    adj_native, ev_native = reviewed_member_context(
+        native_loaded["scorecard_members"][0], native_loaded["scorecards"][0]
+    )
+    assert ev_native == evidence
+    assert adj_native["state"] == "NM"
 
 
 @pytest.mark.parametrize(

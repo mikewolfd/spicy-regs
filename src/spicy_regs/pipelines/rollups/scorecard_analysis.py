@@ -9,7 +9,7 @@ from typing import ClassVar
 
 from spicy_regs.scorecards.inputs import stage_member
 from spicy_regs.scorecards.analysis_inputs import PROJECTED_NATIVE_OFFICIAL_TABLES
-from spicy_regs.scorecards.etl import ANALYSIS_NAMES, POLICIES, verified_receipt_download
+from spicy_regs.scorecards.etl import verified_receipt_download
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.sources import publication
 from spicy_regs.transforms.build_scorecard_analysis import (
@@ -23,7 +23,6 @@ class ScorecardAnalysisRollup(RollupPipeline):
     name: ClassVar[str] = "scorecard-analysis"
     inputs: ClassVar[tuple[str, ...]] = INPUTS
     outputs: ClassVar[tuple[str, ...]] = OUTPUTS
-    receipt_policies: ClassVar[tuple] = tuple(POLICIES[name] for name in ANALYSIS_NAMES)
 
     def _prime(self, output_dir: Path, snapshot: Mapping | None = None) -> dict[str, dict]:
         """Verify every member, including partitioned bill tables, under one index."""
@@ -34,6 +33,9 @@ class ScorecardAnalysisRollup(RollupPipeline):
         self._official_receipts = {}
         if snapshot is None:
             raise publication.PublicationError("Scorecard analysis requires a captured publication index")
+        publication.require_live_receipt_pins(
+            dict(snapshot), [key.removesuffix(".parquet") for key in self.outputs]
+        )
         entries = analysis_input_entries(snapshot)
         self._scorecard_projected_official_index = snapshot
         public_url = getenv("R2_PUBLIC_URL")
@@ -87,7 +89,6 @@ class ScorecardAnalysisRollup(RollupPipeline):
             source_receipt_path=self._scorecard_source_receipt,
             source_generation_id=self._scorecard_source_generation,
             official_receipts=self._official_receipts,
-            receipt_generation_id=self.receipt_generation_id,
             projected_official_index=self._scorecard_projected_official_index,
         )
 

@@ -102,7 +102,7 @@ def test_scorecard_recorded_snapshot_is_association_not_business_identity(tmp_pa
     from spicy_regs.table_joins import JOINS, RETIRED_PROCESSING_JOINS
     raw=tables(edition('2025'))
     write_family(tmp_path,raw)
-    assert read_family(tmp_path,SOURCE_NAMES)==raw
+    assert read_family(tmp_path,SOURCE_NAMES)['scorecard_snapshots']==raw['scorecard_snapshots']
     assert IDENTITIES['scorecard_items']==('scorecard_id','item_id')
     [card]=pq.read_table(tmp_path/'scorecards.parquet').to_pylist()
     [snapshot]=pq.read_table(tmp_path/'scorecard_snapshots.parquet').to_pylist()

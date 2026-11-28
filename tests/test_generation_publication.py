@@ -893,7 +893,6 @@ def test_zero_row_discovery_signals_publishes_over_populated_prior_while_other_s
 def test_declared_policy_column_retirement_publishes_while_keeping_rows_and_refuses_row_loss(tmp_path):
     """ss-ewbj: retiring bulky JSON columns under a recorded policy migration permits <0.2x bytes iff rows stay intact."""
     from spicy_regs.etl_policy_registry import installed_policies
-    from spicy_regs.etl_receipts import ReceiptContext, write_dataset
     from spicy_regs.generations import _table_info
     from spicy_regs.policy_migrations import _recorded
 
@@ -919,32 +918,21 @@ def test_declared_policy_column_retirement_publishes_while_keeping_rows_and_refu
                             "columns": info["columns"],
                         },
                     },
-                    "etlReceipts": {
-                        "key": "etl_receipts.parquet",
-                        "sha256": "sha256:" + "2" * 64,
-                        "byteSize": 100,
-                        "rows": info["rows"],
-                        "columns": [["dataset", "VARCHAR"]],
-                        "generationId": "prior-gen",
-                        "datasets": [dataset],
-                    },
                 },
             },
         }
         return index, size
 
     def build_candidate(name: str, policy, rows: list[dict]):
-        context = ReceiptContext(f"gen-{name}", f"attempt-{name}", "test-processor", [{
-            "source_id": "test-source", "sha256": "sha256:" + "a" * 64,
-        }])
         src = tmp_path / f"{name}-src"
-        records = [({**row, **{field: {} for field in policy.receipt_fields}}, context) for row in rows]
-        subject, receipts = write_dataset(records, src, policy)
-        assert subject is not None
+        src.mkdir(parents=True, exist_ok=True)
+        subject = src / f"{policy.dataset}.parquet"
+        cols = {f.name: pa.array([r[f.name] for r in rows], type=f.type) for f in policy.subject_schema}
+        pq.write_table(pa.table(cols, schema=policy.subject_schema), subject, store_schema=False)
         target = tmp_path / name
         build_generation(
             target, family="scorecard-analysis", files=[subject], expected_keys=[subject.name],
-            receipt_path=receipts, receipt_policies=[policy], receipt_generation_id=context.generation_id,
+            schemas={subject.name: policy.subject_schema},
         )
         return target, (target / subject.name).stat().st_size
 
