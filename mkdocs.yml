@@ -118,6 +118,7 @@ nav:
       - court_citation_map: tables/court_citation_map.md
       - court_parentheticals: tables/court_parentheticals.md
       - court_opinions: tables/court_opinions.md
+      - courtlistener_bankruptcy_dockets: tables/courtlistener_bankruptcy_dockets.md
       - usaspending_recipients: tables/usaspending_recipients.md
       - fcc_proceedings: tables/fcc_proceedings.md
       - fcc_filings: tables/fcc_filings.md

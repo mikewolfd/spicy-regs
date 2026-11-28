@@ -6486,6 +6486,37 @@
       ]
     },
     {
+      "table": "courtlistener_bankruptcy_dockets",
+      "label": "CourtListener bankruptcy dockets (2022 export)",
+      "summary": "Historical U.S. bankruptcy court docket metadata from CourtListener's one-off 2022-09-19 bulk export, typed natively with `DATE`, UTC `TIMESTAMP WITH TIME ZONE`, and `BOOLEAN` columns while preserving identifier strings and publisher NULL-versus-empty-string distinctions verbatim. Unlike `court_dockets` (which selects Administrative Procedure Act cases), this table covers federal bankruptcy districts captured by CourtListener's `court_id LIKE '%b'` export predicate. For strictly federal bankruptcy district totals, filter `court_id NOT IN ('neb', 'mspb', 'pactcomplcolumb', 'paorphctcolumb', 'nyoytermctalb')`. `cl_docket_id` matches `court_opinion_clusters.cl_docket_id`, though most PACER bankruptcy dockets have no published opinion.",
+      "coverage": "Not a range. One archival CourtListener bulk export cut 2022-09-19 from the publisher's `search_docket` table under a `court_id LIKE '%b'` predicate rather than a strict federal bankruptcy court filter. Includes federal bankruptcy district courts whose court code ends in `b`, plus five non-bankruptcy spillover courts (`neb` Nebraska Supreme Court, `mspb` Merit Systems Protection Board, `pactcomplcolumb`, `paorphctcolumb`, and `nyoytermctalb`). All eight Bankruptcy Appellate Panels (`bap1`, `bap2`, `bap6`, `bap8`, `bap9`, `bap10`, `bapma`, `bapme`) and `tennesseeb` are absent. Static historical snapshot cut off at 2022-09-19 and never refreshed incrementally.",
+      "kind": "not_a_range",
+      "measured_on": "2026-11-28",
+      "data_quality": "Measured 2026-11-28 across all 34,653,306 rows of the 2022-09-19 export and reconciled against PostgreSQL 16 `file_fdw`. Because CourtListener exported `WHERE court_id LIKE '%b'`, 65,365 rows belong to five non-bankruptcy courts (`neb`: 62,576; `mspb`: 2,590; `pactcomplcolumb`: 180; `paorphctcolumb`: 11; `nyoytermctalb`: 8), all retained verbatim for Layer 1 fidelity, while all 8 Bankruptcy Appellate Panels (`bap1`, `bap2`, `bap6`, `bap8`, `bap9`, `bap10`, `bapma`, `bapme`) and `tennesseeb` are absent. On `docket_number`, PostgreSQL SQL NULL (2,598 rows: 2,590 `mspb`, 7 `neb`, 1 `flmb`) is kept strictly distinct from empty string `\"\"` (4,241 rows: 4,224 `neb`, 12 `pactcomplcolumb`, 5 `nyoytermctalb`). `pacer_case_id` preserves 6 literal non-numeric strings (`\"null\"` in 5 rows, `\"undefined\"` in 1 row) alongside 73,563 SQL NULLs without coercion, and `docket_number_core` preserves 10,239,468 leading-zero values as text. Clerical date outliers are retained verbatim as `DATE` in `date_filed` (`1871-10-12` to `2079-11-23`; 1 row before 1900 and 45 after `2022-09-19`) and `date_terminated` (`0205-02-25` to `2097-02-13`; 7 rows before 1900 and 16 after `2022-09-19`); `date_blocked` spans `2013-10-29` to `2022-09-19` with zero out-of-range dates, though 266 rows have `blocked` and `date_blocked` populated independently. `referred_to_id` is 100% SQL NULL and `referred_to_str` is 100% empty string `\"\"`; `case_name` retains literal PACER HTML tags, truncated entities, and backslashes as published.",
+      "columns": [
+        "cl_docket_id",
+        "court_id",
+        "docket_number",
+        "docket_number_core",
+        "pacer_case_id",
+        "case_name",
+        "case_name_short",
+        "case_name_full",
+        "date_filed",
+        "date_terminated",
+        "assigned_to_id",
+        "assigned_to_str",
+        "referred_to_id",
+        "referred_to_str",
+        "blocked",
+        "date_blocked",
+        "date_created",
+        "date_modified",
+        "dump_date",
+        "source_sha256"
+      ]
+    },
+    {
       "table": "court_opinion_pdf_extractions",
       "label": "Selected court opinion PDF text",
       "summary": "Recorded PDF text for selected CourtListener opinions. Failed fingerprint or extraction checks supply no text. Following an opinion requires published capture and parent-publication evidence, plus its opinion ID, cluster ID, fingerprint and source URL together. A shared digest alone does not identify the parent.",

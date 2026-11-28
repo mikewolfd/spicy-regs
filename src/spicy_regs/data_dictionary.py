@@ -580,6 +580,7 @@ TABLES: tuple[str, ...] = (
     "court_citation_map",
     "court_parentheticals",
     "court_opinions",
+    "courtlistener_bankruptcy_dockets",
     "court_opinion_pdf_extractions",
     "member_vote_terms",
     "scorecard_member_links",
@@ -753,6 +754,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "court_citation_map",
         "court_parentheticals",
         "court_opinions",
+        "courtlistener_bankruptcy_dockets",
         "usaspending_recipients",
         "usaspending_transactions",
         "usaspending_awards",
@@ -1142,6 +1144,9 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.build_gao_reports import _SCHEMA as GAO_REPORT_SCHEMA
     from spicy_regs.transforms.build_crs_reports import COLUMNS as CRS_REPORT_COLUMNS
     from spicy_regs.transforms.build_court_docket_groups import SCHEMA as COURT_DOCKET_GROUP_SCHEMA
+    from spicy_regs.transforms.build_courtlistener_bankruptcy_dockets import (
+        SCHEMA as COURTLISTENER_BANKRUPTCY_DOCKETS_SCHEMA,
+    )
     from spicy_regs.transforms.build_usaspending_recipients import COLUMNS as USASPENDING_COLUMNS
     from spicy_regs.transforms.build_fcc_ecfs import (
         FILING_COLUMNS as FCC_FILING_COLUMNS,
@@ -1249,6 +1254,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         "agency_lifecycle_stats": AGENCY_LIFECYCLE_STATS_SCHEMA,
         "gao_reports": GAO_REPORT_SCHEMA,
         "court_docket_groups": COURT_DOCKET_GROUP_SCHEMA,
+        "courtlistener_bankruptcy_dockets": COURTLISTENER_BANKRUPTCY_DOCKETS_SCHEMA,
         "oira_reviews": OIRA_REVIEW_SCHEMA,
         "oira_meetings": OIRA_MEETING_SCHEMA,
     }

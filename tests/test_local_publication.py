@@ -524,6 +524,7 @@ def test_cms_drug_spending_families_are_registered_and_dry_run_accepted(tmp_path
     ("family", "expected_tables"),
     [
         ("cms-part-b-associations", {"cms_part_b_manufacturer_associations", "cms_part_b_drug_use_information"}),
+        ("courtlistener-bankruptcy-dockets", {"courtlistener_bankruptcy_dockets"}),
         ("crs-report-files", {"crs_report_files"}),
         ("senate-disclosures", {"senate_disclosure_reports", "senate_disclosure_transactions"}),
     ],

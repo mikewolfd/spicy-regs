@@ -663,6 +663,13 @@
         "courts"
       ]
     },
+    "courtlistener-bankruptcy-dockets": {
+      "sources": [
+        "courts"
+      ],
+      "transformation": "Decodes CourtListener's retained 2022-09-19 bankruptcy bulk CSV export (PostgreSQL ESCAPE '\"' dialect) into natively typed Parquet (DATE, UTC TIMESTAMP WITH TIME ZONE, BOOLEAN, VARCHAR) while preserving NULL-versus-empty-string docket_number, literal sentinel strings, leading zeros, clerical date outliers, and all court_id LIKE '%b' rows verbatim.",
+      "evidence": "src/spicy_regs/transforms/build_courtlistener_bankruptcy_dockets.py"
+    },
     "gao-reports": {
       "sources": [
         "gao",
