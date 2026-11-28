@@ -339,6 +339,74 @@ class RollupPipeline(Pipeline):
         """Additional shared generation admission arguments supplied by an adopter."""
         return {}
 
+    def _validate_resumed_candidate(self, gen_dir: Path, artifact) -> None:
+        """Subclass hook for producer-specific gates that must hold before resuming a candidate."""
+
+    def _verify_live_resume_inputs(
+        self,
+        *,
+        output_dir: Path,
+        public_url: str,
+        live_index: dict,
+        family: str,
+        spec: Mapping,
+        binding: Mapping,
+        expected_keys: list[str],
+        managed_receipt_parents: list[tuple[str, str, Mapping]],
+        check_receipt_pins: bool,
+    ) -> None:
+        """Verify live prior, managed parents/receipts, soft/remote inputs, and receipt pins."""
+        from spicy_regs.sources import publication
+
+        live_family = live_index["families"].get(family)
+        captured_snapshot = spec["readSnapshot"]
+        captured_prior = captured_snapshot.get("families", {}).get(family) if captured_snapshot else None
+        if publication._generation_entry(live_family) != publication._generation_entry(captured_prior):
+            raise ResumeRefusedError(
+                f"Live family {family!r} moved since retained candidate was built"
+            )
+
+        try:
+            publication._assert_parents_current(live_index, spec.get("parents", {}))
+        except PublicationError as exc:
+            raise ResumeRefusedError(f"Managed parent changed since retained candidate was built: {exc}") from exc
+
+        for receipt_key, parent_family, receipt_pin in managed_receipt_parents:
+            live_parent = live_index["families"].get(parent_family)
+            live_receipt = (live_parent or {}).get("etlReceipts")
+            if (
+                not isinstance(live_receipt, Mapping)
+                or live_receipt.get("sha256") != receipt_pin["sha256"]
+                or live_receipt.get("byteSize") != receipt_pin["byteSize"]
+            ):
+                raise ResumeRefusedError(
+                    f"Managed parent receipts changed since retained candidate was built: {receipt_key}"
+                )
+
+        live_soft = self._observe_soft_inputs(live_index)
+        if live_soft != binding["soft_inputs"]:
+            raise ResumeRefusedError("Soft inputs changed since retained candidate was built")
+
+        try:
+            with (
+                publication.with_snapshot(public_url, live_index),
+                TemporaryDirectory(prefix=".resume-probe-", dir=output_dir) as probe_dir,
+            ):
+                live_remote = self._observe_remote_inputs(Path(probe_dir), public_url)
+        except Exception as exc:
+            raise ResumeRefusedError(f"Remote inputs could not be verified for resume: {exc}") from exc
+        if live_remote != binding["remote_inputs"]:
+            raise ResumeRefusedError("Remote inputs changed since retained candidate was built")
+
+        if check_receipt_pins:
+            try:
+                publication.require_live_receipt_pins(
+                    dict(live_index),
+                    [key.removesuffix(".parquet") for key in expected_keys if key not in self.receipt_only_tables],
+                )
+            except PublicationError as exc:
+                raise ResumeRefusedError(f"Live receipt archive pin requirement failed: {exc}") from exc
+
     def _observe_soft_inputs(self, index: Mapping) -> dict[str, dict | None]:
         """Current live table pin (or ``None``) for every declared soft input in ``index``."""
         from spicy_regs.sources import publication
@@ -570,8 +638,25 @@ class RollupPipeline(Pipeline):
             if binding["evidence_directory"] is not None or declared_evidence:
                 raise ResumeRefusedError("Unexpected source evidence attached to non-evidence rollup resume binding")
 
-        for parent_key, parent in spec.get("parents", {}).items():
+        parents_spec = spec.get("parents", {})
+        captured_snapshot = spec["readSnapshot"]
+        managed_receipt_parents: list[tuple[str, str, Mapping]] = []
+        for parent_key, parent in parents_spec.items():
             if "family" not in parent and "sha256" in parent:
+                if parent_key.endswith("/etl_receipts.parquet"):
+                    dataset = parent_key.removesuffix("/etl_receipts.parquet")
+                    companion = parents_spec.get(f"{dataset}.parquet")
+                    if isinstance(companion, Mapping) and isinstance(companion.get("family"), str):
+                        managed_receipt_parents.append((parent_key, companion["family"], parent))
+                        continue
+                    receipt_owners = [
+                        fam_name
+                        for fam_name, fam_entry in (captured_snapshot or {}).get("families", {}).items()
+                        if dataset in fam_entry.get("etlReceipts", {}).get("datasets", ())
+                    ]
+                    if len(receipt_owners) == 1:
+                        managed_receipt_parents.append((parent_key, receipt_owners[0], parent))
+                        continue
                 local_parent = _resolve_contained_path(
                     output_dir, parent_key, label=f"parent {parent_key}", expect_dir=False
                 )
@@ -580,18 +665,36 @@ class RollupPipeline(Pipeline):
                 if actual_sha != parent["sha256"] or local_parent.stat().st_size != parent["byteSize"]:
                     raise ResumeRefusedError(f"Unmanaged local parent changed since candidate build: {parent_key}")
 
+        self._validate_resumed_candidate(gen_dir, artifact)
+
         public_url = getenv("R2_PUBLIC_URL")
         if self.skip_upload:
-            if self.remote_inputs or binding["remote_inputs"]:
+            if public_url:
+                with publication.snapshot(public_url) as live_index:
+                    source = (
+                        read_operation.verified_source(gen_dir)[1]
+                        if read_operation is not None
+                        else LocalMemberSource(gen_dir)
+                    )
+                    expected_entry = publication.generation_entry(
+                        artifact, list(iter_member_descriptors(artifact, source))
+                    )
+                    live_family = live_index["families"].get(family)
+                    if publication._generation_entry(live_family) != expected_entry:
+                        self._verify_live_resume_inputs(
+                            output_dir=output_dir,
+                            public_url=public_url,
+                            live_index=live_index,
+                            family=family,
+                            spec=spec,
+                            binding=binding,
+                            expected_keys=expected_keys,
+                            managed_receipt_parents=managed_receipt_parents,
+                            check_receipt_pins=False,
+                        )
+            elif self.remote_inputs or binding["remote_inputs"]:
                 try:
-                    if public_url:
-                        with (
-                            publication.snapshot(public_url),
-                            TemporaryDirectory(prefix=".resume-probe-", dir=output_dir) as probe_dir,
-                        ):
-                            observed_remote = self._observe_remote_inputs(Path(probe_dir), public_url)
-                    else:
-                        observed_remote = self._observe_remote_inputs(output_dir, None)
+                    observed_remote = self._observe_remote_inputs(output_dir, None)
                 except Exception as exc:
                     raise ResumeRefusedError(f"Remote inputs could not be verified for resume: {exc}") from exc
                 if observed_remote != binding["remote_inputs"]:
@@ -634,40 +737,17 @@ class RollupPipeline(Pipeline):
             logger.info("Done!")
             return True
 
-        captured_snapshot = spec["readSnapshot"]
-        captured_prior = captured_snapshot.get("families", {}).get(family) if captured_snapshot else None
-        if publication._generation_entry(live_family) != publication._generation_entry(captured_prior):
-            raise ResumeRefusedError(
-                f"Live family {family!r} moved since retained candidate {artifact.pin.artifact_digest} was built"
-            )
-
-        try:
-            publication._assert_parents_current(live_index, spec.get("parents", {}))
-        except PublicationError as exc:
-            raise ResumeRefusedError(f"Managed parent changed since retained candidate was built: {exc}") from exc
-
-        live_soft = self._observe_soft_inputs(live_index)
-        if live_soft != binding["soft_inputs"]:
-            raise ResumeRefusedError("Soft inputs changed since retained candidate was built")
-
-        try:
-            with (
-                publication.with_snapshot(public_url, live_index),
-                TemporaryDirectory(prefix=".resume-probe-", dir=output_dir) as probe_dir,
-            ):
-                live_remote = self._observe_remote_inputs(Path(probe_dir), public_url)
-        except Exception as exc:
-            raise ResumeRefusedError(f"Remote inputs could not be verified for resume: {exc}") from exc
-        if live_remote != binding["remote_inputs"]:
-            raise ResumeRefusedError("Remote inputs changed since retained candidate was built")
-
-        try:
-            publication.require_live_receipt_pins(
-                dict(live_index),
-                [key.removesuffix(".parquet") for key in expected_keys if key not in self.receipt_only_tables],
-            )
-        except PublicationError as exc:
-            raise ResumeRefusedError(f"Live receipt archive pin requirement failed: {exc}") from exc
+        self._verify_live_resume_inputs(
+            output_dir=output_dir,
+            public_url=public_url,
+            live_index=live_index,
+            family=family,
+            spec=spec,
+            binding=binding,
+            expected_keys=expected_keys,
+            managed_receipt_parents=managed_receipt_parents,
+            check_receipt_pins=True,
+        )
 
         prior_for_publish = captured_snapshot if captured_snapshot else publication.empty_index()
         publish = publication.publish_generation

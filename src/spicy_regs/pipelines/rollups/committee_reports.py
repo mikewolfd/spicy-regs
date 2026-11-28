@@ -55,8 +55,13 @@ class CommitteeReportsRollup(LegislativeReceiptRollup):
         retained_bundle = self._env_path(self.retained_bundle, "COMMITTEE_REPORTS_RETAINED_BUNDLE")
         retained_bundle_root = self._env_path(self.retained_bundle_root, "COMMITTEE_REPORTS_RETAINED_BUNDLE_ROOT")
         retained_raw_archive = self._env_path(self.retained_raw_archive, "COMMITTEE_REPORTS_RETAINED_RAW_ARCHIVE")
+        bundle_manifest = (
+            retained_bundle / "selected-capture-pins.json"
+            if retained_bundle is not None and retained_bundle.is_dir()
+            else retained_bundle
+        )
         scope["committee_reports"] = {
-            "retained_bundle": file_scope_digest(retained_bundle),
+            "retained_bundle": file_scope_digest(bundle_manifest),
             "retained_bundle_root": str(retained_bundle_root) if retained_bundle_root is not None else None,
             "retained_raw_archive": str(retained_raw_archive) if retained_raw_archive is not None else None,
         }

@@ -25,13 +25,36 @@ class CourtDocketGroupsRollup(CourtReceiptRollup):
     inputs: ClassVar[tuple[str, ...]] = ("court_dockets.parquet",)
     output: ClassVar[str] = "court_docket_groups.parquet"
 
-    def __init__(self, *, native_sha256: str, edition: str, output_dir: Path | None = None, skip_upload: bool = True,
-                 archive_root: Path | None = None):
-        super().__init__(output_dir=output_dir, skip_upload=skip_upload)
+    def __init__(
+        self,
+        *,
+        native_sha256: str,
+        edition: str,
+        output_dir: Path | None = None,
+        skip_upload: bool = True,
+        resume: bool = False,
+        require_resume_candidate: bool = False,
+        archive_root: Path | None = None,
+    ):
+        super().__init__(
+            output_dir=output_dir,
+            skip_upload=skip_upload,
+            resume=resume,
+            require_resume_candidate=require_resume_candidate,
+        )
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", edition):
             raise ValueError(f"edition must be the bulk edition's date, YYYY-MM-DD: {edition!r}")
         # The raw archive's own copy, verified against its digest and size; an absent export raises here.
+        self.native_sha256 = "sha256:" + native_sha256.removeprefix("sha256:").strip().lower()
         self.native_file, self.edition = raw_original(open_raw(archive_root), native_sha256, None), edition
+
+    def invocation_scope(self) -> dict:
+        scope = super().invocation_scope()
+        scope["court_docket_groups"] = {
+            "native_sha256": self.native_sha256,
+            "edition": self.edition,
+        }
+        return scope
 
     def build(self, output_dir: Path) -> Path:
         return build_court_docket_groups(output_dir, dockets_file=output_dir / "court_dockets.parquet",
@@ -42,11 +65,24 @@ app = App(name="run-rollup-court-docket-groups", help=__doc__)
 
 
 @app.default
-def main(*, native_sha256: str, edition: str, output_dir: Path | None = None, skip_upload: bool = True,
-         archive_root: Path | None = None) -> None:
+def main(
+    *,
+    native_sha256: str,
+    edition: str,
+    output_dir: Path | None = None,
+    skip_upload: bool = True,
+    resume: bool = False,
+    archive_root: Path | None = None,
+) -> None:
     load_dotenv()
-    CourtDocketGroupsRollup(native_sha256=native_sha256, edition=edition, output_dir=output_dir,
-                            skip_upload=skip_upload, archive_root=archive_root).run()
+    CourtDocketGroupsRollup(
+        native_sha256=native_sha256,
+        edition=edition,
+        output_dir=output_dir,
+        skip_upload=skip_upload,
+        resume=resume,
+        archive_root=archive_root,
+    ).run()
 
 
 if __name__ == "__main__":

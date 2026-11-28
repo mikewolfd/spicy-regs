@@ -399,15 +399,26 @@ jobs:
           has_output = False
           has_audit = False
           for idx in range(len(delays) + 1):
-              out_art, aud_art = find_artifacts()
-              out_ok = out_art is not None and artifact_ready(int(out_art['id']))
-              aud_ok = aud_art is not None and artifact_ready(int(aud_art['id']))
-              if out_ok and (aud_art is None or aud_ok):
+              try:
+                  out_art, aud_art = find_artifacts()
+                  out_ok = out_art is not None and artifact_ready(int(out_art['id']))
+                  aud_ok = aud_art is not None and artifact_ready(int(aud_art['id']))
+              except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as err:
+                  print(
+                      f'Transient GitHub API error polling artifacts (attempt {idx + 1}/{len(delays) + 1}): {err}',
+                      file=sys.stderr,
+                  )
+                  out_ok = False
+                  aud_ok = False
+              if out_ok and aud_ok:
                   has_output = True
-                  has_audit = aud_ok
+                  has_audit = True
                   break
               if idx < len(delays):
                   time.sleep(delays[idx])
+              else:
+                  has_output = out_ok
+                  has_audit = aud_ok
 
           if explicit and not has_output:
               raise SystemExit(
@@ -457,6 +468,7 @@ jobs:
           SOURCE_ATTEMPT: ${{ steps.resume_lookup.outputs.source_attempt }}
           OUTPUT_ARTIFACT_NAME: ${{ steps.resume_lookup.outputs.output_artifact_name }}
           AUDIT_ARTIFACT_NAME: ${{ steps.resume_lookup.outputs.audit_artifact_name }}
+          HAS_AUDIT: ${{ steps.resume_lookup.outputs.has_audit }}
           EXPLICIT_RESUME: ${{ steps.resume_lookup.outputs.explicit_resume }}
         run: |
           python3 - <<'PY'
@@ -470,6 +482,7 @@ jobs:
           restored_output = temp_root / 'restored-output'
           restored_audit = temp_root / 'restored-audit'
           output_root = Path('output')
+          has_audit = os.environ.get('HAS_AUDIT') == 'true'
           explicit = os.environ.get('EXPLICIT_RESUME') == 'true'
 
           def refuse(message: str) -> None:
@@ -508,8 +521,22 @@ jobs:
               refuse('non-operational workflow inputs differ from prior invocation')
 
           candidates_root = restored_output / 'resume-candidates'
-          if not candidates_root.is_dir() or not list(candidates_root.rglob('*.json')):
+          candidate_files = sorted(candidates_root.rglob('*.json')) if candidates_root.is_dir() else []
+          if not candidate_files:
               refuse('prior artifact contains no retained generation candidate binding')
+
+          for candidate_file in candidate_files:
+              try:
+                  binding = json.loads(candidate_file.read_text(encoding='utf-8'))
+              except (OSError, ValueError) as exc:
+                  refuse(f'unreadable candidate binding {candidate_file.name}: {exc}')
+              if isinstance(binding, dict) and binding.get('retain_source_evidence'):
+                  ev_rel = binding.get('evidence_directory')
+                  if not isinstance(ev_rel, str) or not ev_rel or ev_rel.startswith(('/', '\\')) or '..' in Path(ev_rel).parts:
+                      refuse(f'invalid evidence_directory in candidate binding {candidate_file.name}')
+                  ev_src = restored_audit / ev_rel
+                  if not has_audit or ev_src.is_symlink() or not ev_src.is_dir():
+                      refuse(f'prior audit artifact lacks required evidence directory {ev_rel!r}')
 
           def copy_tree(src_root: Path, rel_name: str) -> None:
               src = src_root / rel_name
@@ -520,14 +547,15 @@ jobs:
 
           for name in ('generations', 'generation-inputs', 'resume-candidates'):
               copy_tree(restored_output, name)
-          for name in ('source-evidence', 'raw-source-originals'):
-              copy_tree(restored_audit, name)
+          if has_audit:
+              for name in ('source-evidence', 'raw-source-originals'):
+                  copy_tree(restored_audit, name)
 
           current_inv['resumed_from'] = {
               'run_id': os.environ['SOURCE_RUN_ID'],
               'run_attempt': os.environ['SOURCE_ATTEMPT'],
               'output_artifact': os.environ['OUTPUT_ARTIFACT_NAME'],
-              'audit_artifact': os.environ['AUDIT_ARTIFACT_NAME'],
+              'audit_artifact': os.environ['AUDIT_ARTIFACT_NAME'] if has_audit else None,
           }
           tmp_inv = output_root / '.invocation.json.tmp'
           tmp_inv.write_text(json.dumps(current_inv, indent=2) + '\n', encoding='utf-8')

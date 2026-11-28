@@ -722,6 +722,9 @@ def test_rollup_workflow_stage_script_preserves_invocation_and_refuses_scope_dri
         prior_rev: str = "abc123",
         current_rev: str = "abc123",
         include_candidate: bool = True,
+        candidate_binding: dict | None = None,
+        has_audit: bool = True,
+        include_evidence: bool = True,
         explicit: bool = False,
     ) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
         work.mkdir(parents=True, exist_ok=True)
@@ -748,30 +751,40 @@ def test_rollup_workflow_stage_script_preserves_invocation_and_refuses_scope_dri
             "run_attempt": "1",
             "inputs": prior_inputs,
         }
-        (restored_aud / "invocation.json").write_text(json.dumps(prior_inv), encoding="utf-8")
-        (restored_aud / "source-evidence" / "run1" / "artifact").mkdir(parents=True)
-        (restored_aud / "source-evidence" / "run1" / "artifact" / "artifact.json").write_text("{}")
+        if has_audit:
+            (restored_aud / "invocation.json").write_text(json.dumps(prior_inv), encoding="utf-8")
+            if include_evidence:
+                (restored_aud / "source-evidence" / "run1" / "artifact").mkdir(parents=True)
+                (restored_aud / "source-evidence" / "run1" / "artifact" / "artifact.json").write_text("{}")
+        else:
+            (restored_out / "invocation.json").write_text(json.dumps(prior_inv), encoding="utf-8")
         if include_candidate:
             (restored_out / "resume-candidates" / "demo").mkdir(parents=True)
-            (restored_out / "resume-candidates" / "demo" / ("a" * 64 + ".json")).write_text("{}")
+            binding_body = candidate_binding if candidate_binding is not None else {
+                "retain_source_evidence": True,
+                "evidence_directory": "source-evidence/run1/artifact",
+            }
+            (restored_out / "resume-candidates" / "demo" / ("a" * 64 + ".json")).write_text(json.dumps(binding_body))
             (restored_out / "generations" / ("a" * 64)).mkdir(parents=True)
             (restored_out / "generations" / ("a" * 64) / "artifact.json").write_text("{}")
 
         github_env = work / "github_env.txt"
         github_env.write_text("", encoding="utf-8")
+        env = {
+            "PATH": os.environ["PATH"],
+            "RUNNER_TEMP": str(runner_temp),
+            "SOURCE_RUN_ID": "100",
+            "SOURCE_ATTEMPT": "1",
+            "OUTPUT_ARTIFACT_NAME": "rollup-output-run-rollup-demo-100-1",
+            "AUDIT_ARTIFACT_NAME": "rollup-audit-run-rollup-demo-100-1",
+            "HAS_AUDIT": "true" if has_audit else "false",
+            "EXPLICIT_RESUME": "true" if explicit else "false",
+            "GITHUB_ENV": str(github_env),
+        }
         result = subprocess.run(
             ["bash", "-e", "-o", "pipefail", "-c", script],
             cwd=work,
-            env={
-                "PATH": os.environ["PATH"],
-                "RUNNER_TEMP": str(runner_temp),
-                "SOURCE_RUN_ID": "100",
-                "SOURCE_ATTEMPT": "1",
-                "OUTPUT_ARTIFACT_NAME": "rollup-output-run-rollup-demo-100-1",
-                "AUDIT_ARTIFACT_NAME": "rollup-audit-run-rollup-demo-100-1",
-                "EXPLICIT_RESUME": "true" if explicit else "false",
-                "GITHUB_ENV": str(github_env),
-            },
+            env=env,
             capture_output=True,
             text=True,
             timeout=15,
@@ -815,3 +828,511 @@ def test_rollup_workflow_stage_script_preserves_invocation_and_refuses_scope_dri
     assert res_auto.returncode == 0
     assert env_auto.read_text() == ""
     assert not (out_auto / "resume-candidates").exists()
+
+    # 4. Missing required evidence directory when retain_source_evidence=True:
+    #    auto retry falls through cleanly; explicit resume fails closed.
+    res_no_ev_auto, out_no_ev_auto, env_no_ev_auto = _run_stage(
+        tmp_path / "stage-no-ev-auto",
+        prior_inputs=base_inputs,
+        current_inputs=retry_inputs,
+        has_audit=False,
+        explicit=False,
+    )
+    assert res_no_ev_auto.returncode == 0
+    assert env_no_ev_auto.read_text() == ""
+    assert not (out_no_ev_auto / "resume-candidates").exists()
+
+    res_no_ev_exp, _, _ = _run_stage(
+        tmp_path / "stage-no-ev-explicit",
+        prior_inputs=base_inputs,
+        current_inputs=retry_inputs,
+        has_audit=False,
+        explicit=True,
+    )
+    assert res_no_ev_exp.returncode != 0
+
+    # 5. Non-evidence candidate without audit artifact records audit_artifact as None (NIT 7b).
+    res_no_aud, out_no_aud, env_no_aud = _run_stage(
+        tmp_path / "stage-no-audit-ok",
+        prior_inputs=base_inputs,
+        current_inputs=retry_inputs,
+        candidate_binding={"retain_source_evidence": False, "evidence_directory": None},
+        has_audit=False,
+        explicit=False,
+    )
+    assert res_no_aud.returncode == 0, res_no_aud.stderr
+    inv_no_aud = json.loads((out_no_aud / "invocation.json").read_text())
+    assert inv_no_aud["resumed_from"]["audit_artifact"] is None
+    assert "SPICY_REGS_RESUME_GENERATION=true" in env_no_aud.read_text().splitlines()
+
+
+def test_rollup_workflow_lookup_polling_retries_transient_errors_and_waits_for_audit_artifact(tmp_path: Path) -> None:
+    """WARNING 4: polling script retries transient HTTP 5xx and does not break early when rollup-audit-* is not yet indexed."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    import threading
+
+    reusable = yaml.safe_load((WORKFLOWS / "_rollup.yml").read_text())
+    lookup_step = next(
+        step
+        for step in reusable["jobs"]["rollup"]["steps"]
+        if step.get("name") == "Resolve retained candidate artifacts for retry"
+    )
+    state = {"list_calls": 0}
+
+    class FakeGitHubApi(BaseHTTPRequestHandler):
+        def log_message(self, format, *args):
+            return
+
+        def do_GET(self):
+            if self.path.startswith("/repos/org/repo/actions/runs/100/artifacts"):
+                state["list_calls"] += 1
+                if state["list_calls"] == 1:
+                    self.send_response(503)
+                    self.end_headers()
+                    return
+                artifacts = [{"id": 11, "name": "rollup-output-run-rollup-demo-100-1", "expired": False}]
+                if state["list_calls"] >= 3:
+                    artifacts.append({"id": 22, "name": "rollup-audit-run-rollup-demo-100-1", "expired": False})
+                body = json.dumps({"artifacts": artifacts}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if self.path in ("/repos/org/repo/actions/artifacts/11", "/repos/org/repo/actions/artifacts/22"):
+                body = json.dumps({"id": int(self.path.rsplit("/", 1)[-1]), "expired": False}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if self.path in ("/repos/org/repo/actions/artifacts/11/zip", "/repos/org/repo/actions/artifacts/22/zip"):
+                self.send_response(302)
+                self.send_header("Location", "https://objects.invalid/artifact.zip")
+                self.end_headers()
+                return
+            self.send_response(404)
+            self.end_headers()
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), FakeGitHubApi)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        patched_script = (
+            lookup_step["run"]
+            .replace("https://api.github.com", f"http://127.0.0.1:{port}")
+            .replace("delays = (2, 4, 6, 8, 10)", "delays = (0, 0, 0, 0, 0)")
+        )
+        gh_out = tmp_path / "github_output.txt"
+        gh_out.write_text("", encoding="utf-8")
+        res = subprocess.run(
+            ["bash", "-e", "-o", "pipefail", "-c", patched_script],
+            cwd=tmp_path,
+            env={
+                "PATH": os.environ["PATH"],
+                "GH_TOKEN": "tok",
+                "GITHUB_REPOSITORY": "org/repo",
+                "GITHUB_RUN_ID": "200",
+                "GITHUB_RUN_ATTEMPT": "2",
+                "COMMAND": "run-rollup-demo",
+                "RESUME_RUN_ID": "100",
+                "RESUME_RUN_ATTEMPT": "1",
+                "RESUME_MODE": "auto",
+                "GITHUB_OUTPUT": str(gh_out),
+            },
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert res.returncode == 0, res.stderr
+    assert state["list_calls"] == 3, "must retry 503 AND wait until audit artifact is also ready"
+    outputs = dict(line.split("=", 1) for line in gh_out.read_text().splitlines() if "=" in line)
+    assert outputs["has_output"] == "true"
+    assert outputs["has_audit"] == "true"
+
+
+# ---------------------------------------------------------------------------
+# 7. Regression tests for Final Review findings (BLOCKERs 1-3, WARNINGs 5-6, NIT 7)
+# ---------------------------------------------------------------------------
+
+
+def test_receipt_bearing_managed_parent_resumes_reconciles_and_refuses_receipt_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """BLOCKER 1: NativeReceiptLifecycle parent '<dataset>/etl_receipts.parquet' resumes, reconciles, and catches receipt drift."""
+    from spicy_regs import etl_policy_registry
+    from spicy_regs.pipelines.rollups import subject_receipts as sr_mod
+    from spicy_regs.pipelines.rollups.subject_receipts import NativeReceiptLifecycle
+
+    monkeypatch.setattr(etl_policy_registry, "require_registered_receipts", lambda *_: None)
+    monkeypatch.setattr(sr_mod.SelectedPriors, "get", lambda self, ds: self.select(ds).subjects[0])
+
+    store = Store()
+    _setup_r2_env(monkeypatch, store)
+
+    # Publish a receipt-bearing parent family ('parent-fam' owning 'parent_tbl.parquet' + etl_receipts.parquet).
+    def _publish_parent(name: str, payload_val: str, prior=None):
+        pol = _policy("parent_tbl")
+        gen_id = f"gen-{name}"
+        ctx = ReceiptContext(
+            gen_id,
+            "parent_tbl-1",
+            pol.policy_version,
+            [{"source_id": "src-p", "source_uri": "https://source.test/p",
+              "sha256": "sha256:" + "b" * 64, "locator": "row:0", "body_version": name}],
+            {},
+        )
+        work = tmp_path / f"parent-work-{name}"
+        subject, rpath = write_dataset(
+            [({"id": "parent_tbl-1", "payload": payload_val}, ctx)],
+            work / "ds",
+            pol,
+            generation_id=gen_id,
+        )
+        assert subject is not None
+        gen_dir = tmp_path / f"parent-gen-{name}"
+        generations.build_generation(
+            gen_dir,
+            family="parent-fam",
+            files=[subject],
+            expected_keys=("parent_tbl.parquet",),
+            read_snapshot=prior or pub.empty_index(),
+            receipt_path=rpath,
+            receipt_policies=(pol,),
+            receipt_generation_id=gen_id,
+        )
+        return publish(store, gen_dir, prior)
+
+    parent_v1 = _publish_parent("v1", "same-subject")
+
+    # Wire pub.fetch_member so SelectedInputs reads parent_tbl and its etl_receipts from Store.
+    def _fake_fetch(_base_url: str, member: pub.Member, target: Path, *_args) -> bool:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(store.objects[member.path])
+        return True
+
+    monkeypatch.setattr(pub, "fetch_member", _fake_fetch)
+
+    class _ChildReceiptRollup(NativeReceiptLifecycle):
+        name: ClassVar[str] = "child-receipt-resume"
+        inputs: ClassVar[tuple[str, ...]] = ("parent_tbl.parquet",)
+        output: ClassVar[str] = "child_tbl.parquet"
+        receipt_policies: ClassVar[tuple] = (_policy("child_tbl"),)
+
+        def __init__(self, *, counters: dict[str, int], **kwargs):
+            super().__init__(**kwargs)
+            self._counters = counters
+
+        def generation_schemas(self):
+            return {"child_tbl": [["id", "VARCHAR"], ["payload", "VARCHAR"]]}
+
+        def build(self, output_dir: Path) -> Path:
+            self._counters["build"] = self._counters.get("build", 0) + 1
+            pol = _policy("child_tbl")
+            ctx = ReceiptContext(
+                self.receipt_generation_id,
+                "child_tbl-1",
+                pol.policy_version,
+                [{"source_id": "src-c", "source_uri": "https://source.test/c",
+                  "sha256": "sha256:" + "c" * 64, "locator": "row:0", "body_version": "c1"}],
+                {},
+            )
+            subject, rpath = write_dataset(
+                [({"id": "child_tbl-1", "payload": "child-val"}, ctx)],
+                output_dir / "ds",
+                pol,
+                generation_id=self.receipt_generation_id,
+            )
+            assert subject is not None
+            (output_dir / "etl_receipts.parquet").write_bytes(rpath.read_bytes())
+            return subject
+
+    # 1. Fail mid-upload on child -> candidate records "parent_tbl/etl_receipts.parquet" without "family".
+    out1 = tmp_path / "child-out-1"
+    counters1: dict[str, int] = {}
+
+    def _fail_pointer(key: str) -> None:
+        if key == pub.INDEX_V2_KEY:
+            raise OSError("pointer drop")
+
+    store.before_put = _fail_pointer
+    with pytest.raises(OSError, match="pointer drop"):
+        _ChildReceiptRollup(output_dir=out1, skip_upload=False, counters=counters1).run()
+    store.before_put = None
+    assert counters1["build"] == 1
+    [child_gen] = list((out1 / "generations").iterdir())
+    child_root = json.loads((child_gen / "artifact.json").read_text())
+    assert "parent_tbl/etl_receipts.parquet" in child_root["spec"]["parents"]
+    assert "family" not in child_root["spec"]["parents"]["parent_tbl/etl_receipts.parquet"]
+
+    # 2. Resume after upload failure succeeds with ZERO rebuilds!
+    _ChildReceiptRollup(output_dir=out1, skip_upload=False, resume=True, counters=counters1).run()
+    assert counters1["build"] == 1
+    assert "child-receipt-resume" in pub.parse_index(store.objects[pub.INDEX_V2_KEY])["families"]
+
+    # 3. Cross-process ALREADY_LIVE reconciliation also succeeds (even when parent moved afterwards!).
+    out2 = tmp_path / "child-out-2"
+    counters2: dict[str, int] = {}
+    monkeypatch.setattr(cloudflare, "purge_urls", lambda _urls: (_ for _ in ()).throw(OSError("post-write crash")))
+    with pytest.raises(OSError, match="post-write crash"):
+        _ChildReceiptRollup(output_dir=out2, skip_upload=False, counters=counters2).run()
+    assert counters2["build"] == 1
+    monkeypatch.setattr(cloudflare, "purge_urls", lambda _urls: None)
+    writes_before_reconcile = list(store.writes)
+    _ChildReceiptRollup(output_dir=out2, skip_upload=False, resume=True, counters=counters2).run()
+    assert counters2["build"] == 1 and store.writes == writes_before_reconcile
+
+    # 4. If parent's etlReceipts member changes (even with identical subject bytes!), resume refuses fail-closed.
+    out3 = tmp_path / "child-out-3"
+    counters3: dict[str, int] = {}
+    store.before_put = _fail_pointer
+    with pytest.raises(OSError, match="pointer drop"):
+        _ChildReceiptRollup(output_dir=out3, skip_upload=False, counters=counters3).run()
+    store.before_put = None
+    # Mutate parent's live etlReceipts entry (keep parent_tbl subject table pin untouched to isolate receipt check!).
+    live_idx = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
+    live_idx["families"]["parent-fam"]["etlReceipts"]["sha256"] = "sha256:" + "f" * 64
+    from rulespec_artifacts import canonical_json_bytes
+    store.objects[pub.INDEX_V2_KEY] = canonical_json_bytes(live_idx)
+    writes_before_refuse = list(store.writes)
+    with pytest.raises(ResumeRefusedError, match="Managed parent receipts changed"):
+        _ChildReceiptRollup(output_dir=out3, skip_upload=False, resume=True, counters=counters3).run()
+    assert counters3["build"] == 1 and store.writes == writes_before_refuse
+    _ = parent_v1
+
+
+def test_laws_rollup_preserves_olrc_access_refusal_on_resume_and_reconciliation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """BLOCKER 2: LawsRollup sets deferred_failure in build() so OLRC 401/403 refusal is preserved across resume & ALREADY_LIVE."""
+    from spicy_regs import etl_policy_registry
+    from spicy_regs.pipelines.rollups import laws as laws_mod
+
+    monkeypatch.setattr(etl_policy_registry, "require_registered_receipts", lambda *_: None)
+    store = Store()
+    _setup_r2_env(monkeypatch, store)
+    calls = {"build": 0}
+
+    def _fake_build_receipts(self, output_dir: Path, _builder, *, evidence=None):
+        calls["build"] += 1
+        assert evidence is not None
+        evidence.event("table3-bulk-refused", status=403)
+        paths = []
+        rpaths = []
+        def _dummy_value(field: pa.Field, required: bool):
+            if field.nullable and not required:
+                return None
+            dtype = field.type
+            if pa.types.is_string(dtype) or pa.types.is_large_string(dtype):
+                return "1"
+            if pa.types.is_integer(dtype):
+                return 1
+            if pa.types.is_floating(dtype):
+                return 1.0
+            if pa.types.is_boolean(dtype):
+                return False
+            if pa.types.is_list(dtype) or pa.types.is_large_list(dtype):
+                return []
+            return None
+
+        for pol in self.receipt_policies:
+            ctx = ReceiptContext(
+                self.receipt_generation_id,
+                f"{pol.dataset}-1",
+                pol.policy_version,
+                [{"source_id": "s", "source_uri": "https://source.test/law",
+                  "sha256": "sha256:" + "d" * 64, "locator": "row:0", "body_version": "1"}],
+                {},
+            )
+            id_set = set(pol.identity_fields)
+            row = {field.name: _dummy_value(field, field.name in id_set) for field in pol.subject_schema}
+            subject, rpath = write_dataset(
+                [] if pol.receipt_only else [(row, ctx)],
+                output_dir / f"ds-{pol.dataset}",
+                pol,
+                generation_id=self.receipt_generation_id,
+            )
+            if not pol.receipt_only:
+                assert subject is not None
+                paths.append(subject)
+            rpaths.append(rpath)
+        combine_receipts(rpaths, output_dir / "etl_receipts.parquet")
+        return tuple(paths)
+
+    monkeypatch.setattr(laws_mod.LawsRollup, "build_receipts", _fake_build_receipts)
+    monkeypatch.setattr(laws_mod, "olrc_access_refused", lambda _ev: ["Table III"])
+
+    # Attempt 1 fails during pointer write while OLRC refused Table III.
+    def _fail_pointer(key: str) -> None:
+        if key == pub.INDEX_V2_KEY:
+            raise OSError("upload drop")
+
+    store.before_put = _fail_pointer
+    with pytest.raises(OSError, match="upload drop"):
+        laws_mod.LawsRollup(output_dir=tmp_path, skip_upload=False).run()
+    assert calls["build"] == 1
+    assert pub.INDEX_V2_KEY not in store.objects
+
+    # Attempt 2 resumes: publishes healthy laws tables WITHOUT rebuilding, AND STILL raises OLRC 401/403 RuntimeError!
+    store.before_put = None
+    with pytest.raises(RuntimeError, match="OLRC answered 401/403 for Table III"):
+        laws_mod.LawsRollup(output_dir=tmp_path, skip_upload=False, resume=True).run()
+    assert calls["build"] == 1
+    assert "laws" in pub.parse_index(store.objects[pub.INDEX_V2_KEY])["families"]
+
+    # Attempt 3 while ALREADY_LIVE: zero builds, zero R2 writes, STILL raises OLRC 401/403 RuntimeError!
+    writes_after = list(store.writes)
+    with pytest.raises(RuntimeError, match="OLRC answered 401/403 for Table III"):
+        laws_mod.LawsRollup(output_dir=tmp_path, skip_upload=False, resume=True).run()
+    assert calls["build"] == 1 and store.writes == writes_after
+
+
+def test_court_docket_groups_and_person_identity_decisions_scope_and_empty_gate_on_resume(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """BLOCKER 3: CourtDocketGroupsRollup & PersonIdentityDecisionsRollup enforce invocation_scope and empty-log live gate."""
+    from spicy_regs.pipelines.rollups import court_docket_groups as cdg_mod
+    from spicy_regs.pipelines.rollups.person_identity_decisions import (
+        DECISIONS_LOG_ENV,
+        PersonIdentityDecisionsRollup,
+    )
+
+    # --- A. CourtDocketGroupsRollup invocation_scope covers native_sha256 and edition ---
+    fake_raw = tmp_path / "dockets.csv.bz2"
+    fake_raw.write_bytes(b"bz2")
+    monkeypatch.setattr(cdg_mod, "open_raw", lambda _root=None: object())
+    monkeypatch.setattr(cdg_mod, "raw_original", lambda _store, _sha, _size: fake_raw)
+    cdg_a = cdg_mod.CourtDocketGroupsRollup(native_sha256="a" * 64, edition="2026-01-01", output_dir=tmp_path)
+    cdg_b = cdg_mod.CourtDocketGroupsRollup(native_sha256="b" * 64, edition="2026-01-01", output_dir=tmp_path)
+    cdg_c = cdg_mod.CourtDocketGroupsRollup(native_sha256="a" * 64, edition="2026-02-01", output_dir=tmp_path)
+    assert cdg_a.invocation_scope() != cdg_b.invocation_scope()
+    assert cdg_a.invocation_scope() != cdg_c.invocation_scope()
+
+    # --- B. PersonIdentityDecisionsRollup: in-place JSONL edit refuses resume; empty candidate refused for live publish ---
+    log_file = tmp_path / "decisions.jsonl"
+    log_file.write_text("", encoding="utf-8")
+    out_pid = tmp_path / "pid-out"
+    store = Store()
+    _setup_r2_env(monkeypatch, store)
+
+    # Dry-run on empty log with owner approval creates a local candidate.
+    PersonIdentityDecisionsRollup(
+        output_dir=out_pid,
+        skip_upload=True,
+        history_path=log_file,
+        owner_approval_ref="owner-approved-2026-11-28",
+    ).run()
+    assert len(list((out_pid / RESUME_CANDIDATES_DIR / "person-identity-decisions").glob("*.json"))) == 1
+
+    # Attempting to resume the 0-row candidate for LIVE publication must refuse fail-closed with zero R2 writes!
+    with pytest.raises(ResumeRefusedError, match="Refusing to publish an empty person-identity-decisions log"):
+        PersonIdentityDecisionsRollup(
+            output_dir=out_pid,
+            skip_upload=False,
+            resume=True,
+            history_path=log_file,
+            owner_approval_ref="owner-approved-2026-11-28",
+        ).run()
+    assert not store.writes
+
+    # Changing owner_approval_ref or editing DECISIONS_LOG_ENV file in place changes invocation_scope() and refuses resume!
+    monkeypatch.setenv(DECISIONS_LOG_ENV, str(log_file))
+    p_orig = PersonIdentityDecisionsRollup(output_dir=out_pid, skip_upload=True, owner_approval_ref="ref-1")
+    scope_before = p_orig.invocation_scope()
+    log_file.write_text('{"edited": true}\n', encoding="utf-8")
+    assert p_orig.invocation_scope() != scope_before
+    with pytest.raises(ResumeRefusedError, match="Invocation scope changed"):
+        PersonIdentityDecisionsRollup(
+            output_dir=out_pid,
+            skip_upload=True,
+            resume=True,
+            history_path=log_file,
+            owner_approval_ref="owner-approved-2026-11-28",
+        ).run()
+
+
+def test_skip_upload_resume_with_public_url_checks_live_prior_parent_and_soft_input_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WARNING 5: skip_upload=True resume with R2_PUBLIC_URL set refuses stale prior/parent/soft-input candidates."""
+    store = Store()
+    _setup_r2_env(monkeypatch, store)
+    old_dir, _ = build(tmp_path, "skip-old", family="simple-resume", keys=("simple.parquet",), value="v0")
+    prior = publish(store, old_dir)
+
+    out = tmp_path / "skip-out"
+    counters: dict[str, int] = {}
+    _SimpleCounterRollup(output_dir=out, skip_upload=True, value="v1", counters=counters).run()
+    assert counters["build"] == 1
+
+    # While live family still matches captured prior, skip_upload=True resume succeeds without rebuilding.
+    _SimpleCounterRollup(output_dir=out, skip_upload=True, resume=True, value="v1", counters=counters).run()
+    assert counters["build"] == 1
+
+    # Once live family moves on R2, skip_upload=True resume MUST refuse cleanly!
+    newer_dir, _ = build(tmp_path, "skip-newer", family="simple-resume", keys=("simple.parquet",), value="v2")
+    publish(store, newer_dir, prior)
+    with pytest.raises(ResumeRefusedError, match="Live family 'simple-resume' moved"):
+        _SimpleCounterRollup(output_dir=out, skip_upload=True, resume=True, value="v1", counters=counters).run()
+    assert counters["build"] == 1
+
+
+def test_manifest_and_directory_and_prior_repair_invocation_scopes_track_content_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WARNING 6 & NIT 7a: directory retained_bundle, BILL_FAMILY_CBO_ARCHIVE_MANIFEST, and prior_repairs bind content."""
+    from spicy_regs.pipelines import prior_repairs
+    from spicy_regs.pipelines.rollups.bill_family import BillFamilyRollup
+    from spicy_regs.pipelines.rollups.committee_reports import CommitteeReportsRollup
+
+    # 1. Directory-valued CommitteeReportsRollup.retained_bundle hashes selected-capture-pins.json bytes.
+    bundle_dir = tmp_path / "bundle"
+    bundle_dir.mkdir()
+    pins_file = bundle_dir / "selected-capture-pins.json"
+    pins_file.write_text('{"selected": ["a"]}\n', encoding="utf-8")
+    cr = CommitteeReportsRollup(output_dir=tmp_path)
+    cr.retained_bundle = bundle_dir
+    scope_cr_1 = cr.invocation_scope()
+    pins_file.write_text('{"selected": ["b"]}\n', encoding="utf-8")
+    assert cr.invocation_scope() != scope_cr_1
+
+    # 2. BILL_FAMILY_CBO_ARCHIVE_MANIFEST edits change BillFamilyRollup.invocation_scope().
+    cbo_manifest = tmp_path / "cbo-manifest.json"
+    cbo_manifest.write_text('{"items": [1]}\n', encoding="utf-8")
+    monkeypatch.setenv("BILL_FAMILY_CBO_ARCHIVE_MANIFEST", str(cbo_manifest))
+    bf = BillFamilyRollup(output_dir=tmp_path)
+    scope_bf_1 = bf.invocation_scope()
+    cbo_manifest.write_text('{"items": [2]}\n', encoding="utf-8")
+    assert bf.invocation_scope() != scope_bf_1
+
+    # 3. Closure-parameterized prior_repairs rollups bind bill_ids and pins in invocation_scope().
+    mb1 = prior_repairs.missing_bills_rollup(["119-hr-1"])(output_dir=tmp_path)
+    mb2 = prior_repairs.missing_bills_rollup(["119-hr-2"])(output_dir=tmp_path)
+    assert mb1.invocation_scope() != mb2.invocation_scope()
+
+    idx_a = {
+        "families": {
+            "demo": {
+                "prefix": "generations/demo/" + "a" * 64,
+                "artifactDigest": "sha256:" + "a" * 64,
+                "tables": {"t.parquet": {"sha256": "sha256:" + "1" * 64, "byteSize": 10, "rows": 1}},
+            }
+        }
+    }
+    idx_b = {
+        "families": {
+            "demo": {
+                "prefix": "generations/demo/" + "b" * 64,
+                "artifactDigest": "sha256:" + "b" * 64,
+                "tables": {"t.parquet": {"sha256": "sha256:" + "2" * 64, "byteSize": 10, "rows": 1}},
+            }
+        }
+    }
+    rr1 = prior_repairs.restore_rollup(idx_a, "demo", ["t"])(output_dir=tmp_path)
+    rr2 = prior_repairs.restore_rollup(idx_b, "demo", ["t"])(output_dir=tmp_path)
+    assert rr1.invocation_scope() != rr2.invocation_scope()

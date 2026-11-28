@@ -13,6 +13,7 @@ approval (supplied via ``owner_approval_ref`` / ``PERSON_IDENTITY_OWNER_APPROVAL
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from collections.abc import Mapping, Sequence
@@ -30,7 +31,7 @@ from spicy_regs.identity_review import (
     verify_person_history,
 )
 from spicy_regs.native_types import described_schema
-from spicy_regs.pipelines.rollups.base import RollupPipeline
+from spicy_regs.pipelines.rollups.base import ResumeRefusedError, RollupPipeline, file_scope_digest
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -211,14 +212,42 @@ class PersonIdentityDecisionsRollup(RollupPipeline):
         *,
         output_dir: Path | None = None,
         skip_upload: bool = True,
+        resume: bool = False,
+        require_resume_candidate: bool = False,
         history_path: Path | None = None,
         history: Sequence[Mapping[str, Any]] | None = None,
         owner_approval_ref: str | None = None,
     ) -> None:
-        super().__init__(output_dir=output_dir, skip_upload=skip_upload)
+        super().__init__(
+            output_dir=output_dir,
+            skip_upload=skip_upload,
+            resume=resume,
+            require_resume_candidate=require_resume_candidate,
+        )
         self.history_path = history_path
         self.history = history
         self.owner_approval_ref = owner_approval_ref or os.environ.get(OWNER_APPROVAL_ENV)
+
+    def invocation_scope(self) -> dict[str, Any]:
+        scope = super().invocation_scope()
+        if self.history is not None:
+            canonical_log = b"".join(_canonical(dict(event)) + b"\n" for event in self.history)
+            history_digest: str | None = "sha256:" + hashlib.sha256(canonical_log).hexdigest()
+        else:
+            env_path = os.environ.get(DECISIONS_LOG_ENV)
+            resolved = self.history_path or (Path(env_path) if env_path else None)
+            history_digest = file_scope_digest(resolved)
+        scope["person_identity_decisions"] = {
+            "history_sha256": history_digest,
+            "owner_approval_ref": (self.owner_approval_ref or "").strip() or None,
+        }
+        return scope
+
+    def _validate_resumed_candidate(self, gen_dir: Path, artifact) -> None:
+        if not self.skip_upload:
+            verified = verify_decisions_parquet(gen_dir / OUTPUT)
+            if not verified:
+                raise ResumeRefusedError("Refusing to publish an empty person-identity-decisions log to live R2")
 
     def generation_schemas(self) -> dict[str, list[tuple[str, str]]]:
         """Declare ``person_identity_decisions`` schema so local generation admission works cleanly."""
@@ -260,11 +289,15 @@ def main(
     history_path: Annotated[Path | None, Parameter(help="JSONL decision log path")] = None,
     owner_approval_ref: Annotated[str | None, Parameter(help="Explicit owner rule-approval reference")] = None,
     skip_upload: Annotated[bool, Parameter(help="Skip R2 upload (mandatory until owner approval)")] = True,
+    resume: Annotated[
+        bool, Parameter(help="Resume a verified retained generation candidate before rebuilding")
+    ] = False,
 ) -> None:
     load_dotenv()
     PersonIdentityDecisionsRollup(
         output_dir=output_dir,
         skip_upload=skip_upload,
+        resume=resume,
         history_path=history_path,
         owner_approval_ref=owner_approval_ref,
     ).run()

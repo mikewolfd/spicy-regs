@@ -38,7 +38,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.base import file_scope_digest, make_rollup_app
 from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup as RollupPipeline
 from spicy_regs.transforms.build_bill_family import (
     ARCHIVES_TABLE,
@@ -77,6 +77,13 @@ class BillFamilyRollup(RollupPipeline):
     partitioned: ClassVar[Mapping[str, tuple[str, ...]]] = {
         f"{name}.parquet": (partitioning.column,) for name, partitioning in PARTITIONED.items()
     }
+
+    def invocation_scope(self) -> dict:
+        scope = super().invocation_scope()
+        manifest_raw = os.environ.get("BILL_FAMILY_CBO_ARCHIVE_MANIFEST", "").strip()
+        if manifest_raw:
+            scope["bill_family"] = {"cbo_archive_manifest_sha256": file_scope_digest(Path(manifest_raw))}
+        return scope
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         raw = os.environ.get("BILL_FAMILY_MAX_VERSION_FETCHES", "").strip()
