@@ -143,7 +143,13 @@ def retained_implementation(manifest: dict) -> dict[str, dict]:
 
 
 def implementation(chamber: str, profile: str = "ledger") -> dict:
-    """Pin the imported reader, shared semantics, repair data and actual runtime."""
+    """Pin the imported reader, shared semantics, repair data and actual runtime.
+
+    Follow ``spicy_docs.extraction`` imports for PDF geometry, table reading and
+    retained OCR replay. Readers use package-level re-exports and lazy imports;
+    an allowlist of PDF modules would miss dependencies that can change replay.
+    This is an import closure, not a hash of the whole extraction package.
+    """
     source_reader = reader_module(chamber, profile)
     names = (
         "spicy_docs.reading.pdf_grid",

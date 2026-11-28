@@ -174,7 +174,6 @@ def test_refresh_publishes_the_families_before_the_mirror_captures_base_versions
         "run-rollup-documents",
         "run-rollup-docket-attributes",
         "run-rollup-document-attributes",
-        "run-rollup-comment-attributes",
     ]
     assert jobs["base-families"]["with"]["skip_upload"] == "${{ inputs.skip_upload }}"
     assert jobs["mirror"]["needs"] == "base-families"
