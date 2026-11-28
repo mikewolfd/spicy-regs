@@ -13,6 +13,7 @@ from cyclopts import App, Parameter
 from dotenv import load_dotenv
 
 from spicy_regs.legislative_rollups import LegislativeReceiptRollup, family_policies
+from spicy_regs.pipelines.rollups.base import file_scope_digest
 from spicy_regs.transforms.build_committee_reports import build_committee_reports
 
 
@@ -48,6 +49,23 @@ class CommitteeReportsRollup(LegislativeReceiptRollup):
             return explicit
         raw = os.environ.get(env_var, "").strip()
         return Path(raw) if raw else None
+
+    def invocation_scope(self) -> dict:
+        scope = super().invocation_scope()
+        retained_bundle = self._env_path(self.retained_bundle, "COMMITTEE_REPORTS_RETAINED_BUNDLE")
+        retained_bundle_root = self._env_path(self.retained_bundle_root, "COMMITTEE_REPORTS_RETAINED_BUNDLE_ROOT")
+        retained_raw_archive = self._env_path(self.retained_raw_archive, "COMMITTEE_REPORTS_RETAINED_RAW_ARCHIVE")
+        bundle_manifest = (
+            retained_bundle / "selected-capture-pins.json"
+            if retained_bundle is not None and retained_bundle.is_dir()
+            else retained_bundle
+        )
+        scope["committee_reports"] = {
+            "retained_bundle": file_scope_digest(bundle_manifest),
+            "retained_bundle_root": str(retained_bundle_root) if retained_bundle_root is not None else None,
+            "retained_raw_archive": str(retained_raw_archive) if retained_raw_archive is not None else None,
+        }
+        return scope
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         # Comma-separated package ids to re-read alone; unset is the normal discovery run.
@@ -85,6 +103,9 @@ def main(
     *,
     output_dir: Annotated[Path | None, Parameter(help="Output directory")] = None,
     skip_upload: Annotated[bool, Parameter(help="Skip R2 upload (recommended while vetting)")] = True,
+    resume: Annotated[
+        bool, Parameter(help="Resume a verified retained generation candidate before rebuilding")
+    ] = False,
     retained_bundle: Annotated[
         Path | None,
         Parameter(help="Path to audited selected-capture-pins.json (or bundle dir) for offline hearing merge"),
@@ -99,7 +120,7 @@ def main(
     ] = None,
 ) -> None:
     load_dotenv()
-    rollup = CommitteeReportsRollup(output_dir=output_dir, skip_upload=skip_upload)
+    rollup = CommitteeReportsRollup(output_dir=output_dir, skip_upload=skip_upload, resume=resume)
     rollup.retained_bundle = retained_bundle
     rollup.retained_bundle_root = retained_bundle_root
     rollup.retained_raw_archive = retained_raw_archive

@@ -39,6 +39,9 @@ Parquet URLs are not rewritten by this path.
 """
 
 import hashlib
+import json
+import os
+import re
 from abc import abstractmethod
 from collections.abc import Mapping
 from contextlib import nullcontext
@@ -52,8 +55,10 @@ from cyclopts import App, Parameter
 from dotenv import load_dotenv
 from loguru import logger
 
+from spicy_regs.env_values import flag_env
 from spicy_regs.pipelines.base import Pipeline
 from spicy_regs.sources import r2
+from spicy_regs.sources.publication import PublicationError
 
 
 class Unchanged(Exception):
@@ -62,6 +67,135 @@ class Unchanged(Exception):
     ``run`` then builds and publishes nothing and returns normally, so a scheduled run on a day without
     news is green. Raise it only once every byte acquired is known to be published already.
     """
+
+
+class ResumeRefusedError(PublicationError):
+    """Retained candidate resume was refused fail-closed without running source fetches or mutating R2."""
+
+
+RESUME_CANDIDATES_DIR = "resume-candidates"
+RESUME_BINDING_FORMAT = "spicy-regs-rollup-candidate-binding"
+RESUME_BINDING_VERSION = 1
+RESUME_GENERATION_ENV = "SPICY_REGS_RESUME_GENERATION"
+RESUME_REQUIRE_ENV = "SPICY_REGS_RESUME_REQUIRE"
+_BINDING_LIMIT = 1024 * 1024
+_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_BINDING_KEYS = frozenset({
+    "format",
+    "version",
+    "family",
+    "pipeline_class",
+    "generation_directory",
+    "generation_pin",
+    "evidence_directory",
+    "expected_keys",
+    "added_tables",
+    "receipt_only_tables",
+    "partitioned",
+    "retain_source_evidence",
+    "validation_identity",
+    "invocation_scope",
+    "soft_inputs",
+    "remote_inputs",
+    "deferred_failure",
+})
+
+#: Non-secret environment variables that scope rollup build outputs.
+ROLLUP_SCOPE_ENV_VARS: tuple[str, ...] = (
+    "ADMINISTRATION_POLICY_FORCE_PUBLISH",
+    "AMENDMENTS_MAX_DETAILS",
+    "AMENDMENTS_SINCE",
+    "AMENDMENTS_UNTIL",
+    "BILL_FAMILY_BILL_TYPES",
+    "BILL_FAMILY_CBO_ARCHIVE_MANIFEST",
+    "BILL_FAMILY_CHILD_BILL_IDS",
+    "BILL_FAMILY_CHILD_CHECKPOINT_DIR",
+    "BILL_FAMILY_CONGRESSES",
+    "BILL_FAMILY_MAX_VERSION_FETCHES",
+    "BILL_SUBJECTS_DEADLINE_MINUTES",
+    "BILL_SUBJECTS_MAX",
+    "CFR_REPLACE_ALL",
+    "COMMITTEE_REPORTS_REREAD",
+    "COMMITTEE_REPORTS_RETAINED_BUNDLE",
+    "COMMITTEE_REPORTS_RETAINED_BUNDLE_ROOT",
+    "COMMITTEE_REPORTS_RETAINED_RAW_ARCHIVE",
+    "COMMITTEE_REPORTS_SINCE",
+    "COMMITTEE_REPORTS_UNTIL",
+    "COMMITTEE_ROSTERS_DIRECTORY_REREAD",
+    "COURTLISTENER_BULK_DIR",
+    "COURT_CLUSTERS_MAX_REQUESTS",
+    "CRS_REPORTS_RECONCILE",
+    "CRS_REPORTS_SINCE",
+    "FCC_PROCEEDINGS",
+    "FCC_SINCE",
+    "FEC_COMMITTEES_FULL_WALK",
+    "FR_SINCE",
+    "GAO_ALLOW_MASS_CLOSE_REASON",
+    "GAO_DECISION_PAGES",
+    "GAO_GOVINFO_HISTORY",
+    "GAO_GOVINFO_MODS",
+    "GAO_LISTING_RUN",
+    "GAO_MAJOR_RULE_LETTERS",
+    "GAO_MAJOR_RULE_OLD_INDEX_RUN",
+    "GAO_MAJOR_RULE_RUN",
+    "GAO_PRODUCT_PAGES",
+    "GAO_PRODUCT_PAGES_UNDO",
+    "GEMINI_MODEL",
+    "LDA_FILING_YEAR",
+    "LDA_POOL_PASSES",
+    "LDA_RETAINED_MANIFEST",
+    "LDA_RETAINED_MANIFEST_SHA256",
+    "LDA_SINCE",
+    "LDA_UNTIL",
+    "PERSON_IDENTITY_DECISIONS_LOG",
+    "PERSON_IDENTITY_OWNER_APPROVAL",
+    "PRINT_CITATIONS_SINCE",
+    "ROLL_CALL_CHAMBERS",
+    "ROLL_CALL_MAX_VOTES",
+    "SAM_INGEST_MODE",
+    "SAM_MAX_RECORDS",
+    "SAM_SINCE_YEAR",
+    "SAM_UNTIL_YEAR",
+    "SENATE_EXPENDITURES_SINCE",
+    "SPICY_REGS_CONGRESSES",
+    "SPICY_REGS_REQUIRE_BULK",
+    "TREASURY_MTS_ISSUE_DATE",
+    "USASPENDING_EVERY_FUNDED",
+)
+
+
+def file_scope_digest(path: Path | None) -> str | None:
+    """Return a content SHA-256 for a regular file scope input, or its path string when not a file."""
+    if path is None:
+        return None
+    if path.is_file():
+        with path.open("rb") as stream:
+            return "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
+    return str(path)
+
+
+def _resolve_contained_path(root: Path, relative: Any, *, label: str, expect_dir: bool = True) -> Path:
+    """Resolve a relative path strictly inside ``root`` without symlinks or ``..`` traversal."""
+    if not isinstance(relative, str) or not relative or relative.startswith(("/", "\\")):
+        raise ResumeRefusedError(f"Invalid {label} path in resume binding")
+    rel = Path(relative)
+    if rel.is_absolute() or rel.drive or not rel.parts or any(part in ("", ".", "..") for part in rel.parts):
+        raise ResumeRefusedError(f"Invalid {label} path in resume binding")
+    current = root
+    for part in rel.parts:
+        current = current / part
+        if current.is_symlink():
+            raise ResumeRefusedError(f"Symlink refused in resume binding {label}: {relative}")
+    root_resolved = root.resolve()
+    resolved = current.resolve()
+    if resolved == root_resolved or not resolved.is_relative_to(root_resolved):
+        raise ResumeRefusedError(f"Resume binding {label} escapes output directory: {relative}")
+    if expect_dir:
+        if not current.is_dir():
+            raise ResumeRefusedError(f"Resume binding {label} directory is missing: {relative}")
+    elif not current.is_file():
+        raise ResumeRefusedError(f"Resume binding {label} file is missing: {relative}")
+    return current
 
 
 class RollupPipeline(Pipeline):
@@ -122,14 +256,32 @@ class RollupPipeline(Pipeline):
             return self.outputs[0]
         raise AttributeError(f"{type(self).__name__} must set 'output' or 'outputs'")
 
-    def __init__(self, *, output_dir: Path | None = None, skip_upload: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        output_dir: Path | None = None,
+        skip_upload: bool = True,
+        resume: bool = False,
+        require_resume_candidate: bool = False,
+    ) -> None:
         self.output_dir = output_dir
         self.skip_upload = skip_upload
+        self.resume = resume
+        self.require_resume_candidate = require_resume_candidate
         self.source_evidence = None
         #: A failure ``build`` met and built around (one source refused, the rest was read): ``run`` publishes the
         #: generation and then raises it, so the run still fails.
         self.deferred_failure: BaseException | None = None
         self.receipt_generation_id = uuid4().hex
+
+    def invocation_scope(self) -> dict[str, Any]:
+        """Deterministic, secret-free fingerprint of build-affecting invocation parameters."""
+        env_scope: dict[str, str] = {}
+        for name in ROLLUP_SCOPE_ENV_VARS:
+            raw = getenv(name)
+            if raw is not None and raw.strip():
+                env_scope[name] = raw.strip()
+        return {"env": env_scope}
 
     def run(self, *, read_operation=None) -> None:
         self._conversion_read_operation = read_operation
@@ -147,12 +299,18 @@ class RollupPipeline(Pipeline):
             logger.info("Legacy unversioned object retained: {}", built)
             return
 
-        from spicy_regs.source_evidence import CaptureEvidence
-
         output_dir = self.output_dir or (Path.cwd() / "output")
         output_dir.mkdir(parents=True, exist_ok=True)
+        resume_requested = self.resume or flag_env(RESUME_GENERATION_ENV)
+        require_candidate = self.require_resume_candidate or flag_env(RESUME_REQUIRE_ENV)
+        if resume_requested and self._try_resume_generation(output_dir, require_candidate=require_candidate):
+            return
+
+        from spicy_regs.source_evidence import CaptureEvidence
+
         if self.retain_source_evidence:
             self.source_evidence = CaptureEvidence(output_dir, self.publication_family or self.name)
+        self._resume_checked = True
         try:
             self._run_tables(output_dir)
             if self.deferred_failure is not None:
@@ -168,6 +326,8 @@ class RollupPipeline(Pipeline):
         else:
             if self.source_evidence:
                 self.source_evidence.finish()
+        finally:
+            self._resume_checked = False
 
     def generation_schemas(self):
         """The schemas this producer declares for generation admission."""
@@ -179,6 +339,450 @@ class RollupPipeline(Pipeline):
         """Additional shared generation admission arguments supplied by an adopter."""
         return {}
 
+    def _validate_resumed_candidate(self, gen_dir: Path, artifact) -> None:
+        """Subclass hook for producer-specific gates that must hold before resuming a candidate."""
+
+    def _verify_live_resume_inputs(
+        self,
+        *,
+        output_dir: Path,
+        public_url: str,
+        live_index: dict,
+        family: str,
+        spec: Mapping,
+        binding: Mapping,
+        expected_keys: list[str],
+        managed_receipt_parents: list[tuple[str, str, Mapping]],
+        check_receipt_pins: bool,
+    ) -> None:
+        """Verify live prior, managed parents/receipts, soft/remote inputs, and receipt pins."""
+        from spicy_regs.sources import publication
+
+        live_family = live_index["families"].get(family)
+        captured_snapshot = spec["readSnapshot"]
+        captured_prior = captured_snapshot.get("families", {}).get(family) if captured_snapshot else None
+        if publication._generation_entry(live_family) != publication._generation_entry(captured_prior):
+            raise ResumeRefusedError(
+                f"Live family {family!r} moved since retained candidate was built"
+            )
+
+        try:
+            publication._assert_parents_current(live_index, spec.get("parents", {}))
+        except PublicationError as exc:
+            raise ResumeRefusedError(f"Managed parent changed since retained candidate was built: {exc}") from exc
+
+        for receipt_key, parent_family, receipt_pin in managed_receipt_parents:
+            live_parent = live_index["families"].get(parent_family)
+            live_receipt = (live_parent or {}).get("etlReceipts")
+            if (
+                not isinstance(live_receipt, Mapping)
+                or live_receipt.get("sha256") != receipt_pin["sha256"]
+                or live_receipt.get("byteSize") != receipt_pin["byteSize"]
+            ):
+                raise ResumeRefusedError(
+                    f"Managed parent receipts changed since retained candidate was built: {receipt_key}"
+                )
+
+        live_soft = self._observe_soft_inputs(live_index)
+        if live_soft != binding["soft_inputs"]:
+            raise ResumeRefusedError("Soft inputs changed since retained candidate was built")
+
+        try:
+            with (
+                publication.with_snapshot(public_url, live_index),
+                TemporaryDirectory(prefix=".resume-probe-", dir=output_dir) as probe_dir,
+            ):
+                live_remote = self._observe_remote_inputs(Path(probe_dir), public_url)
+        except Exception as exc:
+            raise ResumeRefusedError(f"Remote inputs could not be verified for resume: {exc}") from exc
+        if live_remote != binding["remote_inputs"]:
+            raise ResumeRefusedError("Remote inputs changed since retained candidate was built")
+
+        if check_receipt_pins:
+            try:
+                publication.require_live_receipt_pins(
+                    dict(live_index),
+                    [key.removesuffix(".parquet") for key in expected_keys if key not in self.receipt_only_tables],
+                )
+            except PublicationError as exc:
+                raise ResumeRefusedError(f"Live receipt archive pin requirement failed: {exc}") from exc
+
+    def _observe_soft_inputs(self, index: Mapping) -> dict[str, dict | None]:
+        """Current live table pin (or ``None``) for every declared soft input in ``index``."""
+        from spicy_regs.sources import publication
+
+        return {
+            key: publication.table_pin(index, key) if publication.table_owner(index, key) is not None else None
+            for key in self.soft_inputs
+        }
+
+    def _pipeline_class_name(self) -> str:
+        return f"{type(self).__module__}.{type(self).__qualname__}"
+
+    def _write_candidate_binding(
+        self,
+        *,
+        output_dir: Path,
+        family: str,
+        destination: Path,
+        artifact,
+        expected_keys: tuple[str, ...],
+        partitioned: Mapping[str, tuple[str, ...]],
+        soft_inputs: Mapping[str, dict | None],
+        remote_inputs: Mapping[str, dict],
+    ) -> Path:
+        """Persist non-hidden, non-authoritative build-scope binding before upload starts."""
+        from rulespec_artifacts import canonical_json_bytes
+        from spicy_regs.generations import validation_identity
+
+        digest_hex = artifact.pin.artifact_digest.removeprefix("sha256:")
+        binding_dir = output_dir / RESUME_CANDIDATES_DIR / family
+        binding_dir.mkdir(parents=True, exist_ok=True)
+        binding_path = binding_dir / f"{digest_hex}.json"
+        deferred = (
+            {"type": type(self.deferred_failure).__name__, "message": str(self.deferred_failure)}
+            if self.deferred_failure is not None
+            else None
+        )
+        payload = {
+            "format": RESUME_BINDING_FORMAT,
+            "version": RESUME_BINDING_VERSION,
+            "family": family,
+            "pipeline_class": self._pipeline_class_name(),
+            "generation_directory": destination.relative_to(output_dir).as_posix(),
+            "generation_pin": artifact.pin.as_dict(),
+            "evidence_directory": (
+                self.source_evidence.artifact_dir.relative_to(output_dir).as_posix()
+                if self.source_evidence is not None
+                else None
+            ),
+            "expected_keys": list(expected_keys),
+            "added_tables": list(self.added_tables),
+            "receipt_only_tables": list(self.receipt_only_tables),
+            "partitioned": {key: list(cols) for key, cols in sorted(partitioned.items())},
+            "retain_source_evidence": bool(self.retain_source_evidence),
+            "validation_identity": validation_identity(),
+            "invocation_scope": self.invocation_scope(),
+            "soft_inputs": dict(soft_inputs),
+            "remote_inputs": dict(remote_inputs),
+            "deferred_failure": deferred,
+        }
+        raw = canonical_json_bytes(payload)
+        temporary = binding_dir / f".{digest_hex}.{os.getpid()}.{uuid4().hex}.tmp"
+        try:
+            temporary.write_bytes(raw)
+            temporary.replace(binding_path)
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+        return binding_path
+
+    def _try_resume_generation(self, output_dir: Path, *, require_candidate: bool) -> bool:
+        """Discover, cryptographically verify, and resume a retained candidate before any fetches or ``build()``.
+
+        Returns ``True`` when a retained candidate was resumed/reconciled, ``False`` when no candidate exists
+        and ``require_candidate`` is ``False`` (caller falls through to a fresh build). Any validation,
+        identity, input, or live-prior drift raises :class:`ResumeRefusedError` fail-closed.
+        """
+        from rulespec_artifacts import ArtifactPin, LocalMemberSource, iter_member_descriptors
+        from spicy_regs.generations import admit_generation_for_publication, implementation_id, validation_identity
+        from spicy_regs.selected_generations import remember_generation
+        from spicy_regs.source_evidence import INPUT_ROLE, verify_evidence
+        from spicy_regs.sources import publication
+
+        candidate_families = tuple(dict.fromkeys(fam for fam in (self.publication_family, self.name) if fam))
+        bindings: list[Path] = []
+        for fam in candidate_families:
+            fam_dir = output_dir / RESUME_CANDIDATES_DIR / fam
+            if fam_dir.is_symlink():
+                raise ResumeRefusedError(f"Symlinked resume candidate directory refused: {fam_dir}")
+            if fam_dir.is_dir():
+                for candidate in sorted(fam_dir.glob("*.json")):
+                    if candidate.is_symlink() or not candidate.is_file():
+                        raise ResumeRefusedError(f"Invalid resume candidate binding entry: {candidate}")
+                    bindings.append(candidate)
+
+        if not bindings:
+            if require_candidate:
+                raise ResumeRefusedError(f"No retained generation candidate found for {self.name} in {output_dir}")
+            logger.info("Rollup {}: no retained generation candidate found; running fresh build", self.name)
+            return False
+        if len(bindings) > 1:
+            names = ", ".join(path.name for path in bindings)
+            raise ResumeRefusedError(
+                f"Multiple retained generation candidates found for {self.name} ({names}); "
+                "clean output_dir before retrying"
+            )
+
+        binding_path = bindings[0]
+        try:
+            if binding_path.stat().st_size > _BINDING_LIMIT:
+                raise ResumeRefusedError(f"Resume binding exceeds byte limit: {binding_path.name}")
+            binding = json.loads(binding_path.read_bytes())
+        except ResumeRefusedError:
+            raise
+        except (OSError, ValueError, TypeError) as exc:
+            raise ResumeRefusedError(f"Unreadable resume binding {binding_path.name}: {exc}") from exc
+
+        if not isinstance(binding, dict) or set(binding) != _BINDING_KEYS:
+            raise ResumeRefusedError(f"Malformed resume binding keys in {binding_path.name}")
+        if binding["format"] != RESUME_BINDING_FORMAT or binding["version"] != RESUME_BINDING_VERSION:
+            raise ResumeRefusedError(f"Unsupported resume binding format/version in {binding_path.name}")
+
+        family = binding["family"]
+        if not isinstance(family, str) or family not in candidate_families or binding_path.parent.name != family:
+            raise ResumeRefusedError(f"Resume binding family mismatch: {family!r}")
+        if binding["pipeline_class"] != self._pipeline_class_name():
+            raise ResumeRefusedError(
+                f"Resume binding pipeline class {binding['pipeline_class']!r} != {self._pipeline_class_name()!r}"
+            )
+        if binding["added_tables"] != list(self.added_tables):
+            raise ResumeRefusedError("Resume binding added_tables differs from current pipeline declaration")
+        if binding["receipt_only_tables"] != list(self.receipt_only_tables):
+            raise ResumeRefusedError("Resume binding receipt_only_tables differs from current pipeline declaration")
+        if binding["retain_source_evidence"] is not bool(self.retain_source_evidence):
+            raise ResumeRefusedError("Resume binding retain_source_evidence differs from current pipeline declaration")
+
+        own_keys = [key for key in (self.outputs or (self.output,)) if key not in self.receipt_only_tables]
+        own_partitioned = {key: list(cols) for key, cols in sorted(self.partitioned.items())}
+        expected_keys = binding["expected_keys"]
+        partitioned = binding["partitioned"]
+        if not isinstance(expected_keys, list) or not all(isinstance(k, str) for k in expected_keys):
+            raise ResumeRefusedError("Invalid expected_keys in resume binding")
+        if not isinstance(partitioned, dict):
+            raise ResumeRefusedError("Invalid partitioned mapping in resume binding")
+        if self.publication_family is None:
+            if expected_keys != own_keys or partitioned != own_partitioned:
+                raise ResumeRefusedError("Resume binding outputs/partitioned differ from current pipeline declaration")
+        else:
+            if not set(own_keys) <= set(expected_keys) or any(
+                partitioned.get(k) != v for k, v in own_partitioned.items()
+            ):
+                raise ResumeRefusedError("Resume binding partial-writer outputs differ from current declaration")
+
+        if not isinstance(binding["soft_inputs"], dict) or not isinstance(binding["remote_inputs"], dict):
+            raise ResumeRefusedError("Invalid soft_inputs/remote_inputs in resume binding")
+
+        deferred_raw = binding["deferred_failure"]
+        deferred_error: RuntimeError | None = None
+        if deferred_raw is not None:
+            if (
+                not isinstance(deferred_raw, dict)
+                or set(deferred_raw) != {"type", "message"}
+                or not isinstance(deferred_raw["type"], str)
+                or not isinstance(deferred_raw["message"], str)
+            ):
+                raise ResumeRefusedError("Invalid deferred_failure descriptor in resume binding")
+            deferred_error = RuntimeError(
+                f"Resumed generation carries deferred build failure ({deferred_raw['type']}): "
+                f"{deferred_raw['message']}"
+            )
+
+        if binding["validation_identity"] != validation_identity():
+            raise ResumeRefusedError("Producer/runtime validation_identity changed since retained candidate was built")
+        if binding["invocation_scope"] != self.invocation_scope():
+            raise ResumeRefusedError("Invocation scope changed since retained candidate was built")
+
+        pin_raw = binding["generation_pin"]
+        if (
+            not isinstance(pin_raw, dict)
+            or set(pin_raw) != {"logicalId", "artifactDigest"}
+            or not isinstance(pin_raw["logicalId"], str)
+            or not pin_raw["logicalId"]
+            or not isinstance(pin_raw["artifactDigest"], str)
+            or _DIGEST.fullmatch(pin_raw["artifactDigest"]) is None
+        ):
+            raise ResumeRefusedError("Invalid generation_pin in resume binding")
+        digest_hex = pin_raw["artifactDigest"].removeprefix("sha256:")
+        if binding_path.stem != digest_hex:
+            raise ResumeRefusedError("Resume binding filename does not match generation_pin digest")
+
+        gen_dir = _resolve_contained_path(output_dir, binding["generation_directory"], label="generation_directory")
+        if gen_dir.name != digest_hex:
+            raise ResumeRefusedError("Resume binding generation_directory does not match generation_pin digest")
+
+        expected_pin = ArtifactPin(pin_raw["logicalId"], pin_raw["artifactDigest"])
+        read_operation = getattr(self, "_conversion_read_operation", None)
+        try:
+            if read_operation is not None:
+                artifact, _ = read_operation.admit_generation(gen_dir, expected_pin=expected_pin)
+            else:
+                artifact = admit_generation_for_publication(gen_dir, expected_pin=expected_pin)
+        except Exception as exc:
+            raise ResumeRefusedError(f"Retained generation failed cryptographic admission: {exc}") from exc
+
+        if artifact.root.get("producer", {}).get("implementationId") != implementation_id():
+            raise ResumeRefusedError("Producer implementationId changed since retained candidate was built")
+        spec = artifact.root["spec"]
+        if spec["family"] != family or set(spec["tables"]) != set(expected_keys):
+            raise ResumeRefusedError("Admitted generation family/tables differ from resume binding")
+        if not self.skip_upload and spec["publicationStatus"] != "complete-family":
+            raise ResumeRefusedError("Cannot resume a local-partial generation for live publication")
+
+        declared_evidence = [item for item in artifact.root["inputs"] if item["role"] == INPUT_ROLE]
+        evidence_dir: Path | None = None
+        if self.retain_source_evidence:
+            if len(declared_evidence) != 1:
+                raise ResumeRefusedError("Admitted generation is missing its declared source-evidence pin")
+            evidence_dir = _resolve_contained_path(
+                output_dir, binding["evidence_directory"], label="evidence_directory"
+            )
+            ev_pin = ArtifactPin(declared_evidence[0]["logicalId"], declared_evidence[0]["artifactDigest"])
+            try:
+                ev_artifact = verify_evidence(evidence_dir, expected_pin=ev_pin)
+            except Exception as exc:
+                raise ResumeRefusedError(f"Retained source evidence failed verification: {exc}") from exc
+            if ev_artifact.root["spec"].get("outcome") != "build-complete" or ev_artifact.root["spec"].get("family") != family:
+                raise ResumeRefusedError("Retained source evidence is not a build-complete artifact for this family")
+        else:
+            if binding["evidence_directory"] is not None or declared_evidence:
+                raise ResumeRefusedError("Unexpected source evidence attached to non-evidence rollup resume binding")
+
+        parents_spec = spec.get("parents", {})
+        captured_snapshot = spec["readSnapshot"]
+        managed_receipt_parents: list[tuple[str, str, Mapping]] = []
+        for parent_key, parent in parents_spec.items():
+            if "family" not in parent and "sha256" in parent:
+                if parent_key.endswith("/etl_receipts.parquet"):
+                    dataset = parent_key.removesuffix("/etl_receipts.parquet")
+                    companion = parents_spec.get(f"{dataset}.parquet")
+                    if isinstance(companion, Mapping) and isinstance(companion.get("family"), str):
+                        managed_receipt_parents.append((parent_key, companion["family"], parent))
+                        continue
+                    receipt_owners = [
+                        fam_name
+                        for fam_name, fam_entry in (captured_snapshot or {}).get("families", {}).items()
+                        if dataset in fam_entry.get("etlReceipts", {}).get("datasets", ())
+                    ]
+                    if len(receipt_owners) == 1:
+                        managed_receipt_parents.append((parent_key, receipt_owners[0], parent))
+                        continue
+                local_parent = _resolve_contained_path(
+                    output_dir, parent_key, label=f"parent {parent_key}", expect_dir=False
+                )
+                with local_parent.open("rb") as stream:
+                    actual_sha = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
+                if actual_sha != parent["sha256"] or local_parent.stat().st_size != parent["byteSize"]:
+                    raise ResumeRefusedError(f"Unmanaged local parent changed since candidate build: {parent_key}")
+
+        self._validate_resumed_candidate(gen_dir, artifact)
+
+        public_url = getenv("R2_PUBLIC_URL")
+        if self.skip_upload:
+            if public_url:
+                with publication.snapshot(public_url) as live_index:
+                    source = (
+                        read_operation.verified_source(gen_dir)[1]
+                        if read_operation is not None
+                        else LocalMemberSource(gen_dir)
+                    )
+                    expected_entry = publication.generation_entry(
+                        artifact, list(iter_member_descriptors(artifact, source))
+                    )
+                    live_family = live_index["families"].get(family)
+                    if publication._generation_entry(live_family) != expected_entry:
+                        self._verify_live_resume_inputs(
+                            output_dir=output_dir,
+                            public_url=public_url,
+                            live_index=live_index,
+                            family=family,
+                            spec=spec,
+                            binding=binding,
+                            expected_keys=expected_keys,
+                            managed_receipt_parents=managed_receipt_parents,
+                            check_receipt_pins=False,
+                        )
+            elif self.remote_inputs or binding["remote_inputs"]:
+                try:
+                    observed_remote = self._observe_remote_inputs(output_dir, None)
+                except Exception as exc:
+                    raise ResumeRefusedError(f"Remote inputs could not be verified for resume: {exc}") from exc
+                if observed_remote != binding["remote_inputs"]:
+                    raise ResumeRefusedError("Remote inputs changed since retained candidate was built")
+            logger.info("Verified retained local generation {}; upload skipped (resumed)", gen_dir)
+            remember_generation(output_dir, gen_dir, artifact)
+            if deferred_error is not None:
+                self.deferred_failure = deferred_error
+                raise deferred_error
+            return True
+
+        r2.require_credentials("Generation publication")
+        if not public_url:
+            raise RuntimeError("Generation publication requires R2_PUBLIC_URL")
+        client = r2.get_r2_client()
+        bucket = getenv("R2_BUCKET_NAME", "spicy-regs")
+        live_index, _ = publication._stored_index(client, bucket)
+
+        if read_operation is not None:
+            artifact, source = read_operation.verified_source(gen_dir)
+        else:
+            source = LocalMemberSource(gen_dir)
+        expected_entry = publication.generation_entry(artifact, list(iter_member_descriptors(artifact, source)))
+        live_family = live_index["families"].get(family)
+
+        from spicy_regs.sources.cloudflare import purge_urls
+
+        if publication._generation_entry(live_family) == expected_entry:
+            logger.info(
+                "Rollup {}: retained generation {} is already live on R2; reconciling without re-upload",
+                self.name,
+                artifact.pin.artifact_digest,
+            )
+            purge_urls([f"{public_url.rstrip('/')}/{publication.INDEX_V2_KEY}"])
+            remember_generation(output_dir, gen_dir, artifact)
+            if deferred_error is not None:
+                self.deferred_failure = deferred_error
+                raise deferred_error
+            binding_path.unlink(missing_ok=True)
+            logger.info("Done!")
+            return True
+
+        self._verify_live_resume_inputs(
+            output_dir=output_dir,
+            public_url=public_url,
+            live_index=live_index,
+            family=family,
+            spec=spec,
+            binding=binding,
+            expected_keys=expected_keys,
+            managed_receipt_parents=managed_receipt_parents,
+            check_receipt_pins=True,
+        )
+
+        prior_for_publish = captured_snapshot if captured_snapshot else publication.empty_index()
+        publish = publication.publish_generation
+        arguments: dict[str, Any] = {}
+        if read_operation is not None:
+            publish = publication._publish_verified_generation
+            arguments = {
+                "artifact": artifact,
+                "source": source,
+                "local": gen_dir,
+                "upload_member": lambda prefix, key: publication._put_immutable(
+                    client, bucket, prefix + "/" + key, gen_dir / key
+                ),
+            }
+        else:
+            arguments = {"directory": gen_dir}
+        logger.info("Rollup {}: resuming publication of verified generation {}", self.name, gen_dir)
+        publish(
+            **arguments,
+            client=client,
+            bucket=bucket,
+            prior_index=prior_for_publish,
+            evidence_directories=(evidence_dir,) if evidence_dir is not None else (),
+            added_tables=frozenset(self.added_tables),
+            receipt_only_tables=frozenset(self.receipt_only_tables),
+        )
+        purge_urls([f"{public_url.rstrip('/')}/{publication.INDEX_V2_KEY}"])
+        remember_generation(output_dir, gen_dir, artifact)
+        if deferred_error is not None:
+            self.deferred_failure = deferred_error
+            raise deferred_error
+        binding_path.unlink(missing_ok=True)
+        logger.info("Done!")
+        return True
+
     def _run_tables(self, output_dir: Path) -> None:
         from rulespec_artifacts import publish_directory_no_replace
         from spicy_regs.generations import build_generation, output_keys, verify_generation
@@ -188,6 +792,11 @@ class RollupPipeline(Pipeline):
 
         output_dir = self.output_dir or (Path.cwd() / "output")
         output_dir.mkdir(parents=True, exist_ok=True)
+        if not getattr(self, "_resume_checked", False):
+            resume_requested = self.resume or flag_env(RESUME_GENERATION_ENV)
+            require_candidate = self.require_resume_candidate or flag_env(RESUME_REQUIRE_ENV)
+            if resume_requested and self._try_resume_generation(output_dir, require_candidate=require_candidate):
+                return
         public_url = getenv("R2_PUBLIC_URL")
         context = publication.snapshot(public_url) if public_url else nullcontext(publication.empty_index())
         with context as prior_index:
@@ -199,6 +808,7 @@ class RollupPipeline(Pipeline):
                     if key not in self.receipt_only_tables
                 ],
             )
+            soft_inputs = self._observe_soft_inputs(prior_index)
             if self.source_evidence:
                 self.source_evidence.inherit(prior_index, public_url=public_url)
             # Bespoke ingest builders also cache priors. An isolated build
@@ -311,6 +921,16 @@ class RollupPipeline(Pipeline):
             output_dir / "generation-inputs" / family / artifact.pin.artifact_digest.removeprefix("sha256:"),
             artifact, LocalMemberSource(destination), evidence,
         )
+        binding_path = self._write_candidate_binding(
+            output_dir=output_dir,
+            family=family,
+            destination=destination,
+            artifact=artifact,
+            expected_keys=expected_keys,
+            partitioned=partitioned,
+            soft_inputs=soft_inputs,
+            remote_inputs=remote,
+        )
         if self.skip_upload:
             logger.info("Verified local generation {}; upload skipped", destination)
         else:
@@ -343,6 +963,8 @@ class RollupPipeline(Pipeline):
         from spicy_regs.selected_generations import remember_generation
 
         remember_generation(output_dir, destination, artifact)
+        if not self.skip_upload and self.deferred_failure is None:
+            binding_path.unlink(missing_ok=True)
         logger.info("Done!")
 
     def _own(self, key: str, family: str | None) -> bool:
@@ -463,8 +1085,11 @@ def make_rollup_app(pipeline_cls: type[RollupPipeline]) -> App:
         *,
         output_dir: Annotated[Path | None, Parameter(help="Output directory")] = None,
         skip_upload: Annotated[bool, Parameter(help="Skip R2 upload (recommended while vetting)")] = True,
+        resume: Annotated[
+            bool, Parameter(help="Resume a verified retained generation candidate before rebuilding")
+        ] = False,
     ) -> None:
         load_dotenv()
-        pipeline_cls(output_dir=output_dir, skip_upload=skip_upload).run()
+        pipeline_cls(output_dir=output_dir, skip_upload=skip_upload, resume=resume).run()
 
     return app

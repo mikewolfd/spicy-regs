@@ -25,8 +25,14 @@ class LawsRollup(LegislativeReceiptRollup):
     outputs: ClassVar[tuple[str, ...]] = ("laws.parquet", "law_code_sections.parquet", "table3_records.parquet", "law_sections.parquet")
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        return self.build_receipts(output_dir, build_laws, evidence=self.source_evidence)
-
+        result = self.build_receipts(output_dir, build_laws, evidence=self.source_evidence)
+        blocked = olrc_access_refused(self.source_evidence) if self.source_evidence is not None else []
+        if blocked:
+            self.deferred_failure = RuntimeError(
+                f"OLRC answered 401/403 for {' and '.join(blocked)}: the laws family was published without that read; "
+                "see the journaled table3-bulk-refused or classification-refused event"
+            )
+        return result
 
     def run(self, *, read_operation=None) -> None:
         """Publish the family, then fail the run if OLRC refused this run's Table III or classification read.
@@ -36,12 +42,13 @@ class LawsRollup(LegislativeReceiptRollup):
         itself rather than only in the next night's ``check_source_refusals``.
         """
         super().run(read_operation=read_operation)
-        blocked = olrc_access_refused(self.source_evidence) if self.source_evidence is not None else []
-        if blocked:
-            raise RuntimeError(
-                f"OLRC answered 401/403 for {' and '.join(blocked)}: the laws family was published without that read; "
-                "see the journaled table3-bulk-refused or classification-refused event"
-            )
+        if self.deferred_failure is None and self.source_evidence is not None:
+            blocked = olrc_access_refused(self.source_evidence)
+            if blocked:
+                raise RuntimeError(
+                    f"OLRC answered 401/403 for {' and '.join(blocked)}: the laws family was published without that read; "
+                    "see the journaled table3-bulk-refused or classification-refused event"
+                )
 
 
 app = make_rollup_app(LawsRollup)

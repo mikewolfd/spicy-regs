@@ -582,6 +582,11 @@ def missing_bills_rollup(bill_ids: Sequence[str]) -> type[RollupPipeline]:
         output: ClassVar[str] = "congress_bills.parquet"
         retain_source_evidence: ClassVar[bool] = True
 
+        def invocation_scope(self) -> dict[str, Any]:
+            scope = super().invocation_scope()
+            scope["prior_repair_missing_bills"] = {"bill_ids": list(bill_ids)}
+            return scope
+
         def build(self, output_dir: Path) -> Path:
             from spicy_regs.sources import r2
             from spicy_regs.sources.congress_bills import _resolve_api_key
@@ -680,6 +685,18 @@ def restore_rollup(index: Mapping[str, Any], family: str, tables: Sequence[str])
         publication_family: ClassVar[str | None] = family
         outputs: ClassVar[tuple[str, ...]] = tuple(f"{table}.parquet" for table in tables)
         retain_source_evidence: ClassVar[bool] = True
+
+        def invocation_scope(self) -> dict[str, Any]:
+            scope = super().invocation_scope()
+            scope["prior_restore"] = {
+                "family": family,
+                "artifact_digest": entry["artifactDigest"],
+                "tables": {
+                    table: {"path": member.path, "sha256": member.sha256, "byte_size": member.byte_size}
+                    for table, member in sorted(pins.items())
+                },
+            }
+            return scope
 
         def build(self, output_dir: Path) -> tuple[Path, ...]:
             public_url = os.environ.get("R2_PUBLIC_URL")

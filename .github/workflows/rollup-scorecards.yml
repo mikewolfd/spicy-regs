@@ -37,6 +37,7 @@ concurrency:
   cancel-in-progress: false
 permissions:
   contents: read
+  actions: read
 jobs:
   run:
     runs-on: ubuntu-latest

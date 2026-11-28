@@ -37,6 +37,11 @@ class CommitteeRostersRollup(RollupPipeline):
     #: ``ZYTE_TOKEN`` / ``FIRECRAWL_API_KEY``) because www.senate.gov refuses direct clients (ss-ehci).
     senate_paid_ladder: bool = False
 
+    def invocation_scope(self) -> dict:
+        scope = super().invocation_scope()
+        scope["committee_rosters"] = {"senate_paid_ladder": bool(self.senate_paid_ladder)}
+        return scope
+
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         return self.build_receipts(output_dir, build_committee_rosters, evidence=self.source_evidence,
                                    senate_paid_ladder=self.senate_paid_ladder)  # fmt: skip
@@ -54,12 +59,15 @@ def main(
     *,
     output_dir: Annotated[Path | None, Parameter(help="Output directory")] = None,
     skip_upload: Annotated[bool, Parameter(help="Skip R2 upload (recommended while vetting)")] = True,
+    resume: Annotated[
+        bool, Parameter(help="Resume a verified retained generation candidate before rebuilding")
+    ] = False,
     senate_paid_ladder: Annotated[
         bool, Parameter(help="Read today's Senate file through Zyte, then Firecrawl (opt-in; paid)")
     ] = False,
 ) -> None:
     load_dotenv()
-    rollup = CommitteeRostersRollup(output_dir=output_dir, skip_upload=skip_upload)
+    rollup = CommitteeRostersRollup(output_dir=output_dir, skip_upload=skip_upload, resume=resume)
     rollup.senate_paid_ladder = senate_paid_ladder
     rollup.run()
 

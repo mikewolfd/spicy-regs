@@ -449,7 +449,7 @@ def test_scorecard_workflow_preserves_manual_defaults_and_bounded_publication():
         "force": False,
     }
     assert workflow["concurrency"] == {"group": "scorecards-publication", "cancel-in-progress": False}
-    assert workflow["permissions"] == {"contents": "read"}
+    assert workflow["permissions"] == {"contents": "read", "actions": "read"}
     job = workflow["jobs"]["run"]
     assert job["runs-on"] == "ubuntu-latest"
     assert type(job["timeout-minutes"]) is int
@@ -653,3 +653,64 @@ def test_shared_rollup_output_artifact_excludes_audit_directories():
         "!output/source-evidence/**",
         "!output/raw-source-originals/**",
     ]
+
+
+def test_reusable_rollup_workflow_permissions_align_with_callers_and_restore_staging():
+    """_rollup.yml declares actions: read, polls artifact readiness, stages in runner.temp, and callers align."""
+    reusable = yaml.safe_load((WORKFLOWS / "_rollup.yml").read_text())
+    assert reusable["permissions"] == {"contents": "read", "actions": "read"}
+
+    declared_inputs = reusable[True]["workflow_call"]["inputs"]
+    assert {"resume_run_id", "resume_run_attempt", "resume_mode"} <= set(declared_inputs)
+    assert declared_inputs["resume_mode"]["default"] == "auto"
+
+    steps = {step.get("name"): step for step in reusable["jobs"]["rollup"]["steps"] if "name" in step}
+    lookup = steps["Resolve retained candidate artifacts for retry"]
+    assert "/actions/artifacts/" in lookup["run"]
+    assert "/zip" in lookup["run"]
+    assert "expired" in lookup["run"]
+    assert "302" in lookup["run"]
+
+    for step_name, expected_subdir in (
+        ("Download prior rollup output artifact", "restored-output"),
+        ("Download prior rollup audit artifact", "restored-audit"),
+    ):
+        dl = steps[step_name]
+        assert dl["uses"] == "actions/download-artifact@v4"
+        assert dl["with"]["github-token"] == "${{ github.token }}"
+        assert dl["with"]["path"] == f"${{{{ runner.temp }}}}/{expected_subdir}"
+        assert "run-id" in dl["with"]
+
+    stage = steps["Stage retained generation candidate into output"]
+    assert "resume-candidates" in stage["run"]
+    assert "resumed_from" in stage["run"]
+    assert "SPICY_REGS_RESUME_GENERATION=true" in stage["run"]
+
+    # Every caller workflow that calls _rollup.yml and declares an explicit permissions block must allow actions: read.
+    checked_callers = 0
+    for workflow_path in sorted(WORKFLOWS.glob("*.yml")):
+        if workflow_path.name == "_rollup.yml":
+            continue
+        doc = yaml.safe_load(workflow_path.read_text())
+        jobs = doc.get("jobs", {}) if isinstance(doc, dict) else {}
+        calls_rollup = any(
+            isinstance(job, dict) and job.get("uses") == "./.github/workflows/_rollup.yml"
+            for job in jobs.values()
+        )
+        if not calls_rollup:
+            continue
+        checked_callers += 1
+        top_perms = doc.get("permissions")
+        if isinstance(top_perms, dict):
+            assert top_perms.get("contents") in {"read", "write"}, workflow_path.name
+            assert top_perms.get("actions") in {"read", "write"}, (
+                f"{workflow_path.name} explicitly restricts permissions without granting actions: read"
+            )
+        for job_name, job in jobs.items():
+            if isinstance(job, dict) and job.get("uses") == "./.github/workflows/_rollup.yml":
+                job_perms = job.get("permissions")
+                if isinstance(job_perms, dict):
+                    assert job_perms.get("actions") in {"read", "write"}, (
+                        f"{workflow_path.name} job {job_name} restricts permissions without actions: read"
+                    )
+    assert checked_callers >= 20

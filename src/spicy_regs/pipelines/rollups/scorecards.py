@@ -7,7 +7,7 @@ from cyclopts import App, Parameter
 from dotenv import load_dotenv
 from loguru import logger
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline
+from spicy_regs.pipelines.rollups.base import RollupPipeline, file_scope_digest
 from spicy_regs.scorecards.etl import POLICIES, SOURCE_NAMES
 from spicy_regs.scorecards.registry import REGISTRY
 from spicy_regs.scorecards.acquisition import MAX_BYTES, MAX_REQUESTS, fetch_for_publishers, validate_limits
@@ -29,6 +29,8 @@ class ScorecardsRollup(RollupPipeline):
         *,
         output_dir=None,
         skip_upload=True,
+        resume=False,
+        require_resume_candidate=False,
         registry=REGISTRY,
         publishers=(),
         editions=(),
@@ -43,11 +45,18 @@ class ScorecardsRollup(RollupPipeline):
         max_bytes=MAX_BYTES,
         max_requests=MAX_REQUESTS,
     ):
-        super().__init__(output_dir=output_dir, skip_upload=skip_upload)
+        super().__init__(
+            output_dir=output_dir,
+            skip_upload=skip_upload,
+            resume=resume,
+            require_resume_candidate=require_resume_candidate,
+        )
         validate_limits(max_bytes, max_requests)
         self.max_bytes, self.max_requests = max_bytes, max_requests
         self.registry, self.publishers, self.editions = registry, tuple(publishers), tuple(editions)
         self.historical_backfill, self.force = historical_backfill, force
+        self.zyte_publishers = tuple(zyte_publishers)
+        self.zyte_browser_publishers = tuple(zyte_browser_publishers)
         if fetch_factory is not None and (zyte_publishers or zyte_browser_publishers):
             raise ValueError("Choose an injected fetch factory or explicit Zyte publishers")
         self.provider = provider
@@ -63,6 +72,21 @@ class ScorecardsRollup(RollupPipeline):
         )
         self.pdf_extractor, self.retain_extraction = pdf_extractor, retain_extraction
         self.no_op = False
+
+    def invocation_scope(self) -> dict:
+        scope = super().invocation_scope()
+        scope["scorecards"] = {
+            "registry_sha256": file_scope_digest(Path(self.registry)),
+            "publishers": list(self.publishers),
+            "editions": list(self.editions),
+            "historical_backfill": bool(self.historical_backfill),
+            "force": bool(self.force),
+            "zyte_publishers": list(self.zyte_publishers),
+            "zyte_browser_publishers": list(self.zyte_browser_publishers),
+            "max_bytes": self.max_bytes,
+            "max_requests": self.max_requests,
+        }
+        return scope
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         if self.source_evidence is None:
@@ -104,6 +128,9 @@ def main(
     *,
     output_dir: Annotated[Path | None, Parameter(help="Output directory")] = None,
     skip_upload: Annotated[bool, Parameter(help="Retain a local candidate only")] = True,
+    resume: Annotated[
+        bool, Parameter(help="Resume a verified retained generation candidate before rebuilding")
+    ] = False,
     registry: Annotated[Path, Parameter(help="Qualified publisher registry")] = REGISTRY,
     publishers: Annotated[list[str] | None, Parameter(name="--publisher", help="Select an enabled publisher")] = None,
     editions: Annotated[
@@ -130,6 +157,7 @@ def main(
     ScorecardsRollup(
         output_dir=output_dir,
         skip_upload=skip_upload,
+        resume=resume,
         registry=registry,
         publishers=publishers or (),
         editions=editions or (),
