@@ -399,8 +399,10 @@ def compact_read_snapshot(
     extra_families: Sequence[str] = (),
 ) -> dict:
     """Compact a captured publication index to its digest, count, and referenced family entries."""
-    if isinstance(extra_families, (str, bytes)) or any(not isinstance(name, str) or not name for name in extra_families):
-        raise ValueError("extra_families must be a sequence of family names")
+    if isinstance(extra_families, (str, bytes)) or any(
+        not isinstance(name, str) or not _NAME.fullmatch(name) for name in extra_families
+    ):
+        raise ValueError("extra_families must be a sequence of valid family names")
     if not index:
         return {}
     from rulespec_artifacts import canonical_json_bytes

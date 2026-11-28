@@ -349,9 +349,12 @@ def test_parse_index_strict_boundary_and_parse_read_snapshot_validation(tmp_path
     with pytest.raises(pub.PublicationError, match="omits required parent"):
         pub.compact_read_snapshot(compact, family="alpha", parents={"beta.parquet": beta_pin})
 
-    # Passing a bare string as extra_families is refused (prevents character splitting).
+    # Passing a bare string or malformed family name in extra_families is refused.
     with pytest.raises(ValueError, match="extra_families"):
         pub.compact_read_snapshot(index, family="alpha", extra_families="beta")
+    for bad_name in ("", "UPPER", "has space", "../escape"):
+        with pytest.raises(ValueError, match="extra_families"):
+            pub.compact_read_snapshot(index, family="alpha", extra_families=(bad_name,))
 
     # verify_generation refuses a compact root missing a managed parent family or missing prior-generation entry.
     out_file = _write_parquet(tmp_path / "alpha.parquet", "x")

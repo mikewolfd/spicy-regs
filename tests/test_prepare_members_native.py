@@ -89,7 +89,8 @@ def test_complete_preparation_restores_all_tables_and_retains_captured_prior(tmp
     assert observations == ["https://test.invalid"]
     assert requests == [consumed[name]["url"] for name in ("current", "historical")]
     assert result["sourceRosterSelection"] == consumed
-    assert result["capturedPrior"] == prior
+    assert publication.read_snapshot_matches(result["capturedPrior"], prior, family="members")
+    assert result["capturedPrior"]["scope"] == publication.READ_SNAPSHOT_SCOPE
     assert not result["published"]
     assert any(item["role"] == "prior-generation" and item["artifactDigest"] == artifact.pin.artifact_digest
                for item in candidate.root["inputs"])
