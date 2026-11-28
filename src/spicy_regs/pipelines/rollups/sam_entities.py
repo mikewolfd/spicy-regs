@@ -25,7 +25,7 @@ from loguru import logger
 
 from spicy_regs.env_values import int_env
 from spicy_regs.pipelines.rollups.base import make_rollup_app
-from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup
+from spicy_regs.pipelines.rollups.government import GovernmentTableRollup
 from spicy_regs.transforms.build_sam_entities import MIN_REGISTRATION_YEAR as _MIN_REGISTRATION_YEAR
 from spicy_regs.transforms.build_sam_entities import build_sam_entities
 
@@ -45,7 +45,7 @@ def _rotating_year(today: date) -> int:
     return _MIN_REGISTRATION_YEAR + (day // 2) % (today.year - _MIN_REGISTRATION_YEAR)
 
 
-class SamEntitiesRollup(GovernmentReceiptRollup):
+class SamEntitiesRollup(GovernmentTableRollup):
     """Federal entity registry ingested from the SAM.gov Entity API (api.data.gov key)."""
 
     name: ClassVar[str] = "sam-entities"
@@ -72,7 +72,7 @@ class SamEntitiesRollup(GovernmentReceiptRollup):
 
         return build_sam_entities(
             output_dir,
-            evidence=self.source_evidence, receipt_generation_id=self.receipt_generation_id,
+            evidence=self.source_evidence,
             mode=mode,
             since_year=since,
             until_year=until,

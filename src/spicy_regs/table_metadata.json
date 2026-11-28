@@ -21866,7 +21866,7 @@
   "gao_reports": {
     "table": "gao_reports",
     "label": "Government Accountability Office reports",
-    "summary": "One GAO report or testimony, keyed by product ID. GovInfo, GAO listings/RSS, retained package data and explicit repairs supply records. The table retains earlier observations and fills missing cells; source routes have different periods and metadata. Native `/3` rows expose product URL and source route; earlier schemas retain them in receipts. Major-rule letters provide separate source-stated agency, date and RIN fields, with reading evidence in receipts. For Congressional Review Act disapproval resolutions introduced in Congress (as distinct from GAO's major-rule reports), query `congress_bills` (`bill_type` `hjres`/`sjres`, titles mentioning \"congressional disapproval under chapter 8\").",
+    "summary": "One GAO report or testimony, keyed by product ID. GovInfo, GAO listings/RSS, retained package data and explicit repairs supply records. The table retains earlier observations and fills missing cells; source routes have different periods and metadata. Rows expose product URL and source route. Major-rule letters provide separate source-stated agency, date and RIN fields, with reading evidence in retained capture evidence. For Congressional Review Act disapproval resolutions introduced in Congress (as distinct from GAO's major-rule reports), query `congress_bills` (`bill_type` `hjres`/`sjres`, titles mentioning \"congressional disapproval under chapter 8\").",
     "coverage": "True range on GovInfo's closed archive (1989-11-15–2008-09-18), combined with bounded GAO listings, recent RSS reads, retained package data and explicit repairs. Completed GAO listing scopes extend from 2009; major-rule listings reach April 1996. Recent RSS reads began 2026-09-22 and first reached 2026-09-15; the upstream copy covers 2026-07-13–2026-09-14. The retained R package reaches 1922 but adds only otherwise unheld reports. Intermediate periods remain incomplete where listing walks or repairs have not filled them. Numbered legal decisions belong to `gao_decisions`. Missing enrichment is not proof of an absent report.",
     "kind": "true_range",
     "measured_on": "2026-10-05",
@@ -22134,7 +22134,7 @@
   "crs_reports": {
     "table": "crs_reports",
     "label": "Congressional Research Service reports",
-    "summary": "One retained revision of a Congressional Research Service report, keyed by `report_id` and `update_date`. Distinct dated revisions survive incremental merges. Bounded detail enrichment adds the complete summary, authors, topics, file locators and related materials only when the report, update instant and stated version agree. Qualified detail and the latest attempt have separate states, so a failed retry or ordinary list refresh preserves earlier qualified values and their witnesses. List walks check their declared population without proving an atomic snapshot or complete revision history. Listed file locators do not establish acquired bodies. `published_date` dates a retained version and does not establish the report's first issue. Source locators and role-specific capture witnesses remain in receipts.",
+    "summary": "One retained revision of a Congressional Research Service report, keyed by `report_id` and `update_date`. Distinct dated revisions survive incremental merges. Bounded detail enrichment adds the complete summary, authors, topics, file locators and related materials only when the report, update instant and stated version agree. Qualified detail and the latest attempt have separate states, so a failed retry or ordinary list refresh preserves earlier qualified values and their witnesses. List walks check their declared population without proving an atomic snapshot or complete revision history. Listed file locators do not establish acquired bodies. `published_date` dates a retained version and does not establish the report's first issue. Source locators and role-specific capture witnesses belong to retained capture evidence.",
     "coverage": "True range: reports whose current version is dated from 1993-10-22 on (`published_date` is the current version's date, not first issue).",
     "kind": "true_range",
     "measured_on": "2026-09-23",
@@ -23628,7 +23628,7 @@
     "table": "usaspending_recipients",
     "label": "Federal award recipients",
     "summary": "One USAspending recipient and rollup level, keyed by `recipient_id`. The public recipient API ranks trailing-12-month federal awards: daily reads refresh the top 10,000 and weekly walks select the positive-amount tail. Rows outside a selection retain prior amounts. UEI supports related SAM registrations; names are matching candidates. Parent, child and recipient levels must not be added together.",
-    "coverage": "Not a range. Weekly walks select recipients with positive trailing-12-month awards; daily reads refresh the top of the ranking. Recipients outside a run's selection keep earlier amounts, so reporting periods can differ. Observation time and source digest belong to receipts when retained; older evidence may lack them. Absence does not prove the recipient has no federal awards.",
+    "coverage": "Not a range. Weekly walks select recipients with positive trailing-12-month awards; daily reads refresh the top of the ranking. Recipients outside a run's selection keep earlier amounts, so reporting periods can differ. Observation time and source digest belong to retained capture evidence when available; older runs may lack them. Absence does not prove the recipient has no federal awards.",
     "kind": "not_a_range",
     "measured_on": "2026-09-24",
     "data_quality": null,
@@ -23656,12 +23656,12 @@
       {
         "column_name": "recipient_level",
         "column_type": "VARCHAR",
-        "description": "Publisher rollup level: P (parent), C (child) or R (recipient). One UEI can have several levels; their amounts do not sum and can describe different observations. A child's awards can appear under several parents. Compare matching levels and periods using receipt evidence when available; list amounts can differ from a profile page."
+        "description": "Publisher rollup level: P (parent), C (child) or R (recipient). One UEI can have several levels; their amounts do not sum and can describe different observations. A child's awards can appear under several parents. Compare matching levels and periods using retained capture evidence when available; list amounts can differ from a profile page."
       },
       {
         "column_name": "total_award_amount",
         "column_type": "DECIMAL(38,6)",
-        "description": "Trailing-12-month federal award dollars reported by the recipient-list endpoint at its last read. Rows outside the latest selection can retain older amounts. Observation time and source digest are in retained receipt evidence when available, not main columns."
+        "description": "Trailing-12-month federal award dollars reported by the recipient-list endpoint at its last read. Rows outside the latest selection can retain older amounts. Observation time and source digest are in retained capture evidence when available, not main columns."
       }
     ],
     "subject": "spending",
@@ -44726,7 +44726,7 @@
   "gao_decisions": {
     "table": "gao_decisions",
     "label": "Government Accountability Office legal decisions",
-    "summary": "One GAO legal decision page, identified by its stated number and URL. A page can list several B-numbers, and one number can have several pages. Completed listing walks refresh named decisions; retained page captions can add the full number list and decision date. `outcome` classifies source decision-status text. Native `/3` rows expose `listing_page`; earlier schemas retain it in receipts.",
+    "summary": "One GAO legal decision page, identified by its stated number and URL. A page can list several B-numbers, and one number can have several pages. Completed listing walks refresh named decisions; retained page captions can add the full number list and decision date. `outcome` classifies source decision-status text. Rows expose `listing_page`.",
     "coverage": "True range from 2009 on, within completed GAO Month in Review and Annual Index walks. Includes numbered legal decisions and Contract Appeals Board decisions; major-rule reports belong to `gao_reports`. Unnumbered entries are excluded. Year scopes can span several months. Missing rows alone cannot distinguish an unread scope from a completed listing with no decisions.",
     "kind": "true_range",
     "measured_on": "2026-10-03",
@@ -52609,18 +52609,6 @@
         "processing_fields": []
       },
       {
-        "dataset": "crs_reports",
-        "receipt_only": false,
-        "policy_version": "government-sources/3",
-        "identity_columns": [
-          "report_id",
-          "update_date"
-        ],
-        "processing_fields": [
-          "raw_record"
-        ]
-      },
-      {
         "dataset": "diff_summaries",
         "receipt_only": false,
         "policy_version": "legislative-documents/1",
@@ -52675,17 +52663,6 @@
         ]
       },
       {
-        "dataset": "fcc_filings",
-        "receipt_only": false,
-        "policy_version": "government-sources/3",
-        "identity_columns": [
-          "id_submission"
-        ],
-        "processing_fields": [
-          "raw_record"
-        ]
-      },
-      {
         "dataset": "financial_changes",
         "receipt_only": false,
         "policy_version": "legislative-documents/1",
@@ -52700,40 +52677,6 @@
         ],
         "processing_fields": [
           "raw_source_row"
-        ]
-      },
-      {
-        "dataset": "gao_decisions",
-        "receipt_only": false,
-        "policy_version": "government-sources/3",
-        "identity_columns": [
-          "decision_number",
-          "url"
-        ],
-        "processing_fields": [
-          "raw_record"
-        ]
-      },
-      {
-        "dataset": "gao_recommendations",
-        "receipt_only": false,
-        "policy_version": "government-sources/2",
-        "identity_columns": [
-          "recommendation_id"
-        ],
-        "processing_fields": [
-          "raw_record"
-        ]
-      },
-      {
-        "dataset": "gao_reports",
-        "receipt_only": false,
-        "policy_version": "government-sources/4",
-        "identity_columns": [
-          "report_id"
-        ],
-        "processing_fields": [
-          "raw_record"
         ]
       },
       {
@@ -53103,18 +53046,6 @@
         ]
       },
       {
-        "dataset": "sam_entities",
-        "receipt_only": false,
-        "policy_version": "government-sources/1",
-        "identity_columns": [
-          "uei",
-          "entity_eft_indicator"
-        ],
-        "processing_fields": [
-          "raw_record"
-        ]
-      },
-      {
         "dataset": "section_classifications",
         "receipt_only": false,
         "policy_version": "legislative-documents/1",
@@ -53227,17 +53158,6 @@
           "source_metadata",
           "source_schema",
           "entry_kind"
-        ]
-      },
-      {
-        "dataset": "usaspending_recipients",
-        "receipt_only": false,
-        "policy_version": "government-sources/1",
-        "identity_columns": [
-          "recipient_id"
-        ],
-        "processing_fields": [
-          "raw_record"
         ]
       }
     ],

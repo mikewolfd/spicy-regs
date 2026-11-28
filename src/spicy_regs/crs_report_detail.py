@@ -109,7 +109,20 @@ def check_detail_replacement(prior: dict, report: dict) -> None:
         return
     from spicy_docs.storage.raw_archive import CentralRawArchiveStore
 
-    witnesses = json.loads(prior["detail_witness_json"])
+    raw_witnesses = prior.get("detail_witness_json")
+    if not isinstance(raw_witnesses, str):
+        raise GovernmentShapeError("CRS prior qualified detail lacks its pinned witness")
+    try:
+        witnesses = json.loads(raw_witnesses)
+    except ValueError as error:
+        raise GovernmentShapeError("CRS prior qualified detail has invalid witness JSON") from error
+    if (
+        not isinstance(witnesses, list)
+        or not witnesses
+        or not isinstance(witnesses[-1], dict)
+        or not isinstance(witnesses[-1].get("sha256"), str)
+    ):
+        raise GovernmentShapeError("CRS prior qualified detail has an invalid witness")
     digest = witnesses[-1]["sha256"]
     with CentralRawArchiveStore(create=False).open(digest) as stream:
         body = stream.read(2 * 1024 * 1024 + 1)

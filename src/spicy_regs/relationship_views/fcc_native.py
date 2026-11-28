@@ -1,4 +1,4 @@
-"""FCC navigation over native domain arrays; raw fields and parser states live in receipts."""
+"""FCC navigation over native domain arrays."""
 
 from .sql_views import SQLView, pin
 
@@ -90,8 +90,8 @@ FCC_NATIVE_VIEWS = (
         _REQUIRED,
         observations,
         "FCC source roles and document metadata in native array order, including repeats and null elements. "
-        "Names do not resolve people. Each filing's page address on fcc.gov is kept in the filing's receipt; "
-        "see etl_receipts.",
+        "Names do not resolve people. Each filing's page address on fcc.gov is "
+        "https://www.fcc.gov/ecfs/filing/<id_submission>.",
         ("id_submission", "source_field", "source_ordinal"),
         rule_version=_RULE, column_descriptions=_NATIVE_COLUMNS,
     ),

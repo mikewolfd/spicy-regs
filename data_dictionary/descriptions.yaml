@@ -1927,10 +1927,10 @@ tables:
       One GAO report or testimony, keyed by product ID. GovInfo, GAO listings/RSS, retained
       package data and explicit repairs supply records. The table retains earlier
       observations and fills missing cells; source routes have different periods and
-      metadata. Native `/3` rows expose product URL and source route; earlier schemas retain
-      them in receipts. Major-rule letters provide separate source-stated agency, date and
-      RIN fields, with reading evidence in receipts. For Congressional Review Act disapproval
-      resolutions introduced in Congress (as distinct from GAO's major-rule reports), query
+      metadata. Rows expose product URL and source route. Major-rule letters provide
+      separate source-stated agency, date and RIN fields, with reading evidence in
+      retained capture evidence. For Congressional Review Act disapproval resolutions
+      introduced in Congress (as distinct from GAO's major-rule reports), query
       `congress_bills` (`bill_type` `hjres`/`sjres`, titles mentioning "congressional
       disapproval under chapter 8").
     data_quality: >-
@@ -2001,8 +2001,8 @@ tables:
       One GAO legal decision page, identified by its stated number and URL. A page can list
       several B-numbers, and one number can have several pages. Completed listing walks
       refresh named decisions; retained page captions can add the full number list and
-      decision date. `outcome` classifies source decision-status text. Native `/3` rows
-      expose `listing_page`; earlier schemas retain it in receipts.
+      decision date. `outcome` classifies source decision-status text. Rows expose
+      `listing_page`.
     data_quality: >-
       `released_date` is when GAO released the decision, not when it decided
       it; `decided_date` is that day, from the Date line of the decision page's
@@ -2054,7 +2054,8 @@ tables:
       List walks check their declared population without proving an atomic snapshot or
       complete revision history. Listed file locators do not establish acquired bodies.
       `published_date` dates a retained version and does not establish the report's first
-      issue. Source locators and role-specific capture witnesses remain in receipts.
+      issue. Source locators and role-specific capture witnesses belong to retained capture
+      evidence.
     columns:
       report_id: "CRS report id (e.g. `R48641`, `IN12713`). Together with `update_date`, identifies one retained revision."
       title: "Report title as returned by the list endpoint."
@@ -2577,8 +2578,8 @@ tables:
       Not a range. Weekly walks select recipients with positive trailing-12-month awards;
       daily reads refresh the top of the ranking. Recipients outside a run's selection keep
       earlier amounts, so reporting periods can differ. Observation time and source digest
-      belong to receipts when retained; older evidence may lack them. Absence does not prove
-      the recipient has no federal awards.
+      belong to retained capture evidence when available; older runs may lack them. Absence
+      does not prove the recipient has no federal awards.
     measured_on: "2026-09-24"
     summary: >-
       One USAspending recipient and rollup level, keyed by `recipient_id`. The public
@@ -2591,8 +2592,8 @@ tables:
       uei: "SAM.gov Unique Entity Identifier (UEI), when supplied. Links to related SAM registrations; older records can lack it."
       duns: "Legacy Data Universal Numbering System (DUNS) identifier, when supplied. UEI replaced it; newer records can lack it."
       name: "Publisher-stated recipient name. Name matching identifies candidates; it does not establish organization identity."
-      recipient_level: "Publisher rollup level: P (parent), C (child) or R (recipient). One UEI can have several levels; their amounts do not sum and can describe different observations. A child's awards can appear under several parents. Compare matching levels and periods using receipt evidence when available; list amounts can differ from a profile page."
-      total_award_amount: "Trailing-12-month federal award dollars reported by the recipient-list endpoint at its last read. Rows outside the latest selection can retain older amounts. Observation time and source digest are in retained receipt evidence when available, not main columns."
+      recipient_level: "Publisher rollup level: P (parent), C (child) or R (recipient). One UEI can have several levels; their amounts do not sum and can describe different observations. A child's awards can appear under several parents. Compare matching levels and periods using retained capture evidence when available; list amounts can differ from a profile page."
+      total_award_amount: "Trailing-12-month federal award dollars reported by the recipient-list endpoint at its last read. Rows outside the latest selection can retain older amounts. Observation time and source digest are in retained capture evidence when available, not main columns."
       observed_at: "When the ranking response page this row was read from was captured (UTC, ISO 8601). NULL on a row carried from before per-row capture evidence, whose read time was not retained; a carried row never takes a later run's time."
       source_capture_sha256: "SHA-256 of the retained ranking response page this row was read from, so its values trace to one captured response. NULL exactly when `observed_at` is NULL."
   fcc_proceedings:

@@ -461,9 +461,16 @@ def test_empty_success_keeps_prior_rows_or_builds_zero(monkeypatch, tmp_path, ki
         assert all(pq.read_table(other).num_rows == 0 for other in others)
     assert out.name == output_name
     result = pq.read_table(out)
-    from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS, map_subject
     from spicy_regs.transforms.government_receipts import BUILD_METADATA
-    generation = json.loads((tmp_path / BUILD_METADATA).read_text())["generation_id"]
+    from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS, map_subject
+
+    assert not (tmp_path / BUILD_METADATA).exists()
+    assert not (tmp_path / "etl_receipts.parquet").exists()
+    generation = (
+        result["generation_id"][0].as_py()
+        if "generation_id" in result.column_names and result.num_rows
+        else None
+    )
     assert result.to_pylist() == [map_subject(out.stem, row, generation_id=generation) for row in expected]
     assert result.schema == SUBJECT_SCHEMAS[out.stem]
 

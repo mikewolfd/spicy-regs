@@ -12,11 +12,11 @@ from spicy_regs.env_values import date_env, flag_env
 from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import make_rollup_app
-from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup
+from spicy_regs.pipelines.rollups.government import GovernmentTableRollup
 from spicy_regs.transforms.build_crs_reports import build_crs_reports
 
 
-class CrsReportsRollup(GovernmentReceiptRollup):
+class CrsReportsRollup(GovernmentTableRollup):
     """Congressional Research Service reports ingested from the Congress.gov v3 API."""
 
     name: ClassVar[str] = "crs-reports"
@@ -27,7 +27,6 @@ class CrsReportsRollup(GovernmentReceiptRollup):
     def build(self, output_dir: Path) -> Path:
         self.acquisition_status = {}
         result = build_crs_reports(output_dir, evidence=self.source_evidence,
-                                   receipt_generation_id=self.receipt_generation_id,
                                    since=date_env("CRS_REPORTS_SINCE"),
                                    reconcile=flag_env("CRS_REPORTS_RECONCILE"), coverage=self.acquisition_status)
         if self.acquisition_status.get("detail_failed"):

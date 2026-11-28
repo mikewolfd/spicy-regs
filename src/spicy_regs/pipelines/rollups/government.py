@@ -1,15 +1,17 @@
 """Government-source declarations for the shared rollup generation writer."""
 
-from spicy_regs.etl_receipts import ReceiptContext, combine_receipts, failure_receipt, write_dataset
 from spicy_regs.native_types import described_schema
 from spicy_regs.pipelines.rollups.base import RollupPipeline
-from spicy_regs.sources.publication import file_identity
-from spicy_regs.transforms.government_receipts import POLICIES
 from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS
 
 
-class _GovernmentRollup(RollupPipeline):
-    """Shared public-schema declarations for government-source rollups (``SUBJECT_SCHEMAS``)."""
+class GovernmentTableRollup(RollupPipeline):
+    """A government-source family whose tables publish no per-row receipts (ss-vse3; policies ``receipts_retired``).
+
+    Every government-source rollup subclasses this directly. Its run refuses at its start, in seconds, while
+    docs/pins/receipt-archive.json does not pin the live generation that still lists those receipts
+    (``publication.require_live_receipt_pins``), which its first receipts-free publish would refuse at the end.
+    """
 
     def generation_schemas(self):
         schemas = super().generation_schemas()
@@ -17,15 +19,6 @@ class _GovernmentRollup(RollupPipeline):
             dataset = key.removesuffix(".parquet")
             schemas[dataset] = described_schema(SUBJECT_SCHEMAS[dataset])
         return schemas
-
-
-class GovernmentTableRollup(_GovernmentRollup):
-    """A government-source family whose tables publish no per-row receipts (ss-vse3; policies ``receipts_retired``).
-
-    A family whose receipts are retired subclasses this directly. Its run refuses at its start, in seconds, while
-    docs/pins/receipt-archive.json does not pin the live generation that still lists those receipts
-    (``publication.require_live_receipt_pins``), which its first receipts-free publish would refuse at the end.
-    """
 
     def __init_subclass__(cls, **kwargs):
         from spicy_regs.subject_catalog import retired_receipt_datasets
@@ -36,47 +29,4 @@ class GovernmentTableRollup(_GovernmentRollup):
             raise TypeError("Government rollups must declare their output table names")
         names = {key.removesuffix(".parquet") for key in keys if isinstance(key, str)}
         if unretired := sorted(names - retired_receipt_datasets()):
-            raise ValueError(f"{cls.__name__}: {unretired} still publish receipts; use GovernmentReceiptRollup")
-
-
-class GovernmentReceiptRollup(_GovernmentRollup):
-    def run(self, *, read_operation=None):
-        try:
-            return super().run(read_operation=read_operation)
-        except Exception as error:
-            # The shared runner seals CaptureEvidence first. Name that actual
-            # artifact as the failed attempt's witness, preserving its redaction
-            # and credential controls; never copy an arbitrary exception message.
-            evidence = self.source_evidence
-            if evidence is not None and evidence.artifact is not None:
-                pin = evidence.artifact.pin
-                directory = evidence.directory / "etl-failure"
-                paths = []
-                for policy in self.receipt_policies:
-                    context = ReceiptContext(
-                        self.receipt_generation_id,
-                        policy.dataset + ":run-failed",
-                        policy.policy_version,
-                        [
-                            {
-                                "source_id": pin.logical_id,
-                                "source_uri": None,
-                                "sha256": file_identity(evidence.artifact_dir / "artifact.json")["sha256"],
-                                "locator": "journal.jsonl",
-                                "body_version": pin.artifact_digest,
-                            }
-                        ],
-                        {"stage": "rollup", "error_type": type(error).__name__},
-                    )
-                    receipt = failure_receipt(policy, context, outcome="error", raw_fields={"raw_record": None})
-                    _, path = write_dataset([], directory / policy.dataset, policy, failures=[receipt])
-                    paths.append(path)
-                combine_receipts(paths, directory / "etl_receipts.parquet")
-            raise
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        keys = cls.outputs or (cls.output,)
-        if not all(isinstance(key, str) for key in keys):
-            raise TypeError("Government rollups must declare their output table names")
-        cls.receipt_policies = tuple(POLICIES[key.removesuffix(".parquet")] for key in keys if isinstance(key, str))
+            raise ValueError(f"{cls.__name__}: {unretired} still publish receipts; retire their policies first")

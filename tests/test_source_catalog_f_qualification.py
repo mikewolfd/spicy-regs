@@ -130,9 +130,15 @@ def _retained_fixture_corpus(tmp_path, *, mismatch=False):
 
         (blobs / member["sha256"][7:]).write_bytes(read_evidence_member(evidence, member["objectKey"]))
     generation_dir = tmp_path / "generation"
-    generation = build_generation(generation_dir, family="gao-recommendations", files=[table],
-                                  expected_keys=[table.name], inputs=evidence.inputs(),
-                                  **generation_receipt_args((table,)))
+    from spicy_regs import subject_catalog
+
+    # The retained generation this replays is one gao-recommendations published with receipts, before ss-vse3.
+    with pytest.MonkeyPatch.context() as as_published:
+        retired = subject_catalog.retired_receipt_datasets() - {"gao_recommendations"}
+        as_published.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
+        generation = build_generation(generation_dir, family="gao-recommendations", files=[table],
+                                      expected_keys=[table.name], inputs=evidence.inputs(),
+                                      **generation_receipt_args((table,)))
     target = corpus / "lineage/generations/gao-recommendations" / generation.pin.artifact_digest[7:]
     target.mkdir(parents=True)
     shutil.copyfile(generation_dir / "artifact.json", target / "artifact.json")

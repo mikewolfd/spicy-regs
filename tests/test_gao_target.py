@@ -83,18 +83,20 @@ def test_complete_generation_candidate_uses_prior_pin_without_publication(tmp_pa
     row.update(report_id='gao-26-1',title='Existing')
     pq.write_table(pa.Table.from_pylist([row],schema=_SCHEMA),prior)
     directory=tmp_path/'prior-generation'
-    from spicy_regs.transforms.government_receipts import migrate_outputs, generation_receipt_args, _legacy_schema
+    from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS, map_subject
+    from spicy_regs.native_types import described_schema
     outputs = [prior]
+    pq.write_table(pa.Table.from_pylist([map_subject('gao_reports', row)], schema=SUBJECT_SCHEMAS['gao_reports']), prior)
     if with_decisions:
         decisions = tmp_path/'gao_decisions.parquet'
-        pq.write_table(pa.Table.from_pylist([{'decision_number':'B-1','url':'https://gao.test/b1',
+        dec_row = {'decision_number':'B-1','url':'https://gao.test/b1',
             'released_date':'2025-01-02','decided_date':'2025-01-01','decision_status':'Denied.',
-            'outcome':'denied','source':'listing','b_numbers_json':'["B-1"]'}], schema=_legacy_schema('gao_decisions')), decisions)
+            'outcome':'denied','source':'listing','b_numbers_json':'["B-1"]'}
+        pq.write_table(pa.Table.from_pylist([map_subject('gao_decisions', dec_row)], schema=SUBJECT_SCHEMAS['gao_decisions']), decisions)
         outputs.append(decisions)
-    migrate_outputs(tuple(outputs), generation_id='prior')
     before = pq.read_table(outputs[-1]) if with_decisions else None
     build_generation(directory,family='gao-reports',files=outputs,expected_keys=[p.name for p in outputs],
-                     **generation_receipt_args(tuple(outputs)))
+                     schemas={p.stem: described_schema(SUBJECT_SCHEMAS[p.stem]) for p in outputs})
     store=Store()
     snapshot=publication.publish_generation(directory,client=store,bucket='test',prior_index=publication.empty_index())
     raw=(directory/'artifact.json').read_bytes()
@@ -202,19 +204,21 @@ def test_one_candidate_appends_several_retained_pages_and_carries_the_familys_ot
     from spicy_regs.transforms.build_gao_target import prepare_target_generation
     from tests.generation_fakes import Store
 
+    from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS, map_subject
+    from spicy_regs.native_types import described_schema
+
     prior = tmp_path / 'gao_reports.parquet'
     row = dict.fromkeys(_SCHEMA.names)
     row.update(report_id='gao-26-1', title='Existing')
-    pq.write_table(pa.Table.from_pylist([row], schema=_SCHEMA), prior)
+    pq.write_table(pa.Table.from_pylist([map_subject('gao_reports', row)], schema=SUBJECT_SCHEMAS['gao_reports']), prior)
     decisions = tmp_path / 'gao_decisions.parquet'
-    pq.write_table(pa.table({'decision_number': ['B-1.1'], 'url': ['https://www.gao.gov/products/b-1.1']}), decisions)
+    dec_row = {'decision_number': 'B-1.1', 'url': 'https://www.gao.gov/products/b-1.1'}
+    pq.write_table(pa.Table.from_pylist([map_subject('gao_decisions', dec_row)], schema=SUBJECT_SCHEMAS['gao_decisions']), decisions)
     directory = tmp_path / 'prior-generation'
-    from spicy_regs.transforms.government_receipts import migrate_outputs, generation_receipt_args
-
-    migrate_outputs((prior, decisions), generation_id="prior-multiple-targets")
     held_decisions = pq.read_table(decisions)
     build_generation(directory, family='gao-reports', files=[prior, decisions],
-                     expected_keys=[prior.name, decisions.name], **generation_receipt_args((prior, decisions)))
+                     expected_keys=[prior.name, decisions.name],
+                     schemas={p.stem: described_schema(SUBJECT_SCHEMAS[p.stem]) for p in (prior, decisions)})
     store = Store()
     snapshot = publication.publish_generation(directory, client=store, bucket='test',
                                               prior_index=publication.empty_index())
@@ -234,11 +238,8 @@ def test_one_candidate_appends_several_retained_pages_and_carries_the_familys_ot
     assert report['added_report_ids'] == sorted(ANNUAL_REPORTS) and report['candidate_rows'] == 3
     generation = tmp_path / 'target/generation'
     artifact = verify_generation(generation)
-    from spicy_regs.transforms.government_receipts import internal_prior
-
-    processing = internal_prior("gao_reports", generation / "gao_reports.parquet",
-        receipt_path=generation / "etl_receipts.parquet", generation_id=artifact.root["spec"]["etlReceipts"]["generationId"])
-    added = {r['report_id']: r for r in pq.read_table(processing).to_pylist()[1:]}
+    assert 'etlReceipts' not in artifact.root['spec']
+    added = {r['report_id']: r for r in literal_table(generation / "gao_reports.parquet", "gao_reports").to_pylist()[1:]}
     assert {product: (r['title'], r['published_date'], r['topics_json'], r['source'])
             for product, r in added.items()} == {
         product: (title, day, None, 'gao_repair') for product, (title, day) in ANNUAL_REPORTS.items()}

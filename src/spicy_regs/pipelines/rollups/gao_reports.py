@@ -41,7 +41,7 @@ from typing import ClassVar
 
 from spicy_regs.env_values import flag_env, text_env
 from spicy_regs.pipelines.rollups.base import make_rollup_app
-from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup
+from spicy_regs.pipelines.rollups.government import GovernmentTableRollup
 from spicy_regs.transforms.build_gao_reports import build_gao_reports
 
 
@@ -50,7 +50,7 @@ def _directory(name: str) -> Path | None:
     return Path(value) if (value := text_env(name)) else None
 
 
-class GaoReportsRollup(GovernmentReceiptRollup):
+class GaoReportsRollup(GovernmentTableRollup):
     """GAO oversight reports ingested from the gao.gov reports RSS feed."""
 
     name: ClassVar[str] = "gao-reports"
@@ -65,7 +65,7 @@ class GaoReportsRollup(GovernmentReceiptRollup):
     def build(self, output_dir: Path) -> tuple[Path, Path]:
         return build_gao_reports(
             output_dir,
-            evidence=self.source_evidence, receipt_generation_id=self.receipt_generation_id,
+            evidence=self.source_evidence,
             govinfo_history=flag_env("GAO_GOVINFO_HISTORY"),
             govinfo_mods=flag_env("GAO_GOVINFO_MODS"),
             listing_run=_directory("GAO_LISTING_RUN"),

@@ -157,12 +157,16 @@ def test_earlier_gao_selection_reads_original_fields_and_refuses_unknown_or_mixe
     subject, receipts = write_dataset([({**original, "raw_record": {"literal": "unchanged"}}, context)],
                                      tmp_path / "old", earlier)
     assert subject is not None
+    from spicy_regs import subject_catalog
     from spicy_regs.generations import build_generation
     # A new artifact declaring /2 must never admit the older subject shape.
-    with pytest.raises(ValueError, match="Subject schema differs"):
-        build_generation(tmp_path / "false-current", family="gao-reports", files=[subject],
-                         expected_keys=[subject.name], receipt_path=receipts, receipt_policies=[current],
-                         receipt_generation_id="original")
+    with monkeypatch.context() as unretired:
+        retired = subject_catalog.retired_receipt_datasets() - {"gao_reports"}
+        unretired.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
+        with pytest.raises(ValueError, match="Subject schema differs"):
+            build_generation(tmp_path / "false-current", family="gao-reports", files=[subject],
+                             expected_keys=[subject.name], receipt_path=receipts, receipt_policies=[current],
+                             receipt_generation_id="original")
     paths = [subject]
     if damage == "unknown_schema":
         pq.write_table(pq.read_table(subject).append_column("unknown", pa.array(["value"])), subject)

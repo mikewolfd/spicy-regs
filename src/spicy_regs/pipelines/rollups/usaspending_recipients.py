@@ -13,11 +13,11 @@ from typing import ClassVar
 
 from spicy_regs.env_values import flag_env
 from spicy_regs.pipelines.rollups.base import make_rollup_app
-from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup
+from spicy_regs.pipelines.rollups.government import GovernmentTableRollup
 from spicy_regs.transforms.build_usaspending_recipients import build_usaspending_recipients
 
 
-class UsaSpendingRecipientsRollup(GovernmentReceiptRollup):
+class UsaSpendingRecipientsRollup(GovernmentTableRollup):
     """Federal-award recipients ingested from the USASpending.gov v2 API (keyless)."""
 
     name: ClassVar[str] = "usaspending-recipients"
@@ -27,7 +27,7 @@ class UsaSpendingRecipientsRollup(GovernmentReceiptRollup):
 
     def build(self, output_dir: Path) -> Path:
         return build_usaspending_recipients(
-            output_dir, evidence=self.source_evidence, receipt_generation_id=self.receipt_generation_id, every_funded=flag_env("USASPENDING_EVERY_FUNDED"),
+            output_dir, evidence=self.source_evidence, every_funded=flag_env("USASPENDING_EVERY_FUNDED"),
         )
 
 

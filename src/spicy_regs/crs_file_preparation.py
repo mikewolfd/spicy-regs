@@ -18,11 +18,11 @@ def _sha(path: Path) -> str:
         return "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def admit_metadata_pair(subject: Path, receipt: Path, *, max_bytes: int, max_rows: int) -> dict:
-    """Bound both Parquet members before restoration and record their exact identities."""
+def admit_metadata_pair(subject: Path, receipt: Path | None = None, *, max_bytes: int, max_rows: int) -> dict:
+    """Bound Parquet member(s) before restoration/reading and record their exact identities."""
     if any(type(value) is not int or value <= 0 for value in (max_bytes, max_rows)):
         raise ValueError("CRS input bounds must be positive integers")
-    paths = (subject, receipt)
+    paths = (subject,) if receipt is None else (subject, receipt)
     sizes = [path.stat().st_size for path in paths]
     if sum(sizes) > max_bytes:
         raise ValueError("CRS subject and receipt bytes exceed the declared bound")
@@ -38,14 +38,23 @@ def admit_metadata_pair(subject: Path, receipt: Path, *, max_bytes: int, max_row
         for path, size, item in zip(paths, sizes, metadata, strict=True)]}
 
 
-def read_metadata_pair(subject: Path, receipt: Path, *, generation_id: str, max_bytes: int,
-                       max_rows: int, subject_sha256: str | None = None,
+def read_metadata_pair(subject: Path, receipt: Path | None = None, *, generation_id: str | None = None,
+                       max_bytes: int, max_rows: int, subject_sha256: str | None = None,
                        receipt_sha256: str | None = None) -> tuple[list[dict], dict]:
-    """Use the maintained shared receipt reader after complete resource admission."""
+    """Read an admitted CRS subject (or historical subject/receipt pair) after complete resource admission."""
+    admission = admit_metadata_pair(subject, receipt, max_bytes=max_bytes, max_rows=max_rows)
+    if receipt is None:
+        if receipt_sha256 is not None:
+            raise ValueError("CRS receipt SHA256 requires a receipt file")
+        if subject_sha256 is not None and admission["members"][0]["sha256"] != subject_sha256:
+            raise ValueError("CRS input differs from its expected SHA256")
+        from spicy_regs.transforms.government_source_shapes import native_to_legacy_rows
+
+        return native_to_legacy_rows("crs_reports", subject), admission
+
     from spicy_regs.etl_receipts import read_with_receipts
     from spicy_regs.transforms.government_receipts import POLICIES
 
-    admission = admit_metadata_pair(subject, receipt, max_bytes=max_bytes, max_rows=max_rows)
     for member, expected in zip(admission["members"], (subject_sha256, receipt_sha256), strict=True):
         if expected is not None and member["sha256"] != expected:
             raise ValueError("CRS input differs from its expected SHA256")
@@ -145,8 +154,8 @@ def _detail_state(row: Mapping) -> str:
 
 
 def prepare_crs_report_files(
-    subject: Path, receipt: Path, reports: Sequence[str], *, generation_id: str,
-    subject_sha256: str, receipt_sha256: str, latest: bool = False,
+    subject: Path, receipt: Path | None = None, reports: Sequence[str] = (), *, generation_id: str | None = None,
+    subject_sha256: str, receipt_sha256: str | None = None, latest: bool = False,
     include_html: bool = False, prior_bundle: Path | None = None,
     prior_subject_sha256: str | None = None, prior_receipt_sha256: str | None = None,
     catalog_selection: Path | None = None, catalog_selection_sha256: str | None = None,
@@ -155,9 +164,9 @@ def prepare_crs_report_files(
     max_total_bytes: int = 64 * 1024 * 1024,
     max_catalog_rows: int = 1000,
 ) -> dict:
-    """Read admitted native pairs; emit the existing collector input and bounded coverage.
+    """Read admitted native subject (or historical pair); emit collector input and bounded coverage.
 
-    All metadata history remains in the input pair. Coverage describes only the
+    All metadata history remains in the input. Coverage describes only the
     requested revisions and supplied evidence. A missing catalog match is unmapped,
     never a claim that an original or historical edition does not exist.
     """
@@ -172,6 +181,8 @@ def prepare_crs_report_files(
         raise ValueError("CRS preparation bounds must be positive integers")
     if not reports or len(reports) > max_reports:
         raise ValueError("CRS requested report cohort exceeds the declared bound")
+    if (receipt is None) != (receipt_sha256 is None):
+        raise ValueError("CRS receipt input and its expected SHA256 must be supplied together")
     rows, admission = read_metadata_pair(
         subject, receipt, generation_id=generation_id, max_bytes=max_input_bytes, max_rows=max_input_rows,
         subject_sha256=subject_sha256, receipt_sha256=receipt_sha256)
@@ -316,10 +327,12 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("subject", "receipts", "selection-output", "coverage-output"):
+    for name in ("subject", "selection-output", "coverage-output"):
         parser.add_argument("--" + name, type=Path, required=True)
-    for name in ("generation-id", "subject-sha256", "receipt-sha256"):
-        parser.add_argument("--" + name, required=True)
+    parser.add_argument("--receipts", type=Path, default=None)
+    parser.add_argument("--subject-sha256", required=True)
+    for name in ("generation-id", "receipt-sha256"):
+        parser.add_argument("--" + name, default=None)
     parser.add_argument("--report", action="append", required=True, dest="reports")
     parser.add_argument("--latest", action="store_true")
     parser.add_argument("--include-html", action="store_true")
@@ -336,7 +349,12 @@ def main() -> None:
     args = vars(parser.parse_args())
     selection_output, coverage_output = args.pop("selection_output"), args.pop("coverage_output")
     args["receipt"] = args.pop("receipts")
-    inputs = {args["subject"].resolve(), args["receipt"].resolve()}
+    receipt_flags = (args["receipt"], args["generation_id"], args["receipt_sha256"])
+    if any(value is not None for value in receipt_flags) and not all(value is not None for value in receipt_flags):
+        parser.error("--receipts, --generation-id, and --receipt-sha256 must be supplied together")
+    inputs = {args["subject"].resolve()}
+    if args["receipt"] is not None:
+        inputs.add(args["receipt"].resolve())
     if args["catalog_selection"] is not None:
         inputs.add(args["catalog_selection"].resolve())
     if args["prior_bundle"] is not None:

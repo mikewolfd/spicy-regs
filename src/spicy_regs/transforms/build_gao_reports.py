@@ -1,6 +1,6 @@
 """Transform: build ``gao_reports.parquet`` from the GAO reports RSS feed, plus GovInfo's and GAO's own listings on request.
 
-Produces a native subject table and shared receipts keyed on ``report_id`` (e.g.
+Produces a native subject table keyed on ``report_id`` (e.g.
 ``gao-26-107974``) — the Government Accountability Office oversight layer over
 the rulemakings this dataset tracks. ``source`` names the route that supplied
 each row: ``gao_rss`` (this feed), ``gao_repair`` (an explicit repair,
@@ -75,7 +75,7 @@ product pages and PDFs, read by reference
 Agency Major Rule Report, and every row GAO's major-rule listings name whatever
 route holds it, takes its agency clause, RINs and Federal Register citations
 from its letter, once per reader rule. The reading itself, each blank's reason
-included, is a receipt field.
+included, is stored in table KV metadata when present.
 
 **GAO's product pages.** ``product_pages`` reads the newest pending rows' pages
 through Zyte for the counts, page count and subject terms, the page outranking
@@ -121,15 +121,25 @@ from spicy_regs.sources import (
     gao_r_package,
     r2,
 )
-from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
-from spicy_regs.transforms.government_source_shapes import LEGACY_COLUMNS
+from spicy_regs.transforms.government_source_shapes import (
+    GAO_DECISION_RULE_METADATA,
+    GAO_READINGS_METADATA,
+    LEGACY_COLUMNS,
+    SUBJECT_SCHEMAS,
+    encode_kv_json,
+    is_native_table,
+    map_subject,
+    native_to_legacy_rows,
+    write_duckdb_native,
+    write_native_table,
+)
 from spicy_regs.sources.gao_decision_pages import DecisionPageCapture
 from spicy_regs.sources.gao_reports import GaoReportsReader
 from spicy_regs.transforms.table_merge import merge_local_prior
 
 OUTPUT = "gao_reports.parquet"
 
-#: The rows this builder writes, before they become the native subject and its receipt: one declaration, shared with
+#: Legacy shaping columns mapped to native subjects: one declaration, shared with
 #: the mapper (``government_source_shapes``). The three counts are BIGINT and the rest VARCHAR; ``report_id`` is the
 #: primary / dedup key.
 COLUMNS = LEGACY_COLUMNS["gao_reports"]
@@ -206,7 +216,7 @@ def _shape(item: dict) -> dict:
 
 def _held_rows(prior_file: Path) -> dict[str, dict]:
     """The prior table by ``report_id``, read once; a column the prior predates is None."""
-    return {row["report_id"]: {**dict.fromkeys(COLUMNS), **row} for row in pq.read_table(prior_file).to_pylist()}
+    return {row["report_id"]: {**dict.fromkeys(COLUMNS), **row} for row in native_to_legacy_rows("gao_reports", prior_file)}
 
 
 def _table(held: Mapping[str, dict], changed: Mapping[str, dict]) -> Iterator[dict]:
@@ -543,7 +553,6 @@ def _mods_reads(
         evidence.event("govinfo-mods", per_run=MODS_PER_RUN, **counts)
 
 
-@receipt_builder
 def build_gao_reports(
     output_dir: Path,
     *,
@@ -591,8 +600,6 @@ def build_gao_reports(
     # 1. Pull the prior table (best effort — absence just means a fresh start).
     have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
     if have_prior:
-        prior_file = internal_prior("gao_reports", prior_file)
-    if have_prior:
         logger.info("GAO reports: accumulating onto prior table {}", prior_file)
     else:
         logger.info("GAO reports: no prior table found — starting fresh")
@@ -638,27 +645,38 @@ def build_gao_reports(
     rows, taken_over = _over_lowest(held, list(changed.values()))
     if taken_over:
         logger.info("GAO reports: {:,} rows of ours take over the R package's rows, which fill their NULLs", taken_over)
+    merged = {**held, **{row["report_id"]: row for row in rows}}
+    merged = {rid: row for rid, row in merged.items() if rid is not None}
+    readings = {
+        rid: non_null
+        for rid, row in merged.items()
+        if (non_null := {col: row[col] for col in ("major_rule_letter_json", "product_page_json") if row.get(col) is not None})
+    }
+    schema = SUBJECT_SCHEMAS["gao_reports"]
+    mapped = [map_subject("gao_reports", row) for row in merged.values()]
     new_file = output_dir / "_gao_new.parquet"
-    table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
-    pq.write_table(table, new_file, compression="zstd")
+    try:
+        table = pa.Table.from_pylist(mapped, schema=schema) if mapped else schema.empty_table()
+        pq.write_table(table, new_file, compression="zstd")
 
-    # 3. Merge prior + new, dedup on report_id preferring the new row.
-    con = duckdb.connect()
-    con.execute("SET preserve_insertion_order=false")
-    merge_local_prior(
-        con,
-        columns=COLUMNS,
-        identity="report_id",
-        order_by="published_date DESC, report_id",
-        prior_file=prior_file if have_prior else None,
-        new_file=new_file,
-        out_file=out_file,
-    )
-    con.close()
-
-    # Housekeeping: drop scratch files so they aren't mistaken for outputs.
-    for scratch in (prior_file, new_file):
-        scratch.unlink(missing_ok=True)
+        # 3. Order in DuckDB to match merge_local_prior's exact collation and NULL ordering.
+        con = duckdb.connect()
+        try:
+            con.execute("SET preserve_insertion_order=false")
+            new_path = str(new_file).replace("'", "''")
+            metadata = {GAO_READINGS_METADATA: encode_kv_json(readings)} if readings else None
+            write_duckdb_native(
+                con,
+                f"SELECT * FROM read_parquet('{new_path}') ORDER BY published_date DESC, report_id",
+                out_file,
+                schema,
+                metadata=metadata,
+            )
+        finally:
+            con.close()
+        prior_file.unlink(missing_ok=True)
+    finally:
+        new_file.unlink(missing_ok=True)
 
     total = pq.ParquetFile(out_file).metadata.num_rows
     logger.info("GAO reports: {:,} rows", total)
@@ -723,7 +741,6 @@ def _page_readings(prior_file: Path) -> dict[tuple[str, str], tuple[str, str, st
     return {(number, url): tuple(values) for number, url, *values in rows}
 
 
-@receipt_builder
 def _build_decisions(output_dir: Path, decisions: list[dict], evidence: CaptureEvidence | None = None) -> Path:
     """``gao_decisions.parquet``: the prior table with this run's listed decisions over it, every outcome read again.
 
@@ -742,44 +759,60 @@ def _build_decisions(output_dir: Path, decisions: list[dict], evidence: CaptureE
     schema = pa.schema([(column, pa.string()) for column in stated])
     out_file = output_dir / DECISIONS_OUTPUT
     prior_file = output_dir / "_gao_decisions_prior.parquet"
+    prior_literal = output_dir / "_gao_decisions_prior_literal.parquet"
     new_file = output_dir / "_gao_decisions_new.parquet"
     merged_file = output_dir / "_gao_decisions_merged.parquet"
     have_prior = prior_file.exists() or r2.download(DECISIONS_OUTPUT, prior_file)
-    if have_prior:
-        prior_file = internal_prior("gao_decisions", prior_file)
-    read = _page_readings(prior_file) if have_prior else {}
-    rows = [{column: row[column] for column in stated} for row in decisions]
-    for row in rows:
-        held = read.get((row["decision_number"], row["url"])) if row["decided_date"] is None else None
-        if held is not None:
-            row.update(zip(PAGE_READINGS, held, strict=True))
-    pq.write_table(pa.Table.from_pylist(rows, schema=schema), new_file, compression="zstd")
-    con = duckdb.connect()
-    con.execute("SET preserve_insertion_order=false")
-    merge_local_prior(
-        con,
-        columns=stated,
-        identity=GAO_DECISIONS.identity,
-        order_by="released_date DESC, decision_number, url",
-        renamed=DECISION_RENAMES,
-        prior_file=prior_file if have_prior else None,
-        new_file=new_file,
-        out_file=merged_file,
-    )
-    con.close()
-    table = pq.read_table(merged_file)
-    statuses = table.column("decision_status").to_pylist()
-    findings = [decision_outcome(status) for status in statuses]
-    table = table.append_column("outcome", pa.array([f.outcome for f in findings], pa.string()))
-    table = table.append_column("outcome_rule", pa.array([f.rule for f in findings], pa.string()))
-    pq.write_table(table, out_file, compression="zstd", row_group_size=50_000)
-    for scratch in (prior_file, new_file, merged_file):
-        scratch.unlink(missing_ok=True)
+    try:
+        merge_prior = prior_file
+        if have_prior and is_native_table(prior_file, "gao_decisions"):
+            legacy_rows = [{column: row[column] for column in stated} for row in native_to_legacy_rows("gao_decisions", prior_file)]
+            pq.write_table(pa.Table.from_pylist(legacy_rows, schema=schema) if legacy_rows else schema.empty_table(), prior_literal)
+            merge_prior = prior_literal
+        read = _page_readings(merge_prior) if have_prior else {}
+        rows = [{column: row[column] for column in stated} for row in decisions]
+        for row in rows:
+            held = read.get((row["decision_number"], row["url"])) if row["decided_date"] is None else None
+            if held is not None:
+                row.update(zip(PAGE_READINGS, held, strict=True))
+        pq.write_table(pa.Table.from_pylist(rows, schema=schema), new_file, compression="zstd")
+        con = duckdb.connect()
+        try:
+            con.execute("SET preserve_insertion_order=false")
+            merge_local_prior(
+                con,
+                columns=stated,
+                identity=GAO_DECISIONS.identity,
+                order_by="released_date DESC, decision_number, url",
+                renamed=DECISION_RENAMES,
+                prior_file=merge_prior if have_prior else None,
+                new_file=new_file,
+                out_file=merged_file,
+            )
+        finally:
+            con.close()
+        merged_rows = pq.read_table(merged_file).to_pylist()
+        statuses = [row["decision_status"] for row in merged_rows]
+        findings = [decision_outcome(status) for status in statuses]
+        mapped = [
+            map_subject("gao_decisions", {**row, "outcome": finding.outcome, "outcome_rule": finding.rule})
+            for row, finding in zip(merged_rows, findings, strict=True)
+        ]
+        write_native_table(
+            mapped,
+            out_file,
+            SUBJECT_SCHEMAS["gao_decisions"],
+            metadata={GAO_DECISION_RULE_METADATA: GAO_OUTCOME_RULE.encode()},
+        )
+        prior_file.unlink(missing_ok=True)
+    finally:
+        for scratch in (prior_literal, new_file, merged_file):
+            scratch.unlink(missing_ok=True)
     unmapped = unmapped_sentences(statuses)
-    read = sum(f.outcome is not None for f in findings)
+    read_count = sum(f.outcome is not None for f in findings)
     logger.info("GAO decisions: {:,} rows, {:,} with an outcome under {}; {:,} stated sentences the table does not "
-                "read", table.num_rows, read, GAO_OUTCOME_RULE, sum(unmapped.values()))
+                "read", len(mapped), read_count, GAO_OUTCOME_RULE, sum(unmapped.values()))
     if evidence:
-        evidence.event("gao-decision-outcomes", rule=GAO_OUTCOME_RULE, rows=table.num_rows, with_outcome=read,
+        evidence.event("gao-decision-outcomes", rule=GAO_OUTCOME_RULE, rows=len(mapped), with_outcome=read_count,
                        stated=sum(status is not None for status in statuses), unmapped_sentences=dict(unmapped))
     return out_file

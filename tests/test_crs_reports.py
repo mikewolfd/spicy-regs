@@ -56,19 +56,11 @@ def test_shape_handles_missing_scalars():
     assert row["version"] is None
 
 
-@pytest.mark.parametrize("bulk", [False, True])
-def test_build_retains_revisions_and_repeated_imports_deduplicate(tmp_path, monkeypatch, bulk):
-    from spicy_regs import etl_bulk, government_bulk
-    from spicy_regs.etl_receipts import validate_receipt_bundle
-    from spicy_regs.transforms.government_receipts import POLICIES, internal_prior
+def test_build_retains_revisions_and_repeated_imports_deduplicate(tmp_path, monkeypatch):
+    from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS, map_subject
 
     module = importlib.import_module("spicy_regs.transforms.build_crs_reports")
     monkeypatch.setattr(module.r2, "download", lambda *_: False)
-    if not bulk:
-        def row_path(*args, **kwargs):
-            raise etl_bulk.NotBulkEligible("Exercise the reference writer and reader")
-        monkeypatch.setattr(government_bulk, "write_dataset", row_path)
-        monkeypatch.setattr(government_bulk, "restore_legacy", row_path)
     incoming, windows = [], []
 
     class Reader:
@@ -90,17 +82,13 @@ def test_build_retains_revisions_and_repeated_imports_deduplicate(tmp_path, monk
         if output.exists():
             shutil.copyfile(output, tmp_path / "_crs_prior.parquet")
         incoming[:] = reports
-        module.build_crs_reports(tmp_path, receipt_generation_id=f"run-{index}")
+        module.build_crs_reports(tmp_path)
         expected = min(index + 1, 3)
         assert pq.ParquetFile(output).metadata.num_rows == expected
-        validate_receipt_bundle(
-            {"crs_reports": [output]}, [tmp_path / "etl_receipts.parquet"],
-            [POLICIES["crs_reports"]], generation_id=f"run-{index}",
-        )
-    restored = pq.read_table(internal_prior("crs_reports", output)).to_pylist()
-    assert {row["update_date"]: row for row in restored} == {
-        raw["updateDate"]: _shape(raw) for raw in (original, revised, corrected)
-    }
+        assert not (tmp_path / "etl_receipts.parquet").exists()
+    assert pq.read_schema(output).equals(SUBJECT_SCHEMAS["crs_reports"])
+    actual = pq.read_table(output).to_pylist()
+    assert actual == [map_subject("crs_reports", _shape(raw)) for raw in (corrected, revised, original)]
     with duckdb.connect() as con:
         assert con.execute(
             "SELECT report_id, min(published_date), count(*) FROM read_parquet(?) GROUP BY report_id", [str(output)],
@@ -141,8 +129,15 @@ def test_existing_report_key_migrates_without_losing_its_row(tmp_path, monkeypat
     before = prior.read_bytes()
     [old] = pq.read_table(tmp_path / "etl_receipts.parquet").to_pylist()
     revised = {**_RAW_REPORT, "updateDate": "2026-07-20T12:00:00Z", "version": 16}
-    monkeypatch.setattr(module.CrsReportsReader, "iter_records", lambda self: iter([revised]))
-    output = module.build_crs_reports(tmp_path, receipt_generation_id="new-policy")
+    @gr.receipt_builder(dataset="crs_reports")
+    def upgrade(directory, incoming_rows):
+        restored = gr.internal_prior("crs_reports", prior)
+        merged_rows = [*incoming_rows, *pq.read_table(restored).to_pylist()]
+        target = directory / module.OUTPUT
+        pq.write_table(pa.Table.from_pylist(merged_rows, schema=module._SCHEMA), target)
+        return target
+
+    output = upgrade(tmp_path, [_shape(revised)], receipt_generation_id="new-policy")
     assert prior.read_bytes() == before
     assert pq.read_schema(output).equals(current.subject_schema)
     assert pq.read_table(output)["version"].to_pylist() == [16, 15]
@@ -165,7 +160,7 @@ def test_existing_report_key_migrates_without_losing_its_row(tmp_path, monkeypat
     assert resolve_receipt_witness(migrated, inherited) == old["processing_json"].encode()
     assert "prior_receipt" not in decode_exact_json(dated[subjects[0]["update_date"]]["diagnostic_json"])
     shutil.copyfile(output, prior)
-    module.build_crs_reports(tmp_path, receipt_generation_id="repeated")
+    upgrade(tmp_path, [], receipt_generation_id="repeated")
     assert pq.read_table(tmp_path / "etl_receipts.parquet").to_pylist() == receipts
     validate_receipt_bundle(
         {"crs_reports": [output]}, [tmp_path / "etl_receipts.parquet"], [current], generation_id="repeated",

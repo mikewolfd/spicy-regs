@@ -144,7 +144,9 @@ def _export(tmp_path, as_of: date, rows: dict[str, int]) -> None:
     pq.write_table(table, tmp_path / "_gao_recommendations.parquet")
 
 
-def _build(tmp_path, monkeypatch, prior, pages=None, *, evidence=None, **more) -> dict[str, dict]:
+def _build(
+    tmp_path, monkeypatch, prior, pages=None, *, evidence=None, today: date | None = TODAY, **more: Any
+) -> dict[str, dict]:
     """One run over ``prior`` with no feed item, on :data:`TODAY`; its output becomes the next run's prior."""
     if prior is not None:
         pq.write_table(pa.Table.from_pylist(prior, schema=module._SCHEMA), tmp_path / "_gao_prior.parquet")
@@ -158,7 +160,7 @@ def _build(tmp_path, monkeypatch, prior, pages=None, *, evidence=None, **more) -
 
     monkeypatch.setattr(module, "GaoReportsReader", NoFeed)
     monkeypatch.setattr(module.r2, "download", lambda *_: False)
-    out, _ = module.build_gao_reports(tmp_path, pages=pages, evidence=evidence, **{"today": TODAY, **more})
+    out, _ = module.build_gao_reports(tmp_path, pages=pages, evidence=evidence, today=today, **more)
     rows = {row["report_id"]: row for row in literal_table(out).to_pylist()}
     out.rename(tmp_path / "_gao_prior.parquet")
     return rows

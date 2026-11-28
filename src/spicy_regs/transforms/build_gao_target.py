@@ -16,8 +16,14 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from spicy_regs.transforms.build_gao_reports import COLUMNS, SOURCE_REPAIR
-from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder, generation_receipt_args
-from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS
+from spicy_regs.transforms.government_source_shapes import (
+    GAO_READINGS_METADATA,
+    SUBJECT_SCHEMAS,
+    encode_kv_json,
+    is_native_table,
+    map_subject,
+    write_native_table,
+)
 from spicy_regs.native_types import described_schema
 
 if TYPE_CHECKING:
@@ -68,43 +74,63 @@ def target_index(product_id: str, *, retained: CapturedBodyResponse | None = Non
         raise
 
 
-@receipt_builder(output_argument="output", dataset="gao_reports")
 def append_missing_target(prior: Path, output: Path, *indexes: Any) -> dict:
     """Preserve every prior cell, adding each source-identified report with unknown fields null."""
-    prior = internal_prior("gao_reports", prior)
-    table = pq.read_table(prior)
-    if not set(COLUMNS) <= set(table.column_names):
-        raise ValueError('Prior GAO table lacks required metadata columns')
+    native_schema = SUBJECT_SCHEMAS["gao_reports"]
+    if is_native_table(prior, "gao_reports"):
+        table = pq.read_table(prior)
+        if not set(native_schema.names) <= set(table.column_names):
+            raise ValueError('Prior GAO table lacks required metadata columns')
+        target_schema = table.schema
+    else:
+        legacy = pq.read_table(prior)
+        if not set(COLUMNS) <= set(legacy.column_names):
+            raise ValueError('Prior GAO table lacks required metadata columns')
+        legacy_rows = [{**dict.fromkeys(COLUMNS), **r} for r in legacy.to_pylist()]
+        readings = {
+            r['report_id']: {
+                k: r[k] for k in ('major_rule_letter_json', 'product_page_json') if r.get(k) is not None
+            }
+            for r in legacy_rows
+            if r.get('major_rule_letter_json') is not None or r.get('product_page_json') is not None
+        }
+        target_schema = (
+            native_schema.with_metadata({**(native_schema.metadata or {}), GAO_READINGS_METADATA: encode_kv_json(readings)})
+            if readings
+            else native_schema
+        )
+        mapped_prior = [map_subject('gao_reports', r) for r in legacy_rows]
+        table = pa.Table.from_pylist(mapped_prior, schema=target_schema) if mapped_prior else target_schema.empty_table()
     if not indexes or len({index.product_id for index in indexes}) != len(indexes):
         raise ValueError('Name each missing target once')
     held = set(table['report_id'].to_pylist())
-    rows = []
+    raw_rows = []
+    mapped_rows = []
     for index in indexes:
         if index.product_id in held:
             raise ValueError('Target already exists; this missing-target path never overwrites it')
         if not index.title:
             raise ValueError('A source-stated GAO title is required')
-        row = dict.fromkeys(table.column_names)
+        row = dict.fromkeys(COLUMNS)
         row.update(report_id=index.product_id,title=index.title,url=index.product_url,
-                   published_date=getattr(index,'published_date',None))
-        if 'source' in row:
-            row['source']=SOURCE_REPAIR
-        rows.append(row)
+                   published_date=getattr(index,'published_date',None),source=SOURCE_REPAIR)
+        raw_rows.append(row)
+        mapped_rows.append(map_subject('gao_reports', row))
     # An online report index supplies no day; a qualified product page may.
     # Neither supplies a report type, abstract or structured tags here.
     # Unknown remains NULL, rather than an invented date or known-empty list.
-    addition = pa.Table.from_pylist(rows,schema=table.schema)
+    addition = pa.Table.from_pylist(mapped_rows,schema=target_schema)
     combined = pa.concat_tables([table,addition])
     output.parent.mkdir(parents=True,exist_ok=True)
     staged = output.with_suffix('.partial.parquet')
     pq.write_table(combined,staged,compression='zstd')
     actual = pq.read_table(staged)
-    if not actual.slice(0,len(table)).equals(table,check_metadata=True):
+    if not actual.slice(0,len(table)).equals(table) or actual.schema.metadata != table.schema.metadata:
         raise ValueError('GAO candidate changed prior cells')
     staged.replace(output)
     return {'prior_rows':len(table),'candidate_rows':len(actual),'prior_cells_equal':True,
-            'added_report_ids':sorted(row['report_id'] for row in rows),
-            'published_dates':{row['report_id']:row['published_date'] for row in rows},
+            'added_report_ids':sorted(row['report_id'] for row in raw_rows),
+            'published_dates':{row['report_id']:row['published_date'] for row in raw_rows},
             'table_body_storage':'unsupported'}
 
 
@@ -118,20 +144,21 @@ def _verified_member(prior_index: Mapping, key: str, path: Path) -> None:
         raise ValueError(f'Retained GAO {key} differs from the captured publication')
 
 
-@receipt_builder
 def _target_tables(output_dir: Path, *, prior_file: Path, indexes, siblings: tuple[Path, ...],
-                   prior_receipts: Path | None, prior_generation_id: str | None, report: dict, evidence) -> tuple[Path, ...]:
-    """Rebuild the full selected family while retaining sibling processing evidence."""
+                   report: dict) -> tuple[Path, ...]:
+    """Rebuild the full selected family as native tables while preserving sibling bytes."""
     import shutil
     output_dir.mkdir(parents=True, exist_ok=True)
-    prior = internal_prior("gao_reports", prior_file, receipt_path=prior_receipts, generation_id=prior_generation_id)
     output = output_dir / "gao_reports.parquet"
-    report.update(append_missing_target(prior, output, *indexes))
+    report.update(append_missing_target(prior_file, output, *indexes))
     paths = [output]
     for sibling in siblings:
-        literal = internal_prior(sibling.stem, sibling, receipt_path=prior_receipts, generation_id=prior_generation_id)
         target = output_dir / sibling.name
-        shutil.copyfile(literal, target)
+        if is_native_table(sibling, sibling.stem):
+            shutil.copyfile(sibling, target)
+        else:
+            mapped = [map_subject(sibling.stem, r) for r in pq.read_table(sibling).to_pylist()]
+            write_native_table(mapped, target, SUBJECT_SCHEMAS[sibling.stem])
         paths.append(target)
     return tuple(paths)
 
@@ -218,25 +245,16 @@ def prepare_target_generation(output_dir: Path, *, prior_file: Path, prior_index
                 import shutil
                 shutil.copyfile(sibling, selected)
             siblings.append(selected)
-        prior_receipts = None
-        prior_generation_id = None
-        if owner[1].get('etlReceipts'):
-            members = publication.receipt_members(prior_index, dataset='gao_reports')
-            prior_receipts = selected_dir / 'etl_receipts.parquet'
-            if len(members) != 1 or not publication.fetch_member(public_url, members[0], prior_receipts):
-                raise ValueError('Missing pinned GAO receipts')
-            prior_generation_id = owner[1]['etlReceipts']['generationId']
         report = {}
         outputs = _target_tables(output_dir/'candidate', prior_file=prior_file, indexes=tuple(indexes), siblings=tuple(siblings),
-            prior_receipts=prior_receipts, prior_generation_id=prior_generation_id, report=report, evidence=evidence)
+            report=report)
         evidence.event('explicit-target-projection',**report,offered_pdf_urls={item.product_id:item.pdf_url for item in indexes},
             limits='Metadata table only; no text/body reference column, no exact publication day inferred. '
                    'PDF validation checks file route and format; content identity is a separate qualification.')
         generation=output_dir/'generation'
         artifact=build_generation(generation,family='gao-reports',files=outputs,expected_keys=tuple(owner[1]['tables']),
             read_snapshot=prior_index,inputs=evidence.inputs(),
-            schemas={path.stem: described_schema(SUBJECT_SCHEMAS[path.stem]) for path in outputs},
-            **generation_receipt_args(outputs))
+            schemas={path.stem: described_schema(SUBJECT_SCHEMAS[path.stem]) for path in outputs})
         verify_generation(generation,expected_pin=artifact.pin)
         report.update(status='verified_candidate_not_published',candidate_pin=artifact.pin.as_dict(),
                       generation_directory=str(generation),evidence_directory=str(evidence.artifact_dir))

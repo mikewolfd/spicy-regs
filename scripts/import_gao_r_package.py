@@ -31,15 +31,22 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import duckdb
-import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.pipelines.rollups.base import make_rollup_app
 from spicy_regs.pipelines.rollups.gao_reports import GaoReportsRollup
 from spicy_regs.sources import gao_r_package as package
-from spicy_regs.transforms.table_merge import merge_local_prior
-from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
+from spicy_regs.transforms.government_source_shapes import (
+    GAO_READINGS_METADATA,
+    SUBJECT_SCHEMAS,
+    encode_kv_json,
+    is_native_table,
+    map_subject,
+    native_to_legacy_rows,
+    write_duckdb_native,
+    write_native_table,
+)
 
 reports = import_module("spicy_regs.transforms.build_gao_reports")
 
@@ -79,18 +86,22 @@ def rows_digest(rows: Iterable[Mapping[str, Any]]) -> str:
     return "sha256:" + hashlib.sha256("\n".join(lines).encode()).hexdigest()
 
 
-@receipt_builder(output_argument="output", dataset="gao_reports")
 def import_package_rows(
     prior: Path, records: Iterable[Mapping[str, Any]], output: Path, *, rows_sha256: str, fill_nulls: bool = FILL_NULLS
 ) -> dict[str, Any]:
     """The live table plus the package's reports it lacks; a held row's cells never change, NULLs only if asked."""
-    prior = internal_prior("gao_reports", prior)
+    native_schema = SUBJECT_SCHEMAS["gao_reports"]
     schema = pq.read_schema(prior)
-    wanted = {f.name: f.type for f in reports._SCHEMA}
-    if any(wanted.get(f.name) != f.type for f in schema) or schema.names != list(reports.COLUMNS)[: len(schema)]:
-        raise ImportRefused(f"The live table's columns are not a prefix of gao_reports': {schema.names}")
-    # A live table written before the package's columns lacks them: they are NULL there, a backfill.
-    held = {row["report_id"]: {**dict.fromkeys(reports.COLUMNS), **row} for row in pq.read_table(prior).to_pylist()}
+    if is_native_table(prior, "gao_reports"):
+        if not schema.equals(native_schema, check_metadata=False):
+            raise ImportRefused(f"The live table's schema does not match gao_reports': {schema.names}")
+        held = {row["report_id"]: {**dict.fromkeys(reports.COLUMNS), **row} for row in native_to_legacy_rows("gao_reports", prior)}
+    else:
+        wanted = {f.name: f.type for f in reports._SCHEMA}
+        if any(wanted.get(f.name) != f.type for f in schema) or schema.names != list(reports.COLUMNS)[: len(schema)]:
+            raise ImportRefused(f"The live table's columns are not a prefix of gao_reports': {schema.names}")
+        # A live table written before the package's columns lacks them: they are NULL there, a backfill.
+        held = {row["report_id"]: {**dict.fromkeys(reports.COLUMNS), **row} for row in pq.read_table(prior).to_pylist()}
     rows, counts = package.package_rows(records)
     added: list[dict] = []
     filled: dict[str, dict] = {}
@@ -110,24 +121,39 @@ def import_package_rows(
                     filled.setdefault(at, dict(held[at]))[column] = row[column]
     if (digest := rows_digest(added)) != rows_sha256:
         raise ImportRefused(f"The {len(added)} report(s) to add differ from the reviewed rows ({digest})")
+    merged: dict[str, dict[str, Any]] = {**held}
+    for row in [*added, *filled.values()]:
+        merged[row["report_id"]] = {**dict.fromkeys(reports.COLUMNS), **row}
+    if len(merged) != len(held) + len(added):
+        raise ImportRefused(f"The union holds {len(merged)} rows, not {len(held)} + {len(added)}")
+    if changed := [key for key, row in held.items()
+                   if any(row[c] is not None and merged[key].get(c) != row[c] for c in reports.COLUMNS)]:
+        raise ImportRefused(f"{len(changed)} held row(s) would change a stated cell: {changed[:5]}")
+    readings = {
+        key: {k: row[k] for k in ("major_rule_letter_json", "product_page_json") if row.get(k) is not None}
+        for key, row in merged.items()
+        if row.get("major_rule_letter_json") is not None or row.get("product_page_json") is not None
+    }
+    metadata = {GAO_READINGS_METADATA: encode_kv_json(readings)} if readings else None
     new_file = output.with_name("_package_new.parquet")
-    pq.write_table(pa.Table.from_pylist([*added, *filled.values()], schema=reports._SCHEMA), new_file)
+    write_native_table([map_subject("gao_reports", row) for row in merged.values()], new_file, native_schema)
     con = duckdb.connect()
     try:
-        merge_local_prior(con, columns=reports.COLUMNS, identity="report_id", order_by="published_date DESC, report_id",
-                          prior_file=prior, new_file=new_file, out_file=output)
+        cols = ", ".join(f'"{c}"' for c in native_schema.names)
+        new_path = str(new_file).replace("'", "''")
+        write_duckdb_native(
+            con,
+            f"SELECT {cols} FROM read_parquet('{new_path}') ORDER BY published_date DESC, report_id",
+            output,
+            native_schema,
+            metadata=metadata,
+        )
     finally:
         con.close()
         new_file.unlink(missing_ok=True)
-    after = {row["report_id"]: row for row in pq.read_table(output).to_pylist()}
-    if len(after) != len(held) + len(added):
-        raise ImportRefused(f"The union holds {len(after)} rows, not {len(held)} + {len(added)}")
-    if changed := [key for key, row in held.items()
-                   if any(row[c] is not None and after[key].get(c) != row[c] for c in reports.COLUMNS)]:
-        raise ImportRefused(f"{len(changed)} held row(s) would change a stated cell: {changed[:5]}")
     decades = Counter((row["published_date"] or "????")[:3] + "0s" for row in added)
     return {
-        **counts, "added": len(added), "prior_rows": len(held), "candidate_rows": len(after),
+        **counts, "added": len(added), "prior_rows": len(held), "candidate_rows": len(merged),
         "added_by_decade": dict(sorted(decades.items())), "added_rows_sha256": digest,
         "null_fills_available": dict(sorted(Counter(f"{held[at]['source']}.{column}" for at, column in would_fill).items())),
         "null_fills_applied": fill_nulls,
@@ -163,7 +189,6 @@ class GaoRPackageImport(GaoReportsRollup):
         parents[package.RDS_URL] = {"sha256": package.RDS_SHA256, "byteSize": package.RDS_BYTES}
         return parents
 
-    @receipt_builder
     def build(self, output_dir: Path) -> tuple[Path, Path]:
         output = output_dir / reports.OUTPUT
         output.parent.mkdir(parents=True, exist_ok=True)
