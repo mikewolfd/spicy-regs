@@ -26897,11 +26897,11 @@
   },
   "irs990_filings": {
     "table": "irs990_filings",
-    "label": "IRS Form 990 filings and selected finances",
-    "summary": "Find selected nonprofit returns by EIN and filing identity and compare source-reported finances.",
-    "coverage": "Sampled. Explicit filing identities from one retained IRS annual index and selected official XML archive; only declared Form 990 versions and selected fields are interpreted. Other schedules remain native XML. No historical census, donor completeness, Forms 8871/8872 or Form 990-EZ/PF/N interpretation.",
-    "kind": "sampled",
-    "measured_on": "2026-11-13",
+    "label": "IRS Form 990 nonprofit filings",
+    "summary": "Multi-year IRS Form 990 nonprofit return headers, Part I financial totals, and Part VIII/IX reconciliations partitioned by submission_year.",
+    "coverage": "Window. Multi-year Form 990 streaming population across official IRS TEOS annual indexes and bulk XML archives for visually qualified schema cohorts (2020v4.* through 2025v4.*), partitioned by submission_year. Form 990-EZ, Form 990-PF, Form 990-T, and separate non-XML Form 990-N e-Postcard filings are excluded from financial interpretation (with exact per-year exclusion counts retained in the build population summary). Political organization Forms 8871/8872 live separately in irs-527 and are never conflated here. No donor completeness claim.",
+    "kind": "window",
+    "measured_on": "2026-11-28",
     "data_quality": null,
     "columns": [
       {
@@ -26917,7 +26917,7 @@
       {
         "column_name": "organization_name",
         "column_type": "VARCHAR",
-        "description": "Literal TAXPAYER_NAME from the selected annual index; XML filer name remains in native_xml_json."
+        "description": "Literal TAXPAYER_NAME from the IRS annual filing index."
       },
       {
         "column_name": "return_id",
@@ -26932,12 +26932,12 @@
       {
         "column_name": "return_type",
         "column_type": "VARCHAR",
-        "description": "Literal index and XML return type. This interpretation supports 990 only; 990EZ, 990PF and 990-N are unsupported."
+        "description": "Literal index and XML return type. Financial interpretation supports 990 only; 990EZ, 990PF, 990T and separate 990-N are excluded."
       },
       {
         "column_name": "return_version",
         "column_type": "VARCHAR",
-        "description": "Literal XML returnVersion. Only explicitly qualified versions are interpreted."
+        "description": "Literal XML returnVersion. Only visually qualified Form 990 schema cohorts (2020v4.* through 2025v4.*) are interpreted; unknown versions are quarantined and fail the build above 0.1%."
       },
       {
         "column_name": "tax_year",
@@ -26952,7 +26952,7 @@
       {
         "column_name": "tax_period_end",
         "column_type": "VARCHAR",
-        "description": "Literal XML TaxPeriodEndDt, checked against the selected index tax period."
+        "description": "Literal XML TaxPeriodEndDt, checked against the annual index tax period."
       },
       {
         "column_name": "amended_raw",
@@ -26963,6 +26963,11 @@
         "column_name": "amended_status",
         "column_type": "VARCHAR",
         "description": "absent, empty or reported. Source amendment labels do not establish which filing supersedes another."
+      },
+      {
+        "column_name": "document_cnt_status",
+        "column_type": "VARCHAR",
+        "description": "matched, redacted_fewer or absent comparing ReturnData/@documentCnt against observed direct child documents. Records IRS-redacted attachments explicitly; observed exceeding declared refuses."
       },
       {
         "column_name": "revenue_raw",
@@ -26982,17 +26987,17 @@
       {
         "column_name": "revenue_status",
         "column_type": "VARCHAR",
-        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build."
+        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax quarantines or refuses the build."
       },
       {
         "column_name": "expenses_status",
         "column_type": "VARCHAR",
-        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build."
+        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax quarantines or refuses the build."
       },
       {
         "column_name": "grants_paid_status",
         "column_type": "VARCHAR",
-        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build."
+        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax quarantines or refuses the build."
       },
       {
         "column_name": "revenue_reconciliation",
@@ -27012,22 +27017,17 @@
       {
         "column_name": "index_native_json",
         "column_type": "VARCHAR",
-        "description": "Every original selected index field, including unrecognized columns, without numeric conversion."
+        "description": "Every original annual index field, including unrecognized columns, without numeric conversion."
       },
       {
         "column_name": "source_locator_json",
         "column_type": "VARCHAR",
-        "description": "Retained annual index and ZIP descriptors, original and XML member SHA-256 digests, member name and index row. XML positions are namespace-independent positional XPath."
-      },
-      {
-        "column_name": "native_xml_json",
-        "column_type": "VARCHAR",
-        "description": "Complete selected XML tree with expanded names, literal text, attributes and positions. Retained fields outside the declared interpretation remain unqualified."
+        "description": "Annual index and TEOS XML archive descriptors, original archive and XML member SHA-256 digests, member name and index row. Enables byte-exact traceability without retaining raw XML DOM blobs."
       },
       {
         "column_name": "submission_year",
         "column_type": "INTEGER",
-        "description": "Selected annual index year. Distinct from tax year, tax period and observation time."
+        "description": "Annual IRS TEOS index submission year (partition column). Distinct from tax year, tax period and observation time."
       },
       {
         "column_name": "revenue_usd",
@@ -27046,18 +27046,18 @@
       }
     ],
     "subject": "reference",
-    "grain": "One selected filing.",
+    "grain": "One Form 990 filing (unique per submission_year and filing_id; amendments remain separate rows).",
     "identity_columns": [
       "filing_id"
     ]
   },
   "irs990_officers": {
     "table": "irs990_officers",
-    "label": "IRS Form 990 Part VII personnel entries",
-    "summary": "Repeated Part VII Section A personnel entries and separately reported compensation.",
-    "coverage": "Sampled. Explicit filing identities from one retained IRS annual index and selected official XML archive; only declared Form 990 versions and selected fields are interpreted. Other schedules remain native XML. No historical census, donor completeness, Forms 8871/8872 or Form 990-EZ/PF/N interpretation.",
-    "kind": "sampled",
-    "measured_on": "2026-11-13",
+    "label": "IRS Form 990 Part VII personnel and institutional trustee entries",
+    "summary": "Repeated Part VII Section A officer, director, trustee, key-employee, and corporate-trustee entries with separately reported compensation, partitioned by submission_year.",
+    "coverage": "Window. Multi-year Form 990 streaming population across official IRS TEOS annual indexes and bulk XML archives for visually qualified schema cohorts (2020v4.* through 2025v4.*), partitioned by submission_year. Form 990-EZ, 990-PF, 990-T, 990-N, and Section 527 (irs-527) are excluded.",
+    "kind": "window",
+    "measured_on": "2026-11-28",
     "data_quality": null,
     "columns": [
       {
@@ -27073,12 +27073,17 @@
       {
         "column_name": "source_xpath",
         "column_type": "VARCHAR",
-        "description": "Namespace-independent positional XPath of the complete repeated entry in the retained original XML member."
+        "description": "Namespace-independent positional XPath of the complete repeated entry in the original XML member."
       },
       {
         "column_name": "person_name",
         "column_type": "VARCHAR",
-        "description": "Literal PersonNm for this Part VII Section A entry; not a resolved person identifier. An organization entry may have no person name."
+        "description": "Literal PersonNm for this Part VII Section A entry; not a resolved person identifier. Corporate trustee entries populate business_name and leave person_name NULL."
+      },
+      {
+        "column_name": "business_name",
+        "column_type": "VARCHAR",
+        "description": "Literal BusinessName lines joined with a space for corporate trustees or management companies reported in Part VII Section A; NULL for individual entries. Exact separate lines remain in native_entry_json."
       },
       {
         "column_name": "title",
@@ -27093,7 +27098,7 @@
       {
         "column_name": "compensation_status",
         "column_type": "VARCHAR",
-        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build."
+        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax quarantines or refuses the build."
       },
       {
         "column_name": "related_compensation_raw",
@@ -27103,7 +27108,7 @@
       {
         "column_name": "related_compensation_status",
         "column_type": "VARCHAR",
-        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build."
+        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax quarantines or refuses the build."
       },
       {
         "column_name": "other_compensation_raw",
@@ -27113,7 +27118,7 @@
       {
         "column_name": "other_compensation_status",
         "column_type": "VARCHAR",
-        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build."
+        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax quarantines or refuses the build."
       },
       {
         "column_name": "native_entry_json",
@@ -27123,7 +27128,12 @@
       {
         "column_name": "source_locator_json",
         "column_type": "VARCHAR",
-        "description": "Retained annual index and ZIP descriptors, original and XML member SHA-256 digests, member name and index row. XML positions are namespace-independent positional XPath."
+        "description": "Annual index and TEOS XML archive descriptors, original archive and XML member SHA-256 digests, member name and index row. XML positions are namespace-independent positional XPath."
+      },
+      {
+        "column_name": "submission_year",
+        "column_type": "INTEGER",
+        "description": "Annual IRS TEOS index submission year (partition column). Distinct from tax year, tax period and observation time."
       },
       {
         "column_name": "entry_ordinal",
@@ -27147,7 +27157,7 @@
       }
     ],
     "subject": "reference",
-    "grain": "One source-ordered repeated entry in a selected filing.",
+    "grain": "One source-ordered repeated Part VII Section A entry in a Form 990 filing.",
     "identity_columns": [
       "filing_id",
       "entry_ordinal"
@@ -27156,10 +27166,10 @@
   "irs990_grants": {
     "table": "irs990_grants",
     "label": "IRS Form 990 Schedule I domestic organization grants",
-    "summary": "Repeated Schedule I Part II domestic organization grant entries; cash and noncash assistance remain separate.",
-    "coverage": "Sampled. Explicit filing identities from one retained IRS annual index and selected official XML archive; only declared Form 990 versions and selected fields are interpreted. Other schedules remain native XML. No historical census, donor completeness, Forms 8871/8872 or Form 990-EZ/PF/N interpretation.",
-    "kind": "sampled",
-    "measured_on": "2026-11-13",
+    "summary": "Repeated Schedule I Part II domestic organization grant entries partitioned by submission_year; cash and noncash assistance remain separate.",
+    "coverage": "Window. Multi-year Form 990 streaming population across official IRS TEOS annual indexes and bulk XML archives for visually qualified schema cohorts (2020v4.* through 2025v4.*), partitioned by submission_year. Covers Schedule I Part II domestic organization recipients only (excluding Schedule I Part III individuals, Schedule F foreign grants, 990-EZ, 990-PF, 990-T, 990-N, and Section 527 irs-527). Unallocated differences against Part I grants_paid_usd stay explicit.",
+    "kind": "window",
+    "measured_on": "2026-11-28",
     "data_quality": null,
     "columns": [
       {
@@ -27175,7 +27185,7 @@
       {
         "column_name": "source_xpath",
         "column_type": "VARCHAR",
-        "description": "Namespace-independent positional XPath of the complete repeated entry in the retained original XML member."
+        "description": "Namespace-independent positional XPath of the complete repeated entry in the original XML member."
       },
       {
         "column_name": "recipient_ein",
@@ -27200,7 +27210,7 @@
       {
         "column_name": "cash_status",
         "column_type": "VARCHAR",
-        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build."
+        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax quarantines or refuses the build."
       },
       {
         "column_name": "noncash_raw",
@@ -27210,7 +27220,7 @@
       {
         "column_name": "noncash_status",
         "column_type": "VARCHAR",
-        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build."
+        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax quarantines or refuses the build."
       },
       {
         "column_name": "native_entry_json",
@@ -27220,7 +27230,12 @@
       {
         "column_name": "source_locator_json",
         "column_type": "VARCHAR",
-        "description": "Retained annual index and ZIP descriptors, original and XML member SHA-256 digests, member name and index row. XML positions are namespace-independent positional XPath."
+        "description": "Annual index and TEOS XML archive descriptors, original archive and XML member SHA-256 digests, member name and index row. XML positions are namespace-independent positional XPath."
+      },
+      {
+        "column_name": "submission_year",
+        "column_type": "INTEGER",
+        "description": "Annual IRS TEOS index submission year (partition column). Distinct from tax year, tax period and observation time."
       },
       {
         "column_name": "entry_ordinal",
@@ -27239,7 +27254,7 @@
       }
     ],
     "subject": "reference",
-    "grain": "One source-ordered repeated entry in a selected filing.",
+    "grain": "One source-ordered repeated Schedule I Part II recipient entry in a Form 990 filing.",
     "identity_columns": [
       "filing_id",
       "entry_ordinal"

@@ -431,15 +431,22 @@ def _require_prior(live: dict | None, expected: str | None, family: str) -> None
 
 
 def _cited_originals(evidence: Path) -> set[str]:
-    """The digest of every publisher original an evidence journal says the build read or downloaded.
+    """The digest of every retained publisher original an evidence journal cites in the central raw archive.
 
     Files the build wrote for itself (a selection, a manifest, a normalized input) are published with the
-    evidence, not kept in the raw archive, so they are not asked of it.
+    evidence, not kept in the raw archive, so they are not asked of it. Non-retaining captures
+    (``evidence_policy="hash_only"`` / ``body_retained=False``) intentionally record only their digest and
+    HTTP metadata without storing a body blob in the central raw archive.
     """
     cited = set()
     for line in (evidence / JOURNAL).read_text().splitlines():
         event = json.loads(line)
-        if is_original(event) and event.get("sha256"):
+        if (
+            is_original(event)
+            and event.get("body_retained") is not False
+            and event.get("blob_store") == "central-raw"
+            and event.get("sha256")
+        ):
             cited.add(event["sha256"])
     return cited
 

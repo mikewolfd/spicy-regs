@@ -747,3 +747,74 @@ def test_table3_history_family_is_registered_with_schema_and_receipt_enforcement
     assert command._family_schemas("table3-history") == table3_history.SCHEMAS
     with pytest.raises(ValueError, match="Registered datasets require ETL receipts: \\['table3_historical_records'\\]"):
         generation(tmp_path, "table3-history", {"table3_historical_records": ["obs-1"]}, family="table3-history")
+
+
+def test_hash_only_and_full_mixed_evidence_passes_shared_raw_while_missing_full_fails_closed(tmp_path, monkeypatch):
+    """hash_only captures (body_retained=False) pass _require_shared_raw; missing full originals still fail closed."""
+    import httpx
+
+    shared_raw = tmp_path / "shared-raw"
+    monkeypatch.delenv("SPICYGOV_RAW_ROOT", raising=False)
+    monkeypatch.setattr("spicy_docs.storage.raw_archive.default_raw_archive_root", lambda: shared_raw)
+
+    csv_body = b"RETURN_ID,EIN\n1,012345678\n"
+    zip_body = b"PK\x03\x04synthetic-zip-bytes"
+    csv_url = "https://apps.irs.gov/pub/epostcard/990/xml/2023/index_2023.csv"
+    zip_url = "https://apps.irs.gov/pub/epostcard/990/xml/2023/2023_TEOS_XML_01A.zip"
+
+    def responder(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == csv_url:
+            return httpx.Response(200, content=csv_body, headers={"content-type": "text/csv"})
+        if str(request.url) == zip_url:
+            return httpx.Response(200, content=zip_body, headers={"content-type": "application/zip"})
+        return httpx.Response(404)
+
+    evidence = CaptureEvidence(tmp_path / "mixed-build", FAMILY, archive_root=shared_raw)
+    full_owner = evidence.for_source(
+        "irs-form990-index",
+        "full",
+        parser_version="test-v1",
+        policy_decision_id="test-index-full",
+    )
+    hash_owner = evidence.for_source(
+        "irs-form990-xml-archives",
+        "hash_only",
+        parser_version="test-v1",
+        policy_decision_id="test-zip-hash-only",
+    )
+    with httpx.Client(transport=full_owner.transport(httpx.MockTransport(responder), stage="irs-index", max_bytes=1024)) as client:
+        assert client.get(csv_url).content == csv_body
+    with httpx.Client(transport=hash_owner.transport(httpx.MockTransport(responder), stage="irs-zip", max_bytes=1024)) as client:
+        assert client.get(zip_url).content == zip_body
+
+    declared = command._family_schemas(FAMILY) or {}
+    pq_path = tmp_path / "mixed-src" / "irs990_filings.parquet"
+    pq_path.parent.mkdir()
+    pq.write_table(_table_for_schema(declared["irs990_filings"], ["f1"]), pq_path)
+    gen_dir = tmp_path / "mixed-gen"
+    build_generation(gen_dir, family=FAMILY, files=[pq_path], expected_keys=[pq_path.name], inputs=evidence.inputs())
+    evidence.finish()
+
+    csv_sha = "sha256:" + hashlib.sha256(csv_body).hexdigest()
+    zip_sha = "sha256:" + hashlib.sha256(zip_body).hexdigest()
+    # Only the policy="full" central-raw capture is demanded from CentralRawArchiveStore.
+    assert command._cited_originals(evidence.artifact_dir) == {csv_sha}
+    assert zip_sha not in command._cited_originals(evidence.artifact_dir)
+    command._require_shared_raw((evidence.artifact_dir,))
+
+    live = tmp_path / "live-empty.json"
+    live.write_text(json.dumps(publication.empty_index()))
+    output = run(tmp_path, "mixed-dry-run", gen_dir, evidence.artifact_dir, "--dry-run", "--live-index", str(live))
+    receipt = json.loads((output / "dry-run.json").read_text())
+    assert receipt["status"] == "dry_run_accepted"
+    assert receipt["raw_archive"] == "shared"
+
+    # Removing the policy="full" original from CentralRawArchiveStore MUST still fail closed.
+    csv_hex = csv_sha.removeprefix("sha256:")
+    csv_blob = shared_raw / "objects" / "sha256" / csv_hex[:2] / csv_hex
+    assert csv_blob.is_file()
+    csv_blob.unlink()
+    with pytest.raises(publication.PublicationError, match=f"1 cited original.s. are not in the shared raw archive, first {csv_sha}"):
+        command._require_shared_raw((evidence.artifact_dir,))
+    with pytest.raises(publication.PublicationError, match="1 cited original.s. are not in the shared raw archive"):
+        run(tmp_path, "missing-full-dry-run", gen_dir, evidence.artifact_dir, "--dry-run", "--live-index", str(live))

@@ -2,11 +2,11 @@
 
 # `irs990_filings`
 
-**IRS Form 990 filings and selected finances**
+**IRS Form 990 nonprofit filings**
 
-Find selected nonprofit returns by EIN and filing identity and compare source-reported finances.
+Multi-year IRS Form 990 nonprofit return headers, Part I financial totals, and Part VIII/IX reconciliations partitioned by submission_year.
 
-**Coverage.** Sampled. Explicit filing identities from one retained IRS annual index and selected official XML archive; only declared Form 990 versions and selected fields are interpreted. Other schedules remain native XML. No historical census, donor completeness, Forms 8871/8872 or Form 990-EZ/PF/N interpretation. *(measured 2026-11-13)*
+**Coverage.** Window. Multi-year Form 990 streaming population across official IRS TEOS annual indexes and bulk XML archives for visually qualified schema cohorts (2020v4.* through 2025v4.*), partitioned by submission_year. Form 990-EZ, Form 990-PF, Form 990-T, and separate non-XML Form 990-N e-Postcard filings are excluded from financial interpretation (with exact per-year exclusion counts retained in the build population summary). Political organization Forms 8871/8872 live separately in irs-527 and are never conflated here. No donor completeness claim. *(measured 2026-11-28)*
 
 - **Parquet file:** `irs990_filings.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -17,29 +17,29 @@ Find selected nonprofit returns by EIN and filing identity and compare source-re
 | --- | --- | --- |
 | `filing_id` | `VARCHAR` | Literal IRS OBJECT_ID identifying this return; distinct from organization EIN. Amended returns remain separate filings. |
 | `ein` | `VARCHAR` | Filing organization EIN as nine-character text with leading zeros retained. |
-| `organization_name` | `VARCHAR` | Literal TAXPAYER_NAME from the selected annual index; XML filer name remains in native_xml_json. |
+| `organization_name` | `VARCHAR` | Literal TAXPAYER_NAME from the IRS annual filing index. |
 | `return_id` | `VARCHAR` | Literal index RETURN_ID. Distinct from OBJECT_ID, EIN and DLN. |
 | `tax_period` | `VARCHAR` | Literal six-character TAX_PERIOD from index, reconciled to XML tax period end month. |
-| `return_type` | `VARCHAR` | Literal index and XML return type. This interpretation supports 990 only; 990EZ, 990PF and 990-N are unsupported. |
-| `return_version` | `VARCHAR` | Literal XML returnVersion. Only explicitly qualified versions are interpreted. |
+| `return_type` | `VARCHAR` | Literal index and XML return type. Financial interpretation supports 990 only; 990EZ, 990PF, 990T and separate 990-N are excluded. |
+| `return_version` | `VARCHAR` | Literal XML returnVersion. Only visually qualified Form 990 schema cohorts (2020v4.* through 2025v4.*) are interpreted; unknown versions are quarantined and fail the build above 0.1%. |
 | `tax_year` | `VARCHAR` | Literal XML TaxYr; missing remains NULL. |
 | `tax_period_begin` | `VARCHAR` | Literal XML TaxPeriodBeginDt; missing remains NULL. |
-| `tax_period_end` | `VARCHAR` | Literal XML TaxPeriodEndDt, checked against the selected index tax period. |
+| `tax_period_end` | `VARCHAR` | Literal XML TaxPeriodEndDt, checked against the annual index tax period. |
 | `amended_raw` | `VARCHAR` | Literal AmendedReturnInd. Absence is NULL and does not imply an original or unamended return. |
 | `amended_status` | `VARCHAR` | absent, empty or reported. Source amendment labels do not establish which filing supersedes another. |
+| `document_cnt_status` | `VARCHAR` | matched, redacted_fewer or absent comparing ReturnData/@documentCnt against observed direct child documents. Records IRS-redacted attachments explicitly; observed exceeding declared refuses. |
 | `revenue_raw` | `VARCHAR` | Literal XML spelling of Part I current-year total revenue; NULL may mean absent or empty as its status records. |
 | `expenses_raw` | `VARCHAR` | Literal XML spelling of Part I current-year total expenses; NULL may mean absent or empty as its status records. |
 | `grants_paid_raw` | `VARCHAR` | Literal XML spelling of Part I current-year grants and similar amounts paid; NULL may mean absent or empty as its status records. |
-| `revenue_status` | `VARCHAR` | exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build. |
-| `expenses_status` | `VARCHAR` | exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build. |
-| `grants_paid_status` | `VARCHAR` | exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build. |
+| `revenue_status` | `VARCHAR` | exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax quarantines or refuses the build. |
+| `expenses_status` | `VARCHAR` | exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax quarantines or refuses the build. |
+| `grants_paid_status` | `VARCHAR` | exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax quarantines or refuses the build. |
 | `revenue_reconciliation` | `VARCHAR` | matched, different or missing_field comparing Part I current-year revenue with Part VIII total revenue column. |
 | `expenses_reconciliation` | `VARCHAR` | matched, different or missing_field comparing Part I current-year expenses with Part IX total functional expenses. |
 | `schedule_i_status` | `VARCHAR` | present or absent. An absent Schedule I does not establish no grants; Schedule I is not comprehensive donor data. |
-| `index_native_json` | `VARCHAR` | Every original selected index field, including unrecognized columns, without numeric conversion. |
-| `source_locator_json` | `VARCHAR` | Retained annual index and ZIP descriptors, original and XML member SHA-256 digests, member name and index row. XML positions are namespace-independent positional XPath. |
-| `native_xml_json` | `VARCHAR` | Complete selected XML tree with expanded names, literal text, attributes and positions. Retained fields outside the declared interpretation remain unqualified. |
-| `submission_year` | `INTEGER` | Selected annual index year. Distinct from tax year, tax period and observation time. |
+| `index_native_json` | `VARCHAR` | Every original annual index field, including unrecognized columns, without numeric conversion. |
+| `source_locator_json` | `VARCHAR` | Annual index and TEOS XML archive descriptors, original archive and XML member SHA-256 digests, member name and index row. Enables byte-exact traceability without retaining raw XML DOM blobs. |
+| `submission_year` | `INTEGER` | Annual IRS TEOS index submission year (partition column). Distinct from tax year, tax period and observation time. |
 | `revenue_usd` | `DECIMAL(38,0)` | Part I current-year total revenue in reported whole US dollars as exact decimal(38,0); no scaling, currency conversion or invented zero. |
 | `expenses_usd` | `DECIMAL(38,0)` | Part I current-year total expenses in reported whole US dollars as exact decimal(38,0); no scaling, currency conversion or invented zero. |
 | `grants_paid_usd` | `DECIMAL(38,0)` | Part I current-year grants and similar amounts paid in reported whole US dollars as exact decimal(38,0); no scaling, currency conversion or invented zero. |
