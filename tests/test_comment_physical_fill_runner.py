@@ -108,6 +108,26 @@ def test_reconcile_refuses_pending_evidence_outside_pinned_receipt(tmp_path, mon
     assert journal.read_bytes() == merged
 
 
+def test_reconcile_rejects_symlinked_recovery_receipt_before_catalog_connect(tmp_path, monkeypatch):
+    store, plan = group_17_plan(tmp_path)
+    args = arguments(tmp_path, plan, group=17)
+    work = args.workdir / "writer"
+    prepared = {"prepare_id": "earlier-prepare"}
+    journal = writer._journal(work, prepared)
+    journal.parent.mkdir(parents=True)
+    run.owner.durable(journal.parent / "prepare.json", prepared)
+    run.recovery(args)
+    real_receipt = tmp_path / "outside-recovery.json"
+    real_receipt.write_bytes((args.workdir / "recovery.json").read_bytes())
+    (args.workdir / "recovery.json").unlink()
+    (args.workdir / "recovery.json").symlink_to(real_receipt)
+    args.config.update(recovery_sha256=run.digest(real_receipt), recovery_runtime_ref=args.runtime_ref)
+    args.operation, args.runtime_ref = "reconcile", "b" * 40
+    monkeypatch.setattr(run.iceberg, "_connect", lambda *a, **kw: pytest.fail("Symlinked receipt reached catalog connect"))
+    with pytest.raises(ValueError, match="Recovery receipt differs"):
+        run.run_group(args, store, "test")
+
+
 def test_real_group_write_resume_and_undo_preserve_conflicting_copies(tmp_path, catalog, monkeypatch):
     store, plan = setup_plan(tmp_path, catalog)
     monkeypatch.setattr(run.maintenance, "run", lambda *a: {})

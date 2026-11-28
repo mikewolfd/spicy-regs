@@ -1283,14 +1283,27 @@ def test_reconcile_refuses_uncommitted_pending_with_invalid_evidence(tmp_path, c
     assert path.read_bytes() == initial
 
 
-@pytest.mark.parametrize("tamper", ["missing_receipt_args", "missing_receipt_file", "wrong_receipt_sha", "unpinned_journal_tail", "unpinned_preimage"])
+@pytest.mark.parametrize(
+    "tamper",
+    ["missing_receipt_args", "missing_receipt_file", "wrong_receipt_sha", "unpinned_journal_tail",
+     "unpinned_preimage", "symlinked_preimage_parent"],
+)
 def test_reconcile_pending_requires_verified_receipt_at_writer_entrypoint(tmp_path, catalog, tamper):
     seed(catalog, [row("A")])
     reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S"}])
     prepared = cfw.prepare(tmp_path)
     path = cfw._journal(tmp_path, prepared)
-    preimage = path.parent / "preimage.parquet"
-    preimage.write_bytes(b"retained preimage")
+    if tamper == "symlinked_preimage_parent":
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside"
+        outside_dir.mkdir()
+        outside_preimage = outside_dir / "preimage.parquet"
+        outside_preimage.write_bytes(b"retained preimage")
+        linked_dir = path.parent / "linked"
+        linked_dir.symlink_to(outside_dir)
+        preimage = linked_dir / "preimage.parquet"
+    else:
+        preimage = path.parent / "preimage.parquet"
+        preimage.write_bytes(b"retained preimage")
     preimage_sha = cfw._sha256(preimage)
     pending = {"state": "pending", "prepare_id": prepared["prepare_id"], "batch": "pending-batch", "files": ["EPA"],
                "snapshot_before": prepared["snapshot"], "preimage": str(preimage), "preimage_sha256": preimage_sha}
@@ -1324,6 +1337,9 @@ def test_reconcile_pending_requires_verified_receipt_at_writer_entrypoint(tmp_pa
             cfw.reconcile_pending(tmp_path, receipt_path=receipt_path, receipt_sha256="0" * 64)
     elif tamper == "unpinned_journal_tail":
         with pytest.raises(RuntimeError, match="differs from the pinned recovery receipt"):
+            cfw.reconcile_pending(tmp_path, receipt_path=receipt_path, receipt_sha256=receipt_sha)
+    elif tamper == "symlinked_preimage_parent":
+        with pytest.raises(RuntimeError, match="symlink|outside"):
             cfw.reconcile_pending(tmp_path, receipt_path=receipt_path, receipt_sha256=receipt_sha)
     else:
         with pytest.raises(RuntimeError, match="absent from the verified recovery receipt"):

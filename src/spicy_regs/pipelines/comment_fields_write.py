@@ -1188,13 +1188,29 @@ def _require_sha256_pin(label: str, value: str) -> str:
     return value
 
 
-def _verify_receipt_member(receipt_root: Path, pinned_files: Mapping[str, Any], path: Path, label: str) -> str:
+def _has_symlink_under(root: Path, target: Path) -> bool:
+    cur = root
+    for part in target.relative_to(root).parts:
+        cur = cur / part
+        if cur.is_symlink():
+            return True
+    return False
+
+
+def _verify_receipt_member(
+    receipt_dir: Path, receipt_root: Path, pinned_files: Mapping[str, Any], path: Path, label: str,
+) -> str:
     if not path.is_file() or path.is_symlink():
         raise RuntimeError(f"{label} is missing or invalid relative to the verified recovery receipt")
     abs_path = path.absolute()
-    if not abs_path.is_relative_to(receipt_root):
+    if abs_path.is_relative_to(receipt_dir) and _has_symlink_under(receipt_dir, abs_path):
+        raise RuntimeError(f"{label} traverses a symlink inside the verified recovery receipt root")
+    resolved = path.resolve(strict=True)
+    if not resolved.is_relative_to(receipt_root):
         raise RuntimeError(f"{label} lies outside the verified recovery receipt root")
-    member_key = str(abs_path.relative_to(receipt_root))
+    if _has_symlink_under(receipt_root, resolved):
+        raise RuntimeError(f"{label} traverses a symlink inside the verified recovery receipt root")
+    member_key = str(resolved.relative_to(receipt_root))
     entry = pinned_files.get(member_key)
     if not isinstance(entry, dict):
         raise RuntimeError(f"{label} is absent from the verified recovery receipt")
@@ -1203,7 +1219,7 @@ def _verify_receipt_member(receipt_root: Path, pinned_files: Mapping[str, Any], 
     if not isinstance(expected_sha, str) or type(expected_bytes) is not int:
         raise RuntimeError(f"{label} has an invalid pin entry in the verified recovery receipt")
     _require_sha256_pin(f"receipt[{member_key}].sha256", expected_sha)
-    if path.stat().st_size != expected_bytes or _sha256(path) != expected_sha:
+    if resolved.stat().st_size != expected_bytes or _sha256(resolved) != expected_sha:
         raise RuntimeError(f"{label} differs from the pinned recovery receipt")
     return expected_sha
 
@@ -1228,10 +1244,11 @@ def reconcile_pending(
     pinned_files = receipt.get("files") if isinstance(receipt, dict) else None
     if not isinstance(pinned_files, dict):
         raise RuntimeError("recovery receipt lacks a valid files map")
-    receipt_root = receipt_path.parent.absolute()
+    receipt_dir = receipt_path.parent.absolute()
+    receipt_root = receipt_path.parent.resolve(strict=True)
     out = fill_dir(workdir)
     prepare_path = out / "prepare.json"
-    _verify_receipt_member(receipt_root, pinned_files, prepare_path, "prepare.json")
+    _verify_receipt_member(receipt_dir, receipt_root, pinned_files, prepare_path, "prepare.json")
     prepared = json.loads(prepare_path.read_text())
     if _sha256(out / "fill.parquet") != prepared["fill_sha256"]:
         raise RuntimeError("fill.parquet is not the one prepare.json names; prepare again")
@@ -1240,7 +1257,7 @@ def reconcile_pending(
     _prepared_operation(prepared)
     _refuse_committed_failures(workdir)
     journal = _journal(workdir, prepared)
-    _verify_receipt_member(receipt_root, pinned_files, journal, journal.name)
+    _verify_receipt_member(receipt_dir, receipt_root, pinned_files, journal, journal.name)
     lines = _lines(journal)
     pending = lines[-1] if lines and lines[-1]["state"] == "pending" else None
     if pending is None:
@@ -1251,7 +1268,7 @@ def reconcile_pending(
     if preimage is None:
         raise RuntimeError(f"the pre-image of pending batch {pending.get('batch')} is missing; stop (runbook)")
     pinned_preimage_sha = _verify_receipt_member(
-        receipt_root, pinned_files, preimage, f"the pre-image of pending batch {pending.get('batch')}",
+        receipt_dir, receipt_root, pinned_files, preimage, f"the pre-image of pending batch {pending.get('batch')}",
     )
     if pending.get("preimage_sha256") != pinned_preimage_sha:
         raise RuntimeError(f"the pre-image of pending batch {pending.get('batch')} differs from the journal; stop (runbook)")

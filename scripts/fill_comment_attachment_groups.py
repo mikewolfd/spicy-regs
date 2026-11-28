@@ -242,7 +242,8 @@ def recovery_files(root):
 def recovery(args, *, verify=False, maintenance_changed=False):
     path = args.workdir / "recovery.json"
     if verify:
-        require(path.is_file() and digest(path) == args.config["recovery_sha256"], "Recovery receipt differs")
+        require(path.is_file() and not path.is_symlink() and digest(path) == args.config["recovery_sha256"],
+                "Recovery receipt differs")
         data = load(path)
         require(data["identity"] == recovery_identity(args), "Recovery runtime/plan/group differs")
         expected_files = data["files"]
@@ -253,10 +254,12 @@ def recovery(args, *, verify=False, maintenance_changed=False):
             actual -= names
             expected_files = {name: value for name, value in expected_files.items() if name not in names}
         require(actual == set(expected_files), "Recovery contains missing or unlisted files")
+        root_resolved = args.workdir.resolve(strict=True)
         for name, expected in expected_files.items():
             file = args.workdir / name
             require(".." not in Path(name).parts and not Path(name).is_absolute() and not file.is_symlink()
-                    and file.is_file() and pin(file) == expected, "Recovery member differs: " + name)
+                    and file.is_file() and file.resolve(strict=True).is_relative_to(root_resolved)
+                    and pin(file) == expected, "Recovery member differs: " + name)
         return data
     files = {str(file.relative_to(args.workdir)): pin(file) for file in recovery_files(args.workdir)}
     data = {"identity": recovery_identity(args), "files": files}
