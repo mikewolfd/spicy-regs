@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 from collections.abc import Sequence
 from datetime import date
@@ -13,9 +14,12 @@ def date_env(name: str) -> date | None:
     if not raw:
         return None
     try:
-        return date.fromisoformat(raw)
+        parsed = date.fromisoformat(raw)
     except ValueError as exc:
         raise ValueError(f"{name} must be YYYY-MM-DD, got {raw!r}") from exc
+    if parsed.isoformat() != raw:
+        raise ValueError(f"{name} must be YYYY-MM-DD, got {raw!r}")
+    return parsed
 
 
 def flag_env(name: str) -> bool:
@@ -50,3 +54,17 @@ def int_env(name: str) -> int | None:
         return int(raw)
     except ValueError:
         raise ValueError(f"{name} must be an integer or blank") from None
+
+
+def float_env(name: str) -> float | None:
+    """A finite floating-point env var, or None when unset; anything else raises ValueError naming it."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        value = float(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be a finite number or blank") from None
+    if not math.isfinite(value):
+        raise ValueError(f"{name} must be a finite number or blank")
+    return value

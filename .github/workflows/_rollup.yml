@@ -153,6 +153,16 @@ on:
         required: false
         default: ''
         type: string
+      fr_until:
+        description: 'Optional Federal Register re-read end date (YYYY-MM-DD); blank reads through today'
+        required: false
+        default: ''
+        type: string
+      fr_request_interval_seconds:
+        description: 'Optional polite delay in seconds between Federal Register API requests'
+        required: false
+        default: ''
+        type: string
       usaspending_every_funded:
         description: 'Walk every USAspending recipient funded in the trailing 12 months instead of the top pages'
         required: false
@@ -514,6 +524,7 @@ jobs:
               'resume_run_id',
               'resume_run_attempt',
               'resume_mode',
+              'fr_request_interval_seconds',
           }
           prior_scope = {k: v for k, v in prior_inv.get('inputs', {}).items() if k not in operational}
           current_scope = {k: v for k, v in current_inv.get('inputs', {}).items() if k not in operational}
@@ -644,6 +655,8 @@ jobs:
           SENATE_EXPENDITURES_SINCE: ${{ inputs.senate_expenditures_since }}
           FCC_SINCE: ${{ inputs.fcc_since }}
           FR_SINCE: ${{ inputs.fr_since }}
+          FR_UNTIL: ${{ inputs.fr_until }}
+          FR_REQUEST_INTERVAL_SECONDS: ${{ inputs.fr_request_interval_seconds }}
           USASPENDING_EVERY_FUNDED: ${{ inputs.usaspending_every_funded }}
           LDA_FILING_YEAR: ${{ inputs.lda_filing_year }}
           FEC_COMMITTEES_FULL_WALK: ${{ inputs.fec_committees_full_walk }}
@@ -714,6 +727,17 @@ jobs:
           df -k --output=avail / | tail -1 >> "$RUNNER_TEMP/disk-watch.log"
           cp "$RUNNER_TEMP/disk-watch.log" output/disk-watch.log
           awk '/^[[:space:]]*[0-9]+[[:space:]]*$/ {if (!n++ || $1 < lowest) lowest=$1} END {if (n) printf "lowest sampled free disk during the run: %.1f GiB (%d samples)\n", lowest/1048576, n}' output/disk-watch.log
+
+      # When live R2 upload succeeded and published a generation, every referenced raw original is
+      # already verified in R2 source-evidence/blobs/sha256/; drop the local mirror so rollup-audit
+      # stays lightweight while preserving output/raw-source-originals/ on failures, cancellations,
+      # dry runs, and Unchanged live runs (which write no generation and do not upload probe blobs).
+      - name: Drop already-uploaded raw source originals before audit upload
+        if: success() && !inputs.skip_upload
+        run: |
+          if [ -d output/generations ] && [ -n "$(ls -A output/generations 2>/dev/null)" ]; then
+            rm -rf output/raw-source-originals
+          fi
 
       - name: Retain invocation and transferred-input audit
         if: always()

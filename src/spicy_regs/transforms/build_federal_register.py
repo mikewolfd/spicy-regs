@@ -38,6 +38,8 @@ A row no run has read since the column was added holds NULL.
 from __future__ import annotations
 
 import hashlib
+import math
+import time
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from datetime import date, timedelta
@@ -54,6 +56,10 @@ OUTPUT = "federal_register.parquet"
 
 #: The column naming the retained API page a row was last read from; appended after the contract's columns.
 POINTER = "source_sha256"
+
+#: Number of projected rows buffered per Parquet batch while streaming observations to disk,
+#: keeping peak RSS bounded well below hosted runner limits on multi-year backfills.
+STREAM_BATCH_ROWS = 10_000
 
 
 # The oldest documents the API serves. A backfill with no prior table starts here.
@@ -145,8 +151,64 @@ def _federal_register_evidence(output_dir: Path, evidence):
             evidence.finish()
 
 
-def _live_federal_register_documents(since: date, *, output_dir: Path, evidence=None) -> Iterator[tuple[str, dict]]:
-    """Yield ``(page SHA-256, raw FR document)`` for documents published in ``[since, today]`` through the SpicyDocs owner.
+def _coerce_iso_date(value: date | str | None, *, name: str) -> date | None:
+    """Accept ``date`` or strict ``YYYY-MM-DD`` text (or ``None``); reject ``datetime`` and non-ISO spellings."""
+    if value is None:
+        return None
+    if type(value) is date:
+        return value
+    if isinstance(value, str):
+        raw = value.strip()
+        try:
+            parsed = date.fromisoformat(raw)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be YYYY-MM-DD, got {value!r}") from exc
+        if parsed.isoformat() != raw:
+            raise ValueError(f"{name} must be YYYY-MM-DD, got {value!r}")
+        return parsed
+    raise ValueError(f"{name} must be a date or YYYY-MM-DD string, got {value!r}")
+
+
+def _validate_date_window(since: date, until: date | None) -> None:
+    """Refuse an inverted ``[since, until]`` window before any network or disk work."""
+    if until is not None and since > until:
+        raise ValueError(
+            f"Federal Register date window is reversed: since ({since.isoformat()}) > until ({until.isoformat()})"
+        )
+
+
+def _validate_request_interval(request_interval_seconds: float) -> float:
+    """Validate optional inter-request pacing in seconds (non-negative finite float)."""
+    if isinstance(request_interval_seconds, bool) or not isinstance(request_interval_seconds, (int, float)):
+        raise ValueError(
+            f"request_interval_seconds must be a non-negative finite number, got {request_interval_seconds!r}"
+        )
+    value = float(request_interval_seconds)
+    if not math.isfinite(value) or value < 0:
+        raise ValueError(
+            f"request_interval_seconds must be a non-negative finite number, got {request_interval_seconds!r}"
+        )
+    return value
+
+
+def _validate_batch_size(batch_size: int) -> int:
+    """Validate the streaming Parquet batch size."""
+    if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size < 1:
+        raise ValueError(f"batch_size must be a positive integer, got {batch_size!r}")
+    return batch_size
+
+
+def _live_federal_register_documents(
+    since: date | str,
+    *,
+    until: date | str | None = None,
+    request_interval_seconds: float = 0.0,
+    output_dir: Path,
+    evidence=None,
+    sleep: Callable[[float], None] | None = None,
+    monotonic: Callable[[], float] | None = None,
+) -> Iterator[tuple[str, dict]]:
+    """Yield ``(page SHA-256, raw FR document)`` for documents published in ``[since, until or today]`` through SpicyDocs.
 
     The owner acquires exact API pages with its cap-safe date-window traversal:
     a window whose ``count`` reaches the 10,000-result cap is split, and a
@@ -157,8 +219,18 @@ def _live_federal_register_documents(since: date, *, output_dir: Path, evidence=
     One traversal: the merge below deduplicates repeated observations and
     refuses conflicting ones itself, so the owner's two-traversal
     reconciliation would double the request budget for a contract this
-    transform already checks.
+    transform already checks. When ``request_interval_seconds > 0``, consecutive
+    API requests are paced politely without sleeping before the first request.
     """
+    since_date = _coerce_iso_date(since, name="since")
+    assert since_date is not None
+    until_date = _coerce_iso_date(until, name="until")
+    interval = _validate_request_interval(request_interval_seconds)
+    published_through = until_date if until_date is not None else date.today()
+    _validate_date_window(since_date, published_through)
+    sleep_fn = time.sleep if sleep is None else sleep
+    monotonic_fn = time.monotonic if monotonic is None else monotonic
+
     try:
         from spicy_docs.sources.federal_register import native as federal_register
         from spicy_docs.transport.acquisition import federal_register_fetcher
@@ -170,12 +242,22 @@ def _live_federal_register_documents(since: date, *, output_dir: Path, evidence=
             ) from None
         raise
     scope = {
-        "publishedFrom": since.isoformat(),
-        "publishedThrough": date.today().isoformat(),
+        "publishedFrom": since_date.isoformat(),
+        "publishedThrough": published_through.isoformat(),
     }
     with _federal_register_evidence(output_dir, evidence) as evidence, federal_register_fetcher(None) as fetch:
+        last_request_at: float | None = None
+
         def retained_fetch(url):
-            body = fetch(url)
+            nonlocal last_request_at
+            if interval > 0 and last_request_at is not None:
+                remaining = interval - (monotonic_fn() - last_request_at)
+                if remaining > 0:
+                    sleep_fn(remaining)
+            try:
+                body = fetch(url)
+            finally:
+                last_request_at = monotonic_fn()
             # The fetcher exposes only request URL and bytes. Preserve the exact
             # response before parsing; final URL and HTTP capture time stay unknown.
             evidence.retain_bytes(body, raw_source=True, stage="api-page", source_url=url, requested_url=url,
@@ -211,31 +293,70 @@ def _live_federal_register_documents(since: date, *, output_dir: Path, evidence=
 def build_federal_register(
     output_dir: Path,
     *,
-    since: date = FR_EPOCH,
+    since: date | str = FR_EPOCH,
+    until: date | str | None = None,
+    request_interval_seconds: float = 0.0,
+    batch_size: int = STREAM_BATCH_ROWS,
     documents: Callable[[date], Iterable[dict]] | None = None,
     evidence=None,
 ) -> Path:
-    """This run's documents published since ``since`` (every one by default), projected, checked, one per dated key.
+    """This run's documents published in ``[since, until or today]``, projected, checked, one per dated key.
 
     ``documents`` is the raw API records published since a date; the default is SpicyDocs' Federal Register
     acquisition, and a hermetic test passes its own. Only the default names a retained page, so only its rows carry
-    ``source_sha256``. The prior table is merged in ``merge_federal_register``, at the published columns.
+    ``source_sha256``. Incoming rows stream into ``_fr_new.parquet`` in ``batch_size``-row Parquet batches so peak
+    RAM stays bounded even across multi-year backfill windows. The prior table is merged in ``merge_federal_register``,
+    at the published columns.
     """
     import duckdb
     from spicy_docs.schemas.federal_register import FEDERAL_REGISTER_COLUMNS, project_federal_register_document
 
+    since_date = _coerce_iso_date(since, name="since")
+    assert since_date is not None
+    until_date = _coerce_iso_date(until, name="until")
+    _validate_date_window(since_date, until_date)
+    interval = _validate_request_interval(request_interval_seconds)
+    chunk_rows = _validate_batch_size(batch_size)
+
     out_file = output_dir / OUTPUT
     schema = pa.schema([(c, pa.string()) for c in (*FEDERAL_REGISTER_COLUMNS, POINTER)])
-    logger.info("FR: fetching documents published since {}", since)
-    if documents is not None:
-        rows = [project_federal_register_document(doc) for doc in documents(since)]
+    if until_date is not None:
+        logger.info("FR: fetching documents published from {} through {}", since_date, until_date)
     else:
-        rows = [project_federal_register_document(doc) | {POINTER: page}
-                for page, doc in _live_federal_register_documents(since, output_dir=output_dir, evidence=evidence)]
+        logger.info("FR: fetching documents published since {}", since_date)
+    if documents is not None:
+        projected_rows: Iterator[dict] = (project_federal_register_document(doc) for doc in documents(since_date))
+    else:
+        projected_rows = (
+            project_federal_register_document(doc) | {POINTER: page}
+            for page, doc in _live_federal_register_documents(
+                since_date,
+                until=until_date,
+                request_interval_seconds=interval,
+                output_dir=output_dir,
+                evidence=evidence,
+            )
+        )
     new_file = output_dir / "_fr_new.parquet"
-    table = pa.Table.from_pylist(rows, schema=schema) if rows else schema.empty_table()
-    pq.write_table(table, new_file, compression="zstd")
-    logger.info("FR: fetched {:,} documents this run", len(rows))
+    fetched = 0
+    batch: list[dict] = []
+    try:
+        with pq.ParquetWriter(new_file, schema, compression="zstd") as writer:
+            for row in projected_rows:
+                batch.append(row)
+                fetched += 1
+                if len(batch) >= chunk_rows:
+                    writer.write_table(pa.Table.from_pylist(batch, schema=schema))
+                    batch.clear()
+            if batch:
+                writer.write_table(pa.Table.from_pylist(batch, schema=schema))
+                batch.clear()
+            elif fetched == 0:
+                writer.write_table(schema.empty_table())
+    except BaseException:
+        new_file.unlink(missing_ok=True)
+        raise
+    logger.info("FR: fetched {:,} documents this run", fetched)
 
     # The SpicyDocs public-table primary key (projection 1.1). The columns and their literal values stay unchanged;
     # this is not an IRI normalization or an assertion that two dated printings are one matter.
@@ -249,6 +370,7 @@ def build_federal_register(
     # The pointer rides with each row but is no part of the record: one document read from two pages is one
     # observation, so the conflict check below compares the projection alone.
     cols = ", ".join(FEDERAL_REGISTER_COLUMNS)
+    merged_file = output_dir / "_fr_merged.parquet"
     try:
         con.execute(f"CREATE TEMP TABLE _fresh AS SELECT {cols}, {POINTER}, file_row_number AS _row "
                     f"FROM read_parquet('{new_file}', file_row_number=true)")
@@ -269,7 +391,6 @@ def build_federal_register(
         ).fetchone()
         if conflict:
             raise ValueError(f"Federal Register conflicting observations of the same number/date: {conflict!r}")
-        merged_file = output_dir / "_fr_merged.parquet"
         # Written in the contract's published order; SpicyDocs 0.66.6 lists ``rin`` before its newest fields.
         published = published_columns()
         if sorted(published) != sorted((*FEDERAL_REGISTER_COLUMNS, "rin", POINTER)):
@@ -286,9 +407,12 @@ def build_federal_register(
             """
         )
         merged_file.replace(out_file)
+    except BaseException:
+        merged_file.unlink(missing_ok=True)
+        raise
     finally:
         con.close()
-    new_file.unlink(missing_ok=True)
+        new_file.unlink(missing_ok=True)
     logger.info("Federal Register: {:,} documents observed", pq.ParquetFile(out_file).metadata.num_rows)
     return out_file
 
@@ -296,7 +420,10 @@ def build_federal_register(
 def merge_federal_register(
     output_dir: Path,
     *,
-    since: date | None = None,
+    since: date | str | None = None,
+    until: date | str | None = None,
+    request_interval_seconds: float = 0.0,
+    batch_size: int = STREAM_BATCH_ROWS,
     documents: Callable[[date], Iterable[dict]] | None = None,
     download_prior: Callable[[str, Path], bool] = published_prior,
     evidence=None,
@@ -305,10 +432,10 @@ def merge_federal_register(
 
     ``build_federal_register`` reads and checks the run's documents; they are mapped to the published columns
     here (``regulations_shape``) and replace the prior table's rows of the same ``(document_number,
-    publication_date)``. Every other prior row is carried as published, never read back through a receipt or
-    rewritten one row at a time: on 2026-11-09 that restore and rewrite were 1,542 of the job's 1,764 s for 233
-    changed rows. ``rin`` is derived again on every row. Order is the table's: date descending, then number; row
-    groups stay at ``ROW_GROUP_ROWS``.
+    publication_date)``. Every other prior row (including rows outside ``[since, until]``) is carried as published,
+    never read back through a receipt or rewritten one row at a time: on 2026-11-09 that restore and rewrite were
+    1,542 of the job's 1,764 s for 233 changed rows. ``rin`` is derived again on every row. Order is the table's:
+    date descending, then number; row groups stay at ``ROW_GROUP_ROWS``.
 
     A prior without one of the columns that left receipts (``PROMOTED_LAST``) is refused: carried, its rows would
     publish NULL for values only its receipts held. A prior that differs otherwise (a column the contract added or
@@ -323,16 +450,38 @@ def merge_federal_register(
         IDENTITIES, PROMOTED_LAST, mapped_table, published_as_source, subject_schema,
     )
 
+    since_date = _coerce_iso_date(since, name="since")
+    until_date = _coerce_iso_date(until, name="until")
+    if since_date is not None:
+        _validate_date_window(since_date, until_date)
+    interval = _validate_request_interval(request_interval_seconds)
+    chunk_rows = _validate_batch_size(batch_size)
+
     schema = subject_schema("federal_register")
     key = ", ".join(IDENTITIES["federal_register"])
     prior, out_file = output_dir / "_fr_published.parquet", output_dir / OUTPUT
     scratch = [prior, output_dir / "_fr_prior_text.parquet", output_dir / "_fr_prior.parquet",
                output_dir / "_fr_observed.parquet", output_dir / "_fr_fresh.parquet"]
-    have_prior = prior.exists() or download_prior(OUTPUT, prior)
+    existed_prior = prior.exists()
+    downloaded_prior = False if existed_prior else bool(download_prior(OUTPUT, prior))
+    have_prior = existed_prior or downloaded_prior
     if not have_prior and out_file.exists():
+        # Validate implicit since <= until before moving a local output file onto the prior scratch path.
+        if since_date is None and until_date is not None:
+            local_max = _prior_max_publication_date(out_file)
+            _validate_date_window((local_max - timedelta(days=OVERLAP_DAYS)) if local_max else FR_EPOCH, until_date)
         # A local run beside the table it last built: that table is its prior.
         out_file.replace(prior)
         have_prior = True
+    if since_date is None:
+        prior_max = _prior_max_publication_date(prior) if have_prior else None
+        since_date = (prior_max - timedelta(days=OVERLAP_DAYS)) if prior_max else FR_EPOCH
+    try:
+        _validate_date_window(since_date, until_date)
+    except BaseException:
+        if downloaded_prior:
+            prior.unlink(missing_ok=True)
+        raise
     # Counted as published, before any re-map, so a re-map that loses or repeats a row fails the check below.
     prior_rows = pq.ParquetFile(prior).metadata.num_rows if have_prior else 0
     remap: dict[str, list[str]] = {}
@@ -352,12 +501,16 @@ def merge_federal_register(
                     prior_rows)
         prior = mapped_table("federal_register", published_as_source("federal_register", prior, scratch[1]),
                              scratch[2])
-    if since is None:
-        prior_max = _prior_max_publication_date(prior) if have_prior else None
-        since = (prior_max - timedelta(days=OVERLAP_DAYS)) if prior_max else FR_EPOCH
     # The night's observations alone (no prior to merge), moved off the table's name before the merge writes it.
-    observed = build_federal_register(output_dir, since=since, documents=documents, evidence=evidence
-                                      ).replace(scratch[3])
+    observed = build_federal_register(
+        output_dir,
+        since=since_date,
+        until=until_date,
+        request_interval_seconds=interval,
+        batch_size=chunk_rows,
+        documents=documents,
+        evidence=evidence,
+    ).replace(scratch[3])
     fresh = mapped_table("federal_register", observed, scratch[4])
     read_rows = pq.ParquetFile(fresh).metadata.num_rows
     names = ", ".join(f"{_PUBLISHED_RIN_SQL} AS rin" if name == "rin" else f'"{name}"' for name in schema.names)

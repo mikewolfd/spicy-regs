@@ -12,13 +12,17 @@ switch stay where they are (``docs/pins/receipt-archive.json``).
 
 ``FR_SINCE`` (YYYY-MM-DD) replaces the resume point for a re-read: at the
 1994 epoch it refetches every document, so a column added to the projection
-(``topics_json``, 2026-09-26) reaches every row.
+(``topics_json``, 2026-09-26) reaches every row. ``FR_UNTIL`` (YYYY-MM-DD)
+bounds the upper end of a re-read window so multi-year backfills run in
+paced, resumable batches (leaving all rows outside ``[since, until]`` intact
+during merge). ``FR_REQUEST_INTERVAL_SECONDS`` sets optional polite pacing
+between API pages.
 """
 
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.env_values import date_env
+from spicy_regs.env_values import date_env, float_env
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.transforms.build_federal_register import merge_federal_register
 
@@ -32,7 +36,14 @@ class FederalRegisterRollup(RollupPipeline):
     output: ClassVar[str] = "federal_register.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return merge_federal_register(output_dir, since=date_env("FR_SINCE"), evidence=self.source_evidence)
+        interval = float_env("FR_REQUEST_INTERVAL_SECONDS")
+        return merge_federal_register(
+            output_dir,
+            since=date_env("FR_SINCE"),
+            until=date_env("FR_UNTIL"),
+            request_interval_seconds=0.0 if interval is None else interval,
+            evidence=self.source_evidence,
+        )
 
 
 app = make_rollup_app(FederalRegisterRollup)
