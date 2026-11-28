@@ -1238,6 +1238,34 @@ def test_empty_original_document_id_recovers_after_crash_between_commit_and_jour
     assert after["B"]["comment_reference_values_json"] == '{"originalDocumentId":"  \\t"}'
 
 
+@pytest.mark.parametrize(("damage", "problem"), [
+    ("missing preimage", "pre-image.*is missing or differs"),
+    ("different preimage bytes", "pre-image.*is missing or differs"),
+    ("different prepare id", "differs from prepare.json"),
+])
+def test_reconcile_refuses_uncommitted_pending_with_invalid_evidence(tmp_path, catalog, damage, problem):
+    seed(catalog, [row("A")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S"}])
+    prepared = cfw.prepare(tmp_path)
+    path = cfw._journal(tmp_path, prepared)
+    preimage = path.parent / "preimage.parquet"
+    preimage.write_bytes(b"retained preimage")
+    pending = {"state": "pending", "prepare_id": prepared["prepare_id"], "batch": "pending-batch", "files": ["EPA"],
+               "snapshot_before": prepared["snapshot"], "preimage": str(preimage), "preimage_sha256": cfw._sha256(preimage)}
+    if damage == "missing preimage":
+        preimage.unlink()
+    elif damage == "different preimage bytes":
+        preimage.write_bytes(b"different preimage")
+    else:
+        pending["prepare_id"] = "some-other-prepare"
+    cfw._append(path, pending)
+    initial = path.read_bytes()
+
+    with pytest.raises(RuntimeError, match=problem):
+        cfw.reconcile_pending(tmp_path)
+    assert path.read_bytes() == initial
+
+
 # --------------------------------------------------------------------------- #
 # Partitioned spill-free prepare() equivalence, duplicate guards, and tight-budget stress (ss-flsg)
 # --------------------------------------------------------------------------- #

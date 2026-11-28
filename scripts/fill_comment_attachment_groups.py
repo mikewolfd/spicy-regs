@@ -136,7 +136,7 @@ def selected(args, client, bucket):
     target = args.workdir / "plan.json"
     fetch(client, bucket, args.config["plan"], target, 16 * 2**20)
     plan = load(target)
-    expected_ref = recovery_identity(args)["runtime_ref"] if args.operation == "reconcile" else args.runtime_ref
+    expected_ref = recovery_runtime_ref(args)
     require(plan["format"] == "comment-physical-fill/1" and plan["runtime_ref"] == expected_ref, "Plan runtime/format differs")
     require(len({g["original_file"] for g in plan["groups"]}) == len(plan["groups"]), "Plan splits a physical file")
     return plan
@@ -181,7 +181,7 @@ def pull_journals(workdir, prefix, client):
     shutil.rmtree(incoming)
 
 
-def pending_guard(workdir):
+def pending_guard(workdir, *, pinned_files=None):
     writer._refuse_committed_failures(workdir)
     prepared_path = writer.fill_dir(workdir) / "prepare.json"
     prepared = load(prepared_path) if prepared_path.exists() else None
@@ -189,10 +189,23 @@ def pending_guard(workdir):
         lines = writer._lines(journal)
         if lines and lines[-1]["state"] == "pending":
             line = lines[-1]
-            require(prepared is not None and line["prepare_id"] == prepared["prepare_id"],
-                    "Pending write needs its exact earlier recovery artifact; do not prepare another group")
-            require(Path(line["preimage"]).is_file() and digest(Path(line["preimage"])) == line["preimage_sha256"],
-                    "Pending write lacks its verified preimage")
+            if prepared is None or line.get("prepare_id") != prepared["prepare_id"]:
+                raise ValueError("Pending write needs its exact earlier recovery artifact; do not prepare another group")
+            require(isinstance(line.get("preimage"), str) and line["preimage"], "Pending write lacks its verified preimage")
+            preimage = Path(line["preimage"])
+            if pinned_files is None:
+                require(preimage.is_file() and digest(preimage) == line.get("preimage_sha256"),
+                        "Pending write lacks its verified preimage")
+                continue
+            root = workdir.parent.absolute()
+            journal_member = str(journal.absolute().relative_to(root))
+            require(journal == writer._journal(workdir, prepared) and pinned_files.get(journal_member) == pin(journal),
+                    "Pending journal differs from the pinned recovery receipt: " + journal.name)
+            # The receipt already verified the preimage bytes. The writer checks them again before any transition.
+            preimage = preimage.absolute()
+            member = pinned_files.get(str(preimage.relative_to(root))) if preimage.is_relative_to(root) else None
+            require(member is not None and member["sha256"] == line.get("preimage_sha256"),
+                    "Pending preimage differs from the pinned recovery receipt")
 
 
 def pilot_history(workdir, pilot):
@@ -233,7 +246,7 @@ def recovery(args, *, verify=False, maintenance_changed=False):
                     and file.is_file() and pin(file) == expected, "Recovery member differs: " + name)
         return data
     files = {str(file.relative_to(args.workdir)): pin(file) for file in recovery_files(args.workdir)}
-    data = {"identity": identity(args), "files": files}
+    data = {"identity": recovery_identity(args), "files": files}
     owner.durable(path, data)
     (args.workdir / "recovery.json.sha256").write_text(digest(path) + "  recovery.json\n")
     return data
@@ -243,13 +256,17 @@ def identity(args):
     return {"plan_sha256": args.config["plan"]["sha256"], "group": int(args.group), "runtime_ref": args.runtime_ref}
 
 
-def recovery_identity(args):
+def recovery_runtime_ref(args):
     if args.operation != "reconcile":
-        return identity(args)
+        return args.runtime_ref
     prior_ref = args.config.get("recovery_runtime_ref")
     require(isinstance(prior_ref, str) and bool(re.fullmatch(r"[0-9a-f]{40}", prior_ref)),
             "Reconcile requires an exact 40-character recovery_runtime_ref")
-    return {"plan_sha256": args.config["plan"]["sha256"], "group": int(args.group), "runtime_ref": prior_ref}
+    return prior_ref
+
+
+def recovery_identity(args):
+    return {**identity(args), "runtime_ref": recovery_runtime_ref(args)}
 
 
 def run_group(args, client, bucket):
@@ -259,15 +276,17 @@ def run_group(args, client, bucket):
     require(len(choice) == 1, "Unknown physical group")
     group = choice[0]
     require(group["identities"] <= MAX_ROWS and group["read_value_bytes"] <= MAX_VALUES, "Group exceeds qualified bounds")
+    pinned_files = {}
     if args.operation in {"resume", "reconcile", "undo"}:
         authorized = args.workdir / "authorized.json"
-        recovery(args, verify=True, maintenance_changed=authorized.exists() and load(authorized) == ownership(args))
+        receipt = recovery(args, verify=True, maintenance_changed=authorized.exists() and load(authorized) == ownership(args))
+        pinned_files = receipt["files"]
     elif (args.workdir / "writer/fill/prepare.json").exists():
         raise ValueError("Existing writer state requires explicit resume")
     pull_journals(args.workdir, plan["journals"], client)
     work = args.workdir / "writer"
     if args.operation == "reconcile":
-        pending_guard(work)
+        pending_guard(work, pinned_files=pinned_files)
         attempt = writer.fill_dir(work) / "attempt.json"
         require(attempt.is_file() and all(load(attempt)[name] == value for name, value in recovery_identity(args).items()),
                 "Writer attempt identity differs")

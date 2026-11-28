@@ -1225,8 +1225,15 @@ def reconcile_pending(
 
 def _recover(con, journal: Path, pending: dict, prepared: dict, table: str, expected: dict) -> dict:
     """A run that stopped after journaling a batch as pending: find whether that batch committed, and account for it."""
-    current = iceberg._read_snapshot(con, COMMENT).__dict__
     ids = {k: pending.get(k) for k in ("batch", "files", "prepare_id")}
+    if ids["prepare_id"] != prepared["prepare_id"]:
+        raise RuntimeError(f"pending batch {ids['batch']} in {journal.name} differs from prepare.json; stop (runbook)")
+    preimage = Path(pending["preimage"]) if pending.get("preimage") else None
+    if preimage is None or not preimage.is_file() or _sha256(preimage) != pending.get("preimage_sha256"):
+        raise RuntimeError(f"the pre-image of pending batch {ids['batch']} is missing or differs from the journal; "
+                           "stop (runbook)")
+    kept = {k: pending[k] for k in ("preimage", "preimage_sha256")}
+    current = iceberg._read_snapshot(con, COMMENT).__dict__
     if current == pending["snapshot_before"]:
         _append(journal, {"state": "abandoned", **ids})
         return expected
@@ -1238,24 +1245,22 @@ def _recover(con, journal: Path, pending: dict, prepared: dict, table: str, expe
     if problem:
         raise RuntimeError(f"the commit after a pending batch is not that batch ({problem}); prepare again")
     # Our commit, never checked: compare the rows it wrote with the stored pre-image and the fill.
-    kept = {k: pending[k] for k in ("preimage", "preimage_sha256")}
-    if _sha256(Path(kept["preimage"])) != kept["preimage_sha256"]:
-        raise RuntimeError(f"the pre-image of pending batch {ids['batch']} is not the one journaled; stop (runbook)")
     con.execute(f"CREATE OR REPLACE TEMP VIEW _prior AS SELECT * FROM read_parquet({_sql(kept['preimage'])})")
     file_list = ", ".join(map(_sql, pending["files"]))
     con.execute(f"CREATE OR REPLACE TEMP VIEW _batch AS SELECT * FROM read_parquet("
                 f"{_sql(fill_dir(journal.parent.parent) / 'fill.parquet')}) WHERE _file IN ({file_list})")
-    postimage = Path(kept["preimage"]).with_name(f"{Path(kept['preimage']).stem}-written.parquet")
+    postimage = preimage.with_name(f"{preimage.stem}-written.parquet")
     try:
         _check(con, table, list(COMMENT.schema), prepared["columns"], pending["files"], set(pending["before_files"]),
                pending["by_file"], prepared["table_rows"], postimage=postimage, at=after["snapshot_id"],
                operation=_prepared_operation(prepared))
     except FillVerificationError as error:
-        kept |= {"postimage": str(postimage), "postimage_sha256": _sha256(postimage)}
+        has_postimage = postimage.exists()
+        kept |= {"postimage": str(postimage) if has_postimage else None,
+                 "postimage_sha256": _sha256(postimage) if has_postimage else None}
         _append(journal, {"state": "failed", **ids, "committed": True, "reason": f"recovered commit: {error}", **kept,
                           "snapshot_before": pending["snapshot_before"], "snapshot_after": after})
-        raise FillVerificationError(f"committed batch {ids['batch']} differs from its pre-image with the fill "
-                                    "applied; undo it (runbook)") from error
+        raise FillVerificationError(f"committed batch {ids['batch']} failed verification: {error}") from error
     kept |= {"postimage": str(postimage), "postimage_sha256": _sha256(postimage)}
     _append(journal, {"state": "verified", **ids, "planned": planned, "changed": planned, **kept,
                       "snapshot_before": pending["snapshot_before"], "snapshot_after": after, "recovered": True})
@@ -1299,6 +1304,8 @@ def undo(workdir: Path, batch: str, *, expected_snapshot: int, con=None) -> dict
     journal, line = _committed_batch(workdir, batch)
     images = {}
     for name in ("preimage", "postimage"):
+        if not line.get(name):
+            raise RuntimeError(f"batch {batch} has no recorded {name}; restore it by hand (runbook)")
         images[name] = Path(line[name])
         if _sha256(images[name]) != line[f"{name}_sha256"]:
             raise RuntimeError(f"{images[name]} is not the {name} batch {batch} journaled; stop (runbook)")
