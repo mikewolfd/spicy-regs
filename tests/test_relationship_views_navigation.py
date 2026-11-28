@@ -33,7 +33,7 @@ def test_all_navigation_definitions_bind_and_report_actual_schemas():
         else:
             assert info['reason'], name
     for name in ('fcc_native_observations', 'bill_subject_terms_pairs', 'section_diff_endpoints',
-                 'org_identity_candidates', 'member_vote_party_affiliations'):
+                 'org_identity_candidates', 'member_vote_party_affiliations', 'fec_relationship_evidence'):
         assert result[name]['status'] == 'available', result[name]
 
 
@@ -100,17 +100,19 @@ def test_diff_endpoints_do_not_cross_provider_or_multiply():
 
 def test_fec_companion_count_digest_and_explicit_empty_observation():
     con: Any = duckdb.connect()
-    table(con,'fec_relationships',['source_locator_json','source_sha256','value_status','source_fields_json','relationship_type'],[
-        (json.dumps({'collection_id':'a','source_record_id':'x'}),'sha-one','empty_list','{}','candidate'),
-        (json.dumps({'collection_id':'b','source_record_id':'x'}),'sha-wrong','value','{}','candidate'),
-        ('{}',None,'missing_field','{}','candidate'),
+    # Live receiptless fec_relationships.parquet omits receipt-only source_fields_json (ss-vse3 F5).
+    table(con,'fec_relationships',['record_id','source_locator_json','source_sha256','value_status','relationship_type'],[
+        ('r-1',json.dumps({'collection_id':'a','source_record_id':'x'}),'sha-one','empty_list','candidate'),
+        ('r-2',json.dumps({'collection_id':'b','source_record_id':'x'}),'sha-wrong','value','candidate'),
+        ('r-3','{}',None,'missing_field','candidate'),
     ])
     table(con,'fec_source_records',['collection_id','source_record_id','source_sha256','source_url',
                                     'source_locator_json','metadata_json','source_record_json'],[
         ('a','x','sha-one','https://example.test/a','{}','{"candidate_ids":[]}','{}'),
         ('b','x','sha-two','https://example.test/b','{}','{}','{}'),
     ])
-    install_relationship_views(con,['fec_relationships','fec_source_records'])
+    result_views = install_relationship_views(con,['fec_relationships','fec_source_records'])
+    assert result_views['fec_relationship_evidence']['status'] == 'available', result_views['fec_relationship_evidence']
     result = con.execute('SELECT collection_id,value_status,target_status,recorded_digest_status,source_bytes_status '
                          'FROM fec_relationship_evidence ORDER BY collection_id NULLS LAST').fetchall()
     assert result == [('a','empty_list','found','matches','not_checked'),

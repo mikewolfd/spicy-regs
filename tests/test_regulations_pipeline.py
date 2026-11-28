@@ -1097,7 +1097,13 @@ def test_etl_documents_publish_carries_reconcile_outcomes_and_skips_documents_fa
     tmp_output, monkeypatch, native_publication
 ):
     """ETL joins docket_reconcile_outcomes once so the subsequent DocumentsFamily step sees Unchanged."""
-    from spicy_regs.pipelines.docket_reconcile import OUTCOME_SCHEMA, OUTCOMES, RECONCILE_SOURCE_ID
+    import hashlib
+    import pyarrow.parquet as pq
+    from spicy_regs.pipelines.docket_reconcile import (
+        OUTCOME_SCHEMA,
+        OUTCOMES,
+        RECONCILE_OUTCOMES_METADATA_KEY,
+    )
     from spicy_regs.pipelines.rollups.regulatory_base import DocumentsFamily
 
     monkeypatch.setenv("AGENCIES", "EPA")
@@ -1151,17 +1157,14 @@ def test_etl_documents_publish_carries_reconcile_outcomes_and_skips_documents_fa
     from spicy_regs.sources import publication as pub
 
     index = pub.parse_index(native_publication.objects[pub.INDEX_V2_KEY])
+    assert "etlReceipts" not in index["families"]["documents"]
     location = pub.single_member(index, "documents.parquet").path
-    published = pl.read_parquet(io.BytesIO(native_publication.objects[location]))
+    published_bytes = native_publication.objects[location]
+    published = pl.read_parquet(io.BytesIO(published_bytes))
     assert published["publisher_status"].to_list() == ["removed"]
-    receipts_key = index["families"]["documents"]["prefix"] + "/etl_receipts.parquet"
-    receipts = pl.read_parquet(io.BytesIO(native_publication.objects[receipts_key]))
-    observed = receipts.filter((pl.col("dataset") == "documents") & (pl.col("outcome") == "observed"))
-    assert any(
-        w["source_id"] == RECONCILE_SOURCE_ID
-        for row in observed["witnesses"].to_list()
-        for w in row
-    )
+    expected_digest = "sha256:" + hashlib.sha256(outcomes_bytes).hexdigest()
+    published_schema = pq.read_schema(io.BytesIO(published_bytes))
+    assert (published_schema.metadata or {}).get(RECONCILE_OUTCOMES_METADATA_KEY) == expected_digest.encode("utf-8")
 
     before_index = native_publication.objects[pub.INDEX_V2_KEY]
     monkeypatch.setattr(

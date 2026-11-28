@@ -409,21 +409,31 @@ def _native(dataset, field, value):
                         raise RegulationsShapeError(f"{field}: conflicting {source} observations")
                     item[target] = item.pop(source)
         elif field == "attachment_records_json":
-            _object(item, ("id", "type", "attributes", "links", "relationships"), field)
-            if item.get("type") != "attachments":
-                raise RegulationsShapeError(f"{field}: source record is not an attachment")
-            attrs = _object(
-                item.get("attributes") or {},
-                ("title", "fileFormats", "restrictReason", "restrictReasonType",
-                 "agencyNote", "authors", "docAbstract", "docOrder", "modifyDate", "publication"), field
-            )
-            item = {
-                "attachment_id": item.get("id"),
-                "title": attrs.get("title"),
-                "file_formats": _formats(attrs.get("fileFormats"), field, source_names=True),
-                "restrict_reason": attrs.get("restrictReason"),
-                "restrict_reason_type": attrs.get("restrictReasonType"),
-            }
+            if isinstance(item, Mapping) and "attachment_id" in item and "type" not in item:
+                _object(item, ATTACHMENT_RECORDS.value_type.names, field)
+                item = {
+                    "attachment_id": item.get("attachment_id"),
+                    "title": item.get("title"),
+                    "file_formats": _formats(item.get("file_formats"), field, source_names=False),
+                    "restrict_reason": item.get("restrict_reason"),
+                    "restrict_reason_type": item.get("restrict_reason_type"),
+                }
+            else:
+                _object(item, ("id", "type", "attributes", "links", "relationships"), field)
+                if item.get("type") != "attachments":
+                    raise RegulationsShapeError(f"{field}: source record is not an attachment")
+                attrs = _object(
+                    item.get("attributes") or {},
+                    ("title", "fileFormats", "restrictReason", "restrictReasonType",
+                     "agencyNote", "authors", "docAbstract", "docOrder", "modifyDate", "publication"), field
+                )
+                item = {
+                    "attachment_id": item.get("id"),
+                    "title": attrs.get("title"),
+                    "file_formats": _formats(attrs.get("fileFormats"), field, source_names=True),
+                    "restrict_reason": attrs.get("restrictReason"),
+                    "restrict_reason_type": attrs.get("restrictReasonType"),
+                }
         elif field == "file_formats_json":
             item = _formats([item], field, source_names=True)[0]
         result.append(item)
@@ -618,7 +628,7 @@ def published_as_source(dataset: str, published, destination: Path) -> Path:
     paths = [Path(published)] if isinstance(published, (str, Path)) else [Path(path) for path in published]
     schema = pq.read_schema(paths[0])
     held = set(schema.names)
-    native = {source: target for source, (target, _) in NATIVE_FIELDS.get(dataset, {}).items() if source != target}
+    native = {source: target for source, (target, _) in NATIVE_FIELDS.get(dataset, {}).items()}
     columns = []
     for name, _ in SOURCE_COLUMNS[dataset]:
         target = native.get(name, name)

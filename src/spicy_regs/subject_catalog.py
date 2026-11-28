@@ -30,11 +30,15 @@ def is_shared_log(declared) -> bool:
 
 
 def is_receipts_retired(declared) -> bool:
-    """Whether one installed declaration's table no longer has receipts; the marker anywhere else is refused."""
+    """Whether one installed declaration no longer has receipts; shared logs and non-boolean markers are refused."""
     if RECEIPTS_RETIRED not in declared:
         return False
-    if declared[RECEIPTS_RETIRED] is not True or declared["receipt_only"] is not False or SHARED_LOG in declared:
-        raise ValueError(f"Only a table's declaration can retire its receipts: {declared['dataset']}")
+    if (
+        declared[RECEIPTS_RETIRED] is not True
+        or type(declared.get("receipt_only")) is not bool
+        or SHARED_LOG in declared
+    ):
+        raise ValueError(f"Only a non-shared dataset declaration can retire its receipts: {declared['dataset']}")
     return True
 
 

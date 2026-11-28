@@ -87,6 +87,12 @@
    "publishedAt": "2026-11-26T10:47:26Z",
    "receipts": "generations/document-attributes/d9604244b01eac6e99da933ce954efb72edaf59619f18d9af400685bf1554173/etl_receipts.parquet"
   },
+  "documents": {
+   "family": "documents",
+   "artifactDigest": "sha256:08a47fd62716d8a622d891cf4e434db1cb6002d6922f280ae7be7553471cb4e9",
+   "publishedAt": "2026-11-27T07:16:43Z",
+   "receipts": "generations/documents/08a47fd62716d8a622d891cf4e434db1cb6002d6922f280ae7be7553471cb4e9/etl_receipts.parquet"
+  },
   "fcc_proceedings": {
    "family": "fcc-proceedings",
    "artifactDigest": "sha256:e9fe4002523a19eefc60cdb4348bff6f75c4143d2d87af58cab69678e98a02ba",
@@ -236,6 +242,18 @@
   "court_opinion_texts": {
    "family": "court-opinion-texts",
    "reason": "Receipts retired in courts/2 prior to initial R2 publication (ss-bb8c); no receipted R2 generation exists to archive."
+  },
+  "ecfr_snapshot_sections": {
+   "family": "ecfr-snapshots",
+   "reason": "Receipts retired prior to initial R2 publication (ss-vse3); no receipted R2 generation exists to archive."
+  },
+  "ecfr_snapshots": {
+   "family": "ecfr-snapshots",
+   "reason": "Receipts retired prior to initial R2 publication (ss-vse3); no receipted R2 generation exists to archive."
+  },
+  "federal_register_issues": {
+   "family": "federal-register-issues",
+   "reason": "Receipts retired prior to initial R2 publication (ss-vse3); no receipted R2 generation exists to archive."
   }
  }
 }

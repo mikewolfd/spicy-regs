@@ -19,7 +19,6 @@ from spicy_docs.sources.mirrulations import KeyedPayload
 from spicy_regs.contract_types import DESCRIBED, arrow_schema, arrow_type
 from spicy_regs.pipelines import attributes_sweep
 from spicy_regs.pipelines.regulations import RegulationsPipeline
-from spicy_regs.pipelines.rollups.regulatory_base import DocketAttributesFamily, DocumentAttributesFamily
 from spicy_regs.pipelines.staging import stage_agencies
 from spicy_regs.schemas import RECORD_TYPES
 from spicy_regs.transforms.regulations_attributes import (
@@ -170,9 +169,11 @@ def test_a_transport_failure_is_re_read_skipping_what_was_read(tmp_path):
     assert passes == [frozenset(), frozenset({"raw-data/EPA/EPA-1/documents/EPA-1-0001.json"})]
 
 
-def test_the_families_publish_on_the_contracts_key():
-    assert DocumentAttributesFamily().key() == "document_id"
-    assert DocketAttributesFamily().key() == "docket_id"
+def test_the_contracts_declare_each_attribute_tables_key():
+    from spicy_regs.transforms.regulations_attributes import contract
+
+    assert contract("document_attributes").identity == ("document_id",)
+    assert contract("docket_attributes").identity == ("docket_id",)
 
 
 def _pick(tmp_path, records) -> list[dict]:

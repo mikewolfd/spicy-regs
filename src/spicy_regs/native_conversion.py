@@ -309,13 +309,28 @@ def _rollup_class(family: str, base: type | None = None):
     return None
 
 
-def _regulatory_base_class(family: str):
-    from spicy_regs.pipelines.rollups.regulatory_base import (
-        CommentAttributesFamily, DocketAttributesFamily, DocketsFamily, DocumentAttributesFamily, DocumentsFamily,
-    )
+@dataclass(frozen=True)
+class _RegulatoryBaseSpec:
+    name: str
+    output: str
+    key: str
+    retain_source_evidence: bool = False
 
-    return {cls.name: cls for cls in (DocketsFamily, DocumentsFamily, DocketAttributesFamily,
-                                      DocumentAttributesFamily, CommentAttributesFamily)}.get(family)
+
+_REGULATORY_BASE_FAMILIES = {
+    spec.name: spec
+    for spec in (
+        _RegulatoryBaseSpec("dockets", "dockets.parquet", "docket_id"),
+        _RegulatoryBaseSpec("documents", "documents.parquet", "document_id"),
+        _RegulatoryBaseSpec("docket-attributes", "docket_attributes.parquet", "docket_id"),
+        _RegulatoryBaseSpec("document-attributes", "document_attributes.parquet", "document_id"),
+        _RegulatoryBaseSpec("comment-attributes", "comment_attributes.parquet", "comment_id"),
+    )
+}
+
+
+def _regulatory_base_class(family: str) -> _RegulatoryBaseSpec | None:
+    return _REGULATORY_BASE_FAMILIES.get(family)
 
 
 def _replaced_evidence(base: str, entry: Mapping) -> tuple[dict, list[dict]]:
@@ -609,38 +624,40 @@ def _convert_court(family: str, old: Mapping, captured: Mapping, retained: Mappi
                         (evidence.artifact_dir,) if evidence else (), read_operation, original_pins)
 
 
-def _convert_regulatory_base(cls, captured: Mapping, retained: Mapping[str, Path], base: str,
+def _convert_regulatory_base(spec: _RegulatoryBaseSpec, captured: Mapping, retained: Mapping[str, Path], base: str,
                              work: Path, handed_on: Sequence[Mapping], retain_evidence: bool,
                    read_operation: ConversionReadOperation, original_pins: Mapping) -> _Built:
     from spicy_regs.generations import build_generation
+    from spicy_regs.native_types import described_schema
+    from spicy_regs.pipelines.rollups.regulatory_base import validate_base_table_output
     from spicy_regs.transforms.regulations_receipts import policy, write_held_dataset
 
-    dataset = cls.output.removesuffix(".parquet")
+    dataset = spec.output.removesuffix(".parquet")
     generation_id = uuid4().hex
     evidence = None
     if retain_evidence:
         from spicy_regs.source_evidence import CaptureEvidence
 
         (work / "build").mkdir(parents=True, exist_ok=True)
-        evidence = CaptureEvidence(work / "build", cls.name)
+        evidence = CaptureEvidence(work / "build", spec.name)
         evidence.inherit(dict(captured), public_url=base)
         _journal(evidence, handed_on)
     try:
-        (member,) = publication.table_members(captured, cls.output)
+        (member,) = publication.table_members(captured, spec.output)
         witness = {"source_id": member.path, "source_uri": None, "sha256": member.sha256,
                    "locator": None, "body_version": None}
         subject, receipts = write_held_dataset(
-            dataset, retained[cls.output], work / "regulatory-native", generation_id=generation_id,
+            dataset, retained[spec.output], work / "regulatory-native", generation_id=generation_id,
             witnesses=[witness], bulk=True,
         )
-        owner = cls.__new__(cls)
-        owner.validate_native_output(subject)
+        validate_base_table_output(subject, key=spec.key)
+        declared = policy(dataset)
         generation = work / "build" / "generation"
         build_generation(
-            generation, family=cls.name, files=[subject], expected_keys=[cls.output],
-            schemas=owner.generation_schemas(), read_snapshot=captured,
+            generation, family=spec.name, files=[subject], expected_keys=[spec.output],
+            schemas={dataset: described_schema(declared.subject_schema)}, read_snapshot=captured,
             inputs=evidence.inputs() if evidence else (), receipt_path=receipts,
-            receipt_policies=[policy(dataset)], receipt_generation_id=generation_id, read_operation=read_operation,
+            receipt_policies=[declared], receipt_generation_id=generation_id, read_operation=read_operation,
         )
     except BaseException as error:
         if evidence:

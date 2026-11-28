@@ -68,6 +68,18 @@ def test_attachment_order_repeated_url_sizes_and_restrictions_survive():
     assert shaped["attachment_records"][0]["file_formats"] is None
     assert shaped["attachment_records"][1]["file_formats"] == []
     assert shaped["attachment_records"][0]["restrict_reason_type"] == "Restricted"
+    # Native published attachment_records round-trip through published_as_source without losing fidelity,
+    # while unknown fields still refuse.
+    roundtrip = shape_record(
+        "documents",
+        {"document_id": "D", "attachment_records_json": json.dumps(shaped["attachment_records"])},
+    )
+    assert roundtrip["attachment_records"] == shaped["attachment_records"]
+    with pytest.raises(RegulationsShapeError):
+        shape_record(
+            "documents",
+            {"document_id": "D", "attachment_records_json": json.dumps([{"attachment_id": "a", "bogus": 1}])},
+        )
 
 
 def test_timetable_keeps_literal_month_precision_and_non_dates():

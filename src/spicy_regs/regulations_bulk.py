@@ -98,7 +98,8 @@ def _subject_sql(dataset, declared, source):
 
 
 def write_held_dataset(dataset, source, destination, *, generation_id, processor, witnesses,
-                       include_source_witness, prior_receipts, validate=True):
+                       include_source_witness, prior_receipts, validate=True,
+                       subject_metadata: Mapping[str, str] | None = None):
     from spicy_regs.transforms.regulations_receipts import carry_regulatory_receipts, map_regulations_attempt, policy
     from rulespec_artifacts import publish_directory_no_replace
 
@@ -174,9 +175,16 @@ def write_held_dataset(dataset, source, destination, *, generation_id, processor
             for name, dtype in parsed:
                 con.create_function(f'parse_{name}', _parser(dataset, name, dtype), ['VARCHAR'],
                                     'STRUCT(native VARCHAR, reference BOOLEAN)', type='arrow', null_handling='special')
+            target_schema = (
+                declared.subject_schema.with_metadata(
+                    {k.encode("utf-8"): v.encode("utf-8") for k, v in subject_metadata.items()}
+                )
+                if subject_metadata
+                else declared.subject_schema
+            )
             etl_bulk.write_split(
                 con, query, source=source, batch_rows=_BATCH, expected_rows=pq.ParquetFile(source).metadata.num_rows,
-                subject_schema=declared.subject_schema, subject_path=subject_path, receipt_path=receipt_path,
+                subject_schema=target_schema, subject_path=subject_path, receipt_path=receipt_path,
                 label=dataset, refusals_last=True,
                 last_receipts=[observation_receipt(declared, observed, processing_fields={'input_metadata': metadata})],
                 row_attempt=lambda table, index, row: attempt(row, table['_ordinal'][index].as_py()))

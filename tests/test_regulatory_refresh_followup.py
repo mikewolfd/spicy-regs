@@ -9,7 +9,6 @@ from spicy_docs.schemas.regulations import DOCKET
 from spicy_docs.sources.mirrulations import MirrulationsReader
 
 from spicy_regs.pipelines import docket_gaps
-from spicy_regs.pipelines.rollups.regulatory_base import DocketsFamily
 from spicy_regs.sources import r2
 from tests.test_docket_gaps import NOW, SERVED, _Detail
 from tests.test_mirrulations_reader import (
@@ -86,7 +85,6 @@ def test_served_gap_docket_reaches_the_selected_native_publication(tmp_path, gap
     result = docket_gaps.fill(working, reader, skip_upload=False, now=lambda: NOW)
     assert result["served"] == 1
     assert SERVED["data"]["id"] in pl.read_parquet(working / "dockets.parquet")["docket_id"].to_list()
-    DocketsFamily(output_dir=tmp_path / "republish", skip_upload=False).run()
     assert set(_published_ids(remote)) == {"EPA-1", SERVED["data"]["id"]}
 
 

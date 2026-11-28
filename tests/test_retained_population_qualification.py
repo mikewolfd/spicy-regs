@@ -19,6 +19,10 @@ def selected_plan(tmp_path, dataset, *, refused=False):
         rows = [{'opinion_id': None if refused else '1', 'cluster_id': '2', 'author_str': 'café\x00\n',
                  'page_count': '0002', 'per_curiam': 't'},
                 {'opinion_id': '3', 'cluster_id': None, 'author_str': '', 'page_count': None, 'per_curiam': None}]
+    elif dataset == 'court_dockets':
+        rows = [{'cl_docket_id': None if refused else '101', 'court_id': 'dcd', 'case_name': 'café\x00\n',
+                 'nature_of_suit': '899', 'blocked': 'f'},
+                {'cl_docket_id': '102', 'court_id': 'ca9', 'case_name': '', 'nature_of_suit': None, 'blocked': None}]
     elif dataset == 'dockets':
         rows = [{'docket_id': 'FAA-2026-0001', 'title': 'café\x00\n', 'rin': '007'},
                 {'docket_id': 'FAA-2026-0002', 'title': '', 'rin': None}]
@@ -45,9 +49,10 @@ def _receipt_datasets():
     return [dataset for dataset in runner.DATASETS if dataset not in retired_receipt_datasets()]
 
 
-def test_a_retired_table_is_never_qualified_back_into_receipts(tmp_path, installed_httpfs):
-    """court_opinions publishes without receipts (ss-vse3); its replay stops at generation admission."""
-    path, _, _ = selected_plan(tmp_path, 'court_opinions')
+@pytest.mark.parametrize('dataset', ['court_opinions', 'dockets', 'documents'])
+def test_a_retired_table_is_never_qualified_back_into_receipts(tmp_path, dataset, installed_httpfs):
+    """Retired tables publish without receipts (ss-vse3); their replay stops at generation admission."""
+    path, _, _ = selected_plan(tmp_path, dataset)
     output, candidate = tmp_path / 'workflow', tmp_path / 'candidate'
     subprocess.run([sys.executable, '-m', 'scripts.qualify_retained_population', str(path), str(candidate),
                     '--fixture', '--stage', 'build'], cwd=Path(__file__).parents[1], capture_output=True, text=True)
@@ -56,7 +61,7 @@ def test_a_retired_table_is_never_qualified_back_into_receipts(tmp_path, install
                              '--httpfs-extension', str(installed_httpfs)],
                             cwd=Path(__file__).parents[1], capture_output=True, text=True)
     assert result.returncode != 0
-    assert "Receipts are retired for ['court_opinions']" in result.stdout + result.stderr
+    assert f"Receipts are retired for [{dataset!r}]" in result.stdout + result.stderr
     assert not (output / 'RESULT.json').exists()
 
 
@@ -93,7 +98,7 @@ def test_actual_complete_fixture_pipeline(tmp_path, dataset, installed_httpfs):
     # The history phase verifies every prior field and a distinct actual current file.
     history = next(item for item in phases if item['phase'] == 'full-unchanged-history-and-exact-prior-fields')
     assert history['selectedPrior']['sha256'] != history['current']['sha256']
-    assert history['rows'] == 2 + (dataset != 'court_opinions')
+    assert history['rows'] == 2 + (dataset not in runner.COURT_DATASETS)
     if dataset in runner.BASE_DATASETS:
         runner.compare_files(candidate / 'selected-prior' / 'etl_receipts.parquet', output / 'carried-receipts.parquet')
         handoff = json.loads((output / 'HANDOFF.json').read_text())
@@ -111,10 +116,10 @@ def test_actual_complete_fixture_pipeline(tmp_path, dataset, installed_httpfs):
 
 
 def test_separate_closed_candidate_audit_keeps_full_oracles_without_candidate_build(tmp_path, installed_httpfs):
-    """Constructed documents fixture; real audit/restore/private-serving checks run."""
+    """Constructed court_dockets fixture; real audit/restore/private-serving checks run."""
     from spicy_regs.operational_runner import census
 
-    path, _, _ = selected_plan(tmp_path, 'documents')
+    path, _, _ = selected_plan(tmp_path, 'court_dockets')
     candidate = tmp_path / 'closed-build'
     command = [sys.executable, '-B', '-m', 'scripts.qualify_retained_population', str(path),
                str(candidate), '--fixture', '--stage', 'build']
@@ -142,11 +147,11 @@ Path(sys.argv[4]).write_text(json.dumps(calls))
                              str(installed_httpfs)],
                             cwd=Path(__file__).parents[1], capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert json.loads(counts.read_text()) == ['full-row-reference', 'reference-bundle']
+    assert json.loads(counts.read_text()) == ['reference-bundle']
     assert census(candidate) == before
     phases = [json.loads(line) for line in (audit / 'phases.jsonl').read_text().splitlines()]
     completed = {phase['phase'] for phase in phases if phase['status'] == 'passed'}
-    assert {'independent-closed-candidate-full-admission', 'full-original-row-producer-and-all-field-equivalence',
+    assert {'independent-closed-candidate-full-admission',
             'actual-full-processor-restore-original-and-canonical-conservation',
             'actual-production-mcp-http-and-dataset-correct-controls',
             'final-complete-artifact-stored-bytes-and-original-pins'} <= completed
@@ -191,7 +196,7 @@ def test_wrong_pin_and_empty_selection_refuse_before_production(tmp_path):
 
 
 def test_source_changed_after_capture_refuses_final_claim(tmp_path, installed_httpfs):
-    path, _, source = selected_plan(tmp_path, 'documents')
+    path, _, source = selected_plan(tmp_path, 'court_dockets')
     output = tmp_path / 'changed'
     code = '''
 import sys

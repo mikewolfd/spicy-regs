@@ -398,19 +398,19 @@ def test_a_failed_list_of_todays_sweeps_does_not_cancel_the_retry(tmp_path):
     assert "--event schedule --status success" in calls
 
 
-def test_refresh_omits_retired_comment_attributes_and_keeps_the_document_attributes_timeout():
+def test_base_families_refresh_runs_only_documents_with_thirty_minute_budget():
+    """After retiring receipts on all five base regulatory tables, only documents stays in base-families (ss-ojz3)."""
     refresh = yaml.safe_load((WORKFLOW.parent / "_regulations-refresh.yml").read_text())
     families = refresh["jobs"]["base-families"]
-    assert set(families["strategy"]["matrix"]["command"]) == {
-        "run-rollup-dockets", "run-rollup-documents", "run-rollup-docket-attributes", "run-rollup-document-attributes",
-    }
-    assert families["with"]["timeout_minutes"] == (
-        "${{ matrix.command == 'run-rollup-document-attributes' && 90 || 30 }}"
-    )
+    assert families["strategy"]["matrix"]["command"] == ["run-rollup-documents"]
+    assert families["with"]["timeout_minutes"] == 30
     assert "free_disk" not in families["with"]
     rollup = yaml.safe_load((WORKFLOW.parent / "_rollup.yml").read_text())
     assert rollup[True]["workflow_call"]["inputs"]["timeout_minutes"]["type"] == "number"
     assert rollup["jobs"]["rollup"]["timeout-minutes"] == "${{ inputs.timeout_minutes }}"
+    assert rollup[True]["workflow_call"]["inputs"]["free_disk"]["type"] == "boolean"
+    freeing = [step for step in rollup["jobs"]["rollup"]["steps"] if "inputs.free_disk" in str(step.get("if"))]
+    assert freeing and "sudo rm -rf" in freeing[0]["run"]
 
 
 @pytest.mark.parametrize(

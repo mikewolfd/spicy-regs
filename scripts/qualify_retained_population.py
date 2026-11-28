@@ -35,7 +35,13 @@ from spicy_regs.transforms import regulations_receipts as regulations
 #: The tables whose receipt conversion this replays. A table whose receipts are retired
 #: (``subject_catalog.RECEIPTS_RETIRED``) has no conversion left to qualify, and admission refuses
 #: receipts for it, so it leaves this map: federal_register did with ss-vse3 step 3.
-DATASETS = {'court_opinions': 'court-opinions', 'dockets': 'dockets', 'documents': 'documents'}
+DATASETS = {
+    'court_opinions': 'court-opinions',
+    'court_dockets': 'courtlistener',
+    'dockets': 'dockets',
+    'documents': 'documents',
+}
+COURT_DATASETS = frozenset({'court_opinions', 'court_dockets'})
 BASE_DATASETS = frozenset({'dockets', 'documents'})
 
 
@@ -118,7 +124,7 @@ def handoff(output, candidate, dataset, family, generation, declared, entry, pla
 
 
 def declared_policy(dataset):
-    return court_receipts.POLICIES[dataset] if dataset == 'court_opinions' else regulations.policy(dataset)
+    return court_receipts.POLICIES[dataset] if dataset in COURT_DATASETS else regulations.policy(dataset)
 
 
 @contextmanager
@@ -184,7 +190,7 @@ def capture_source(entry, destination):
 
 
 def produce(dataset, source, directory, generation, *, bulk=False):
-    if dataset == 'court_opinions':
+    if dataset in COURT_DATASETS:
         subject = court_receipts.write_court_rows(dataset, court_receipts.parquet_rows(source), directory,
             witnesses=[court_receipts.file_witness(source)], generation_id=generation,
             attempt_prefix='qualification')
@@ -198,7 +204,7 @@ def produce(dataset, source, directory, generation, *, bulk=False):
 def selected_pair(dataset, directory):
     """The produced subject and its selected receipts; court subjects are link-selected attempts."""
     pointer = directory / (dataset + '.parquet')
-    if dataset == 'court_opinions':
+    if dataset in COURT_DATASETS:
         receipt, _ = court_receipts.local_receipt_selection(pointer)
         subject = pointer.resolve()
         if not subject.is_relative_to(directory.resolve()):
@@ -223,7 +229,7 @@ def populations(dataset, source, subject, receipt):
     if counts.get('accepted', 0) != rows or pq.read_metadata(subject).num_rows != rows:
         raise ValueError('Selected population contains refused/lost source rows; full qualification stops')
     expected = {'accepted': rows}
-    if dataset != 'court_opinions':
+    if dataset not in COURT_DATASETS:
         expected['observed'] = 1
     if counts != expected:
         raise ValueError('Receipt outcomes differ from the complete selected source population')
@@ -233,6 +239,7 @@ def populations(dataset, source, subject, receipt):
 def complete_sample(dataset, source, destination, *, bound=2000):
     """Scan all source shapes; retain first eight per shape plus periodic rows."""
     fields = {'court_opinions': ('per_curiam', 'page_count', 'author_str'),
+              'court_dockets': ('court_id', 'nature_of_suit', 'case_name'),
               'dockets': ('docket_type', 'rin', 'title'),
               'documents': ('document_type', 'attachment_records_json', 'title')}[dataset]
     selected, seen = [], {}
@@ -257,7 +264,7 @@ def complete_sample(dataset, source, destination, *, bound=2000):
 
 
 def restore(dataset, source, subject, receipt, destination, generation, *, bulk=False):
-    if dataset == 'court_opinions':
+    if dataset in COURT_DATASETS:
         court_receipts.restore_processing_input(subject, destination, dataset=dataset, schema=pq.read_schema(source),
                                                receipt_path=receipt, generation_id=generation)
         return compare_files(source, destination)

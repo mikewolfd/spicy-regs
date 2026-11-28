@@ -40,6 +40,8 @@ from spicy_regs.sources import r2
 
 OUTCOMES = "docket_reconcile_outcomes.parquet"
 RECONCILE_SOURCE_ID = "regulations-gov-reconciliation"
+#: Parquet schema metadata key recording the ``docket_reconcile_outcomes.parquet`` SHA-256 last joined onto ``documents``.
+RECONCILE_OUTCOMES_METADATA_KEY = b"spicy_regs.documents.reconcile_outcomes_sha256"
 OUTCOME_SCHEMA = {"document_id": pl.Utf8, "docket_id": pl.Utf8, "publisher_status": pl.Utf8,
                   "observed_at": pl.Utf8, "removed_observed_at": pl.Utf8, "http_status": pl.Int64,
                   "body_sha256": pl.Utf8}
@@ -204,11 +206,25 @@ def reconcile(
     return counts
 
 
-def with_publisher_status(documents: Path, outcomes: Path | None) -> None:
+def read_reconcile_outcomes_sha256(documents: Path) -> str | None:
+    """Return the ``docket_reconcile_outcomes.parquet`` SHA-256 recorded in ``documents`` Parquet metadata."""
+    import pyarrow.parquet as pq
+
+    raw = (pq.read_schema(documents).metadata or {}).get(RECONCILE_OUTCOMES_METADATA_KEY)
+    return raw.decode("utf-8") if raw is not None else None
+
+
+def with_publisher_status(
+    documents: Path,
+    outcomes: Path | None,
+    *,
+    outcomes_sha256: str | None = None,
+) -> None:
     """Add ``publisher_status`` and ``removed_observed_at`` to the documents file in place, NULL where never read.
 
     Each row group is rewritten as it was with the two columns appended, so the row groups the family's admission
-    bound measures keep their rows.
+    bound measures keep their rows. When ``outcomes_sha256`` is supplied, it is recorded in the Parquet file's schema
+    metadata under :data:`RECONCILE_OUTCOMES_METADATA_KEY`.
     """
     import pyarrow as pa
     import pyarrow.compute as pc
@@ -223,6 +239,12 @@ def with_publisher_status(documents: Path, outcomes: Path | None) -> None:
     for column in DOCUMENT_FAMILY_COLUMNS:
         if column not in schema.names:
             schema = schema.append(pa.field(column, pa.string()))
+    metadata = dict(schema.metadata or {})
+    if outcomes_sha256 is not None:
+        metadata[RECONCILE_OUTCOMES_METADATA_KEY] = outcomes_sha256.encode("utf-8")
+    elif outcomes is None:
+        metadata.pop(RECONCILE_OUTCOMES_METADATA_KEY, None)
+    schema = schema.with_metadata(metadata) if metadata else schema.remove_metadata()
     groups = source.metadata.num_row_groups
     codec = source.metadata.row_group(0).column(0).compression if groups else "ZSTD"
     lookup = pc.SetLookupOptions(value_set=answers["document_id"])
@@ -239,6 +261,7 @@ def with_publisher_status(documents: Path, outcomes: Path | None) -> None:
                     group = group.set_column(group.schema.get_field_index(column), column, values)
                 else:
                     group = group.append_column(column, values)
+            group = group.replace_schema_metadata(schema.metadata)
             writer.write_table(group, row_group_size=max(group.num_rows, 1))
     staged.replace(documents)
 
@@ -269,7 +292,7 @@ def annotate_documents(
             with_publisher_status(documents, None)
         return ()
     outcomes_path, digest = fetched
-    with_publisher_status(documents, outcomes_path)
+    with_publisher_status(documents, outcomes_path, outcomes_sha256=digest)
     return ({"source_id": RECONCILE_SOURCE_ID, "source_uri": None,
              "sha256": digest, "locator": None, "body_version": None},)
 

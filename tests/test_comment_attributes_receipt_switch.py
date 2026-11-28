@@ -126,18 +126,22 @@ def test_an_upsert_refuses_a_repeated_identity_or_another_schema(tmp_path):
     assert not (tmp_path / "out.parquet").exists()
 
 
-def test_the_refresh_republishes_nothing_for_a_retired_attribute_table(tmp_path, monkeypatch):
-    """The ETL's generation is the family's own; republishing would copy it, or state receipts admission refuses."""
+def test_the_refresh_republishes_nothing_for_a_retired_attribute_table():
+    """The ETL's generation is the family's own; attribute tables no longer have _BaseTableFamily refresh classes."""
     from spicy_regs.pipelines.rollups import regulatory_base
-    from spicy_regs.pipelines.rollups.base import Unchanged
     from spicy_regs.subject_catalog import retired_receipt_datasets
 
     assert DATASET in retired_receipt_datasets()
-    monkeypatch.setattr(regulatory_base, "SelectedPriors", lambda *a, **k: pytest.fail("nothing is selected"))
-    with pytest.raises(Unchanged, match="publishes without receipts"):
-        regulatory_base.CommentAttributesFamily(output_dir=tmp_path).build(tmp_path)
-    # Every attribute table now publishes without receipts.
-    assert {"comment_attributes", "docket_attributes", "document_attributes"} <= retired_receipt_datasets()
+    assert not hasattr(regulatory_base, "CommentAttributesFamily")
+    assert not hasattr(regulatory_base, "_BaseTableFamily")
+    # Every base regulatory and attribute table now publishes without receipts.
+    assert {
+        "comment_attributes",
+        "docket_attributes",
+        "document_attributes",
+        "dockets",
+        "documents",
+    } <= retired_receipt_datasets()
 
 
 def test_a_retired_table_whose_live_generation_still_lists_receipts_is_selected_without_them(tmp_path, monkeypatch):
