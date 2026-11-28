@@ -160,8 +160,76 @@ def test_later_pages_keep_their_window_when_next_page_url_is_not_a_window_reques
 
 def test_workflow_always_retains_main_evidence_bodies_and_journal():
     workflow = yaml.safe_load((Path(__file__).parents[1] / ".github/workflows/_rollup.yml").read_text())
-    audit = next(step for step in workflow["jobs"]["rollup"]["steps"]
-                 if step.get("name") == "Retain invocation and transferred-input audit")
+    steps = workflow["jobs"]["rollup"]["steps"]
+    audit_idx = next(i for i, step in enumerate(steps)
+                     if step.get("name") == "Retain invocation and transferred-input audit")
+    audit = steps[audit_idx]
     assert audit["if"] == "always()"
     assert "output/source-evidence/" in audit["with"]["path"].splitlines()
     assert "output/raw-source-originals/" in audit["with"]["path"].splitlines()
+
+    # On successful live R2 publishes, raw-source-originals are already verified in R2 blobs/sha256/ and
+    # pruned right before rollup-audit upload; failures, cancellations, and dry runs retain them intact.
+    drop_idx = next(i for i, step in enumerate(steps)
+                    if step.get("name") == "Drop already-uploaded raw source originals before audit upload")
+    run_idx = next(i for i, step in enumerate(steps) if step.get("name") == "Run rollup")
+    disk_idx = next(i for i, step in enumerate(steps) if step.get("name") == "Report the lowest free disk seen")
+    assert run_idx < disk_idx < drop_idx < audit_idx
+    assert steps[drop_idx]["if"] == "success() && !inputs.skip_upload"
+    assert "rm -rf output/raw-source-originals" in steps[drop_idx]["run"]
+
+
+def test_federal_register_workflow_wires_fr_until_pacing_and_resume_scope(tmp_path, monkeypatch):
+    """rollup-federal-register.yml and _rollup.yml wire FR_UNTIL + pacing and keep FR_UNTIL in resume scope."""
+    import subprocess
+
+    from spicy_regs.pipelines.rollups.base import ROLLUP_SCOPE_ENV_VARS
+
+    workflows = Path(__file__).parents[1] / ".github/workflows"
+    fr = yaml.safe_load((workflows / "rollup-federal-register.yml").read_text())
+    reusable = yaml.safe_load((workflows / "_rollup.yml").read_text())
+
+    fr_inputs = fr[True]["workflow_dispatch"]["inputs"]
+    assert {"since", "until", "request_interval_seconds", "skip_upload"} <= set(fr_inputs)
+    run_with = fr["jobs"]["run"]["with"]
+    assert run_with["fr_since"] == "${{ inputs.since || '' }}"
+    assert run_with["fr_until"] == "${{ inputs.until || '' }}"
+    assert run_with["fr_request_interval_seconds"] == "${{ inputs.request_interval_seconds || (inputs.since && '0.25' || '') }}"
+
+    reusable_inputs = reusable[True]["workflow_call"]["inputs"]
+    assert {"fr_since", "fr_until", "fr_request_interval_seconds"} <= set(reusable_inputs)
+    steps = {step["name"]: step for step in reusable["jobs"]["rollup"]["steps"] if "name" in step}
+    run_env = steps["Run rollup"]["env"]
+    assert run_env["FR_SINCE"] == "${{ inputs.fr_since }}"
+    assert run_env["FR_UNTIL"] == "${{ inputs.fr_until }}"
+    assert run_env["FR_REQUEST_INTERVAL_SECONDS"] == "${{ inputs.fr_request_interval_seconds }}"
+
+    # FR_UNTIL scopes build output (in ROLLUP_SCOPE_ENV_VARS, NOT operational); pacing is operational only.
+    assert "FR_UNTIL" in ROLLUP_SCOPE_ENV_VARS
+    assert "FR_REQUEST_INTERVAL_SECONDS" not in ROLLUP_SCOPE_ENV_VARS
+    stage_script = steps["Stage retained generation candidate into output"]["run"]
+    assert "'fr_request_interval_seconds'" in stage_script
+    assert "'fr_until'" not in stage_script
+
+    monkeypatch.setenv("FR_SINCE", "2020-01-01")
+    monkeypatch.setenv("FR_UNTIL", "2020-12-31")
+    scope_a = FederalRegisterRollup(output_dir=tmp_path).invocation_scope()
+    monkeypatch.setenv("FR_UNTIL", "2021-12-31")
+    scope_b = FederalRegisterRollup(output_dir=tmp_path).invocation_scope()
+    assert scope_a != scope_b
+
+    # Execute the prune step's exact shell command and verify lightweight audit files survive.
+    work = tmp_path / "prune-check"
+    (work / "output" / "raw-source-originals" / "blobs").mkdir(parents=True)
+    (work / "output" / "raw-source-originals" / "blobs" / "big.json").write_bytes(b"{}")
+    (work / "output" / "source-evidence" / "run1").mkdir(parents=True)
+    (work / "output" / "source-evidence" / "run1" / "artifact.json").write_text("{}")
+    (work / "output" / "invocation.json").write_text("{}")
+    subprocess.run(
+        ["bash", "-e", "-o", "pipefail", "-c", steps["Drop already-uploaded raw source originals before audit upload"]["run"]],
+        cwd=work,
+        check=True,
+    )
+    assert not (work / "output" / "raw-source-originals").exists()
+    assert (work / "output" / "source-evidence" / "run1" / "artifact.json").is_file()
+    assert (work / "output" / "invocation.json").is_file()

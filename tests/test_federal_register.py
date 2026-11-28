@@ -369,3 +369,475 @@ def test_the_rulemaking_stages_read_the_printed_statement_only(tmp_path):
                for docket, reference in index.docket_links(tmp_path / "fr_docket_links.parquet")}
     assert ("2026-12696", "FNA-2026-0034") not in dockets
     assert {("2026-12696", "FNS-2026-0595"), ("2016-04346", "NRC-2016-0040")} <= dockets
+
+
+def test_live_fetch_bounds_scope_with_until_and_preserves_31_fields(tmp_path, monkeypatch):
+    """``until`` bounds ``publishedThrough`` in API requests, journal events, and retained evidence."""
+    from contextlib import contextmanager
+    from urllib.parse import parse_qs, urlparse
+
+    from spicy_docs.sources.federal_register import native as federal_register
+    from spicy_docs.transport import acquisition
+
+    from spicy_regs.transforms.build_federal_register import _live_federal_register_documents
+
+    requested_windows: list[tuple[date, date]] = []
+    seen_field_sets: list[frozenset[str]] = []
+
+    def fake_fetch(url: str) -> bytes:
+        query = parse_qs(urlparse(url).query)
+        gte = date.fromisoformat(query["conditions[publication_date][gte]"][0])
+        lte = date.fromisoformat(query["conditions[publication_date][lte]"][0])
+        requested_windows.append((gte, lte))
+        seen_field_sets.append(frozenset(query["fields[]"]))
+        doc = dict(_RAW_DOC, document_number=f"DOC-{gte.isoformat()}", publication_date=gte.isoformat())
+        return json.dumps({"count": 1, "total_pages": 1, "results": [doc]}).encode()
+
+    @contextmanager
+    def fetcher(_):
+        yield fake_fetch
+
+    monkeypatch.setattr(acquisition, "federal_register_fetcher", fetcher)
+    monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(tmp_path / "raw-source-originals"))
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+
+    rows = list(_live_federal_register_documents(date(2020, 1, 1), until=date(2020, 6, 30), output_dir=out_dir))
+    assert len(requested_windows) == 3  # 182 days tiled into 90 + 90 + 2 day windows
+    assert requested_windows[0][0] == date(2020, 1, 1)
+    assert requested_windows[-1][1] == date(2020, 6, 30)
+    assert all(nxt[0] == prev[1] + timedelta(days=1) for prev, nxt in zip(requested_windows, requested_windows[1:]))
+    assert all(fields == federal_register.DOCUMENT_FIELDS for fields in seen_field_sets)
+    assert len(rows) == 3
+    assert all(page.startswith("sha256:") and len(page) == 71 for page, _ in rows)
+
+    [journal_path] = list(out_dir.rglob("journal.jsonl"))
+    events = [json.loads(line) for line in journal_path.read_text().splitlines()]
+    [pages_event] = [e for e in events if e.get("event") == "federal-register-pages"]
+    assert pages_event["requested_from"] == "2020-01-01"
+    assert pages_event["requested_through"] == "2020-06-30"
+    retained = [e for e in events if e.get("event") == "retained-file"]
+    assert len(retained) == 3
+    assert all(
+        e["covered_period"] == {"requested_from": "2020-01-01", "requested_through": "2020-06-30"}
+        for e in retained
+    )
+
+
+def test_merge_with_until_updates_window_and_preserves_outside_rows_and_composite_keys(tmp_path, monkeypatch):
+    """A bounded ``[since, until]`` backfill replaces only keys in that window and preserves all outside rows."""
+    import hashlib
+    from contextlib import contextmanager
+    from urllib.parse import parse_qs, urlparse
+
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from spicy_docs.transport import acquisition
+
+    from spicy_regs.pipelines.rollups.federal_register import FederalRegisterRollup
+    from spicy_regs.transforms.regulations_shape import subject_schema
+
+    schema = subject_schema("federal_register")
+    prior_rows = [
+        # Pre-window row (1998) — untouched by 2020 batch, updated by 1998 batch
+        dict.fromkeys(schema.names)
+        | {
+            "document_number": "98-100",
+            "publication_date": "1998-05-01",
+            "title": "Old 1998 notice",
+            "html_url": "https://www.federalregister.gov/d/98-100",
+            "body_html_url": "https://www.federalregister.gov/body/98-100.html",
+            "regulations_dot_gov_info_json": "{}",
+            "president_json": None,
+            "source_sha256": None,
+        },
+        # In-window row (2020) — replaced with fresh 31-field data + source_sha256
+        dict.fromkeys(schema.names)
+        | {
+            "document_number": "2020-00010",
+            "publication_date": "2020-02-01",
+            "title": "Old 2020 rule without president",
+            "html_url": "https://www.federalregister.gov/d/2020-00010",
+            "body_html_url": "https://www.federalregister.gov/body/2020-00010.html",
+            "regulations_dot_gov_info_json": "{}",
+            "president_json": None,
+            "source_sha256": None,
+        },
+        # Composite-key doc spanning two dates: 2020 date inside batch, 2022 date outside batch
+        dict.fromkeys(schema.names)
+        | {
+            "document_number": "00-111",
+            "publication_date": "2020-03-10",
+            "title": "Old 2020 printing of 00-111",
+            "html_url": "https://www.federalregister.gov/documents/2020/03/10/00-111/old",
+            "body_html_url": "https://www.federalregister.gov/body/2020-00-111.html",
+            "regulations_dot_gov_info_json": "{}",
+            "president_json": None,
+            "source_sha256": None,
+        },
+        dict.fromkeys(schema.names)
+        | {
+            "document_number": "00-111",
+            "publication_date": "2022-03-10",
+            "title": "Later 2022 printing of 00-111",
+            "html_url": "https://www.federalregister.gov/documents/2022/03/10/00-111/keep",
+            "body_html_url": "https://www.federalregister.gov/body/2022-00-111.html",
+            "regulations_dot_gov_info_json": "{}",
+            "president_json": '{"identifier":"joseph-biden","name":"Joseph R. Biden Jr."}',
+            "source_sha256": "sha256:" + "b" * 64,
+        },
+        # Post-window live 2026 row — untouched by historical batch
+        dict.fromkeys(schema.names)
+        | {
+            "document_number": "2026-24001",
+            "publication_date": "2026-08-01",
+            "title": "Live 2026 row",
+            "html_url": "https://www.federalregister.gov/d/2026-24001",
+            "body_html_url": "https://www.federalregister.gov/body/2026-24001.html",
+            "regulations_dot_gov_info_json": "{}",
+            "president_json": '{"identifier":"donald-trump","name":"Donald J. Trump"}',
+            "source_sha256": "sha256:" + "a" * 64,
+        },
+    ]
+    out_dir = tmp_path / "output"
+    out_dir.mkdir()
+    pq.write_table(pa.Table.from_pylist(prior_rows, schema=schema), out_dir / "federal_register.parquet")
+
+    fresh_2020 = [
+        dict(
+            _RAW_DOC,
+            document_number="2020-00010",
+            publication_date="2020-02-01",
+            title="Refreshed 2020 rule",
+            president={"identifier": "donald-trump", "name": "Donald J. Trump"},
+            regulations_dot_gov_info={},
+        ),
+        dict(
+            _RAW_DOC,
+            document_number="00-111",
+            publication_date="2020-03-10",
+            title="Refreshed 2020 printing of 00-111",
+            president={"identifier": "donald-trump", "name": "Donald J. Trump"},
+            regulations_dot_gov_info={},
+        ),
+    ]
+    fresh_1998 = [
+        dict(
+            _RAW_DOC,
+            document_number="98-100",
+            publication_date="1998-05-01",
+            title="Refreshed 1998 notice",
+            president={"identifier": "william-j-clinton", "name": "William J. Clinton"},
+            regulations_dot_gov_info={},
+        ),
+    ]
+    all_fresh = fresh_2020 + fresh_1998
+    served_pages: dict[str, bytes] = {}
+
+    def fake_fetch(url: str) -> bytes:
+        query = parse_qs(urlparse(url).query)
+        gte = query["conditions[publication_date][gte]"][0]
+        lte = query["conditions[publication_date][lte]"][0]
+        matched = [doc for doc in all_fresh if gte <= doc["publication_date"] <= lte]
+        raw = json.dumps({"count": len(matched), "total_pages": 1, "results": matched}).encode()
+        if matched:
+            served_pages[matched[0]["document_number"]] = raw
+        return raw
+
+    @contextmanager
+    def fetcher(_):
+        yield fake_fetch
+
+    monkeypatch.setattr(acquisition, "federal_register_fetcher", fetcher)
+    monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(tmp_path / "raw-source-originals"))
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    monkeypatch.setenv("FR_SINCE", "2020-01-01")
+    monkeypatch.setenv("FR_UNTIL", "2020-03-31")
+    monkeypatch.setenv("FR_REQUEST_INTERVAL_SECONDS", "0")
+
+    FederalRegisterRollup(output_dir=out_dir, skip_upload=True).run()
+    [gen_1] = list((out_dir / "generations").iterdir())
+    assert pq.read_schema(gen_1 / "federal_register.parquet").equals(schema, check_metadata=False)
+    after_2020 = {(r["document_number"], r["publication_date"]): r for r in pq.read_table(gen_1 / "federal_register.parquet").to_pylist()}
+    assert len(after_2020) == 5
+
+    # In-window rows updated with president_json and matching retained page SHA-256
+    digest_2020 = "sha256:" + hashlib.sha256(served_pages["2020-00010"]).hexdigest()
+    assert after_2020[("2020-00010", "2020-02-01")]["title"] == "Refreshed 2020 rule"
+    assert json.loads(after_2020[("2020-00010", "2020-02-01")]["president_json"])["identifier"] == "donald-trump"
+    assert after_2020[("2020-00010", "2020-02-01")]["source_sha256"] == digest_2020
+    assert after_2020[("00-111", "2020-03-10")]["title"] == "Refreshed 2020 printing of 00-111"
+    assert after_2020[("00-111", "2020-03-10")]["source_sha256"] == digest_2020
+
+    # Outside rows (pre-window 1998, same-number 2022 printing, post-window 2026) preserved untouched
+    assert after_2020[("98-100", "1998-05-01")]["title"] == "Old 1998 notice"
+    assert after_2020[("98-100", "1998-05-01")]["source_sha256"] is None
+    assert after_2020[("00-111", "2022-03-10")]["title"] == "Later 2022 printing of 00-111"
+    assert after_2020[("00-111", "2022-03-10")]["source_sha256"] == "sha256:" + "b" * 64
+    assert after_2020[("2026-24001", "2026-08-01")]["source_sha256"] == "sha256:" + "a" * 64
+
+    # Second disjoint batch (1998) updates 1998 row while keeping 2020/2022/2026 intact
+    monkeypatch.setenv("FR_SINCE", "1998-05-01")
+    monkeypatch.setenv("FR_UNTIL", "1998-05-01")
+    FederalRegisterRollup(output_dir=out_dir, skip_upload=True).run()
+    [gen_2] = [p for p in (out_dir / "generations").iterdir() if p != gen_1]
+    after_1998 = {(r["document_number"], r["publication_date"]): r for r in pq.read_table(gen_2 / "federal_register.parquet").to_pylist()}
+    assert len(after_1998) == 5
+    digest_1998 = "sha256:" + hashlib.sha256(served_pages["98-100"]).hexdigest()
+    assert after_1998[("98-100", "1998-05-01")]["source_sha256"] == digest_1998
+    assert json.loads(after_1998[("98-100", "1998-05-01")]["president_json"])["identifier"] == "william-j-clinton"
+    assert after_1998[("2020-00010", "2020-02-01")] == after_2020[("2020-00010", "2020-02-01")]
+    assert after_1998[("00-111", "2022-03-10")] == after_2020[("00-111", "2022-03-10")]
+    assert after_1998[("2026-24001", "2026-08-01")] == after_2020[("2026-24001", "2026-08-01")]
+
+
+def test_date_window_and_env_validation_refuses_malformed_or_reversed_dates(tmp_path, monkeypatch):
+    """Malformed ISO dates, reversed ``since > until`` windows, and invalid pacing/batch params fail closed."""
+    from datetime import datetime
+
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from spicy_regs.env_values import date_env, float_env
+    from spicy_regs.transforms.build_federal_register import _live_federal_register_documents
+    from spicy_regs.transforms.regulations_shape import subject_schema
+
+    called = []
+    with pytest.raises(ValueError, match="reversed"):
+        build_federal_register(
+            tmp_path,
+            since=date(2020, 6, 1),
+            until=date(2020, 5, 31),
+            documents=lambda start: called.append(start) or iter(()),
+        )
+    assert called == []
+
+    with pytest.raises(ValueError, match="reversed"):
+        merge_federal_register(
+            tmp_path,
+            since=date(2020, 6, 1),
+            until=date(2020, 5, 31),
+            documents=lambda start: called.append(start) or iter(()),
+            download_prior=lambda k, p: called.append("prior") or False,
+        )
+    assert called == []
+
+    with pytest.raises(ValueError, match="reversed"):
+        list(_live_federal_register_documents(date(2020, 6, 1), until=date(2020, 5, 31), output_dir=tmp_path))
+
+    # Implicit since from prior_max (2026-09-30 - 120d = 2026-06-02) > explicit until (2020-12-31) refuses
+    # without clobbering the local federal_register.parquet file.
+    schema = subject_schema("federal_register")
+    row = dict.fromkeys(schema.names) | {"document_number": "2026-19936", "publication_date": "2026-09-30"}
+    local_out = tmp_path / "federal_register.parquet"
+    pq.write_table(pa.Table.from_pylist([row], schema=schema), local_out)
+    before_bytes = local_out.read_bytes()
+    with pytest.raises(ValueError, match="reversed"):
+        merge_federal_register(
+            tmp_path,
+            until=date(2020, 12, 31),
+            documents=lambda start: called.append(start) or iter(()),
+            download_prior=lambda k, p: False,
+        )
+    assert called == [] and local_out.read_bytes() == before_bytes
+
+    for bad_date in ("20200601", "2020-13-01", "not-a-date", datetime(2020, 6, 1)):
+        with pytest.raises(ValueError, match="until"):
+            build_federal_register(tmp_path, since=date(2020, 1, 1), until=bad_date, documents=lambda s: iter(()))  # type: ignore[arg-type]
+
+    for bad_env in ("20200601", "2020-02-30", "yesterday"):
+        monkeypatch.setenv("FR_UNTIL", bad_env)
+        with pytest.raises(ValueError, match="FR_UNTIL must be YYYY-MM-DD"):
+            date_env("FR_UNTIL")
+    monkeypatch.setenv("FR_UNTIL", "2020-06-30")
+    assert date_env("FR_UNTIL") == date(2020, 6, 30)
+
+    for bad_interval in (-0.1, float("nan"), float("inf"), True):
+        with pytest.raises(ValueError, match="request_interval_seconds"):
+            build_federal_register(
+                tmp_path,
+                since=date(2020, 1, 1),
+                request_interval_seconds=bad_interval,  # type: ignore[arg-type]
+                documents=lambda s: iter(()),
+            )
+    for bad_float_env in ("nan", "inf", "-inf", "abc"):
+        monkeypatch.setenv("FR_REQUEST_INTERVAL_SECONDS", bad_float_env)
+        with pytest.raises(ValueError, match="FR_REQUEST_INTERVAL_SECONDS must be a finite number"):
+            float_env("FR_REQUEST_INTERVAL_SECONDS")
+    monkeypatch.setenv("FR_REQUEST_INTERVAL_SECONDS", "0.25")
+    assert float_env("FR_REQUEST_INTERVAL_SECONDS") == 0.25
+
+    for bad_batch in (0, -10, True):
+        with pytest.raises(ValueError, match="batch_size"):
+            build_federal_register(
+                tmp_path,
+                since=date(2020, 1, 1),
+                batch_size=bad_batch,  # type: ignore[arg-type]
+                documents=lambda s: iter(()),
+            )
+
+
+def test_streaming_parquet_writer_matches_single_batch_and_flushes_incrementally(tmp_path, monkeypatch):
+    """Streaming ``ParquetWriter`` flushes chunks incrementally and matches single-batch output exactly."""
+    from contextlib import contextmanager
+
+    import pyarrow.parquet as pq
+    from spicy_docs.transport import acquisition
+
+    from spicy_regs.transforms.build_federal_register import STREAM_BATCH_ROWS
+
+    assert STREAM_BATCH_ROWS == 10_000
+
+    # Two pages; doc "2020-DUP" repeats identically across pages (and chunks), while "2020-MULTI" spans two dates.
+    p1_docs = [
+        dict(_RAW_DOC, document_number="2020-001", publication_date="2020-01-01"),
+        dict(_RAW_DOC, document_number="2020-DUP", publication_date="2020-01-02"),
+        dict(_RAW_DOC, document_number="2020-MULTI", publication_date="2020-01-03", title="First printing"),
+    ]
+    next_url = (
+        "https://www.federalregister.gov/api/v1/documents?"
+        "conditions%5Bpublication_date%5D%5Bgte%5D=2020-01-01&conditions%5Bpublication_date%5D%5Blte%5D=2020-01-05"
+        "&format=json&order=newest&page=2&per_page=1000"
+    )
+    p2_docs = [
+        dict(_RAW_DOC, document_number="2020-004", publication_date="2020-01-04"),
+        dict(_RAW_DOC, document_number="2020-DUP", publication_date="2020-01-02"),
+        dict(_RAW_DOC, document_number="2020-MULTI", publication_date="2020-01-05", title="Second printing"),
+    ]
+    raw_p1 = json.dumps({"count": 6, "total_pages": 2, "next_page_url": next_url, "results": p1_docs}).encode()
+    raw_p2 = json.dumps({"count": 6, "total_pages": 2, "results": p2_docs}).encode()
+
+    @contextmanager
+    def fetcher(_):
+        yield lambda url: raw_p2 if url == next_url else raw_p1
+
+    monkeypatch.setattr(acquisition, "federal_register_fetcher", fetcher)
+    monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(tmp_path / "raw-source-originals"))
+
+    single_dir = tmp_path / "single"
+    stream_dir = tmp_path / "stream"
+    single_dir.mkdir()
+    stream_dir.mkdir()
+
+    single_out = build_federal_register(single_dir, since=date(2020, 1, 1), until=date(2020, 1, 5), batch_size=10_000)
+
+    # Track write_table calls during streaming to prove chunks flush BEFORE the full stream ends.
+    real_write_table = pq.ParquetWriter.write_table
+    chunk_sizes: list[int] = []
+
+    def spy_write_table(self, table, *args, **kwargs):
+        chunk_sizes.append(table.num_rows)
+        return real_write_table(self, table, *args, **kwargs)
+
+    monkeypatch.setattr(pq.ParquetWriter, "write_table", spy_write_table)
+    stream_out = build_federal_register(stream_dir, since=date(2020, 1, 1), until=date(2020, 1, 5), batch_size=2)
+
+    assert chunk_sizes == [2, 2, 2]
+    single_tbl = pq.read_table(single_out)
+    stream_tbl = pq.read_table(stream_out)
+    assert stream_tbl.schema.equals(single_tbl.schema, check_metadata=False)
+    assert stream_tbl.to_pylist() == single_tbl.to_pylist()
+    assert stream_tbl.num_rows == 5  # 6 rows - 1 duplicate ("2020-DUP", "2020-01-02")
+
+    # First page's source_sha256 wins even when duplicate straddles Parquet chunks.
+    import hashlib
+
+    by_key = {(r["document_number"], r["publication_date"]): r for r in stream_tbl.to_pylist()}
+    assert by_key[("2020-DUP", "2020-01-02")]["source_sha256"] == "sha256:" + hashlib.sha256(raw_p1).hexdigest()
+    assert ("2020-MULTI", "2020-01-03") in by_key and ("2020-MULTI", "2020-01-05") in by_key
+
+    # Conflicting same-date observations straddling chunk boundaries still refuse before replacing output.
+    monkeypatch.setattr(pq.ParquetWriter, "write_table", real_write_table)
+    conflict_dir = tmp_path / "conflict"
+    conflict_dir.mkdir()
+    conflict_records = [
+        dict(_RAW_DOC, document_number="2020-A", publication_date="2020-01-01", title="Original"),
+        dict(_RAW_DOC, document_number="2020-B", publication_date="2020-01-02"),
+        dict(_RAW_DOC, document_number="2020-A", publication_date="2020-01-01", title="Conflicting"),
+    ]
+    with pytest.raises(ValueError, match="conflicting.*same.*date"):
+        build_federal_register(conflict_dir, batch_size=2, documents=lambda s: iter(conflict_records))
+    assert not (conflict_dir / "federal_register.parquet").exists()
+    assert not (conflict_dir / "_fr_new.parquet").exists()
+
+    # Empty stream produces a valid 0-row Parquet with exact schema.
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    empty_out = build_federal_register(empty_dir, batch_size=2, documents=lambda s: iter(()))
+    assert pq.read_table(empty_out).num_rows == 0
+    assert pq.read_schema(empty_out).names == list(COLUMNS)
+
+
+def test_polite_pacing_sleeps_between_pages_not_before_first(tmp_path, monkeypatch):
+    """``request_interval_seconds`` paces consecutive API fetches without delaying the first request."""
+    import time
+    from contextlib import contextmanager
+
+    from spicy_docs.transport import acquisition
+
+    from spicy_regs.transforms.build_federal_register import _live_federal_register_documents
+
+    next_2 = (
+        "https://www.federalregister.gov/api/v1/documents?"
+        "conditions%5Bpublication_date%5D%5Bgte%5D=2020-01-01&conditions%5Bpublication_date%5D%5Blte%5D=2020-01-03"
+        "&format=json&order=newest&page=2&per_page=1000"
+    )
+    next_3 = (
+        "https://www.federalregister.gov/api/v1/documents?"
+        "conditions%5Bpublication_date%5D%5Bgte%5D=2020-01-01&conditions%5Bpublication_date%5D%5Blte%5D=2020-01-03"
+        "&format=json&order=newest&page=3&per_page=1000"
+    )
+    pages = {
+        None: json.dumps({"count": 3, "total_pages": 3, "next_page_url": next_2, "results": [dict(_RAW_DOC, document_number="2020-1", publication_date="2020-01-01")]}).encode(),
+        next_2: json.dumps({"count": 3, "total_pages": 3, "next_page_url": next_3, "results": [dict(_RAW_DOC, document_number="2020-2", publication_date="2020-01-02")]}).encode(),
+        next_3: json.dumps({"count": 3, "total_pages": 3, "results": [dict(_RAW_DOC, document_number="2020-3", publication_date="2020-01-03")]}).encode(),
+    }
+
+    now = [100.0]
+    sleeps: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        now[0] += seconds
+
+    @contextmanager
+    def fetcher(_):
+        def _get(url: str) -> bytes:
+            return pages[url] if url in pages else pages[None]
+
+        yield _get
+
+    monkeypatch.setattr(acquisition, "federal_register_fetcher", fetcher)
+    monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(tmp_path / "raw-source-originals"))
+
+    # 1. Explicit clock/sleep hooks: 3 instant pages -> 2 pauses of 0.25s, 0 before page 1.
+    out_a = tmp_path / "a"
+    out_a.mkdir()
+    got = list(
+        _live_federal_register_documents(
+            date(2020, 1, 1),
+            until=date(2020, 1, 3),
+            request_interval_seconds=0.25,
+            output_dir=out_a,
+            sleep=fake_sleep,
+            monotonic=lambda: now[0],
+        )
+    )
+    assert len(got) == 3
+    assert sleeps == [pytest.approx(0.25), pytest.approx(0.25)]
+
+    # 2. Monkeypatching stdlib time.sleep/time.monotonic works through build_federal_register too.
+    sleeps.clear()
+    monkeypatch.setattr(time, "sleep", fake_sleep)
+    monkeypatch.setattr(time, "monotonic", lambda: now[0])
+    out_b = tmp_path / "b"
+    out_b.mkdir()
+    build_federal_register(out_b, since=date(2020, 1, 1), until=date(2020, 1, 3), request_interval_seconds=0.25)
+    assert sleeps == [pytest.approx(0.25), pytest.approx(0.25)]
+
+    # 3. Interval of 0 never sleeps.
+    sleeps.clear()
+    out_c = tmp_path / "c"
+    out_c.mkdir()
+    build_federal_register(out_c, since=date(2020, 1, 1), until=date(2020, 1, 3), request_interval_seconds=0.0)
+    assert sleeps == []
