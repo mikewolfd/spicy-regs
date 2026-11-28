@@ -38,6 +38,13 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
+- **Optional DDK catalog bridge wheel** `data_design_kit-0.2.0-py3-none-any.whl` is built
+  deterministically (`SOURCE_DATE_EPOCH=1700000000`) from `data-design-kit` commit
+  `3b76613096ecfbe7b8e76262f890ef9294c5416b` (tree `ef5ad2a2b672ef377b7feb481f50c1453e96c261`,
+  branch `fix/ddk-bridge-pr0`; `sha256:23cbc6cb5f20626a6e3e0e97833f34d025f45563c24bd179396e50989abdfc34`,
+  598,325 bytes). Pinned only under the optional `ddk-bridge` extra and dependency group so base
+  CLI/MCP installs and `source-readers` remain untouched.
+
 - **Selected House disbursements date-adjudication provider** `spicy_docs-0.85.0+readers.20261128.1` is built from
   `72ec8253a1c71752c391caa0f118c38452fef671` (tree `64498e5a39fdf222ca85a24e0191c005381a29eb`,
   `mikewolfd/spicy-docs#60` on `fork/main`). It applies the independently adjudicated `ss-9uvk`
