@@ -95,6 +95,7 @@ jobs:
           IRS990_YEARS: ${{ inputs.years }}
           IRS990_MAX_ZIPS: ${{ inputs.max_zips }}
           IRS990_EXPECT_PRIOR: ${{ inputs.expect_prior }}
+          SKIP_UPLOAD: ${{ inputs.skip_upload }}
         run: |
           set -euo pipefail
           export TMPDIR="$RUNNER_TEMP"
@@ -128,6 +129,15 @@ jobs:
           if max_zips < 0 or max_zips > 500:
               raise SystemExit(f"max_zips must be between 0 and 500, got {max_zips}")
 
+          skip_upload = os.environ.get("SKIP_UPLOAD", "true").strip().lower()
+          if skip_upload not in {"true", "false"}:
+              raise SystemExit(f"Invalid skip_upload value: {skip_upload!r}")
+          if max_zips > 0 and skip_upload == "false":
+              raise SystemExit(
+                  f"Refusing live publish (skip_upload=false) with truncated max_zips={max_zips}; "
+                  "set max_zips=0 for live publishes"
+              )
+
           expect_prior = os.environ.get("IRS990_EXPECT_PRIOR", "").strip()
           if expect_prior and not re.fullmatch(r"(sha256:)?[0-9a-f]{8,64}", expect_prior):
               raise SystemExit("expect_prior must be 8-64 lowercase hex chars (optional sha256: prefix)")
@@ -155,73 +165,98 @@ jobs:
             -H "User-Agent: $WORKFLOW_USER_AGENT" \
             -H "Cache-Control: no-cache" \
             --output "$WORK_DIR/live-publication.v2.json" "$INDEX_URL"
-          LIVE_PREFIX=$(uv run --frozen python - "$WORK_DIR/live-publication.v2.json" <<'PY'
+          LIVE_PRESENT=$(uv run --frozen python - "$WORK_DIR/live-publication.v2.json" <<'PY'
           import sys
           from pathlib import Path
           from spicy_regs.sources import publication
 
           index = publication.parse_index(Path(sys.argv[1]).read_bytes())
-          entry = index["families"].get("irs-form990")
-          print(entry["prefix"] if entry else "")
+          print("true" if "irs-form990" in index["families"] else "false")
           PY
           )
           READ_INDEX=""
           CARRY_GEN=""
           CARRY_SUMMARY=""
-          if [ -n "$LIVE_PREFIX" ]; then
+          if [ "$LIVE_PRESENT" = "true" ]; then
             SPICY_REGS_R2_URL="$R2_PUBLIC_URL" uv run --frozen spicy-regs mirror "$WORK_DIR/live-mirror" \
               --family irs-form990 --min-free-gib 4 > "$WORK_DIR/mirror-output.jsonl"
-            READ_INDEX=$(uv run --frozen python - "$WORK_DIR/live-mirror" "$WORK_DIR/mirror-output.jsonl" <<'PY'
+            IFS=$'\t' read -r READ_INDEX CARRY_GEN <<< "$(uv run --frozen python - "$WORK_DIR/live-mirror" "$WORK_DIR/mirror-output.jsonl" <<'PY'
           import json
           import sys
           from pathlib import Path
 
           root = Path(sys.argv[1])
-          lines = [json.loads(line) for line in Path(sys.argv[2]).read_text().splitlines() if line.strip()]
+          lines = [json.loads(line) for line in Path(sys.argv[2]).read_text(encoding="utf-8").splitlines() if line.strip()]
           snapshot = next(item["snapshot"] for item in reversed(lines) if "snapshot" in item)
-          print(root / snapshot)
+          prefix = next(
+              item["prefix"]
+              for item in reversed(lines)
+              if item.get("family") == "irs-form990" and isinstance(item.get("prefix"), str) and item["prefix"]
+          )
+          print(f"{root / snapshot}\t{root / prefix}")
           PY
-            )
-            CARRY_GEN="$WORK_DIR/live-mirror/$LIVE_PREFIX"
-            # Best-effort fetch of prior irs990-population-summary.json from public source-evidence for closed-year fingerprint carry-forward.
-            CARRY_SUMMARY=$(uv run --frozen python - "$CARRY_GEN/artifact.json" "$R2_PUBLIC_URL" "$WORK_DIR/prior-summary.json" "$WORKFLOW_USER_AGENT" <<'PY'
+            )"
+            # Fetch and cryptographically verify prior irs990-population-summary.json when mirrored prior is partitioned.
+            CARRY_SUMMARY=$(uv run --frozen python - "$CARRY_GEN" "$R2_PUBLIC_URL" "$WORK_DIR/prior-summary.json" "$WORKFLOW_USER_AGENT" <<'PY'
+          import hashlib
           import json
+          import re
           import sys
           from pathlib import Path
           import httpx
 
-          art_path, base_url, dest_path, ua = Path(sys.argv[1]), sys.argv[2].rstrip("/"), Path(sys.argv[3]), sys.argv[4]
-          if not art_path.is_file():
+          carry_gen = Path(sys.argv[1])
+          base_url = sys.argv[2].rstrip("/")
+          dest_path = Path(sys.argv[3])
+          ua = sys.argv[4]
+
+          filings_dir = carry_gen / "irs990_filings"
+          is_partitioned = filings_dir.is_dir() and any(filings_dir.glob("submission_year=*/part-*.parquet"))
+          if not is_partitioned:
               print("")
               raise SystemExit(0)
+
+          art_path = carry_gen / "artifact.json"
+          if not art_path.is_file():
+              raise SystemExit(f"Mirrored partitioned prior generation is missing artifact.json: {art_path}")
           art = json.loads(art_path.read_text(encoding="utf-8"))
           ev = next((item for item in art.get("inputs", ()) if item.get("role") == "source-evidence"), None)
-          if not ev or not ev.get("artifactDigest"):
-              print("")
-              raise SystemExit(0)
+          if not ev or not isinstance(ev.get("artifactDigest"), str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", ev["artifactDigest"]):
+              raise SystemExit("Mirrored partitioned prior generation lacks a valid source-evidence digest")
           ev_hex = ev["artifactDigest"].removeprefix("sha256:")
-          try:
-              with httpx.Client(headers={"User-Agent": ua}, timeout=60, follow_redirects=False) as client:
-                  jresp = client.get(f"{base_url}/source-evidence/{ev_hex}/journal.jsonl")
-                  if jresp.status_code != 200:
-                      print("")
-                      raise SystemExit(0)
-                  blob_member = None
-                  for line in jresp.text.splitlines():
-                      event = json.loads(line)
-                      if event.get("event") == "retained-file" and event.get("stage") == "irs990-population-summary":
-                          blob_member = event.get("blob_member")
-                  if not blob_member:
-                      print("")
-                      raise SystemExit(0)
-                  sresp = client.get(f"{base_url}/source-evidence/{blob_member}")
-                  if sresp.status_code != 200:
-                      print("")
-                      raise SystemExit(0)
-                  dest_path.write_bytes(sresp.content)
-                  print(dest_path)
-          except Exception:
-              print("")
+
+          with httpx.Client(headers={"User-Agent": ua}, timeout=60, follow_redirects=False) as client:
+              journal_url = f"{base_url}/source-evidence/{ev_hex}/journal.jsonl"
+              jresp = client.get(journal_url)
+              if jresp.status_code != 200:
+                  raise SystemExit(f"Failed to fetch prior source-evidence journal ({jresp.status_code}): {journal_url}")
+              summary_event = None
+              for line in jresp.text.splitlines():
+                  if not line.strip():
+                      continue
+                  event = json.loads(line)
+                  if event.get("event") == "retained-file" and event.get("stage") == "irs990-population-summary":
+                      summary_event = event
+              if not isinstance(summary_event, dict):
+                  raise SystemExit("Prior partitioned source-evidence journal lacks an irs990-population-summary receipt")
+              blob_member = summary_event.get("blob_member")
+              expected_sha = summary_event.get("sha256")
+              if not isinstance(blob_member, str) or not re.fullmatch(r"blobs/sha256/[0-9a-f]{64}", blob_member):
+                  raise SystemExit(f"Invalid prior summary blob_member in evidence journal: {blob_member!r}")
+              if not isinstance(expected_sha, str) or expected_sha != "sha256:" + blob_member.removeprefix("blobs/sha256/"):
+                  raise SystemExit(f"Prior summary sha256 {expected_sha!r} disagrees with blob_member {blob_member!r}")
+              summary_url = f"{base_url}/source-evidence/{blob_member}"
+              sresp = client.get(summary_url)
+              if sresp.status_code != 200:
+                  raise SystemExit(f"Failed to fetch prior irs990-population-summary ({sresp.status_code}): {summary_url}")
+              actual_sha = "sha256:" + hashlib.sha256(sresp.content).hexdigest()
+              if actual_sha != expected_sha:
+                  raise SystemExit(f"Prior summary SHA-256 mismatch: expected {expected_sha}, got {actual_sha}")
+              parsed = json.loads(sresp.content.decode("utf-8"))
+              if not isinstance(parsed, dict) or parsed.get("format") != "spicy-irs-form990-population-summary" or not isinstance(parsed.get("years"), dict):
+                  raise SystemExit("Prior irs990-population-summary JSON has unexpected format")
+              dest_path.write_bytes(sresp.content)
+              print(dest_path)
           PY
             )
           fi
@@ -280,6 +315,10 @@ jobs:
           uv run --frozen python -m spicy_regs.pipelines.irs_form990 sync-build "${SYNC_ARGS[@]}" \
             | tee "$WORK_DIR/build-result.json"
 
+          # Reclaim mirrored prior Parquet bytes before running the 40 GiB-floored --dry-run check.
+          rm -rf "$WORK_DIR/live-mirror"
+          df -h /
+
           mkdir -p output
           cp "$WORK_DIR/build/irs990-population-summary.json" output/irs990-population-summary.json
           if [ -f "$WORK_DIR/build/quarantined-anomalies.json" ]; then
@@ -318,6 +357,7 @@ jobs:
               "family": "irs-form990",
               "artifact_digest": admitted.pin.artifact_digest,
               "logical_id": admitted.pin.logical_id,
+              "publication_status": root["spec"]["publicationStatus"],
               "tables": sorted(root["spec"]["tables"].keys()),
               "partition_columns": {k: v.get("partitionColumns") for k, v in sorted(root["spec"]["tables"].items())},
               "rows": result["rows"],
@@ -332,7 +372,7 @@ jobs:
               out.write(f"artifact_digest={admitted.pin.artifact_digest}\n")
           PY
 
-          if [ "$SKIP_UPLOAD" = "true" ]; then
+          if [ "$SKIP_UPLOAD" = "true" ] && [ "$MAX_ZIPS" = "0" ]; then
             DRY_ARGS=(
               --generation "$WORK_DIR/build/generation"
               --family irs-form990

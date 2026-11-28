@@ -35,15 +35,22 @@ R2/MCP publication.
 2. **Stream build with closed-year carry-forward:**
    `python -m spicy_regs.pipelines.irs_form990 sync-build --manifest manifest.json --output-dir fresh-output`
    - **Dual-tier evidence:** Annual index CSVs are retained under `policy="full"` in
-     `CentralRawArchiveStore` (reusing exact retained originals in place). Multi-hundred-MB TEOS
-     XML ZIPs are streamed strictly sequentially (`max_workers=1`) under `policy="hash_only"` into
-     one private temporary file at a time, parsed via single-pass Expat `scan_form990_return()`,
-     checkpointed per ZIP (`checkpoints/<year>.json`), and unlinked immediately before the next
-     ZIP. Already-retained local ZIPs (such as `2023_TEOS_XML_01A.zip`) are reused in place.
-   - **Carry-forward:** Passing `--carry-forward-generation <mirrored-generation>` (and optionally
-     `--carry-forward-summary <prior-summary.json>`) copies unchanged closed-year
-     `submission_year=<YYYY>/part-000000.parquet` members verbatim so `publish-local-generation`
-     reuses them via server-side R2 `copy_object`.
+     `CentralRawArchiveStore` (reusing exact retained originals by SHA-256 or verified
+     `(url, etag, byte_size)` receipt match). Multi-hundred-MB TEOS XML ZIPs are streamed strictly
+     sequentially (`max_workers=1`) under `policy="hash_only"` into one private temporary file at a
+     time, parsed via single-pass Expat `scan_form990_return()`, and unlinked immediately before the
+     next ZIP. Already-retained local ZIPs (such as `2023_TEOS_XML_01A.zip`) are also reused in
+     place under `policy="hash_only"` so bulk ZIPs are never uploaded to R2 evidence.
+   - **Checkpoints & year-level resume:** `checkpoints/<year>.json` records per-ZIP progress audit
+     state (`completed_zips`, `pending_zips`, dispositions, and peak RSS) for operational tracking.
+     Restart/resume operates at the **submission-year** boundary via `--carry-forward-generation` +
+     `--carry-forward-summary` (not intra-year mid-ZIP resume).
+   - **Carry-forward & truncation guard:** Passing `--carry-forward-generation <mirrored-generation>`
+     with `--carry-forward-summary <prior-summary.json>` copies unchanged closed-year
+     `submission_year=<YYYY>/part-*.parquet` members verbatim (failing closed if prior year
+     metadata/fingerprints are missing or schemas drift) so `publish-local-generation` reuses them
+     via server-side R2 `copy_object`. Bounded `--max-zips > 0` runs seal as `local-partial` and
+     are blocked from live publication.
    - **Provenance without DOM bloat:** Full XML trees (`native_xml_json`) are omitted from
      `irs990_filings`; every row retains `source_locator_json` (annual index + ZIP URL/SHA-256 +
      member name/SHA-256 + index row), `index_native_json`, and on child tables exact positional

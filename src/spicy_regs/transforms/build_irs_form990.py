@@ -558,7 +558,7 @@ def build_irs_form990_year(
                 member_name = locator.get("member_name")
 
                 if oid in seen_oids:
-                    if member_sha is not None and seen_oids[oid] == member_sha:
+                    if member_sha and seen_oids[oid] == member_sha:
                         duplicate_identical_oids += 1
                         continue
                     record_quarantine({

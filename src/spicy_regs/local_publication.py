@@ -441,12 +441,7 @@ def _cited_originals(evidence: Path) -> set[str]:
     cited = set()
     for line in (evidence / JOURNAL).read_text().splitlines():
         event = json.loads(line)
-        if (
-            is_original(event)
-            and event.get("body_retained") is not False
-            and event.get("blob_store") == "central-raw"
-            and event.get("sha256")
-        ):
+        if is_original(event) and event.get("body_retained") is not False and event.get("sha256"):
             cited.add(event["sha256"])
     return cited
 

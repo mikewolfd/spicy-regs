@@ -668,7 +668,11 @@ def test_credential_refusal_is_retained_and_aborts_remaining_acquisitions(tmp_pa
     assert '"failed"' in roots[0].read_text()
 
 
-def test_refresh_irs_form990_workflow_structure_and_safety():
+def test_refresh_irs_form990_workflow_structure_and_safety(tmp_path):
+    import os
+    import subprocess
+    import sys
+
     root = Path(__file__).parents[1]
     wf_path = root / ".github/workflows/refresh-irs-form990.yml"
     assert wf_path.is_file()
@@ -683,6 +687,8 @@ def test_refresh_irs_form990_workflow_structure_and_safety():
     steps = workflow["jobs"]["run"]["steps"]
     names = [step.get("name") for step in steps]
     free_step = next(step for step in steps if step.get("name") == "Free preinstalled toolchains on Linux runners")
+    validate_step = next(step for step in steps if step.get("name") == "Validate inputs")
+    live_step = next(step for step in steps if step.get("name") == "Read live publication index and mirror prior partitions")
     discover_step = next(step for step in steps if step.get("name") == "Discover official IRS TEOS index and archive URLs")
     build_step = next(step for step in steps if step.get("name") == "Stream build and validate candidate generation")
     publish_step = next(step for step in steps if step.get("name") == "Publish candidate generation")
@@ -692,9 +698,570 @@ def test_refresh_irs_form990_workflow_structure_and_safety():
     assert "secrets." not in json.dumps(free_step) and "R2_" not in json.dumps(free_step)
     assert names.index(free_step["name"]) < names.index(discover_step["name"]) < names.index(build_step["name"]) < names.index(publish_step["name"])
 
+    # Finding 1: Validate inputs MUST reject max_zips > 0 when skip_upload == false
+    assert validate_step["env"]["SKIP_UPLOAD"] == "${{ inputs.skip_upload }}"
+    py_block = validate_step["run"].split("<<'PY'\n", 1)[1].split("\nPY", 1)[0]
+    py_script = "\n".join(line[10:] if line.startswith(" " * 10) else line for line in py_block.splitlines())
+    gh_out = tmp_path / "github_output.txt"
+    gh_out.write_text("", encoding="utf-8")
+    base_env = {
+        **os.environ,
+        "RUNNER_TEMP": str(tmp_path),
+        "GITHUB_OUTPUT": str(gh_out),
+        "IRS990_YEARS": "2026",
+        "IRS990_EXPECT_PRIOR": "",
+    }
+    rejected = subprocess.run(
+        [sys.executable, "-c", py_script],
+        env={**base_env, "IRS990_MAX_ZIPS": "1", "SKIP_UPLOAD": "false"},
+        text=True,
+        capture_output=True,
+    )
+    assert rejected.returncode != 0
+    assert "Refusing live publish" in rejected.stderr
+    allowed = subprocess.run(
+        [sys.executable, "-c", py_script],
+        env={**base_env, "IRS990_MAX_ZIPS": "1", "SKIP_UPLOAD": "true"},
+        text=True,
+        capture_output=True,
+    )
+    assert allowed.returncode == 0, allowed.stderr
+
+    # Finding 2: CARRY_GEN comes from mirror-output.jsonl, summary verifies blob_member + sha256 + JSON and fails closed
+    live_run = live_step["run"]
+    assert 'item.get("family") == "irs-form990"' in live_run
+    assert 'item["prefix"]' in live_run
+    assert r'blobs/sha256/[0-9a-f]{64}' in live_run
+    assert "hashlib.sha256(sresp.content).hexdigest()" in live_run
+    assert "except Exception:" not in live_run
+
+    # Finding 3: live-mirror is removed after sync-build and before publish-local-generation --dry-run
+    build_run = build_step["run"]
+    assert 'rm -rf "$WORK_DIR/live-mirror"' in build_run
+    assert build_run.index("sync-build") < build_run.index('rm -rf "$WORK_DIR/live-mirror"') < build_run.index("publish-local-generation")
+    assert '[ "$SKIP_UPLOAD" = "true" ] && [ "$MAX_ZIPS" = "0" ]' in build_run
+
     assert publish_step["if"] == "inputs.skip_upload == false"
     assert "unset SPICYGOV_RAW_ROOT R2_ALLOW_SHRINK R2_MIN_SIZE_RATIO" in publish_step["run"]
     assert "live-before-publish.v2.json" in publish_step["run"]
     assert "publish-local-generation" in publish_step["run"]
-    assert "--carry-forward-generation" in build_step["run"]
-    assert "sync-build" in build_step["run"]
+    assert "--carry-forward-generation" in build_run
+    assert "sync-build" in build_run
+
+
+def _year_fixture(year: int, *, oid_suffix: str = "0001", return_version: str = "2023v6.0", extra_zips: int = 1):
+    tax_yr = str(year - 1)
+    idx_rows = []
+    archives: dict[str, bytes] = {}
+    for z_idx in range(1, extra_zips + 1):
+        oid = f"{year}000{z_idx}934930{oid_suffix}"
+        idx_rows.append({
+            **INDEX,
+            "OBJECT_ID": oid,
+            "TAX_PERIOD": f"{tax_yr}12",
+            "SUB_DATE": str(year),
+            "RETURN_TYPE": "990",
+        })
+        xml = _make_xml(
+            return_version=return_version,
+            tax_yr=tax_yr,
+            period_begin=f"{tax_yr}-01-01",
+            period_end=f"{tax_yr}-12-31",
+        )
+        zip_name = f"{year}_TEOS_XML_{z_idx:02d}A.zip"
+        archives[source.BASE_URL + f"{year}/{zip_name}"] = _zip_bytes({
+            f"{year}_TEOS_XML_{z_idx:02d}A/{oid}_public.xml": xml,
+        })
+    idx_url = source.BASE_URL + f"{year}/index_{year}.csv"
+    return idx_url, _csv_bytes(idx_rows), archives
+
+
+def test_carry_forward_unlisted_preserves_metadata_and_fails_closed_without_summary(tmp_path, monkeypatch):
+    shared_raw = tmp_path / "shared-raw"
+    monkeypatch.delenv("SPICYGOV_RAW_ROOT", raising=False)
+    monkeypatch.setattr("spicy_docs.storage.raw_archive.default_raw_archive_root", lambda: shared_raw)
+
+    idx_24_url, idx_24, zips_24 = _year_fixture(2024, return_version="2023v6.0")
+    idx_25_url, idx_25, zips_25 = _year_fixture(2025, return_version="2025v4.0")
+    zip_24_url, zip_24 = next(iter(zips_24.items()))
+    zip_25_url, zip_25 = next(iter(zips_25.items()))
+    payloads = {
+        idx_24_url: (idx_24, '"idx24"'),
+        zip_24_url: (zip_24, '"zip24"'),
+        idx_25_url: (idx_25, '"idx25"'),
+        zip_25_url: (zip_25, '"zip25"'),
+    }
+    requested: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested.append(str(request.url))
+        body, etag = payloads[str(request.url)]
+        return httpx.Response(200, content=body, headers={"etag": etag, "content-length": str(len(body))})
+
+    m24 = {
+        "format": "spicy-irs-form990-discovery",
+        "version": 1,
+        "years": {
+            "2024": {
+                "submission_year": 2024,
+                "index": {"url": idx_24_url, "content_length": len(idx_24), "etag": '"idx24"'},
+                "archives": [{"url": zip_24_url, "content_length": len(zip_24), "etag": '"zip24"'}],
+            }
+        },
+    }
+    out1 = tmp_path / "run1"
+    pipeline.sync_build(m24, out1, archive_root=shared_raw, min_interval=0, transport=httpx.MockTransport(handler))
+
+    # Request ONLY 2025 with carry_forward_unlisted=True -> 2024 carried forward with full fingerprints preserved!
+    m25 = {
+        "format": "spicy-irs-form990-discovery",
+        "version": 1,
+        "years": {
+            "2025": {
+                "submission_year": 2025,
+                "index": {"url": idx_25_url, "content_length": len(idx_25), "etag": '"idx25"'},
+                "archives": [{"url": zip_25_url, "content_length": len(zip_25), "etag": '"zip25"'}],
+            }
+        },
+    }
+    requested.clear()
+    out2 = tmp_path / "run2"
+    _art2, _ev2, summary2 = pipeline.sync_build(
+        m25,
+        out2,
+        archive_root=shared_raw,
+        carry_forward_generation=out1 / "generation",
+        carry_forward_summary=out1 / "irs990-population-summary.json",
+        carry_forward_unlisted=True,
+        min_interval=0,
+        transport=httpx.MockTransport(handler),
+    )
+    assert requested == [idx_25_url, zip_25_url]
+    assert summary2["submission_years"] == [2024, 2025]
+    assert summary2["years"]["2024"]["mode"] == "carried_forward_unlisted"
+    assert summary2["years"]["2024"]["source_index"]["url"] == idx_24_url
+    assert summary2["years"]["2024"]["source_archives"][0]["url"] == zip_24_url
+    assert summary2["years"]["2024"]["return_version_counts"] == {"2023v6.0": 1}
+
+    # Missing carry_forward_summary MUST fail closed rather than erasing 2024 fingerprints!
+    with pytest.raises(ValueError, match="Cannot carry forward unlisted closed year 2024"):
+        pipeline.sync_build(
+            m25,
+            tmp_path / "run-no-summary",
+            archive_root=shared_raw,
+            carry_forward_generation=out1 / "generation",
+            carry_forward_summary=None,
+            carry_forward_unlisted=True,
+            min_interval=0,
+            transport=httpx.MockTransport(handler),
+        )
+
+
+def test_carry_forward_schema_mismatch_fails_closed(tmp_path, monkeypatch):
+    import pyarrow as pa
+
+    shared_raw = tmp_path / "shared-raw"
+    monkeypatch.delenv("SPICYGOV_RAW_ROOT", raising=False)
+    monkeypatch.setattr("spicy_docs.storage.raw_archive.default_raw_archive_root", lambda: shared_raw)
+
+    idx_24_url, idx_24, zips_24 = _year_fixture(2024)
+    idx_25_url, idx_25, zips_25 = _year_fixture(2025)
+    zip_24_url, zip_24 = next(iter(zips_24.items()))
+    zip_25_url, zip_25 = next(iter(zips_25.items()))
+    payloads = {
+        idx_24_url: (idx_24, '"idx24"'),
+        zip_24_url: (zip_24, '"zip24"'),
+        idx_25_url: (idx_25, '"idx25"'),
+        zip_25_url: (zip_25, '"zip25"'),
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body, etag = payloads[str(request.url)]
+        return httpx.Response(200, content=body, headers={"etag": etag, "content-length": str(len(body))})
+
+    m24 = {
+        "format": "spicy-irs-form990-discovery",
+        "version": 1,
+        "years": {
+            "2024": {
+                "submission_year": 2024,
+                "index": {"url": idx_24_url, "content_length": len(idx_24), "etag": '"idx24"'},
+                "archives": [{"url": zip_24_url, "content_length": len(zip_24), "etag": '"zip24"'}],
+            }
+        },
+    }
+    out1 = tmp_path / "run1"
+    pipeline.sync_build(m24, out1, archive_root=shared_raw, min_interval=0, transport=httpx.MockTransport(handler))
+
+    # Overwrite carried-forward filing partition with a drifted schema
+    drifted = out1 / "generation/irs990_filings/submission_year=2024/part-000000.parquet"
+    pq.write_table(pa.table({"submission_year": pa.array([2024], type=pa.int32()), "wrong": ["x"]}), drifted)
+
+    m25 = {
+        "format": "spicy-irs-form990-discovery",
+        "version": 1,
+        "years": {
+            "2025": {
+                "submission_year": 2025,
+                "index": {"url": idx_25_url, "content_length": len(idx_25), "etag": '"idx25"'},
+                "archives": [{"url": zip_25_url, "content_length": len(zip_25), "etag": '"zip25"'}],
+            }
+        },
+    }
+    with pytest.raises(ValueError, match="failed schema verification"):
+        pipeline.sync_build(
+            m25,
+            tmp_path / "run-drifted",
+            archive_root=shared_raw,
+            carry_forward_generation=out1 / "generation",
+            carry_forward_summary=out1 / "irs990-population-summary.json",
+            carry_forward_unlisted=True,
+            min_interval=0,
+            transport=httpx.MockTransport(handler),
+        )
+
+
+def test_all_years_carried_forward_with_read_index_and_dry_run_copies_all_members(tmp_path, monkeypatch):
+    import shutil
+    from spicy_regs.sources.disk_store import DiskStore
+
+    shared_raw = tmp_path / "shared-raw"
+    monkeypatch.delenv("SPICYGOV_RAW_ROOT", raising=False)
+    monkeypatch.setattr("spicy_docs.storage.raw_archive.default_raw_archive_root", lambda: shared_raw)
+
+    idx_24_url, idx_24, zips_24 = _year_fixture(2024)
+    zip_24_url, zip_24 = next(iter(zips_24.items()))
+    payloads = {idx_24_url: (idx_24, '"idx24"'), zip_24_url: (zip_24, '"zip24"')}
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        body, etag = payloads[str(request.url)]
+        return httpx.Response(200, content=body, headers={"etag": etag, "content-length": str(len(body))})
+
+    m24 = {
+        "format": "spicy-irs-form990-discovery",
+        "version": 1,
+        "years": {
+            "2024": {
+                "submission_year": 2024,
+                "index": {"url": idx_24_url, "content_length": len(idx_24), "etag": '"idx24"'},
+                "archives": [{"url": zip_24_url, "content_length": len(zip_24), "etag": '"zip24"'}],
+            }
+        },
+    }
+    out1 = tmp_path / "run1"
+    _art1, ev1, _sum1 = pipeline.sync_build(
+        m24, out1, archive_root=shared_raw, min_interval=0, transport=httpx.MockTransport(handler)
+    )
+
+    # Publish Run 1 to a DiskStore and build a local mirror layout with read_index
+    store = DiskStore(tmp_path / "live-store", bucket="live")
+    published = publication.publish_generation(
+        out1 / "generation",
+        client=store,
+        bucket="live",
+        prior_index=publication.empty_index(),
+        evidence_directories=(ev1,),
+    )
+    live_bytes = store.objects[publication.INDEX_V2_KEY].read_bytes()
+    mirror_root = tmp_path / "mirror"
+    read_index = mirror_root / "publication.v2" / "live.json"
+    read_index.parent.mkdir(parents=True)
+    read_index.write_bytes(live_bytes)
+    prior_prefix = published["families"]["irs-form990"]["prefix"]
+    mirrored_gen = mirror_root / prior_prefix
+    shutil.copytree(out1 / "generation", mirrored_gen)
+
+    # Run 2 carries forward ALL years (zero HTTP, used_inputs == []) while binding read_index
+    calls.clear()
+    out2 = tmp_path / "run2"
+    _art2, ev2, summary2 = pipeline.sync_build(
+        m24,
+        out2,
+        archive_root=shared_raw,
+        read_index=read_index,
+        carry_forward_generation=mirrored_gen,
+        carry_forward_summary=out1 / "irs990-population-summary.json",
+        min_interval=0,
+        transport=httpx.MockTransport(handler),
+    )
+    assert calls == []
+    assert summary2["years"]["2024"]["mode"] == "carried_forward"
+
+    local_publication.main([
+        "--generation", str(out2 / "generation"),
+        "--family", "irs-form990",
+        "--evidence", str(ev2),
+        "--output", str(tmp_path / "dry-cf"),
+        "--dry-run",
+        "--live-index", str(read_index),
+    ])
+    receipt = json.loads((tmp_path / "dry-cf/dry-run.json").read_text())
+    assert receipt["status"] == "dry_run_accepted"
+    assert receipt["store_members_copied"] == 3
+
+
+def test_offline_local_reuse_by_sha256_and_by_etag_and_missing_asset_refusal(tmp_path, monkeypatch):
+    shared_raw = tmp_path / "shared-raw"
+    monkeypatch.delenv("SPICYGOV_RAW_ROOT", raising=False)
+    monkeypatch.setattr("spicy_docs.storage.raw_archive.default_raw_archive_root", lambda: shared_raw)
+
+    idx_url, idx_bytes, zips = _year_fixture(2024)
+    zip_url, zip_bytes = next(iter(zips.items()))
+    idx_sha = "sha256:" + hashlib.sha256(idx_bytes).hexdigest()
+    zip_sha = "sha256:" + hashlib.sha256(zip_bytes).hexdigest()
+
+    # Seed CentralRawArchiveStore with both blobs + an ETag-bearing acquisition receipt (via online run for index + retain for zip)
+    def seed_handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == idx_url:
+            return httpx.Response(200, content=idx_bytes, headers={"etag": '"idx24"', "content-length": str(len(idx_bytes))})
+        return httpx.Response(200, content=zip_bytes, headers={"etag": '"zip24"', "content-length": str(len(zip_bytes))})
+
+    seed_manifest = {
+        "format": "spicy-irs-form990-discovery",
+        "version": 1,
+        "years": {
+            "2024": {
+                "submission_year": 2024,
+                "index": {"url": idx_url, "content_length": len(idx_bytes), "etag": '"idx24"'},
+                "archives": [{"url": zip_url, "content_length": len(zip_bytes), "etag": '"zip24"'}],
+            }
+        },
+    }
+    pipeline.sync_build(seed_manifest, tmp_path / "seed", archive_root=shared_raw, min_interval=0, transport=httpx.MockTransport(seed_handler))
+    # Also store zip_bytes in CentralRawArchiveStore with a receipt matching (url, etag, byte_size)
+    store = CentralRawArchiveStore(shared_raw)
+    store.put_blob(zip_sha, len(zip_bytes), [zip_bytes])
+    zip_hex = zip_sha.removeprefix("sha256:")
+    receipt_path = shared_raw / "acquisitions/sha256" / zip_hex[:2] / zip_hex
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+    receipt_path.write_text(
+        json.dumps({
+            "format": "spicygov-acquisition-1",
+            "receipt": {
+                "event": "capture",
+                "requested_url": zip_url,
+                "byte_size": len(zip_bytes),
+                "sha256": zip_sha,
+                "response_headers": [["etag", '"zip24"']],
+                "observed_at": "2026-11-28T00:00:00+00:00",
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    # 1. Offline reuse via explicit sha256 manifest -> local ZIP reused under hash_only (NOT in _cited_originals!)
+    pinned_manifest = {
+        "format": "spicy-irs-form990-discovery",
+        "version": 1,
+        "years": {
+            "2024": {
+                "submission_year": 2024,
+                "index": {"url": idx_url, "sha256": idx_sha, "byte_size": len(idx_bytes), "observed_at": "2026-11-28T00:00:00+00:00"},
+                "archives": [{"url": zip_url, "sha256": zip_sha, "byte_size": len(zip_bytes), "observed_at": "2026-11-28T00:00:00+00:00"}],
+            }
+        },
+    }
+    out_sha = tmp_path / "offline-sha"
+    _art_s, ev_s, sum_s = pipeline.sync_build(pinned_manifest, out_sha, archive_root=shared_raw, offline=True)
+    assert sum_s["years"]["2024"]["source_archives"][0]["evidence_mode"] == "hash_only_local_reuse"
+    assert local_publication._cited_originals(ev_s) == {idx_sha}
+    assert zip_sha not in local_publication._cited_originals(ev_s)
+
+    # Verify dry-run against shared raw succeeds and does NOT upload the ZIP blob
+    live_path = tmp_path / "live-empty.json"
+    live_path.write_text(json.dumps(publication.empty_index()))
+    local_publication.main([
+        "--generation", str(out_sha / "generation"),
+        "--family", "irs-form990",
+        "--evidence", str(ev_s),
+        "--output", str(tmp_path / "dry-offline"),
+        "--dry-run",
+        "--live-index", str(live_path),
+    ])
+    assert json.loads((tmp_path / "dry-offline/dry-run.json").read_text())["status"] == "dry_run_accepted"
+
+    # 2. Offline reuse via discover()-style manifest (NO sha256, ONLY url + etag + content_length!)
+    out_etag = tmp_path / "offline-etag"
+    _art_e, _ev_e, sum_e = pipeline.sync_build(seed_manifest, out_etag, archive_root=shared_raw, offline=True)
+    assert sum_e["rows"]["irs990_filings"] == 1
+    assert sum_e["years"]["2024"]["source_archives"][0]["evidence_mode"] == "hash_only_local_reuse"
+
+    # 3. Missing local asset in offline=True mode fails closed with FileNotFoundError
+    missing_idx_manifest = {
+        "format": "spicy-irs-form990-discovery",
+        "version": 1,
+        "years": {
+            "2024": {
+                "submission_year": 2024,
+                "index": {"url": idx_url, "content_length": len(idx_bytes), "etag": '"different-etag"'},
+                "archives": [{"url": zip_url, "content_length": len(zip_bytes), "etag": '"zip24"'}],
+            }
+        },
+    }
+    with pytest.raises(FileNotFoundError, match="missing retained annual index"):
+        pipeline.sync_build(missing_idx_manifest, tmp_path / "offline-miss-idx", archive_root=shared_raw, offline=True)
+
+    missing_zip_manifest = {
+        "format": "spicy-irs-form990-discovery",
+        "version": 1,
+        "years": {
+            "2024": {
+                "submission_year": 2024,
+                "index": {"url": idx_url, "content_length": len(idx_bytes), "etag": '"idx24"'},
+                "archives": [{"url": zip_url, "content_length": len(zip_bytes), "etag": '"different-zip-etag"'}],
+            }
+        },
+    }
+    with pytest.raises(FileNotFoundError, match="missing retained archive"):
+        pipeline.sync_build(missing_zip_manifest, tmp_path / "offline-miss-zip", archive_root=shared_raw, offline=True)
+
+
+def test_max_zips_truncates_and_seals_local_partial_refused_by_publish(tmp_path, monkeypatch):
+    shared_raw = tmp_path / "shared-raw"
+    monkeypatch.delenv("SPICYGOV_RAW_ROOT", raising=False)
+    monkeypatch.setattr("spicy_docs.storage.raw_archive.default_raw_archive_root", lambda: shared_raw)
+
+    idx_url, idx_bytes, zips = _year_fixture(2024, extra_zips=2)
+    zip_items = sorted(zips.items())
+    payloads = {idx_url: (idx_bytes, '"idx"'), zip_items[0][0]: (zip_items[0][1], '"z1"'), zip_items[1][0]: (zip_items[1][1], '"z2"')}
+    requested: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested.append(str(request.url))
+        body, etag = payloads[str(request.url)]
+        return httpx.Response(200, content=body, headers={"etag": etag, "content-length": str(len(body))})
+
+    manifest = {
+        "format": "spicy-irs-form990-discovery",
+        "version": 1,
+        "years": {
+            "2024": {
+                "submission_year": 2024,
+                "index": {"url": idx_url, "content_length": len(idx_bytes), "etag": '"idx"'},
+                "archives": [
+                    {"url": zip_items[0][0], "content_length": len(zip_items[0][1]), "etag": '"z1"'},
+                    {"url": zip_items[1][0], "content_length": len(zip_items[1][1]), "etag": '"z2"'},
+                ],
+            }
+        },
+    }
+    out = tmp_path / "partial"
+    art, ev, summary = pipeline.sync_build(
+        manifest, out, archive_root=shared_raw, max_zips=1, min_interval=0, transport=httpx.MockTransport(handler)
+    )
+    assert requested == [idx_url, zip_items[0][0]]
+    assert summary["max_zips"] == 1 and summary["truncated"] is True
+    assert summary["rows"]["irs990_filings"] == 1
+    assert art.root["spec"]["publicationStatus"] == "local-partial"
+
+    live_path = tmp_path / "live.json"
+    live_path.write_text(json.dumps(publication.empty_index()))
+    with pytest.raises(publication.PublicationError, match="local partial candidate cannot be published"):
+        local_publication.main([
+            "--generation", str(out / "generation"),
+            "--family", "irs-form990",
+            "--evidence", str(ev),
+            "--output", str(tmp_path / "dry-partial"),
+            "--dry-run",
+            "--live-index", str(live_path),
+        ])
+
+
+@pytest.mark.parametrize(
+    ("defect", "expected_exc", "match"),
+    [
+        ("index_403", CredentialRefusedError, "HTTP 403"),
+        ("zip_403", CredentialRefusedError, "HTTP 403"),
+        ("index_etag", source.IRS990Error, "ETag changed"),
+        ("zip_etag", source.IRS990Error, "ETag changed"),
+        ("index_size", source.IRS990Error, "size differs"),
+        ("zip_size", source.IRS990Error, "size differs"),
+    ],
+)
+def test_sync_build_download_refuses_403_etag_and_size_mismatches(tmp_path, defect, expected_exc, match):
+    idx_url, idx_bytes, zips = _year_fixture(2024)
+    zip_url, zip_bytes = next(iter(zips.items()))
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        calls.append(url)
+        if url == idx_url:
+            if defect == "index_403":
+                return httpx.Response(403, content=b"Denied")
+            etag = '"wrong-idx"' if defect == "index_etag" else '"idx"'
+            body = idx_bytes + b"\n" if defect == "index_size" else idx_bytes
+            return httpx.Response(200, content=body, headers={"etag": etag, "content-length": str(len(body))})
+        if defect == "zip_403":
+            return httpx.Response(403, content=b"Denied")
+        etag = '"wrong-zip"' if defect == "zip_etag" else '"zip"'
+        body = zip_bytes + b"x" if defect == "zip_size" else zip_bytes
+        return httpx.Response(200, content=body, headers={"etag": etag, "content-length": str(len(body))})
+
+    manifest = {
+        "format": "spicy-irs-form990-discovery",
+        "version": 1,
+        "years": {
+            "2024": {
+                "submission_year": 2024,
+                "index": {"url": idx_url, "content_length": len(idx_bytes), "etag": '"idx"'},
+                "archives": [{"url": zip_url, "content_length": len(zip_bytes), "etag": '"zip"'}],
+            }
+        },
+    }
+    out = tmp_path / f"fail-{defect}"
+    with pytest.raises(expected_exc, match=match):
+        pipeline.sync_build(manifest, out, archive_root=tmp_path / "raw", min_interval=0, transport=httpx.MockTransport(handler))
+    if defect == "index_403":
+        assert calls == [idx_url]
+    assert not list(out.glob(".zip-spool-*"))
+    assert not (out / "generation").exists()
+
+
+def test_fatal_anomalies_quarantine_row_ceiling_and_zero_row_child_tables(tmp_path):
+    # 1. Fatal archive anomalies raise immediately even with max_quarantined_rows=500
+    for reason in ("unsafe_member_path", "encrypted_member"):
+        anomaly = source.IRS990Anomaly(
+            member_name="../evil.xml",
+            object_id=None,
+            reason=reason,
+            detail="unsafe",
+            archive_sha256="sha256:" + "a" * 64,
+        )
+        with pytest.raises(ValueError, match=f"Fatal IRS Form 990 archive anomaly \\({reason}\\)"):
+            transform.build_irs_form990_year(2023, [record(), anomaly], tmp_path / f"fatal-{reason}")
+        assert not list((tmp_path / f"fatal-{reason}").rglob("*.parquet"))
+
+    # 2. max_quarantined_rows ceiling aborts immediately on overflow
+    bad_anomalies = [
+        source.IRS990Anomaly(
+            member_name=f"bad_{i}.xml",
+            object_id=f"20230001934930{i:04d}",
+            reason="parse_error",
+            detail="malformed",
+            archive_sha256="sha256:" + "a" * 64,
+        )
+        for i in range(3)
+    ]
+    with pytest.raises(ValueError, match="max_quarantined_rows=2"):
+        transform.build_irs_form990_year(
+            2023,
+            [record(), *bad_anomalies],
+            tmp_path / "row-cap",
+            max_quarantined_rows=2,
+            max_quarantined_ratio=1.0,
+        )
+
+    # 3. Filing with 0 Part VII officers and 0 Schedule I grants produces valid 0-row schema-exact child partitions
+    bare_xml = _make_xml(part_vii="", schedule_i=None, doc_cnt="1")
+    out_zero = tmp_path / "zero-children"
+    summary = transform.build_irs_form990_year(2023, [record(bare_xml)], out_zero)
+    assert summary["rows"] == {"irs990_filings": 1, "irs990_officers": 0, "irs990_grants": 0}
+    for name, expected_schema in transform.SCHEMAS.items():
+        part = out_zero / name / "submission_year=2023/part-000000.parquet"
+        assert part.is_file()
+        assert pq.read_schema(part).equals(expected_schema)
+        assert pq.read_metadata(part).num_rows == summary["rows"][name]
+

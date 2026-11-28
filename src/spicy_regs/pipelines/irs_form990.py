@@ -220,66 +220,166 @@ def _year_fingerprint_matches(
 def _discover_prior_partition_years(carry_forward_dir: Path | None) -> list[int]:
     if carry_forward_dir is None or not carry_forward_dir.is_dir():
         return []
-    year_sets: list[set[int]] = []
+    year_sets: dict[str, set[int]] = {}
     for table_name in SCHEMAS:
         table_dir = carry_forward_dir / table_name
         if not table_dir.is_dir():
-            return []
+            year_sets[table_name] = set()
+            continue
         found: set[int] = set()
         for child in table_dir.iterdir():
             if child.is_dir():
                 match = _PARTITION_YEAR_RE.fullmatch(child.name)
-                if match and (child / "part-000000.parquet").is_file():
+                if match and any(child.glob("part-*.parquet")):
                     found.add(int(match.group(1)))
-        year_sets.append(found)
-    return sorted(set.intersection(*year_sets)) if year_sets else []
+        year_sets[table_name] = found
+    unique_sets = list(year_sets.values())
+    if not any(unique_sets):
+        return []
+    if len({frozenset(s) for s in unique_sets}) != 1:
+        raise ValueError(
+            f"Asymmetric prior partition years across tables in {carry_forward_dir}: "
+            f"{ {k: sorted(v) for k, v in year_sets.items()} }"
+        )
+    return sorted(unique_sets[0])
 
 
 def _can_copy_year_partitions(carry_forward_dir: Path | None, year: int) -> bool:
     if carry_forward_dir is None:
         return False
     for table_name, expected_schema in SCHEMAS.items():
-        part_path = carry_forward_dir / table_name / f"submission_year={year}" / "part-000000.parquet"
-        if not part_path.is_file():
+        part_dir = carry_forward_dir / table_name / f"submission_year={year}"
+        parts = sorted(part_dir.glob("part-*.parquet")) if part_dir.is_dir() else []
+        if not parts:
             return False
-        try:
-            actual = pq.read_schema(part_path)
-        except Exception:
-            return False
-        if not actual.equals(expected_schema):
-            return False
+        for part_path in parts:
+            try:
+                actual = pq.read_schema(part_path)
+            except Exception:
+                return False
+            if not actual.equals(expected_schema):
+                return False
     return True
 
 
 def _copy_year_partitions(carry_forward_dir: Path, candidate_dir: Path, year: int) -> dict[str, int]:
     rows: dict[str, int] = {}
     for table_name in SCHEMAS:
-        src = carry_forward_dir / table_name / f"submission_year={year}" / "part-000000.parquet"
-        dest = candidate_dir / table_name / f"submission_year={year}" / "part-000000.parquet"
-        if dest.exists():
-            raise ValueError(f"Duplicate partition target for submission_year={year}: {table_name}")
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(src, dest)
-        rows[table_name] = pq.read_metadata(dest).num_rows
+        src_dir = carry_forward_dir / table_name / f"submission_year={year}"
+        parts = sorted(src_dir.glob("part-*.parquet"))
+        if not parts:
+            raise ValueError(f"Missing partition members for submission_year={year}: {table_name}")
+        table_rows = 0
+        for src in parts:
+            dest = candidate_dir / table_name / f"submission_year={year}" / src.name
+            if dest.exists():
+                raise ValueError(f"Duplicate partition target for submission_year={year}: {table_name}/{src.name}")
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, dest)
+            table_rows += pq.read_metadata(dest).num_rows
+        rows[table_name] = table_rows
     return rows
+
+
+def _receipt_etag(receipt: Mapping[str, Any]) -> str | None:
+    if isinstance(receipt.get("etag"), str) and receipt["etag"]:
+        return receipt["etag"]
+    headers = receipt.get("response_headers")
+    if isinstance(headers, list):
+        for pair in headers:
+            if isinstance(pair, (list, tuple)) and len(pair) == 2 and str(pair[0]).lower() == "etag" and pair[1]:
+                return str(pair[1])
+    return None
+
+
+def _match_verified_local_blob(store, sha: str, size: int, observed_at: str) -> tuple[Path, str, int, str] | None:
+    if not isinstance(sha, str) or not _SHA256_RE.fullmatch(sha) or not isinstance(size, int) or size <= 0:
+        return None
+    try:
+        described = store.describe_blob(sha, size)
+    except FileNotFoundError:
+        return None
+    if described["encoding"] != "raw":
+        raise ValueError("Raw original must be stored unwrapped to be read as a file")
+    return store.root / described["object"], sha, size, observed_at
 
 
 def _find_local_raw_match(
     store,
     entry: Mapping[str, Any],
+    *,
+    prior_years_meta: Mapping[str, Any] | None = None,
 ) -> tuple[Path, str, int, str] | None:
-    """Return ``(blob_path, sha256, byte_size, observed_at)`` when an exact verified local blob exists."""
+    """Return ``(blob_path, sha256, byte_size, observed_at)`` for an exact verified local blob.
+
+    Matches either by explicit ``sha256``/``response_sha256`` + ``byte_size`` or, for ``discover()``
+    manifests omitting ``sha256``, by verified ``(url, etag, byte_size)`` against ``prior_years_meta``
+    or ``CentralRawArchiveStore`` acquisition receipts.
+    """
     sha = entry.get("sha256") or entry.get("response_sha256")
     size = entry.get("byte_size", entry.get("content_length"))
-    if isinstance(sha, str) and _SHA256_RE.fullmatch(sha) and isinstance(size, int) and size > 0:
+    observed_at = str(entry.get("observed_at") or datetime.now(UTC).isoformat())
+    if isinstance(sha, str) and isinstance(size, int):
+        return _match_verified_local_blob(store, sha, size, observed_at)
+
+    url = str(entry.get("url") or entry.get("request_url") or "")
+    etag = entry.get("etag")
+    if not url or not isinstance(etag, str) or not etag or not isinstance(size, int) or size <= 0:
+        return None
+
+    # 1. Check prior population summary fingerprints for an exact (url, etag, size) -> sha256 match.
+    for year_meta in (prior_years_meta or {}).values():
+        if not isinstance(year_meta, Mapping):
+            continue
+        candidates: list[Any] = []
+        if isinstance(year_meta.get("source_index"), Mapping):
+            candidates.append(year_meta["source_index"])
+        if isinstance(year_meta.get("source_archives"), list):
+            candidates.extend(year_meta["source_archives"])
+        for item in candidates:
+            if not isinstance(item, Mapping):
+                continue
+            item_url = str(item.get("url") or item.get("request_url") or "")
+            item_etag = item.get("etag")
+            item_size = item.get("byte_size", item.get("content_length"))
+            item_sha = item.get("sha256") or item.get("response_sha256")
+            if item_url == url and item_etag == etag and item_size == size and isinstance(item_sha, str):
+                matched = _match_verified_local_blob(store, item_sha, size, observed_at)
+                if matched is not None:
+                    return matched
+
+    # 2. Scan CentralRawArchiveStore acquisition receipts for an exact verified (url, etag, size) match.
+    acquisitions_dir = store.root / "acquisitions" / "sha256"
+    if not acquisitions_dir.is_dir():
+        return None
+    for receipt_path in sorted(acquisitions_dir.rglob("*")):
+        if not receipt_path.is_file():
+            continue
         try:
-            described = store.describe_blob(sha, size)
-        except FileNotFoundError:
-            return None
-        if described["encoding"] != "raw":
-            raise ValueError("Raw original must be stored unwrapped to be read as a file")
-        observed_at = str(entry.get("observed_at") or datetime.now(UTC).isoformat())
-        return store.root / described["object"], sha, size, observed_at
+            doc = json.loads(receipt_path.read_bytes())
+        except (OSError, ValueError):
+            continue
+        if not isinstance(doc, Mapping) or doc.get("format") != "spicygov-acquisition-1":
+            continue
+        receipt = doc.get("receipt")
+        if not isinstance(receipt, Mapping):
+            continue
+        urls = {
+            receipt.get(key)
+            for key in ("requested_url", "resolved_url", "source_url", "original_location")
+            if isinstance(receipt.get(key), str)
+        }
+        if url not in urls:
+            continue
+        if receipt.get("byte_size") != size or _receipt_etag(receipt) != etag:
+            continue
+        candidate_sha = receipt.get("sha256")
+        if not isinstance(candidate_sha, str):
+            continue
+        obs = str(receipt.get("observed_at") or observed_at)
+        matched = _match_verified_local_blob(store, candidate_sha, size, obs)
+        if matched is not None:
+            return matched
     return None
 
 
@@ -316,7 +416,12 @@ def _stream_download_full_index(
     expected_etag = entry.get("etag")
 
     pacer.wait()
-    retained = index_owner.transport(transport, stage="irs-form990-index", max_bytes=source.MAX_INDEX_BYTES)
+    retained = index_owner.transport(
+        transport,
+        stage="irs-form990-index",
+        max_bytes=source.MAX_INDEX_BYTES,
+        response_header_names=("etag", "last-modified"),
+    )
     headers = {"User-Agent": user_agent, "Accept-Encoding": "identity"}
     digest = hashlib.sha256()
     byte_size = 0
@@ -455,9 +560,13 @@ def sync_build(
     Uses dual-tier evidence: ``policy="full"`` for annual index CSVs (reusing exact retained
     blobs in ``CentralRawArchiveStore``) and ``policy="hash_only"`` for sequentially streamed
     TEOS ZIPs (one private temp file at a time, unlinked immediately after Parquet flush;
-    already-retained local ZIPs are reused in place). Unchanged closed years from
-    ``carry_forward_generation`` are copied forward byte-for-byte so R2 publish executes
-    server-side ``copy_object`` without re-downloading.
+    already-retained local ZIPs are also reused under ``policy="hash_only"`` so bulk ZIPs are
+    not uploaded to R2 evidence). Unchanged closed years from ``carry_forward_generation`` are
+    copied forward byte-for-byte (requiring prior summary metadata/fingerprints) so R2 publish
+    executes server-side ``copy_object`` without re-downloading. Per-ZIP ``checkpoints/<year>.json``
+    files record progress audit state; resume operates at the submission-year boundary via
+    ``--carry-forward-generation``. Truncated builds (``max_zips > 0``) seal as ``local-partial``
+    so they cannot overwrite live R2.
     """
     from spicy_docs.sources import irs_form990 as source
 
@@ -521,14 +630,24 @@ def sync_build(
             for prior_year in _discover_prior_partition_years(carry_forward_generation):
                 if prior_year in requested_years:
                     continue
+                prior_year_meta = prior_years_meta.get(str(prior_year))
+                if (
+                    not isinstance(prior_year_meta, Mapping)
+                    or not isinstance(prior_year_meta.get("source_index"), Mapping)
+                    or not isinstance(prior_year_meta.get("source_archives"), list)
+                    or not prior_year_meta["source_archives"]
+                ):
+                    raise ValueError(
+                        f"Cannot carry forward unlisted closed year {prior_year}: missing prior year "
+                        "metadata/fingerprints in carry_forward_summary"
+                    )
                 if not _can_copy_year_partitions(carry_forward_generation, prior_year):
                     raise ValueError(
                         f"Prior carry-forward year {prior_year} failed schema verification in {carry_forward_generation}"
                     )
                 copied_rows = _copy_year_partitions(carry_forward_generation, candidate_dir, prior_year)
-                prior_meta = dict(prior_years_meta.get(str(prior_year), {}))
                 years_summary[str(prior_year)] = {
-                    **prior_meta,
+                    **dict(prior_year_meta),
                     "submission_year": prior_year,
                     "mode": "carried_forward_unlisted",
                     "rows": copied_rows,
@@ -577,7 +696,7 @@ def sync_build(
             # Acquire or reuse the annual index CSV under policy="full".
             index_url = str(index_entry.get("url") or index_entry.get("request_url"))
             source.validate_url(index_url)
-            local_index = _find_local_raw_match(evidence.store, index_entry)
+            local_index = _find_local_raw_match(evidence.store, index_entry, prior_years_meta=prior_years_meta)
             if local_index is not None:
                 index_path, index_sha, index_size, index_obs = local_index
                 saved_idx = evidence.retain_file(
@@ -645,10 +764,12 @@ def sync_build(
                         source.validate_url(zip_url)
                         temp_zip: Path | None = None
                         try:
-                            local_zip = _find_local_raw_match(evidence.store, archive_entry)
+                            local_zip = _find_local_raw_match(
+                                evidence.store, archive_entry, prior_years_meta=prior_years_meta
+                            )
                             if local_zip is not None:
                                 zip_path, zip_sha, zip_size, zip_obs = local_zip
-                                saved_zip = evidence.retain_file(
+                                saved_zip = zip_owner.retain_file(
                                     zip_path,
                                     stage="irs-form990-archive",
                                     raw_source=True,
@@ -666,7 +787,7 @@ def sync_build(
                                     **({"etag": archive_entry["etag"]} if archive_entry.get("etag") else {}),
                                 }
                                 stream_path = zip_path
-                                evidence_mode = "central-raw-reused"
+                                evidence_mode = "hash_only_local_reuse"
                             else:
                                 if offline:
                                     raise FileNotFoundError(
@@ -685,13 +806,13 @@ def sync_build(
                                 peak_temp_zip_bytes = max(peak_temp_zip_bytes, temp_zip.stat().st_size)
                                 stream_path = temp_zip
                                 evidence_mode = "hash_only"
+                                used_inputs.append({
+                                    "location": archive_descriptor["request_url"],
+                                    "sha256": archive_descriptor["response_sha256"],
+                                    "bytes": archive_descriptor["byte_size"],
+                                    "asset_kind": "archive",
+                                })
 
-                            used_inputs.append({
-                                "location": archive_descriptor["request_url"],
-                                "sha256": archive_descriptor["response_sha256"],
-                                "bytes": archive_descriptor["byte_size"],
-                                "asset_kind": "archive",
-                            })
                             source_archives_meta.append({
                                 "url": archive_descriptor["request_url"],
                                 "sha256": archive_descriptor["response_sha256"],
@@ -800,6 +921,8 @@ def sync_build(
             "family": FAMILY,
             "generated_at": datetime.now(UTC).isoformat(),
             "submission_years": sorted(int(y) for y in years_summary),
+            "max_zips": max_zips,
+            "truncated": max_zips > 0,
             "rows": total_rows,
             "quarantined_count": len(all_quarantined),
             "telemetry": {
@@ -843,6 +966,7 @@ def sync_build(
             schemas={name: described_schema(schema) for name, schema in SCHEMAS.items()},
             inputs=evidence.inputs(),
             read_snapshot=read_snapshot,
+            publication_status="local-partial" if max_zips > 0 else "complete-family",
             partitioned=PARTITIONED_TABLES,
             receipt_path=None,
             owned_output_root=output_dir,
@@ -1038,7 +1162,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="Optional prior irs990-population-summary.json for fingerprint-matched year carry-forward",
     )
     sync.add_argument("--no-carry-forward-unlisted", action="store_true")
-    sync.add_argument("--max-zips", type=int, default=0, help="Optional cap on ZIPs processed per year (0 = all)")
+    sync.add_argument(
+        "--max-zips",
+        type=int,
+        default=0,
+        help="Optional cap on ZIPs processed per year (0 = all; >0 seals a non-publishable local-partial build)",
+    )
     sync.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     sync.add_argument("--max-quarantined-rows", type=int, default=DEFAULT_MAX_QUARANTINED_ROWS)
     sync.add_argument("--max-quarantined-ratio", type=float, default=DEFAULT_MAX_QUARANTINED_RATIO)
