@@ -1228,3 +1228,388 @@ def test_empty_original_document_id_recovers_after_crash_between_commit_and_jour
     assert after["A"]["original_document_id"] is None and after["B"]["original_document_id"] is None
     assert after["A"]["comment_reference_values_json"] == '{"originalDocumentId":""}'
     assert after["B"]["comment_reference_values_json"] == '{"originalDocumentId":"  \\t"}'
+
+
+# --------------------------------------------------------------------------- #
+# Partitioned spill-free prepare() equivalence, duplicate guards, and tight-budget stress (ss-flsg)
+# --------------------------------------------------------------------------- #
+def _bucket_witness_ids(buckets: int) -> dict[int, str]:
+    """Return one deterministic comment_id for each hash bucket 0..buckets-1."""
+    mask = buckets - 1
+    found: dict[int, str] = {}
+    with duckdb.connect() as con:
+        rows = con.execute(
+            f"SELECT 'W-' || i::VARCHAR AS cid, (hash('W-' || i::VARCHAR) & {mask})::INT AS b "
+            "FROM range(2000) t(i)"
+        ).fetchall()
+    for cid, bucket in rows:
+        found.setdefault(bucket, cid)
+        if len(found) == buckets:
+            break
+    assert len(found) == buckets
+    return found
+
+
+def test_partitioned_prepare_matches_reference_semantics_across_edge_cases(tmp_path, catalog, monkeypatch):
+    from spicy_regs.sources import regulatory_catalog as native
+
+    witnesses = _bucket_witness_ids(cfw.HASH_BUCKETS)
+    agencies = ("CMS", "DOT", "EPA", "FDA")
+    changed_non_additive = json.dumps([
+        {"title": "Letter", "formats": [{**_PDF, "url": f"{_PDF['url']}?v=2"}]},
+    ])
+    catalog_rows = []
+    read_rows = []
+
+    # Populate every hash bucket 0..HASH_BUCKETS-1 with varied outcomes.
+    for bucket, cid in sorted(witnesses.items()):
+        agency = agencies[bucket % len(agencies)]
+        if bucket % 6 == 0:
+            # Additive replacement (HELD -> LISTED)
+            catalog_rows.append(row(cid, agency=agency, attachments_json=HELD))
+            read_rows.append({"key": f"{cid}/1", "comment_id": cid, "modify_date": T0, "attachments_json": LISTED})
+        elif bucket % 6 == 1:
+            # Non-additive refusal (HELD -> changed_non_additive)
+            catalog_rows.append(row(cid, agency=agency, attachments_json=HELD))
+            read_rows.append(
+                {"key": f"{cid}/1", "comment_id": cid, "modify_date": T0, "attachments_json": changed_non_additive}
+            )
+        elif bucket % 6 == 2:
+            # Already equal held value (no fill, no refusal)
+            catalog_rows.append(row(cid, agency=agency, attachments_json=LISTED))
+            read_rows.append({"key": f"{cid}/1", "comment_id": cid, "modify_date": T0, "attachments_json": LISTED})
+        elif bucket % 6 == 3:
+            # Multi-copy agreeing on matching version + an extra stale version (still fills once, not other_version_only)
+            catalog_rows.append(row(cid, agency=agency))
+            read_rows.extend([
+                {"key": f"{cid}/a", "comment_id": cid, "modify_date": T0, "attachments_json": LISTED},
+                {"key": f"{cid}/b", "comment_id": cid, "modify_date": T0, "attachments_json": LISTED},
+                {"key": f"{cid}/old", "comment_id": cid, "modify_date": "2019-01-01T00:00:00Z", "attachments_json": HELD},
+            ])
+        elif bucket % 6 == 4:
+            # Multi-copy disagreeing on matching version (conflict -> blocks fill, not other_version_only)
+            catalog_rows.append(row(cid, agency=agency))
+            read_rows.extend([
+                {"key": f"{cid}/a", "comment_id": cid, "modify_date": T0, "attachments_json": LISTED},
+                {"key": f"{cid}/b", "comment_id": cid, "modify_date": T0, "attachments_json": None},
+            ])
+        else:
+            # Plain NULL fill
+            catalog_rows.append(row(cid, agency=agency))
+            read_rows.append({"key": f"{cid}/1", "comment_id": cid, "modify_date": T0, "attachments_json": LISTED})
+
+    # Explicit NULL modify_date, multi-wrong-version, stated-NULL, unread, and absent edge cases.
+    catalog_rows.extend([
+        row("NULL-MD-MATCH", agency="CMS", modify=None),
+        row("NULL-MD-MULTI-AGREE", agency="CMS", modify=None),
+        row("NULL-MD-MULTI-CONFLICT", agency="CMS", modify=None),
+        row("NULL-MD-CAT-ONLY", agency="DOT", modify=None),
+        row("NULL-MD-READ-ONLY", agency="DOT", modify=T0),
+        row("MULTI-WRONG-VER", agency="EPA", modify=T0),
+        row("STATED-NULL-SAME-VER", agency="EPA", modify=T0),
+        row("UNREAD-1", agency="FDA", modify=T0),
+        row("UNREAD-NULL-MD", agency="FDA", modify=None),
+    ])
+    read_rows.extend([
+        {"key": "nm/1", "comment_id": "NULL-MD-MATCH", "modify_date": None, "attachments_json": LISTED},
+        {"key": "nma/1", "comment_id": "NULL-MD-MULTI-AGREE", "modify_date": None, "attachments_json": LISTED},
+        {"key": "nma/2", "comment_id": "NULL-MD-MULTI-AGREE", "modify_date": None, "attachments_json": LISTED},
+        {"key": "nmc/1", "comment_id": "NULL-MD-MULTI-CONFLICT", "modify_date": None, "attachments_json": LISTED},
+        {"key": "nmc/2", "comment_id": "NULL-MD-MULTI-CONFLICT", "modify_date": None, "attachments_json": HELD},
+        {"key": "nmco/1", "comment_id": "NULL-MD-CAT-ONLY", "modify_date": T0, "attachments_json": LISTED},
+        {"key": "nmro/1", "comment_id": "NULL-MD-READ-ONLY", "modify_date": None, "attachments_json": LISTED},
+        {"key": "mwv/1", "comment_id": "MULTI-WRONG-VER", "modify_date": "2019-01-01T00:00:00Z", "attachments_json": LISTED},
+        {"key": "mwv/2", "comment_id": "MULTI-WRONG-VER", "modify_date": "2019-06-01T00:00:00Z", "attachments_json": HELD},
+        {"key": "sn/1", "comment_id": "STATED-NULL-SAME-VER", "modify_date": T0, "attachments_json": None},
+        {"key": "abs/1", "comment_id": "ABSENT-ID", "modify_date": T0, "attachments_json": LISTED},
+        {"key": "null-cid-read/1", "comment_id": None, "modify_date": T0, "attachments_json": LISTED},
+    ])
+
+    seed(catalog, catalog_rows)
+    staged_reads = tmp_path / "reads.parquet"
+    pl.DataFrame(
+        [{c: r.get(c) for c in cfw.read_columns("attachments")} for r in read_rows],
+        schema={c: pl.Utf8 for c in cfw.read_columns("attachments")},
+    ).write_parquet(staged_reads)
+
+    # Inject a single NULL comment_id row into the snapshot query (valid under SQL GROUP BY HAVING count(*) > 1,
+    # and must count toward table_rows, catalog_rows, and unread — never other_version_only).
+    qualified = iceberg._qualified(COMMENT)
+    one_null_row = (
+        f"(SELECT * REPLACE (NULL::VARCHAR AS comment_id, NULL::VARCHAR AS modify_date, 'EPA'::VARCHAR AS agency_code) "
+        f"FROM {qualified} LIMIT 1)"
+    )
+    snapshot_with_one_null = f"SELECT * FROM (SELECT * FROM {qualified} UNION ALL {one_null_row})"
+    monkeypatch.setattr(iceberg, "_snapshot_query", lambda *_a, **_kw: snapshot_with_one_null)
+
+    # Ensure processing_table still reads cleanly from the valid non-null native table rows.
+    prepared = cfw.prepare(tmp_path / "run", reads=staged_reads, profile="attachments")
+
+    # Compute independent legacy reference counts directly using the original correlated EXISTS SQL.
+    with catalog() as con:
+        parts_rel = f"read_parquet({cfw._sql(staged_reads)}, hive_partitioning=false)"
+        index_sql = f"SELECT comment_id, modify_date, agency_code AS _file FROM ({snapshot_with_one_null})"
+        ref_reads_sql = (
+            f"SELECT s.comment_id, s.modify_date, CAST(s.attachments_json AS VARCHAR) AS attachments_json "
+            f"FROM {parts_rel} s SEMI JOIN ({index_sql}) c USING (comment_id)"
+        )
+        ref_versions_sql = f"""
+            SELECT comment_id, modify_date,
+                   CASE WHEN count(DISTINCT CASE WHEN attachments_json IS NULL THEN 'n' ELSE 'v' || attachments_json END) = 1
+                        THEN any_value(attachments_json) END AS attachments_json
+            FROM ({ref_reads_sql})
+            GROUP BY comment_id, modify_date
+        """
+        ref_counts = con.execute(f"""
+            WITH idx AS ({index_sql}),
+                 rr AS ({ref_reads_sql}),
+                 vv AS ({ref_versions_sql})
+            SELECT count(*),
+                   count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM rr r WHERE r.comment_id = c.comment_id)),
+                   count(*) FILTER (
+                       WHERE EXISTS (SELECT 1 FROM rr r WHERE r.comment_id = c.comment_id)
+                         AND NOT EXISTS (
+                             SELECT 1 FROM vv v
+                             WHERE v.comment_id = c.comment_id AND v.modify_date IS NOT DISTINCT FROM c.modify_date
+                         )
+                   )
+            FROM idx c
+        """).fetchone()
+
+    assert (prepared["catalog_rows"], prepared["unread"], prepared["other_version_only"]) == ref_counts
+    assert prepared["table_rows"] == len(catalog_rows) + 1
+    assert prepared["unread"] == 3  # UNREAD-1, UNREAD-NULL-MD, and the single NULL comment_id row
+    assert prepared["other_version_only"] == 3  # NULL-MD-CAT-ONLY, NULL-MD-READ-ONLY, MULTI-WRONG-VER
+
+    fill_df = pl.read_parquet(tmp_path / "run" / "fill" / "fill.parquet").sort("comment_id")
+    filled_ids = set(fill_df["comment_id"].to_list())
+    assert {"NULL-MD-MATCH", "NULL-MD-MULTI-AGREE"} <= filled_ids
+    assert "NULL-MD-MULTI-CONFLICT" not in filled_ids
+    assert "STATED-NULL-SAME-VER" not in filled_ids
+
+    conflicts_df = pl.read_parquet(tmp_path / "run" / "fill" / "conflicts.parquet")
+    assert "NULL-MD-MULTI-CONFLICT" in set(conflicts_df["comment_id"].to_list())
+    assert prepared["conflicted_versions_by_column"]["attachments_json"] == len(conflicts_df)
+
+    refusals_df = pl.read_parquet(tmp_path / "run" / "fill" / "refusals.parquet")
+    assert prepared["refused_not_additive_by_column"]["attachments_json"] == len(refusals_df)
+    assert prepared["replaced_by_column"]["attachments_json"] == sum(1 for b in witnesses if b % 6 == 0)
+    assert prepared["rows_to_fill"] == len(fill_df)
+    assert sum(prepared["cells_by_column"].values()) + sum(prepared["replaced_by_column"].values()) == len(fill_df)
+    assert not (tmp_path / "run" / "fill" / "work").exists()
+
+    # Verify the write path applies the prepared fill cleanly (on the non-null snapshot).
+    monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, _, **kw: f"SELECT * FROM {iceberg._qualified(rt)}")
+    all_reads_dir = tmp_path / "all-profile"
+    reads(all_reads_dir, [
+        {"key": "a", "comment_id": "UNREAD-1", "subtype": "Public Comment", "attachments_json": LISTED},
+        {"key": "b", "comment_id": "NULL-MD-MATCH", "modify_date": None, "subtype": "Public Comment"},
+    ])
+    all_prepared = cfw.prepare(all_reads_dir, profile="all")
+    assert (all_prepared["rows_to_fill"], all_prepared["unread"], all_prepared["other_version_only"]) == (
+        2, len(catalog_rows) - 2, 0,
+    )
+    assert native.processing_table is not None
+
+
+def test_partitioned_prepare_handles_zero_matching_reads_and_empty_catalog(tmp_path, catalog):
+    seed(catalog, [row("A"), row("B", agency="CMS")])
+    absent_reads = tmp_path / "absent.parquet"
+    pl.DataFrame(
+        [
+            {"key": "x", "comment_id": "NOT-IN-CATALOG", "modify_date": T0, "attachments_json": LISTED},
+            {"key": "n", "comment_id": None, "modify_date": T0, "attachments_json": LISTED},
+        ],
+        schema={c: pl.Utf8 for c in cfw.read_columns("attachments")},
+    ).write_parquet(absent_reads)
+
+    prepared = cfw.prepare(tmp_path / "no-match", reads=absent_reads, profile="attachments")
+    assert (prepared["table_rows"], prepared["catalog_rows"], prepared["unread"], prepared["other_version_only"]) == (
+        2, 2, 2, 0,
+    )
+    assert prepared["rows_to_fill"] == 0
+    assert prepared["files"] == {}
+    assert pl.read_parquet(tmp_path / "no-match" / "fill" / "fill.parquet").height == 0
+
+    # Empty catalog (0 rows) with non-empty reads.
+    with catalog() as con:
+        con.execute(f"DELETE FROM {iceberg._qualified(COMMENT)}")
+    empty_prepared = cfw.prepare(tmp_path / "empty-cat", reads=absent_reads, profile="attachments")
+    assert (
+        empty_prepared["table_rows"],
+        empty_prepared["catalog_rows"],
+        empty_prepared["unread"],
+        empty_prepared["other_version_only"],
+        empty_prepared["rows_to_fill"],
+    ) == (0, 0, 0, 0, 0)
+    assert empty_prepared["files"] == {}
+
+
+@pytest.mark.parametrize("mode", ["two-nulls", "buckets-and-nulls"])
+def test_partitioned_duplicate_id_guard_refuses_null_and_bucket_duplicates(tmp_path, catalog, monkeypatch, mode):
+    witnesses = _bucket_witness_ids(cfw.HASH_BUCKETS)
+    dup_ids = [witnesses[0], witnesses[17], witnesses[cfw.HASH_BUCKETS - 1]]
+    seed(catalog, [row(cid) for cid in dup_ids] + [row("UNIQUE-1")])
+    reads(tmp_path / "prep", [{"key": "u", "comment_id": "UNIQUE-1", "attachments_json": LISTED}])
+
+    qualified = iceberg._qualified(COMMENT)
+    one_null_row = (
+        f"(SELECT * REPLACE (NULL::VARCHAR AS comment_id, NULL::VARCHAR AS modify_date, 'EPA'::VARCHAR AS agency_code) "
+        f"FROM {qualified} LIMIT 1)"
+    )
+    if mode == "two-nulls":
+        snap_sql = (
+            f"SELECT * FROM (SELECT * FROM {qualified} "
+            f"UNION ALL {one_null_row} UNION ALL {one_null_row})"
+        )
+        expected_dups = 1
+    else:
+        in_list = ", ".join(cfw._sql(cid) for cid in dup_ids)
+        snap_sql = (
+            f"SELECT * FROM (SELECT * FROM {qualified} "
+            f"UNION ALL SELECT * FROM {qualified} WHERE comment_id IN ({in_list}) "
+            f"UNION ALL {one_null_row} UNION ALL {one_null_row})"
+        )
+        expected_dups = len(dup_ids) + 1
+
+    monkeypatch.setattr(iceberg, "_snapshot_query", lambda *_a, **_kw: snap_sql)
+
+    with pytest.raises(RuntimeError, match=f"^{expected_dups} comment ids appear more than once"):
+        cfw.prepare(tmp_path / "prep", profile="attachments")
+    assert not (tmp_path / "prep" / "fill" / "prepare.json").exists()
+
+    with pytest.raises(RuntimeError, match=f"^{expected_dups} comment ids appear more than once"):
+        cfw.prepare_empty_original_document_id(tmp_path / "empty-odid")
+    assert not (tmp_path / "empty-odid" / "fill" / "prepare.json").exists()
+
+
+def test_prepare_stays_spill_free_on_large_catalog_under_tight_budget(tmp_path, monkeypatch):
+    """Reproduce the correlated-EXISTS spill OOM on a 500K-row catalog and verify new prepare() runs spill-free."""
+    from spicy_regs.duckdb_settings import ExportResources
+    from spicy_regs.sources import regulatory_catalog as native
+
+    n_catalog = 500_000
+    n_reads = 15_000
+    index_src = tmp_path / "synthetic-catalog.parquet"
+    reads_src = tmp_path / "synthetic-reads.parquet"
+    changed_non_additive = json.dumps([
+        {"title": "Letter", "formats": [{**_PDF, "url": f"{_PDF['url']}?v=2"}]},
+    ])
+
+    with duckdb.connect() as con:
+        con.execute(f"""
+            COPY (
+                SELECT
+                    'EPA-HQ-OAR-2023-' || lpad((hash(i) % 9999)::VARCHAR, 4, '0') || '-' || lpad(i::VARCHAR, 7, '0') AS comment_id,
+                    CASE WHEN i % 1000 = 0 THEN NULL
+                         ELSE '2024-01-' || lpad(((i % 28) + 1)::VARCHAR, 2, '0') || 'T12:00:00Z' END AS modify_date,
+                    's3://spicy-regs/data/part-' || lpad((i % 20)::VARCHAR, 3, '0') || '.parquet' AS _file,
+                    CASE
+                        WHEN i < 100 THEN {cfw._sql(HELD)}
+                        WHEN i < 150 THEN {cfw._sql(HELD)}
+                        ELSE NULL
+                    END AS attachments_json
+                FROM range({n_catalog}) t(i)
+            ) TO {cfw._sql(index_src)} (FORMAT PARQUET, COMPRESSION ZSTD)
+        """)
+        # 15,000 read copies covering 14,800 catalog IDs + 100 agreeing dup copies + 50 conflicting dup copies + 50 absent IDs:
+        #   i in 0..99: additive replacement (HELD -> LISTED) -> 100 replaced
+        #   i in 100..149: non-additive refusal (HELD -> changed_non_additive) -> 50 refused
+        #   i in 150..199: conflicting multi-copy (LISTED vs NULL) -> 50 conflicts
+        #   i in 200..299: agreeing multi-copy (LISTED & LISTED) -> 100 fills
+        #   i in 300..799: other-version-only (wrong modify_date) -> 500 other_version_only
+        #   i in 800..14799: plain NULL fills -> 14,000 fills
+        #   50 extra absent IDs -> ignored
+        con.execute(f"""
+            COPY (
+                WITH base AS (
+                    SELECT row_number() OVER () - 1 AS idx, comment_id, modify_date
+                    FROM read_parquet({cfw._sql(index_src)})
+                    LIMIT 14800
+                )
+                SELECT 'k/' || idx::VARCHAR AS key, comment_id,
+                       CASE WHEN idx BETWEEN 300 AND 799 THEN '2019-01-01T00:00:00Z' ELSE modify_date END AS modify_date,
+                       CASE WHEN idx BETWEEN 100 AND 149 THEN {cfw._sql(changed_non_additive)} ELSE {cfw._sql(LISTED)} END AS attachments_json
+                FROM base
+                UNION ALL
+                SELECT 'k/dup-conflict/' || idx::VARCHAR, comment_id, modify_date, NULL::VARCHAR
+                FROM base WHERE idx BETWEEN 150 AND 199
+                UNION ALL
+                SELECT 'k/dup-agree/' || idx::VARCHAR, comment_id, modify_date, {cfw._sql(LISTED)}
+                FROM base WHERE idx BETWEEN 200 AND 299
+                UNION ALL
+                SELECT 'k/absent/' || j::VARCHAR, 'ABSENT-' || j::VARCHAR, {cfw._sql(T0)}, {cfw._sql(LISTED)}
+                FROM range(50) t(j)
+            ) TO {cfw._sql(reads_src)} (FORMAT PARQUET, COMPRESSION ZSTD)
+        """)
+
+    # 1. Confirm the old correlated-EXISTS counts query hits the 32MB spill cap on this exact 500K catalog.
+    legacy_spill = tmp_path / "legacy-spill"
+    legacy_spill.mkdir()
+    with duckdb.connect() as con:
+        ExportResources(memory="64MB", threads=2).configure(con, legacy_spill)
+        con.execute("SET max_temp_directory_size='32MB'")
+        with pytest.raises(duckdb.OutOfMemoryException, match="max_temp_directory_size"):
+            con.execute(f"""
+                SELECT count(*),
+                       count(*) FILTER (WHERE NOT EXISTS (
+                           SELECT 1 FROM read_parquet({cfw._sql(reads_src)}) r WHERE r.comment_id = c.comment_id
+                       )),
+                       count(*) FILTER (WHERE EXISTS (
+                           SELECT 1 FROM read_parquet({cfw._sql(reads_src)}) r WHERE r.comment_id = c.comment_id
+                       ) AND NOT EXISTS (
+                           SELECT 1 FROM read_parquet({cfw._sql(reads_src)}) v
+                           WHERE v.comment_id = c.comment_id AND v.modify_date IS NOT DISTINCT FROM c.modify_date
+                       ))
+                FROM read_parquet({cfw._sql(index_src)}) c
+            """).fetchall()
+
+    # 2. Run new prepare() end-to-end under the EXACT same 64MB RAM / 32MB spill cap.
+    snap = iceberg.CatalogSnapshot("stress", 8949044782115210564, 1)
+    monkeypatch.setattr(iceberg, "_selected_catalog_namespace", lambda con, rt: "default_native")
+    monkeypatch.setattr(iceberg, "_read_snapshot", lambda con, rt, namespace=None: snap)
+    monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, s, namespace=None: f"SELECT * FROM read_parquet({cfw._sql(index_src)})")
+    monkeypatch.setattr(cfw, "FILE_COLUMN", "_file")
+    monkeypatch.setattr(cfw, "storage_access", lambda con: None)
+    monkeypatch.setattr(
+        cfw,
+        "data_files",
+        lambda con: {f"s3://spicy-regs/data/part-{i:03d}.parquet": 10_000_000 for i in range(20)},
+    )
+
+    def synthetic_processing(con, rt, *, where=None, include_comment_promotion=False, **_kw):
+        tbl = "_stress_processing"
+        con.execute(f"""
+            CREATE OR REPLACE TEMP TABLE {tbl} AS
+            SELECT comment_id, modify_date, attachments_json, FALSE AS _promoted_v2
+            FROM read_parquet({cfw._sql(index_src)})
+            WHERE {where}
+        """)
+        return tbl
+
+    monkeypatch.setattr(native, "processing_table", synthetic_processing)
+
+    workdir = tmp_path / "stress-run"
+    with duckdb.connect() as con:
+        con.execute("SET max_temp_directory_size='32MB'")
+        prepared = cfw.prepare(
+            workdir,
+            reads=reads_src,
+            profile="attachments",
+            con=con,
+            resources=ExportResources(memory="64MB", threads=2),
+        )
+        spill_files = list((workdir / "fill" / "spill").glob("*"))
+        assert spill_files == []
+
+    assert prepared["table_rows"] == n_catalog
+    assert prepared["catalog_rows"] == n_catalog
+    assert prepared["unread"] == n_catalog - 14_800
+    assert prepared["other_version_only"] == 500
+    assert prepared["conflicted_versions_by_column"] == {"attachments_json": 50}
+    assert prepared["refused_not_additive_by_column"] == {"attachments_json": 50}
+    assert prepared["replaced_by_column"] == {"attachments_json": 100}
+    assert prepared["cells_by_column"] == {"attachments_json": 14_100}
+    assert prepared["rows_to_fill"] == 14_200
+    assert not (workdir / "fill" / "work").exists()
+    assert n_reads == 15_000
