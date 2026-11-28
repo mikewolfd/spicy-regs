@@ -9,7 +9,9 @@ window, caps, prior-output resume and publication.
 The whole published window is enumerated each run so unsuccessful packages
 remain eligible, and held packages are revisited when a reading input changes
 (:func:`_processing_versions`); an unchanged source with successful matching
-checkpoints across all its outputs costs no body requests. Outstanding packages
+checkpoints across all its outputs costs no body requests. A processing-version
+change can re-read a verified retained PDF instead of requesting its body
+from GovInfo again. Outstanding packages
 are read most-needed first (:func:`_queue`), and collections share the package
 cap round-robin so neither starves on a cold start. Print families read the
 package's PDF-first order because their columns state pages; bodies are read whole and
@@ -22,21 +24,25 @@ Senate expenditure granules use a separate acquisition pass
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import os
+import re
+import zlib
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime
 from functools import cache
 from importlib.metadata import version
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple, Protocol
+from typing import TYPE_CHECKING, Any, NamedTuple, Protocol, cast
 
 import httpx
 from loguru import logger
+from rulespec_artifacts import BlobIntegrityError
 from spicy_docs.extraction import BODY_TEXT_DERIVATION_VERSION, DERIVATION_READS_AS
-from spicy_docs.extraction.body_text import BodyText, body_text
+from spicy_docs.extraction.body_text import BodyText, FetchedBody, body_text
 from spicy_docs.interpretation.bill_actions import (
     PRINT_ACTION_RULE_SET_VERSION,
     PRINT_ACTION_VOCABULARY_VERSION,
@@ -78,18 +84,29 @@ from spicy_docs.sources.govinfo.activity_reports import (
     is_activity_report,
     names_activity,
 )
-from spicy_docs.sources.govinfo.bodies import MEASURED_BUDGET_PARTS, PRINT_BODY_PREFERENCE, parse_package_id
+from spicy_docs.sources.govinfo.bodies import (
+    MEASURED_BUDGET_PARTS,
+    PRINT_BODY_PREFERENCE,
+    package_body_locator,
+    package_summary_locator,
+    parse_package_id,
+    validate_package_summary,
+)
 from spicy_docs.sources.govinfo.body_acquisition import (
     GovInfoBodyAcquirer,
     GovInfoBodyBudget,
     GovInfoFormatNotOfferedError,
+    GovInfoPackageBody,
 )
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, published_url
+from spicy_docs.storage.raw_archive import CentralRawArchiveStore, default_raw_archive_root
+from spicy_docs.transport.captured import CapturedBodyResponse
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
 from spicy_regs.govinfo_revisions import latest_package_rows, latest_read, revision_instant
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
+from spicy_regs.sources.publication import _bounded_get
 from spicy_regs.transforms.congress_scope import current_congress
 from spicy_regs.transforms.read_checkpoints import checkpoint_metadata, read_checkpoints
 from spicy_regs.transforms.table_merge import merge_contract_table, published_table
@@ -468,8 +485,121 @@ def _roster_vocabulary(rosters: RosterSource, congress: int) -> dict[str, dict[s
     return vocabularies
 
 
-def _read_body(acquirer: PackageBodySource, package_id: str) -> tuple[Any, BodyText]:
-    """One package's fetched body and the one text derivation for its rendition.
+class _RetainedPDF(NamedTuple):
+    last_modified: str
+    source_sha256: str
+    source_url: str
+
+
+_SHA256 = re.compile(r"sha256:[0-9a-f]{64}\Z")
+
+
+def _retained_pdf(
+    package_id: str,
+    published: _Held,
+    pending: str | None,
+    states: Sequence[Mapping[str, Any]],
+    processing_version: str,
+) -> _RetainedPDF | None:
+    """Require all outputs to agree on the prior read, with only its processing version stale."""
+    stamp = published.last_modified
+    if stamp is None or stamp != pending or published.body_rendition != "pdf" or not published.text_sha256:
+        return None
+    first = states[0]
+    old_version, digest, url = (first.get(key) for key in ("processing_version", "source_sha256", "source_url"))
+    if not isinstance(old_version, str) or not old_version or old_version == processing_version:
+        return None
+    if not isinstance(digest, str) or not _SHA256.fullmatch(digest) or (url is not None and not isinstance(url, str)):
+        return None
+    expected = (stamp, published.text_sha256, old_version)
+    if any(_read_identity(state) != expected or state.get("source_sha256") != digest
+           or state.get("source_url") != url for state in states):
+        return None
+    # Legacy checkpoints pin the package PDF but not a separate part locator.
+    return _RetainedPDF(stamp, digest, url or package_body_locator(parse_package_id(package_id), "pdf"))
+
+
+def _verified_pdf(digest: str, max_bytes: int, evidence: CaptureEvidence | None) -> bytes | None:
+    """Open a bounded original by digest, first from local custody then from published evidence."""
+    store = evidence.store if evidence is not None else None
+    if store is None and (root := default_raw_archive_root()).exists():
+        store = CentralRawArchiveStore(root, create=False)
+    if store is not None:
+        try:
+            with store.open(digest) as stream:
+                raw = stream.read(max_bytes + 1)
+        except FileNotFoundError:
+            pass
+        except (BlobIntegrityError, EOFError, gzip.BadGzipFile, zlib.error):
+            logger.warning("Print citations: could not verify local original {}", digest)
+        else:
+            if len(raw) <= max_bytes and "sha256:" + hashlib.sha256(raw).hexdigest() == digest:
+                return raw
+            logger.warning("Print citations: local original {} exceeds the bound or differs from its digest", digest)
+
+    base_url = os.environ.get("R2_PUBLIC_URL")
+    if not base_url:
+        return None
+    key = f"source-evidence/blobs/sha256/{digest.removeprefix('sha256:')}"
+    raw = _bounded_get(f"{base_url.rstrip('/')}/{key}", allow_missing=True, limit=max_bytes)
+    if raw is not None and "sha256:" + hashlib.sha256(raw).hexdigest() != digest:
+        logger.warning("Print citations: published original {} differs from its digest", digest)
+        return None
+    return raw
+
+
+class _PrintBodyAcquirer(GovInfoBodyAcquirer):
+    """Keep live summary/MODS validation and rendition choice; substitute only the verified body."""
+
+    _reuse: tuple[_RetainedPDF, CaptureEvidence | None] | None = None
+    _summary_capture: CapturedBodyResponse | None = None
+    _summary_package: str | None = None
+    _replayed: CapturedBodyResponse | None = None
+
+    def acquire_with_retained_pdf(
+        self, package_id: str, retained: _RetainedPDF, evidence: CaptureEvidence | None
+    ) -> tuple[GovInfoPackageBody, bool]:
+        self._reuse = retained, evidence
+        self._summary_package = package_id
+        try:
+            package = self.acquire(package_id, prefer=PRINT_BODY_PREFERENCE)
+            return package, package.body_capture is self._replayed
+        finally:
+            self._reuse = self._summary_capture = self._summary_package = self._replayed = None
+
+    def _capture(self, url: str, *, keyed: bool, max_bytes: int) -> CapturedBodyResponse:
+        captured = super()._capture(url, keyed=keyed, max_bytes=max_bytes)
+        if self._summary_package is not None and url == package_summary_locator(self._summary_package):
+            self._summary_capture = captured
+        return captured
+
+    def _body_capture(self, url: str, *, max_bytes: int, label: str = "body rendition") -> CapturedBodyResponse:
+        self._replayed = self._replay_body(url, max_bytes)
+        return self._replayed or super()._body_capture(url, max_bytes=max_bytes, label=label)
+
+    def _replay_body(self, url: str, max_bytes: int) -> CapturedBodyResponse | None:
+        if self._reuse is None or self._summary_capture is None or self._summary_package is None:
+            return None
+        retained, evidence = self._reuse
+        if url != retained.source_url or not url.endswith(".pdf"):
+            return None
+        # Upstream has already validated this summary and the MODS before
+        # selecting the body. Discovery alone can be stale.
+        capture = self._summary_capture
+        summary = validate_package_summary(
+            capture.body, package=self._summary_package, final_url=capture.resolved_url,
+            max_bytes=self.budget.max_metadata_bytes,
+        )
+        if summary.last_modified != retained.last_modified:
+            return None
+        raw = _verified_pdf(retained.source_sha256, max_bytes, evidence)
+        return None if raw is None else CapturedBodyResponse(url, url, 200, "application/pdf", capture.observed_at, raw)
+
+
+def _read_body(
+    acquirer: PackageBodySource, package_id: str, retained: _RetainedPDF | None, evidence: CaptureEvidence | None
+) -> tuple[Any, BodyText, bool]:
+    """One package's original body and the one text derivation for its rendition.
 
     No extractor argument, for the reason ``build_committee_reports`` states:
     ``body_text``'s default is the pipeline ``gpo_normalize`` was derived on,
@@ -477,8 +607,11 @@ def _read_body(acquirer: PackageBodySource, package_id: str) -> tuple[Any, BodyT
     adjacency. Table detection stays off — nothing published here is a ruled
     cell, and it would cost three to eight times the per-page time.
     """
-    package = acquirer.acquire(package_id, prefer=PRINT_BODY_PREFERENCE)
-    return package, body_text(package)
+    if retained is not None and isinstance(acquirer, _PrintBodyAcquirer):
+        package, replayed = acquirer.acquire_with_retained_pdf(package_id, retained, evidence)
+    else:
+        package, replayed = acquirer.acquire(package_id, prefer=PRINT_BODY_PREFERENCE), False
+    return package, body_text(cast(FetchedBody, package)), replayed
 
 
 #: The two collections this pass walks, with the table each fills and the rule
@@ -594,7 +727,7 @@ def build_print_citations(
             budget=DISCOVERY_BUDGET, api_key=api_key,
             transport=None if evidence is None else evidence.transport(stage="print-discovery", max_bytes=DISCOVERY_BUDGET.max_page_bytes),
         )
-        acquirer = acquirer or GovInfoBodyAcquirer(
+        acquirer = acquirer or _PrintBodyAcquirer(
             budget=BODY_BUDGET, api_key=api_key,
             transport=None if evidence is None else evidence.transport(
                 stage="print-package", max_bytes=max(BODY_BUDGET.max_body_bytes, BODY_BUDGET.max_metadata_bytes)),
@@ -649,7 +782,7 @@ def build_print_citations(
     kinds: Counter[str] = Counter()
     covered_by: Counter[str] = Counter()
     filed_in_another_congress = 0
-    unchanged = fetched = capped = root_not_offered = 0
+    unchanged = fetched = rederived = capped = root_not_offered = 0
     pages_read = 0
 
     # Enumerate both windows first, drop what is already published, then
@@ -698,8 +831,15 @@ def build_print_citations(
             logger.warning("CRPT: {} states no House or Senate chamber in its id; refused before any request", package_id)
             left_unread(collection, package_id)
             continue
+        parent = _OUTPUTS[collection][0]
+        published = held[parent].get(package_id)
+        prior_states = tuple(checkpoints[name].get(package_id, {}) for name in _OUTPUTS[collection])
         try:
-            package, derived = _read_body(acquirer, package_id)
+            retained = None if published is None else _retained_pdf(
+                package_id, published, checkpoints[parent][package_id]["pending_last_modified"], prior_states,
+                processing_versions(published.body_rendition)[collection],
+            )
+            package, derived, replayed = _read_body(acquirer, package_id, retained, evidence)
             revision_instant(package.summary.last_modified)
         except CredentialRefusedError:
             raise
@@ -721,6 +861,14 @@ def build_print_citations(
             left_unread(collection, package_id)
             continue
         fetched += 1
+        if replayed:
+            rederived += 1
+            if evidence is not None:
+                evidence.retain_bytes(
+                    package.body_capture.body, stage="print-pdf-rederived", raw_source=True,
+                    source_url=package.body_capture.requested_url, package_id=package_id,
+                    last_modified=package.summary.last_modified,
+                )
 
         # A report's bills belong to the Congress the report says it covers,
         # never the package id's: a Senate report is filed in the next
@@ -789,7 +937,6 @@ def build_print_citations(
         source_sha256 = package.body_capture.sha256
         if provenance.text_sha256 is not None:
             evaluated[collection].add((package_id, provenance.text_sha256))
-            prior_states = tuple(checkpoints[name].get(package_id, {}) for name in _OUTPUTS[collection])
             superseded = _superseded_readings(prior_states, source_sha256=source_sha256,
                                               current=provenance.text_sha256)
             if superseded and (prior_parent := priors[_OUTPUTS[collection][0]]) is not None:
@@ -819,6 +966,8 @@ def build_print_citations(
                  "source_sha256": source_sha256, "text_sha256": provenance.text_sha256,
                  "processing_version": processing_versions(provenance.body_rendition)[collection],
                  "read_at": _now()}
+        if provenance.body_rendition == "pdf":
+            state["source_url"] = package.body_capture.requested_url
         for name in _OUTPUTS[collection]:
             previous = checkpoints[name].get(package_id, {})
             selected = latest_read(previous, state)
@@ -846,6 +995,7 @@ def build_print_citations(
         unchanged,
         sum(refusals.values()),
     )
+    logger.info("Print citations: {:,} packages re-derived from verified retained PDFs", rederived)
     logger.info("BUDGET: {} publisher package-root format answers (not failures)", root_not_offered)
     if covered_by:
         logger.info("CRPT: covered Congress read from {} (rule {}); {} reports cover a Congress other than their filing one",
@@ -908,7 +1058,7 @@ def build_print_citations(
         ),
     )
     status = {"discovery": "complete", "scope": "issue-date-window", "since": since,
-              "unchanged": unchanged, "fetched": fetched, "refused": sum(refusals.values()),
+              "unchanged": unchanged, "fetched": fetched, "rederived": rederived, "refused": sum(refusals.values()),
               "deferred": sum(map(len, outstanding.values())) - len(scheduled),
               "publisher_root_not_offered": root_not_offered, "shorter_than_stated": capped,
               "table_generation": "prepared", "atomic_snapshot": False, "whole_history_complete": False}

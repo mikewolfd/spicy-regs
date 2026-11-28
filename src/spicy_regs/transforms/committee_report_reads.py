@@ -5,17 +5,14 @@ collection, ``complete`` is the completeness test over a checkpoint row, and
 ``settled`` adds the refusals no later run could turn into a read.
 """
 
+from importlib.metadata import version
 from pathlib import Path
 
 import pyarrow.parquet as pq
 from spicy_docs.extraction.derivation import BODY_TEXT_DERIVATION_VERSION
-from importlib.metadata import version
-
 from spicy_docs.interpretation.cbo_estimates import CBO_ESTIMATE_RULE_VERSION
 from spicy_docs.interpretation.hearing_bill_links import HEARING_BILL_LINK_RULE_VERSION
 from spicy_docs.schemas.committee_report_tables import REPORT_SECTION_READER_VERSION
-
-from spicy_regs.generations import spicy_docs_code
 
 READS_TABLE = "committee_report_reads"
 READ_COLUMNS = ("package_id", "last_modified", "outcome", "rule_version", "observed_at")
@@ -36,10 +33,10 @@ READ_COLUMNS = ("package_id", "last_modified", "outcome", "rule_version", "obser
 #: ``placeholder-pdf-002`` (spicy-docs 0.33.2) also knows the notice spelled
 #: without "IN", which CRPT-119hrpt649 and CHRG-119jhrg60491 print, so every
 #: body read under 001 is read again.
-#: ``code`` is the installed SpicyDocs' code and data (:func:`spicy_docs_code`),
-#: which derives a report's text and sections; it replaced the release string,
-#: under which every one of the stack's version-only releases re-read all 141
-#: reports for rows differing only in ``observed_at`` (708f2bf4 against 95810b26).
+#: CRPT follows the maintained CBO and section reader versions, the body-text
+#: derivation and the actual PDF decoder. Move the host's part/body tokens for
+#: report selection, shaping or fallback changes not covered by those versions.
+#: The old whole-package ``code`` also moved for unrelated SpicyDocs readers.
 #: CHRG also moves with ``HEARING_BILL_LINK_RULE_VERSION`` (the date correction
 #: moved it). Admitting the two historical CHRG volumes to the package grammar
 #: needs no token: no checkpoint names either, so there is nothing to re-read,
@@ -51,16 +48,42 @@ READ_COLUMNS = ("package_id", "last_modified", "outcome", "rule_version", "obser
 #: Hearing text follows the maintained body-text derivation and actual PDF decoder,
 #: independently of unrelated SpicyDocs releases. Equivalent earlier derivations
 #: remain reusable per rendition through ``DERIVATION_READS_AS``.
-RULE_VERSIONS = {
-    "CRPT": (
-        f"code={spicy_docs_code()[:12]};cbo={CBO_ESTIMATE_RULE_VERSION};sections={REPORT_SECTION_READER_VERSION}"
+def _crpt_rule_version() -> str:
+    return (
+        f"cbo={CBO_ESTIMATE_RULE_VERSION};sections={REPORT_SECTION_READER_VERSION}"
         ";parts=per-part-001;body=placeholder-pdf-002"
-    ),
+        f";text={BODY_TEXT_DERIVATION_VERSION};pymupdf={version('pymupdf')}"
+    )
+
+
+RULE_VERSIONS = {
+    "CRPT": _crpt_rule_version(),
     "CHRG": (
         f"{HEARING_BILL_LINK_RULE_VERSION};body=placeholder-pdf-002;mods=hearing-mods-003;detail=hearing-detail-001"
         f";text={BODY_TEXT_DERIVATION_VERSION};pymupdf={version('pymupdf')}"
     ),
 }
+
+# Exact compatibility with the audited post-CBO-fix vendored readers
+# (.20261127.3 and .20261127.5 through .20261128.3). Never alias an unknown
+# code hash or an earlier CBO rule (as held under 2836154256da / 5f4d981e1716).
+# This mapping stays pinned: a future reader/decoder bump must invalidate it.
+_CRPT_LEGACY_BASE = "cbo=7967093c912f;sections=report-headings-003;parts=per-part-001;body=placeholder-pdf-002"
+_CRPT_LEGACY_TARGET = f"{_CRPT_LEGACY_BASE};text=006;pymupdf=1.28.2"
+_CRPT_LEGACY_RULES = frozenset(f"code={code};{_CRPT_LEGACY_BASE}" for code in (
+    "5d310afbafcc", "7abf73468a43", "4c3c2ee03b61", "ca5435a06866",
+    "e4e1ada81934", "99c2172ddb1c", "86ee485cf688",
+))
+_REFUSAL_SEPARATOR = ";refused-under="
+
+
+def _comparable_rule(rule: str, collection: str) -> str:
+    """Recognize equivalent legacy rules, leaving any final-refusal basis intact."""
+    if collection == "CRPT":
+        base, separator, basis = rule.partition(_REFUSAL_SEPARATOR)
+        if base in _CRPT_LEGACY_RULES:
+            return _CRPT_LEGACY_TARGET + separator + basis
+    return rule
 
 
 def prior_reads(path: Path | None, priors: dict[str, Path | None]) -> dict[str, dict]:
@@ -82,7 +105,7 @@ def complete(row: dict, collection: str, modified: str | None = None) -> bool:
     """Whether a recorded read is complete under this collection's rule version, optionally at a source stamp."""
     return (
         row.get("outcome") == "complete"
-        and row.get("rule_version") == RULE_VERSIONS[collection]
+        and _comparable_rule(row.get("rule_version") or "", collection) == RULE_VERSIONS[collection]
         and (modified is None or modified == row.get("last_modified"))
     )
 
@@ -124,7 +147,7 @@ def refusal_rule(collection: str, basis: str) -> str:
     ``basis`` is ``size=<bytes>`` for a body whose response stated a length past
     the byte bound, and otherwise the bounds that refused it.
     """
-    return f"{RULE_VERSIONS[collection]};refused-under={basis}"
+    return f"{RULE_VERSIONS[collection]}{_REFUSAL_SEPARATOR}{basis}"
 
 
 def settled(row: dict, collection: str, modified: str | None = None, *, bounds: str, max_body_bytes: int) -> bool:
@@ -145,7 +168,7 @@ def settled(row: dict, collection: str, modified: str | None = None, *, bounds: 
     if row.get("outcome") != REFUSED_FINAL:
         return complete(row, collection, modified)
     prefix = refusal_rule(collection, "")
-    rule = row.get("rule_version") or ""
+    rule = _comparable_rule(row.get("rule_version") or "", collection)
     if not rule.startswith(prefix):
         return False
     basis = rule.removeprefix(prefix)
